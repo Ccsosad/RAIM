@@ -1,0 +1,99 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..16ecabe 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -67,13 +67,16 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+     """
+     result: dict[str, ModuleDescriptionDict] = {}
+     errors: list[ErrorDescriptionDict] = []
+-    path = sys.path.copy()
++    # Convert source roots to absolute paths and add them to the search path
++    abs_source_roots = [os.path.abspath(root) for root in source_roots]
++    path = abs_source_roots + sys.path.copy()
+ 
+     for something in files_or_modules:
+         basename = os.path.basename(something)
+diff --git a/pylint/lint/utils.py b/pylint/lint/utils.py
+index 05793a0..0385bb6 100644
+--- a/pylint/lint/utils.py
++++ b/pylint/lint/utils.py
+@@ -72,7 +72,7 @@ def get_fatal_error_message(filepath: str, issue_template_path: Path) -> str:
+     )
+ 
+ 
+-def _patch_sys_path(args: Sequence[str]) -> list[str]:
++def _patch_sys_path(args: Sequence[str], source_roots: Sequence[str] = ()) -> list[str]:
+     original = list(sys.path)
+     changes = []
+     seen = set()
+@@ -81,6 +81,12 @@ def _patch_sys_path(args: Sequence[str]) -> list[str]:
+         if path not in seen:
+             changes.append(path)
+             seen.add(path)
++    # Add source roots to the changes, but avoid duplicates
++    abs_source_roots = [os.path.abspath(root) for root in source_roots]
++    for root in abs_source_roots:
++        if root not in seen:
++            changes.append(root)
++            seen.add(root)
+ 
+     sys.path[:] = changes + sys.path
+     return original
+diff --git a/pylint/lint/source_utils.py b/pylint/lint/source_utils.py
+new file mode 100644
+index 0000000..1b8740a
+--- /dev/null
++++ b/pylint/lint/source_utils.py
+@@ -0,0 +1,45 @@
++"""Utilities for handling source roots and package discovery."""
++
++import os
++import sys
++from typing import Sequence
++
++
++def discover_package_path(filepath: str, source_roots: Sequence[str]) -> str:
++    """Return the package path for a given file, considering source roots.
++
++    This function is intended to replace get_python_path for implicit namespace packages.
++    """
++    abs_source_roots = [os.path.abspath(root) for root in source_roots]
++    # Start from the directory of the file
++    dirname = os.path.dirname(os.path.abspath(filepath)) if not os.path.isdir(filepath) else os.path.abspath(filepath)
++    # Walk up the directory tree
++    while True:
++        # Check if the current directory is under any source root
++        for root in abs_source_roots:
++            if os.path.commonpath([root, dirname]) == root:
++                return root
++        # If not, go up one level
++        old_dirname = dirname
++        dirname = os.path.dirname(dirname)
++        if old_dirname == dirname:
++            break
++    # If no source root found, return the current working directory
++    return os.getcwd()
++
++
++def augmented_sys_path(source_roots: Sequence[str]) -> list[str]:
++    """Return a new sys.path with source roots added at the beginning."""
++    abs_source_roots = [os.path.abspath(root) for root in source_roots]
++    # Filter out duplicates and ensure they are at the beginning
++    new_path = []
++    seen = set()
++    for root in abs_source_roots:
++        if root not in seen:
++            new_path.append(root)
++            seen.add(root)
++    for path in sys.path:
++        if path not in seen:
++            new_path.append(path)
++            seen.add(path)
++    return new_path

@@ -1,0 +1,87 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..4314e1e 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -512,9 +512,59 @@ def array_repr(arr):
+     return "\n".join(summary)
+ 
+ 
++def coords_repr(coords, col_width=None):
++    from ..core.options import get_option
++    expand_option = get_option("display_expand_coords")
++    if expand_option == "default":
++        max_items = 10
++    elif expand_option:
++        max_items = float("inf")
++    else:
++        max_items = 0
++
++    if col_width is None:
++        col_width = _calculate_col_width(_get_col_items(coords))
++    return _mapping_repr(
++        coords, title="Coordinates", summarizer=summarize_coord, col_width=col_width, max_items=max_items
++    )
++
++
++def data_vars_repr(data_vars, col_width=None):
++    from ..core.options import get_option
++    expand_option = get_option("display_expand_data_vars")
++    if expand_option == "default":
++        max_items = 10
++    elif expand_option:
++        max_items = float("inf")
++    else:
++        max_items = 0
++
++    if col_width is None:
++        col_width = _calculate_col_width(_get_col_items(data_vars))
++    return _mapping_repr(
++        data_vars, title="Data variables", summarizer=summarize_datavar, col_width=col_width, max_items=max_items
++    )
++
++
++def attrs_repr(attrs, col_width=None):
++    from ..core.options import get_option
++    expand_option = get_option("display_expand_attrs")
++    if expand_option == "default":
++        max_items = 10
++    elif expand_option:
++        max_items = float("inf")
++    else:
++        max_items = 0
++
++    if col_width is None:
++        col_width = _calculate_col_width(_get_col_items(attrs))
++    return _mapping_repr(
++        attrs, title="Attributes", summarizer=summarize_attr, col_width=col_width, max_items=max_items
++    )
++
++
+ def dataset_repr(ds):
+     summary = ["<xarray.{}>".format(type(ds).__name__)]
+-
+     col_width = _calculate_col_width(_get_col_items(ds.variables))
+ 
+     dims_start = pretty_print("Dimensions:", col_width)
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..7bcb131 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -23,11 +23,17 @@ OPTIONS = {
+     FILE_CACHE_MAXSIZE: 128,
+     KEEP_ATTRS: "default",
+     WARN_FOR_UNCLOSED_FILES: False,
++    "display_expand_attrs": "default",
++    "display_expand_coords": "default",
++    "display_expand_data": "default",
++    "display_expand_data_vars": "default",
+ }
+ 
+ _JOIN_OPTIONS = frozenset(["inner", "outer", "left", "right", "exact"])
+ _DISPLAY_OPTIONS = frozenset(["text", "html"])
+ 
++def _expand_option(value):
++    return value in [True, False, "default"]
+ 
+ def _positive_integer(value):
+     return isinstance(value, int) and value > 0

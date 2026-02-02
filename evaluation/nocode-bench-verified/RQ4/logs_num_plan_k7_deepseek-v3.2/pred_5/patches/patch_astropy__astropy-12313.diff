@@ -1,0 +1,180 @@
+diff --git a/astropy/cosmology/io/table.py b/astropy/cosmology/io/table.py
+index b315be5..9a78986 100644
+--- a/astropy/cosmology/io/table.py
++++ b/astropy/cosmology/io/table.py
+@@ -2,6 +2,7 @@
+ 
+ import copy
+ 
++import copy
+ import numpy as np
+ 
+ from astropy.cosmology.connect import convert_registry
+@@ -11,6 +12,32 @@ from astropy.table import QTable, Table
+ from .mapping import from_mapping, to_mapping
+ 
+ 
++def _row_to_mapping(row):
++    """Convert a Table Row to a mapping suitable for Cosmology.from_mapping.
++
++    Parameters
++    ----------
++    row : `~astropy.table.Row`
++        A row from an astropy Table.
++
++    Returns
++    -------
++    mapping : dict
++        Dictionary with cosmology parameters.
++    """
++    # special values
++    name = row['name'] if 'name' in row.columns else None  # get name from column
++    meta = copy.deepcopy(row.meta)
++
++    # turn row into mapping, filling cosmo if not in a column
++    mapping = dict(row)
++    mapping["name"] = name
++    mapping.setdefault("cosmology", meta.pop("cosmology", None))
++    mapping["meta"] = meta
++
++    return mapping
++
++
+ def from_table(table, index=None, *, move_to_meta=False, cosmology=None):
+     """Instantiate a `~astropy.cosmology.Cosmology` from a |QTable|.
+ 
+@@ -135,16 +162,7 @@ def from_table(table, index=None, *, move_to_meta=False, cosmology=None):
+ 
+     # ------------------
+     # parse row to cosmo
+-
+-    # special values
+-    name = row['name'] if 'name' in row.columns else None  # get name from column
+-    meta = copy.deepcopy(row.meta)
+-
+-    # turn row into mapping, filling cosmo if not in a column
+-    mapping = dict(row)
+-    mapping["name"] = name
+-    mapping.setdefault("cosmology", meta.pop("cosmology", None))
+-    mapping["meta"] = meta
++    mapping = _row_to_mapping(row)
+ 
+     # build cosmology from map
+     return from_mapping(mapping, move_to_meta=move_to_meta, cosmology=cosmology)
+diff --git a/astropy/cosmology/io/row.py b/astropy/cosmology/io/row.py
+new file mode 100644
+index 0000000..a69be2a
+--- /dev/null
++++ b/astropy/cosmology/io/row.py
+@@ -0,0 +1,111 @@
++"""Read and write Cosmology objects to/from an Astropy Row.
++
++This module provides functions to convert a Cosmology object to a Row and vice versa.
++"""
++
++import copy
++
++from astropy.cosmology.connect import convert_registry
++from astropy.cosmology.core import Cosmology
++from astropy.table import Row
++
++from .mapping import from_mapping
++from .table import _row_to_mapping, to_table
++
++
++def from_row(row, *, move_to_meta=False, cosmology=None):
++    """Instantiate a `~astropy.cosmology.Cosmology` from a :class:`~astropy.table.Row`.
++
++    Parameters
++    ----------
++    row : `~astropy.table.Row`
++        The row to convert to a Cosmology.
++    move_to_meta : bool (optional, keyword-only)
++        Whether to move keyword arguments that are not in the Cosmology class'
++        signature to the Cosmology's metadata. This will only be applied if the
++        Cosmology does NOT have a keyword-only argument (e.g. ``**kwargs``).
++        Arguments moved to the metadata will be merged with existing metadata,
++        preferring specified metadata in the case of a merge conflict
++        (e.g. for ``Cosmology(meta={'key':10}, key=42)``, the ``Cosmology.meta``
++        will be ``{'key': 10}``).
++    cosmology : str, `~astropy.cosmology.Cosmology` class, or None (optional, keyword-only)
++        The cosmology class (or string name thereof) to use when constructing
++        the cosmology instance. The class also provides default parameter values,
++        filling in any non-mandatory arguments missing in the row.
++
++    Returns
++    -------
++    `~astropy.cosmology.Cosmology` subclass instance
++
++    Examples
++    --------
++    >>> from astropy.cosmology import Planck18
++    >>> row = Planck18.to_format("astropy.row")
++    >>> cosmo = Cosmology.from_format(row, format="astropy.row")
++    >>> cosmo == Planck18
++    True
++    """
++    # Convert row to mapping
++    mapping = _row_to_mapping(row)
++    # Build cosmology from map
++    return from_mapping(mapping, move_to_meta=move_to_meta, cosmology=cosmology)
++
++
++def to_row(cosmology, *args, cosmology_in_meta=True):
++    """Serialize the cosmology into a :class:`~astropy.table.Row`.
++
++    Parameters
++    ----------
++    cosmology : `~astropy.cosmology.Cosmology` subclass instance
++    *args
++        Not used. Needed for compatibility with
++        `~astropy.io.registry.UnifiedReadWriteMethod`
++    cosmology_in_meta : bool
++        Whether to put the cosmology class in the Row's table metadata (if `True`,
++        default) or as a column (if `False`).
++
++    Returns
++    -------
++    `~astropy.table.Row`
++        A Row with columns for the cosmology parameters, and metadata and
++        cosmology class name in the Row's table ``meta`` attribute.
++
++    Examples
++    --------
++    >>> from astropy.cosmology import Planck18
++    >>> row = Planck18.to_format("astropy.row")
++    >>> row
++    <Row index=0>
++      cosmology     name        H0        Om0    Tcmb0    Neff    m_nu [3]    Ob0
++                               km / (Mpc s)            K                 eV
++        str13       str8     float64    float64 float64 float64   float64   float64
++    ------------- -------- ------------ ------- ------- ------- ----------- -------
++    FlatLambdaCDM Planck18        67.66 0.30966  2.7255   3.046 0.0 .. 0.06 0.04897
++    """
++    # Create a one-row table
++    tbl = to_table(cosmology, *args, cosmology_in_meta=cosmology_in_meta)
++    # Return the first row
++    return tbl[0]
++
++
++def row_identify(origin, format, *args, **kwargs):
++    """Identify if object uses the Row format.
++
++    Parameters
++    ----------
++    origin : str
++        "read" or "write".
++    format : str or None
++        The format string.
++    *args, **kwargs
++        Arguments passed to the reader/writer.
++
++    Returns
++    -------
++    bool
++        True if the format is "astropy.row" and the input is a Row (for reading)
++        or if the format is "astropy.row" (for writing).
++    """
++    if origin == "read":
++        return isinstance(args[1], Row) and (format in (None, "astropy.row"))
++    return False

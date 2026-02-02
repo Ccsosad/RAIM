@@ -1,0 +1,29 @@
+diff --git a/lib/matplotlib/figure.py b/lib/matplotlib/figure.py
+index 6d7c2c5..e621e50 100644
+--- a/lib/matplotlib/figure.py
++++ b/lib/matplotlib/figure.py
+@@ -409,6 +409,24 @@ default: %(va)s
+                 'weight': 'figure.labelweight'}
+         return self._suplabels(t, info, **kwargs)
+ 
++    def get_suptitle(self):
++        """
++        Return the suptitle text string.
++        """
++        return self._suptitle.get_text() if self._suptitle is not None else ''
++
++    def get_supxlabel(self):
++        """
++        Return the supxlabel text string.
++        """
++        return self._supxlabel.get_text() if self._supxlabel is not None else ''
++
++    def get_supylabel(self):
++        """
++        Return the supylabel text string.
++        """
++        return self._supylabel.get_text() if self._supylabel is not None else ''
++
+     def get_edgecolor(self):
+         """Get the edge color of the Figure rectangle."""
+         return self.patch.get_edgecolor()

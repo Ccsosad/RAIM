@@ -1,0 +1,61 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..370dba2 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -304,6 +304,9 @@ class PhysicalType:
+     PhysicalType('length')
+     """
+ 
++import sys
++
++...
+     def __init__(self, unit, physical_types):
+         self._unit = _replace_temperatures_with_kelvin(unit)
+         self._physical_type_id = self._unit._get_physical_type_id()
+@@ -424,6 +427,9 @@ class PhysicalType:
+     __array__ = None
+ 
+ 
++import sys
++...
++
+ def def_physical_type(unit, name):
+     """
+     Add a mapping between a unit and the corresponding physical type(s).
+@@ -525,6 +531,9 @@ def get_physical_type(obj):
+         return obj
+ 
+     if isinstance(obj, str):
++        # Check if the string is an attribute name
++        if obj in _attrname_physical_mapping:
++            obj = _attrname_physical_mapping[obj]
+         return _physical_type_from_str(obj)
+ 
+     try:
+@@ -545,6 +554,26 @@ def get_physical_type(obj):
+ for unit, physical_type in _units_and_physical_types:
+     def_physical_type(unit, physical_type)
+ 
++# Create a mapping from attribute names (underscored) to physical type names.
++import sys
++_attrname_physical_mapping = {}
++for name in list(_name_physical_mapping.keys()):
++    # Convert to a valid Python identifier by replacing spaces and hyphens with underscores.
++    attrname = name.replace(' ', '_').replace('-', '_')
++    _attrname_physical_mapping[attrname] = name
++    # Set the attribute on this module.
++    if not hasattr(sys.modules[__name__], attrname):
++        setattr(sys.modules[__name__], attrname, _name_physical_mapping[name])
++
++# Update the attribute name mapping and set attributes on the module.
++for name in list(_name_physical_mapping.keys()):
++    # Convert to a valid Python identifier by replacing spaces and hyphens with underscores.
++    attrname = name.replace(' ', '_').replace('-', '_')
++    _attrname_physical_mapping[attrname] = name
++    # Set the attribute on this module.
++    if not hasattr(sys.modules[__name__], attrname):
++        setattr(sys.modules[__name__], attrname, _name_physical_mapping[name])
++
+ 
+ # This generates a docstring addition for this module that describes all of the
+ # standard physical types defined here.

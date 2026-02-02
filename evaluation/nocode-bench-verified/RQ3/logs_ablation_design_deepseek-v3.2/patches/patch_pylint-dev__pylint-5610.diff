@@ -1,0 +1,102 @@
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..f00c2b5
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,96 @@
++# Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
++# For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
++
++"""Private import checker for pylint."""
++
++from typing import TYPE_CHECKING
++
++from pylint import checkers
++from pylint import interfaces
++from pylint.checkers import utils
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++
++class PrivateImportChecker(checkers.BaseChecker):
++    """Checker for private imports from external packages.
++
++    This checker detects imports of private names (prefixed with underscore)
++    from external packages, which may indicate usage of internal APIs
++    that are not meant for public consumption.
++    """
++
++    name = "private-import"
++    msgs = {
++        "W5501": (
++            "Import of private name %s from external package %s",
++            "import-private-name",
++            "Used when a private name (starting with underscore) is imported "
++            "from an external package. Private names are considered internal "
++            "implementation details and may change without notice.",
++        ),
++    }
++    options = ()
++
++    priority = -1
++
++    def visit_import(self, node: "astroid.Import") -> None:
++        """Visit an import node."""
++        for name, alias in node.names:
++            if name.startswith("_"):
++                # Check if this is an external package
++                # For simple imports like "import _private", we need to check
++                # if it's from an external package
++                self._check_private_import(name, node)
++
++    def visit_importfrom(self, node: "astroid.ImportFrom") -> None:
++        """Visit a from-import node."""
++        module = node.modname
++        for name, alias in node.names:
++            if name.startswith("_"):
++                # Check if this is from an external package
++                self._check_private_import(f"{module}.{name}", node, module, name)
++
++    def _check_private_import(
++        self,
++        fullname: str,
++        node: "astroid.NodeNG",
++        module: str = "",
++        name: str = "",
++    ) -> None:
++        """Check if a private import is from an external package."""
++        # For now, we'll flag all private imports
++        # In a more complete implementation, we would need to determine
++        # if the import is from an external package vs local/standard library
++        if module:
++            self.add_message(
++                "import-private-name",
++                node=node,
++                args=(name, module),
++                confidence=interfaces.HIGH,
++            )
++        else:
++            # For simple imports like "import _private"
++            parts = fullname.split(".")
++            if len(parts) > 1:
++                module = ".".join(parts[:-1])
++                name = parts[-1]
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=(name, module),
++                    confidence=interfaces.HIGH,
++                )
++            else:
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=(fullname, ""),
++                    confidence=interfaces.HIGH,
++                )
++
++
++def register(linter: "PyLinter") -> None:
++    """Required method to auto-register this checker."""
++    linter.register_checker(PrivateImportChecker(linter))

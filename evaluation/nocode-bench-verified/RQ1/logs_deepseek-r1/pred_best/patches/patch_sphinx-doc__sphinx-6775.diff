@@ -1,0 +1,16 @@
+diff --git a/sphinx/builders/latex/__init__.py b/sphinx/builders/latex/__init__.py
+index 1c44ce3..cfedb50 100644
+--- a/sphinx/builders/latex/__init__.py
++++ b/sphinx/builders/latex/__init__.py
+@@ -181,6 +181,11 @@ class LaTeXBuilder(Builder):
+ 
+         # Apply user settings to context
+         self.context.update(self.config.latex_elements)
++        
++        # Handle extrapackages: add them before hyperref and extension packages
++        extrapackages = self.context.get('extrapackages', '')
++        if extrapackages:
++            self.context['packages'] = extrapackages + self.context['packages']
+         self.context['release'] = self.config.release
+         self.context['use_xindy'] = self.config.latex_use_xindy
+ 

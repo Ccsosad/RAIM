@@ -1,0 +1,110 @@
+diff --git a/xarray/plot/accessor.py b/xarray/plot/accessor.py
+new file mode 100644
+index 0000000..70c2fe5
+--- /dev/null
++++ b/xarray/plot/accessor.py
+@@ -0,0 +1,104 @@
++"""
++Plot accessor for DataArray and Dataset.
++"""
++from typing import Any, Hashable, Optional
++import xarray as xr
++from xarray.plot.facetgrid import FacetGrid
++
++
++class DataArrayPlotAccessor:
++    """Plot accessor for DataArray."""
++    def __init__(self, dataarray: xr.DataArray) -> None:
++        self._da = dataarray
++
++    def scatter(
++        self,
++        x: Hashable,
++        y: Hashable,
++        row: Optional[Hashable] = None,
++        col: Optional[Hashable] = None,
++        col_wrap: Optional[int] = None,
++        ax=None,
++        figsize=None,
++        size=None,
++        hue=None,
++        hue_style=None,
++        markersize=None,
++        linewidth=None,
++        **kwargs,
++    ) -> Any:
++        """Scatter plot for DataArray."""
++        # If row or col is given, use FacetGrid
++        if row is not None or col is not None:
++            # Create the FacetGrid
++            fg = FacetGrid(
++                data=self._da,
++                row=row,
++                col=col,
++                col_wrap=col_wrap,
++                figsize=figsize,
++                size=size,
++            )
++            # Map the scatter plot
++            return fg.map_plot1d(
++                func=xr.plot.scatter,
++                x=x,
++                y=y,
++                hue=hue,
++                hue_style=hue_style,
++                markersize=markersize,
++                linewidth=linewidth,
++                **kwargs,
++            )
++        else:
++            # Non-faceted scatter plot
++            return xr.plot.scatter(self._da, x=x, y=y, ax=ax, **kwargs)
++
++
++class DatasetPlotAccessor:
++    """Plot accessor for Dataset."""
++    def __init__(self, dataset: xr.Dataset) -> None:
++        self._ds = dataset
++
++    def scatter(
++        self,
++        x: Hashable,
++        y: Hashable,
++        row: Optional[Hashable] = None,
++        col: Optional[Hashable] = None,
++        col_wrap: Optional[int] = None,
++        ax=None,
++        figsize=None,
++        size=None,
++        hue=None,
++        hue_style=None,
++        markersize=None,
++        linewidth=None,
++        **kwargs,
++    ) -> Any:
++        """Scatter plot for Dataset."""
++        # If row or col is given, use FacetGrid
++        if row is not None or col is not None:
++            # Create the FacetGrid
++            fg = FacetGrid(
++                data=self._ds,
++                row=row,
++                col=col,
++                col_wrap=col_wrap,
++                figsize=figsize,
++                size=size,
++            )
++            # Map the scatter plot
++            return fg.map_dataset(
++                func=xr.plot.scatter,
++                x=x,
++                y=y,
++                hue=hue,
++                hue_style=hue_style,
++                markersize=markersize,
++                linewidth=linewidth,
++                **kwargs,
++            )
++        else:
++            # Non-faceted scatter plot
++            return xr.plot.scatter(self._ds, x=x, y=y, ax=ax, **kwargs)

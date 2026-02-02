@@ -1,0 +1,103 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..367655a 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -1,3 +1,4 @@
++
+ """
+ Core functions and attributes for the matplotlib style library:
+ 
+@@ -81,6 +82,50 @@ def _apply_style(d, warn=True):
+     mpl.rcParams.update(_remove_blacklisted_style_params(d, warn=warn))
+ 
+ 
++def _load_style_from_package(style):
++    """Load a style from a package without importing it.
++
++    Parameters
++    ----------
++    style : str
++        A dotted style name like 'mypackage.presentation'.
++
++    Returns
++    -------
++    dict
++        The style dictionary.
++
++    Raises
++    ------
++    IOError
++        If the style cannot be found in the package.
++    """
++    try:
++        import importlib.resources as importlib_resources
++    except ImportError:
++        import importlib_resources
++    # Split the style name into package and resource.
++    parts = style.split('.')
++    if len(parts) < 2:
++        raise ValueError(f"Invalid package style name: {style}")
++    package_name = '.'.join(parts[:-1])
++    resource_name = parts[-1] + '.mplstyle'
++    try:
++        # Get the Traversable object for the package.
++        package = importlib_resources.files(package_name)
++        # Join the resource name.
++        style_file = package.joinpath(resource_name)
++        # Open the file without importing the package.
++        with importlib_resources.as_file(style_file) as path:
++            from .rcsetup import rc_params_from_file
++            return rc_params_from_file(path, use_default_template=False)
++    except (ImportError, AttributeError, TypeError, OSError) as e:
++        # If any error occurs, raise an IOError.
++        raise IOError(
++            f"Cannot load style {style!r} from package {package_name!r}"
++        ) from e
++
++
+ @_docstring.Substitution(
+     "\n".join(map("- {}".format, sorted(STYLE_BLACKLIST, key=str.lower)))
+ )
+@@ -102,7 +147,8 @@ def use(style):
+         A style specification. Valid options are:
+ 
+         +------+-------------------------------------------------------------+
+-        | str  | The name of a style or a path/URL to a style file. For a    |
++        | str  | The name of a style, a path/URL to a style file, or a       |
++        |      | dotted package name (e.g., 'mypackage.presentation'). For a |
+         |      | list of available style names, see `.style.available`.      |
+         +------+-------------------------------------------------------------+
+         | dict | Dictionary with valid key/value pairs for                   |
+@@ -148,14 +194,28 @@ def use(style):
+         elif style in library:
+             _apply_style(library[style])
+         else:
++            # First, try to load it as a file or URL.
+             try:
+                 rc = rc_params_from_file(style, use_default_template=False)
+                 _apply_style(rc)
+             except IOError as err:
+-                raise IOError(
+-                    "{!r} not found in the style library and input is not a "
+-                    "valid URL or path; see `style.available` for list of "
+-                    "available styles".format(style)) from err
++                # If that fails, try to load it as a package style.
++                if '.' in style:
++                    try:
++                        rc = _load_style_from_package(style)
++                        _apply_style(rc)
++                    except IOError as err2:
++                        # If both fail, raise the original error.
++                        raise IOError(
++                            "{!r} not found in the style library and input is not a "
++                            "valid URL or path, and cannot be loaded as a package style; "
++                            "see `style.available` for list of available styles".format(style)
++                        ) from err2
++                else:
++                    raise IOError(
++                        "{!r} not found in the style library and input is not a "
++                        "valid URL or path; see `style.available` for list of "
++                        "available styles".format(style)) from err
+ 
+ 
+ @contextlib.contextmanager

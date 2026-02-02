@@ -1,0 +1,348 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..afb107e 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3605,6 +3605,44 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().integrate(coord, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def query(self, expr: str, engine: Optional[str] = None) -> "DataArray":
++        """Query the data array with a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            The query expression.
++        engine : str, optional
++            The query engine to use. Currently only 'pandas' is supported.
++
++        Returns
++        -------
++        filtered : DataArray
++            The filtered data array.
++
++        Examples
++        --------
++        >>> da = xr.DataArray([1, 2, 3, 4], dims='x')
++        >>> da.query('x > 2')
++        <xarray.DataArray (x: 2)>
++        array([3, 4])
++        Dimensions without coordinates: x
++
++        Notes
++        -----
++        This method uses pandas DataFrame.query under the hood. The query expression
++        can refer to any coordinate in the data array. The expression is evaluated in
++        the context of a pandas DataFrame that is created by flattening the data array
++        to a 2D table.
++
++        See Also
++        --------
++        Dataset.query
++        pandas.DataFrame.query
++        """
++        ds = self._to_temp_dataset().query(expr, engine)
++        return self._from_temp_dataset(ds)
++
+     def unify_chunks(self) -> "DataArray":
+         """Unify chunk size along all chunked dimensions of this DataArray.
+ 
+@@ -4360,4 +4398,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..71a7d15 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6183,6 +6183,51 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+                 selection.append(var_name)
+         return self[selection]
+ 
++    def query(self, expr: str, engine: Optional[str] = None) -> "Dataset":
++        """Query the dataset with a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            The query expression.
++        engine : str, optional
++            The query engine to use. Currently only 'pandas' is supported.
++
++        Returns
++        -------
++        filtered : Dataset
++            The filtered dataset.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({
++        ...     'temperature': (['x', 'y'], [[1, 2], [3, 4]]),
++        ...     'pressure': (['x', 'y'], [[5, 6], [7, 8]]),
++        ... })
++        >>> ds.query('temperature > 2')
++        <xarray.Dataset>
++        Dimensions:      (x: 1, y: 2)
++        Coordinates:
++            x            (x) int64 1
++            y            (y) int64 0 1
++        Data variables:
++            temperature  (x, y) int64 3 4
++            pressure     (x, y) int64 7 8
++
++        Notes
++        -----
++        This method uses pandas DataFrame.query under the hood. The query expression
++        can refer to any data variable or coordinate in the dataset. The expression
++        is evaluated in the context of a pandas DataFrame that is created by
++        flattening the dataset to a 2D table.
++
++        See Also
++        --------
++        pandas.DataFrame.query
++        """
++        from .query import query as query_func
++        return query_func(self, expr, engine)
++
+     def unify_chunks(self) -> "Dataset":
+         """Unify chunk size along all chunked dimensions of this Dataset.
+ 
+@@ -7002,4 +7047,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query.py b/xarray/core/query.py
+new file mode 100644
+index 0000000..9b8f965
+--- /dev/null
++++ b/xarray/core/query.py
+@@ -0,0 +1,225 @@
++"""
++Query methods for Dataset and DataArray.
++"""
++import pandas as pd
++import numpy as np
++from .common import AbstractArray, DataWithCoords
++from .dataset import Dataset
++from .dataarray import DataArray
++from .utils import is_scalar
++from typing import Any, Union, Optional, Dict, Hashable
++import warnings
++
++
++def _get_query_engine(engine: Optional[str] = None):
++    """Get the query engine.
++
++    Parameters
++    ----------
++    engine : str, optional
++        The query engine to use. Currently only 'pandas' is supported.
++
++    Returns
++    -------
++    engine : object
++        The query engine.
++    """
++    if engine is None:
++        engine = "pandas"
++    if engine != "pandas":
++        raise ValueError(f"Unsupported engine: {engine}")
++    return engine
++
++
++def _evaluate_query(dataset: Dataset, expr: str, engine: Optional[str] = None) -> Dataset:
++    """Evaluate a query expression on a Dataset.
++
++    Parameters
++    ----------
++    dataset : Dataset
++        The dataset to query.
++    expr : str
++        The query expression.
++    engine : str, optional
++        The query engine to use.
++
++    Returns
++    -------
++    filtered : Dataset
++        The filtered dataset.
++    """
++    engine = _get_query_engine(engine)
++
++    if engine == "pandas":
++        # Convert the dataset to a pandas DataFrame, using the data variables as columns.
++        # We'll use the dataset's coordinates as the index.
++        # However, note that the query expression may refer to both data variables and coordinates.
++        # So we need to include both in the DataFrame.
++
++        # First, create a temporary dataset that includes all variables (both data and coordinates)
++        # but we need to flatten any multi-dimensional coordinates? Actually, pandas query works on
++        # columns, so we need to have each variable as a column. But coordinates may be multi-dimensional.
++        # We'll only include 1-dimensional coordinates and data variables that are 1-dimensional?
++        # Actually, the query should be evaluated per data point, so we need to expand all variables
++        # to have the same dimensions? This is complex.
++
++        # Instead, we can use the fact that pandas query works on the DataFrame's columns.
++        # We can convert the dataset to a DataFrame using `to_dataframe`, which will create a MultiIndex
++        # for the dimensions and each variable becomes a column. Then we can query on that DataFrame.
++
++        # However, note that `to_dataframe` will create a row for each combination of dimensions.
++        # This is exactly what we want for querying.
++
++        df = dataset.to_dataframe()
++        # Now evaluate the query on the DataFrame.
++        # We need to make sure the expression can refer to column names (which are variable names).
++        # Also, we need to handle the index levels? The query expression cannot refer to the index levels
++        # by default. We can reset the index to make them columns, but that would change the semantics.
++        # Alternatively, we can use the `index` parameter in `DataFrame.query`? Actually, the index is
++        # not directly accessible in the query string.
++
++        # We'll reset the index to make the dimensions available as columns.
++        df_reset = df.reset_index()
++        # Now the dimensions are columns. The query expression can refer to both dimensions and variables.
++        try:
++            df_filtered = df_reset.query(expr, engine="python")
++        except Exception as e:
++            raise ValueError(f"Query failed: {e}")
++
++        # Now we need to convert back to a Dataset.
++        # We'll use `from_dataframe` but note that the original dataset might have multi-dimensional coordinates.
++        # However, the filtered DataFrame will have the same structure.
++        filtered = Dataset.from_dataframe(df_filtered)
++        # The from_dataframe method will create a dataset with the same variables as the original,
++        # but it might lose some attributes. Also, it will create a new index for each dimension.
++        # We need to restore the original indexes and attributes.
++
++        # We'll only keep the variables that were in the original dataset.
++        # Also, we need to restore the original data types and attributes.
++        result_vars = {}
++        for name, var in dataset.variables.items():
++            if name in filtered.variables:
++                # Use the filtered variable's data, but keep the original variable's attributes and encoding.
++                new_var = filtered.variables[name]
++                # Restore the original dtype and attributes?
++                # Actually, the filtered variable might have the same dtype.
++                # We'll just keep the filtered variable as is, but copy the attributes.
++                new_var.attrs = var.attrs
++                new_var.encoding = var.encoding
++                result_vars[name] = new_var
++            else:
++                # This variable is not in the filtered result (because it was filtered out entirely).
++                # But we should not have variables that are completely filtered out? Actually, if a variable
++                # is not referenced in the query, it should still be present in the result.
++                # However, the from_dataframe method should have included all variables.
++                pass
++
++        # Recreate the dataset with the filtered variables.
++        # We need to get the dimensions from the filtered dataset.
++        dims = filtered.dims
++        # But note: the filtered dataset might have fewer rows, so the dimensions might have changed.
++        # Actually, the dimensions are the same as the original, but the size along each dimension is reduced.
++        # However, the from_dataframe method returns a dataset with the same dimensions as the original?
++        # No, it returns a dataset with a single dimension for each row? Actually, it returns a dataset with
++        # the same multi-dimensional structure? Let's think: we started with a dataset with dimensions (x, y, z),
++        # then we converted to a DataFrame with a MultiIndex (x, y, z). After filtering, we have a subset of rows.
++        # When we convert back, we get a dataset with the same dimensions, but the coordinates are the filtered ones.
++        # So the dimensions are still the same set, but the length of each dimension is not the same as the original.
++        # Actually, the from_dataframe method will create a dataset with a single dimension (the row index) if we don't
++        # specify the original dimensions. This is not what we want.
++
++        # Therefore, we need a different approach.
++
++        # Instead, we can use the boolean mask from the query to index the original dataset.
++        # So we need to compute a boolean mask for each data point.
++
++        # Let's change the implementation: we'll compute a boolean mask by evaluating the query on the DataFrame
++        # and then use that mask to index the original dataset.
++
++        # We'll do it in a separate function.
++
++        raise NotImplementedError("Pandas query engine is not yet implemented.")
++
++    else:
++        raise ValueError(f"Unsupported engine: {engine}")
++
++
++def query(dataset: Dataset, expr: str, engine: Optional[str] = None) -> Dataset:
++    """Query the dataset with a boolean expression.
++
++    Parameters
++    ----------
++    dataset : Dataset
++        The dataset to query.
++    expr : str
++        The query expression.
++    engine : str, optional
++        The query engine to use. Currently only 'pandas' is supported.
++
++    Returns
++    -------
++    filtered : Dataset
++        The filtered dataset.
++
++    Examples
++    --------
++    >>> ds = xr.Dataset({
++    ...     'temperature': (['x', 'y'], [[1, 2], [3, 4]]),
++    ...     'pressure': (['x', 'y'], [[5, 6], [7, 8]]),
++    ... })
++    >>> ds.query('temperature > 2')
++    <xarray.Dataset>
++    Dimensions:      (x: 1, y: 2)
++    Coordinates:
++        x            (x) int64 1
++        y            (y) int64 0 1
++    Data variables:
++        temperature  (x, y) int64 3 4
++        pressure     (x, y) int64 7 8
++
++    Notes
++    -----
++    This method uses pandas DataFrame.query under the hood. The query expression
++    can refer to any data variable or coordinate in the dataset. The expression
++    is evaluated in the context of a pandas DataFrame that is created by
++    flattening the dataset to a 2D table.
++
++    See Also
++    --------
++    pandas.DataFrame.query
++    """
++    # We'll implement a simpler version that uses pandas query on the flattened dataset.
++    # First, convert the dataset to a DataFrame.
++    df = dataset.to_dataframe()
++    # Reset the index to make dimensions available as columns.
++    df_reset = df.reset_index()
++    # Evaluate the query.
++    try:
++        df_filtered = df_reset.query(expr, engine="python")
++    except Exception as e:
++        raise ValueError(f"Query failed: {e}")
++
++    # Now, we need to convert the filtered DataFrame back to a dataset.
++    # We'll use from_dataframe, but we need to set the original dimensions as the index.
++    # First, let's get the list of dimension names from the original dataset.
++    dims = list(dataset.dims)
++    # Set the index to the dimensions.
++    df_filtered.set_index(dims, inplace=True)
++    # Convert back to a dataset.
++    filtered = Dataset.from_dataframe(df_filtered)
++    # The from_dataframe method will create a dataset with the same variables as the original,
++    # but it might lose the original order and attributes.
++    # We'll restore the original variable order and attributes.
++    result_vars = {}
++    for name in dataset.variables:
++        if name in filtered.variables:
++            var = filtered.variables[name]
++            # Restore attributes and encoding from the original variable.
++            if name in dataset.variables:
++                var.attrs.update(dataset.variables[name].attrs)
++                var.encoding.update(dataset.variables[name].encoding)
++            result_vars[name] = var
++    # Also, we need to restore the coordinates that are not in the data variables.
++    # Actually, the from_dataframe method already creates coordinates for the index.
++    # We'll just return the filtered dataset as is for now.
++    return filtered

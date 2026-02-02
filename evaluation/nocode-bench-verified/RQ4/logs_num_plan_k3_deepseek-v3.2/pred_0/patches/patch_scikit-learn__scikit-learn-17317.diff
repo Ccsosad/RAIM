@@ -1,0 +1,99 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 24b047c..56fbf78 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -32,18 +32,31 @@ def _unique(values, *, return_inverse=False):
+ 
+ def _unique_python(values, *, return_inverse):
+     # Only used in `_uniques`, see docstring there for details
+-    try:
+-        uniques = sorted(set(values))
+-        uniques = np.array(uniques, dtype=values.dtype)
+-    except TypeError:
+-        types = sorted(t.__qualname__
+-                       for t in set(type(v) for v in values))
+-        raise TypeError("Encoders require their input to be uniformly "
+-                        f"strings or numbers. Got {types}")
++    # We cannot use set because NaN != NaN, and we want to treat None and NaN as distinct.
++    uniques = []
++    table = {}
++    for i, v in enumerate(values):
++        if v is None:
++            key = ('None', type(v))
++        elif isinstance(v, float) and np.isnan(v):
++            key = ('NaN', type(v))
++        else:
++            key = (v, type(v))
++        if key not in table:
++            table[key] = len(uniques)
++            uniques.append(v)
++    uniques = np.array(uniques, dtype=values.dtype)
+ 
+     if return_inverse:
+-        table = {val: i for i, val in enumerate(uniques)}
+-        inverse = np.array([table[v] for v in values])
++        inverse = np.zeros(len(values), dtype=int)
++        for i, v in enumerate(values):
++            if v is None:
++                key = ('None', type(v))
++            elif isinstance(v, float) and np.isnan(v):
++                key = ('NaN', type(v))
++            else:
++                key = (v, type(v))
++            inverse[i] = table[key]
+         return uniques, inverse
+ 
+     return uniques
+@@ -119,13 +132,46 @@ def _check_unknown(values, known_values, return_mask=False):
+ 
+     """
+     if values.dtype == object:
+-        uniques_set = set(known_values)
+-        diff = list(set(values) - uniques_set)
+-        if return_mask:
+-            if diff:
+-                valid_mask = np.array([val in uniques_set for val in values])
++        # We cannot use set because NaN != NaN and None is hashable.
++        # Build a set of known values with a custom key.
++        known_set = set()
++        for v in known_values:
++            if v is None:
++                key = ('None', type(v))
++            elif isinstance(v, float) and np.isnan(v):
++                key = ('NaN', type(v))
+             else:
+-                valid_mask = np.ones(len(values), dtype=bool)
++                key = (v, type(v))
++            known_set.add(key)
++        diff_keys = []
++        valid_mask = np.ones(len(values), dtype=bool)
++        for i, v in enumerate(values):
++            if v is None:
++                key = ('None', type(v))
++            elif isinstance(v, float) and np.isnan(v):
++                key = ('NaN', type(v))
++            else:
++                key = (v, type(v))
++            if key not in known_set:
++                diff_keys.append(key)
++                valid_mask[i] = False
++        # Convert diff_keys back to original values? We need to return the unique values not in known_values.
++        # But we don't have the original values for the keys. Instead, we collect the actual values.
++        # We'll collect the actual values in a list without duplicates.
++        diff = []
++        seen = set()
++        for i, v in enumerate(values):
++            if not valid_mask[i]:
++                if v is None:
++                    k = ('None', type(v))
++                elif isinstance(v, float) and np.isnan(v):
++                    k = ('NaN', type(v))
++                else:
++                    k = (v, type(v))
++                if k not in seen:
++                    seen.add(k)
++                    diff.append(v)
++        if return_mask:
+             return diff, valid_mask
+         else:
+             return diff

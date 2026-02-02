@@ -1,0 +1,48 @@
+diff --git a/lib/mpl_toolkits/mplot3d/axes3d.py b/lib/mpl_toolkits/mplot3d/axes3d.py
+index 7e611ff..1e9ad76 100644
+--- a/lib/mpl_toolkits/mplot3d/axes3d.py
++++ b/lib/mpl_toolkits/mplot3d/axes3d.py
+@@ -141,6 +141,16 @@ class Axes3D(Axes):
+         if sharez is not None:
+             self._shared_axes["z"].join(self, sharez)
+             self._adjustable = 'datalim'
++        shareview = kwargs.pop("shareview", None)
++        self._shareview = shareview
++        if shareview is not None:
++            if not hasattr(self, "_shared_axes_view"):
++                self._shared_axes_view = cbook.Grouper()
++            self._shared_axes_view.join(self, shareview)
++            # also sync the current view angles
++            self.elev = shareview.elev
++            self.azim = shareview.azim
++            self.roll = shareview.roll
+ 
+         if kwargs.pop('auto_add_to_figure', False):
+             raise AttributeError(
+@@ -975,6 +985,26 @@ class Axes3D(Axes):
+         self.set_zlim(z0, z1, emit=False, auto=other.get_autoscalez_on())
+         self.zaxis._scale = other.zaxis._scale
+ 
++    def shareview(self, other):
++        """
++        Share the view angles (elev, azim, roll) with *other* 3D Axes.
++
++        This is equivalent to passing ``shareview=other`` when constructing the
++        Axes, and cannot be used if the view is already being shared with
++        another Axes.
++        """
++        _api.check_isinstance(Axes3D, other=other)
++        if getattr(self, "_shareview", None) is not None and other is not self._shareview:
++            raise ValueError("view is already shared")
++        if not hasattr(self, "_shared_axes_view"):
++            self._shared_axes_view = cbook.Grouper()
++        self._shared_axes_view.join(self, other)
++        self._shareview = other
++        # also sync the current view angles
++        self.elev = other.elev
++        self.azim = other.azim
++        self.roll = other.roll
++
+     def clear(self):
+         # docstring inherited.
+         super().clear()

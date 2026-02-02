@@ -1,0 +1,57 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 3d4fbde..7e1e367 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -248,6 +248,11 @@ class DatasetCoordinates(Coordinates):
+             {k: v for k, v in self._data.variables.items() if k in self._names}
+         )
+ 
++    @property
++    def dtypes(self) -> Mapping[Hashable, np.dtype]:
++        """Mapping from coordinate names to dtypes."""
++        return Frozen({k: v.dtype for k, v in self.variables.items()})
++
+     def __getitem__(self, key: Hashable) -> DataArray:
+         if key in self._data.data_vars:
+             raise KeyError(key)
+@@ -342,6 +347,11 @@ class DataArrayCoordinates(Coordinates):
+     def variables(self):
+         return Frozen(self._data._coords)
+ 
++    @property
++    def dtypes(self) -> Mapping[Hashable, np.dtype]:
++        """Mapping from coordinate names to dtypes."""
++        return Frozen({k: v.dtype for k, v in self.variables.items()})
++
+     def to_dataset(self) -> Dataset:
+         from .dataset import Dataset
+ 
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 15487c2..8951ede 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -677,6 +677,18 @@ class Dataset(
+         """
+         return self.dims
+ 
++    @property
++    def dtypes(self) -> Frozen[Hashable, np.dtype]:
++        """Mapping from data variable names to dtypes.
++
++        Cannot be modified directly, but is updated when adding new variables.
++
++        See Also
++        --------
++        Dataset.coords.dtypes
++        """
++        return Frozen({k: v.dtype for k, v in self.data_vars.items()})
++
+     def load(self: T_Dataset, **kwargs) -> T_Dataset:
+         """Manually trigger loading and/or computation of this dataset's data
+         from disk or a remote source into memory and return this dataset.
+@@ -8516,4 +8528,4 @@ class Dataset(
+         DataArray
+             The source interpolated on the decimal years of target,
+         """
+-        return interp_calendar(self, target, dim=dim)
++        return interp_calendar(self, target, dim=dim)

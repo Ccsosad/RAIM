@@ -1,0 +1,62 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..c2f8617 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -339,7 +339,7 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+ def join(left, right, keys=None, join_type='inner',
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -368,6 +368,16 @@ def join(left, right, keys=None, join_type='inner',
+     join_funcs : dict, None
+         Dict of functions to use for matching the corresponding key column(s).
+         See `~astropy.table.join_skycoord` for an example and details.
++    keys_left : str, list of str, or column-like object, or list of column-like objects
++        Key column(s) for the left table. If provided, must also provide ``keys_right``.
++        These can be column names, or column-like objects (e.g., arrays, Quantity).
++        If column-like objects are provided, they are used as the key values and
++        must have the same length as the left table.
++    keys_right : str, list of str, or column-like object, or list of column-like objects
++        Key column(s) for the right table. If provided, must also provide ``keys_left``.
++        These can be column names, or column-like objects (e.g., arrays, Quantity).
++        If column-like objects are provided, they are used as the key values and
++        must have the same length as the right table.
+ 
+     Returns
+     -------
+@@ -381,6 +391,31 @@ def join(left, right, keys=None, join_type='inner',
+     if not isinstance(right, Table):
+         right = Table(right)
+ 
++    # Handle keys_left and keys_right
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Cannot specify both keys and keys_left/keys_right')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both keys_left and keys_right')
++        # Convert to list if necessary
++        if isinstance(keys_left, str):
++            keys_left = [keys_left]
++        if isinstance(keys_right, str):
++            keys_right = [keys_right]
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same length')
++        # Create temporary tables to avoid modifying originals
++        left = left.copy(copy_data=False)
++        right = right.copy(copy_data=False)
++        # Generate unique temporary column names
++        temp_keys = []
++        for i in range(len(keys_left)):
++            temp_key = f'__temp_key_{i}__'
++            left[temp_key] = keys_left[i]
++            right[temp_key] = keys_right[i]
++            temp_keys.append(temp_key)
++        keys = tuple(temp_keys)
++
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,

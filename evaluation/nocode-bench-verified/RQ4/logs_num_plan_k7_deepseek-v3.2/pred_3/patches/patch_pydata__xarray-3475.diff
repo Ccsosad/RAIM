@@ -1,0 +1,193 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f8247e8..2b88b2c 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1924,9 +1924,65 @@ class DataArray(AbstractArray, DataWithCoords):
+         -------
+         dropped : DataArray
+         """
++        from .deprecation import warn_deprecation
++        if dim is None:
++            warn_deprecation(
++                "DataArray.drop with dim=None is deprecated. Use drop_vars instead.",
++                version="0.15"
++            )
++        else:
++            warn_deprecation(
++                "DataArray.drop with dim is deprecated. Use drop_sel instead.",
++                version="0.15"
++            )
+         ds = self._to_temp_dataset().drop(labels, dim, errors=errors)
+         return self._from_temp_dataset(ds)
+ 
++    def drop_sel(self, labels=None, *, errors="raise", **labels_kwargs):
++        """Drop index labels from this DataArray.
++
++        Parameters
++        ----------
++        labels : dict, optional
++            Dictionary with keys matching dimensions and values given
++            by scalars, slices or arrays of tick labels to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the index labels passed are not in the array.
++            If 'ignore', any given labels that are in the array are dropped
++            and no error is raised.
++        **labels_kwargs : {dim: label, ...}, optional
++            The keyword arguments form of ``labels``.
++            One of labels or labels_kwargs must be provided.
++
++        Returns
++        -------
++        dropped : DataArray
++        """
++        if labels is None:
++            labels = {}
++        labels = either_dict_or_kwargs(labels, labels_kwargs, "drop_sel")
++        return self.drop(labels, errors=errors)
++
++    def drop_vars(self, names, *, errors="raise"):
++        """Drop variables (including coordinates) from this DataArray.
++
++        Parameters
++        ----------
++        names : hashable or iterable of hashables
++            Name(s) of variables to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the variables passed are not in the array.
++            If 'ignore', any given names that are in the array are dropped
++            and no error is raised.
++
++        Returns
++        -------
++        dropped : DataArray
++        """
++        return self.drop(names, errors=errors)
++
+     def dropna(
+         self, dim: Hashable, how: str = "any", thresh: int = None
+     ) -> "DataArray":
+@@ -3118,4 +3174,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c07f9e0..035d0b4 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3579,6 +3579,7 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         Data variables:
+             A        (x, y) float64 -0.3944 -1.418 1.423 -1.041
+         """
++        from .deprecation import warn_deprecation
+         if errors not in ["raise", "ignore"]:
+             raise ValueError('errors must be either "raise" or "ignore"')
+ 
+@@ -3597,6 +3598,18 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+                 stacklevel=2,
+             )
+ 
++        # Issue deprecation warning for drop
++        if dim is None:
++            warn_deprecation(
++                "Dataset.drop with dim=None is deprecated. Use drop_vars instead.",
++                version="0.15"
++            )
++        else:
++            warn_deprecation(
++                "Dataset.drop with dim is deprecated. Use drop_sel instead.",
++                version="0.15"
++            )
++
+         if labels_kwargs or isinstance(labels, dict):
+             labels_kwargs = either_dict_or_kwargs(labels, labels_kwargs, "drop")
+             if dim is not None:
+@@ -3614,6 +3627,51 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         else:
+             return self._drop_labels(labels, dim, errors=errors)
+ 
++    def drop_sel(self, labels=None, *, errors="raise", **labels_kwargs):
++        """Drop index labels from this dataset.
++
++        Parameters
++        ----------
++        labels : dict, optional
++            Dictionary with keys matching dimensions and values given
++            by scalars, slices or arrays of tick labels to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the index labels passed are not in the dataset.
++            If 'ignore', any given labels that are in the dataset are dropped
++            and no error is raised.
++        **labels_kwargs : {dim: label, ...}, optional
++            The keyword arguments form of ``labels``.
++            One of labels or labels_kwargs must be provided.
++
++        Returns
++        -------
++        dropped : Dataset
++        """
++        if labels is None:
++            labels = {}
++        labels = either_dict_or_kwargs(labels, labels_kwargs, "drop_sel")
++        return self.drop(labels, errors=errors)
++
++    def drop_vars(self, names, *, errors="raise"):
++        """Drop variables (including coordinates) from this dataset.
++
++        Parameters
++        ----------
++        names : hashable or iterable of hashables
++            Name(s) of variables to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the variables passed are not in the dataset.
++            If 'ignore', any given names that are in the dataset are dropped
++            and no error is raised.
++
++        Returns
++        -------
++        dropped : Dataset
++        """
++        return self.drop(names, errors=errors)
++
+     def _drop_labels(self, labels=None, dim=None, errors="raise"):
+         # Don't cast to set, as it would harm performance when labels
+         # is a large numpy array
+@@ -5478,4 +5536,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/deprecation.py b/xarray/core/deprecation.py
+new file mode 100644
+index 0000000..21421af
+--- /dev/null
++++ b/xarray/core/deprecation.py
+@@ -0,0 +1,22 @@
++"""
++Deprecation warnings for xarray.
++"""
++import warnings
++
++
++def warn_deprecation(message, version=None, stacklevel=3):
++    """
++    Issue a deprecation warning.
++
++    Parameters
++    ----------
++    message : str
++        The deprecation message.
++    version : str, optional
++        The version in which the deprecation will be removed.
++    stacklevel : int, optional
++        The stack level for the warning.
++    """
++    if version:
++        message = f"{message} and will be removed in version {version}"
++    warnings.warn(message, PendingDeprecationWarning, stacklevel=stacklevel)

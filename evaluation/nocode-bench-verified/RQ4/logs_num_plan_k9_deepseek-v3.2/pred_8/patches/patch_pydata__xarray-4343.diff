@@ -1,0 +1,113 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..20ff8db 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -262,6 +262,8 @@ def format_attrs(index, separator=", "):
+     attrs_str = f"{separator}".join(attrs_str)
+     return attrs_str
+ 
++from .cftime_parsing import parse_iso8601_like
++
+ 
+ class CFTimeIndex(pd.Index):
+     """Custom Index for working with CF calendars and dates
+@@ -415,7 +417,7 @@ class CFTimeIndex(pd.Index):
+ 
+     def _get_string_slice(self, key):
+         """Adapted from pandas.tseries.index.DatetimeIndex._get_string_slice"""
+-        parsed, resolution = _parse_iso8601_with_reso(self.date_type, key)
++        parsed, resolution = parse_iso8601_like(self.date_type, key)
+         try:
+             loc = self._partial_date_slice(resolution, parsed)
+         except KeyError:
+@@ -459,7 +461,7 @@ class CFTimeIndex(pd.Index):
+         """Adapted from
+         pandas.tseries.index.DatetimeIndex._maybe_cast_slice_bound"""
+         if isinstance(label, str):
+-            parsed, resolution = _parse_iso8601_with_reso(self.date_type, label)
++            parsed, resolution = parse_iso8601_like(self.date_type, label)
+             start, end = _parsed_string_to_bounds(self.date_type, resolution, parsed)
+             if self.is_monotonic_decreasing and len(self) > 1:
+                 return end if side == "left" else start
+@@ -743,7 +745,7 @@ class CFTimeIndex(pd.Index):
+ 
+ 
+ def _parse_iso8601_without_reso(date_type, datetime_str):
+-    date, _ = _parse_iso8601_with_reso(date_type, datetime_str)
++    date, _ = parse_iso8601_like(date_type, datetime_str)
+     return date
+ 
+ 
+diff --git a/xarray/coding/times.py b/xarray/coding/times.py
+index 1f45ede..3cadd9d 100644
+--- a/xarray/coding/times.py
++++ b/xarray/coding/times.py
+@@ -1,3 +1,4 @@
++
+ import re
+ import warnings
+ from datetime import datetime
+@@ -9,6 +10,7 @@ import pandas as pd
+ from pandas.errors import OutOfBoundsDatetime
+ 
+ from ..core import indexing
++from .cftime_parsing import parse_iso8601_like
+ from ..core.common import contains_cftime_datetimes
+ from ..core.formatting import first_n_items, format_timestamp, last_item
+ from ..core.variable import Variable
+diff --git a/xarray/coding/cftime_parsing.py b/xarray/coding/cftime_parsing.py
+new file mode 100644
+index 0000000..aa071b3
+--- /dev/null
++++ b/xarray/coding/cftime_parsing.py
+@@ -0,0 +1,50 @@
++"""
++Parsing functions for cftime datetime strings.
++"""
++import re
++from datetime import datetime
++
++from .times import _parse_iso8601_with_reso  # for backward compatibility
++
++
++def parse_iso8601_like(date_type, datetime_str):
++    """
++    Parse a datetime string that may be in ISO 8601 format (basic or extended)
++    or in the default cftime string format (YYYY-MM-DD hh:mm:ss).
++
++    Parameters
++    ----------
++    date_type : type
++        The cftime.datetime type.
++    datetime_str : str
++        The datetime string to parse.
++
++    Returns
++    -------
++    parsed_date : cftime.datetime
++        The parsed datetime.
++    resolution : str
++        The resolution of the parsed string (e.g. 'year', 'month', 'day', etc.)
++
++    Raises
++    ------
++    ValueError
++        If the string cannot be parsed.
++    """
++    # First, try the existing ISO 8601 parser.
++    try:
++        return _parse_iso8601_with_reso(date_type, datetime_str)
++    except ValueError:
++        pass
++
++    # If that fails, try the default cftime format: YYYY-MM-DD hh:mm:ss
++    # This format is similar to ISO 8601 extended, but with a space instead of 'T'
++    # We can replace the space with 'T' and try again.
++    if ' ' in datetime_str:
++        try:
++            return _parse_iso8601_with_reso(date_type, datetime_str.replace(' ', 'T'))
++        except ValueError:
++            pass
++
++    # If still not parsed, raise an error.
++    raise ValueError(f"Unable to parse datetime string '{datetime_str}'")

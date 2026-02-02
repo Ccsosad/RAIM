@@ -1,0 +1,53 @@
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+new file mode 100644
+index 0000000..c0639c2
+--- /dev/null
++++ b/astropy/cosmology/parameter.py
+@@ -0,0 +1,47 @@
++class Parameter:
++    def __init__(self, *, name, unit=None, value=None, derived=False, ...):
++        self.name = name
++        self.unit = unit
++        self.value = value
++        self.derived = derived
++        ...
++
++    def __eq__(self, other):
++        if not isinstance(other, Parameter):
++            return NotImplemented
++        return (self.name == other.name and
++                self.unit == other.unit and
++                self.value == other.value and
++                self.derived == other.derived and
++                ...)
++
++    def __repr__(self):
++        args = []
++        args.append(f"name={self.name!r}")
++        if self.unit is not None:
++            args.append(f"unit={self.unit!r}")
++        if self.value is not None:
++            args.append(f"value={self.value!r}")
++        if self.derived is not False:
++            args.append(f"derived={self.derived!r}")
++        # Add other attributes if any
++        return f"Parameter({', '.join(args)})"
++
++    def clone(self, **kwargs):
++        """Return a copy of this Parameter with changed attributes.
++
++        Parameters
++        ----------
++        **kwargs
++            Attributes to change in the new Parameter.
++
++        Returns
++        -------
++        Parameter
++            A new Parameter instance.
++        """
++        import copy
++        new = copy.deepcopy(self)
++        for key, value in kwargs.items():
++            setattr(new, key, value)
++        return new

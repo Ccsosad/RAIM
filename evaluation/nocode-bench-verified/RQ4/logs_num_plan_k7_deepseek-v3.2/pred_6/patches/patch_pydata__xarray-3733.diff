@@ -1,0 +1,195 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..99a98a3 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3443,10 +3443,44 @@ class DataArray(AbstractArray, DataWithCoords):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(self, dim, deg, full=False, rcond=None, skipna=None):
++        """
++        Least squares polynomial fit.
++
++        Parameters
++        ----------
++        dim : str
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        full : bool, optional
++            If True, return additional information (residuals, rank, singular values).
++        rcond : float, optional
++            Relative condition number of the fit. Singular values smaller than this
++            relative to the largest singular value will be ignored. The default value
++            is len(x)*eps, where eps is the relative precision of the float type,
++            about 2e-16 in most cases.
++        skipna : bool, optional
++            If True, ignore NaN values in the input. Not yet implemented.
++
++        Returns
++        -------
++        coefficients : DataArray
++            Polynomial coefficients ordered from highest degree to lowest.
++            If `full` is True, returns a Dataset with coefficients and additional info.
++
++        See Also
++        --------
++        xarray.polyval
++        numpy.polyfit
++        """
++        from .stats import polyfit
++        return polyfit(self, dim, deg, full=full, rcond=rcond, skipna=skipna)
++
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+     str = property(StringAccessor)
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/stats.py b/xarray/core/stats.py
+new file mode 100644
+index 0000000..b8128e6
+--- /dev/null
++++ b/xarray/core/stats.py
+@@ -0,0 +1,139 @@
++"""
++Statistical functions for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from . import duck_array_ops
++from .common import _contains_datetime_like_objects
++from .computation import apply_ufunc
++from .utils import is_scalar
++
++__all__ = ["polyfit", "polyval"]
++
++
++def _least_squares(lhs, rhs, rcond=None):
++    """
++    Return the coefficients of a polynomial of degree `deg` that fits the data.
++    This is a helper function for polyfit, using numpy.linalg.lstsq.
++    """
++    # This function is inspired by numpy's polyfit implementation.
++    # We use numpy.linalg.lstsq to solve the least squares problem.
++    # lhs: Vandermonde matrix of shape (N, deg+1)
++    # rhs: y-coordinates of shape (N,) or (N, M)
++    # Returns: coefficients of shape (deg+1,) or (deg+1, M)
++    coeffs, residuals, rank, s = np.linalg.lstsq(lhs, rhs, rcond=rcond)
++    return coeffs, residuals, rank, s
++
++
++def polyfit(da, dim, deg, full=False, rcond=None, skipna=None):
++    """
++    Least squares polynomial fit.
++
++    Parameters
++    ----------
++    da : DataArray
++        Input data. Must be a 1-D array along the dimension `dim`.
++    dim : str
++        Dimension along which to fit the polynomial.
++    deg : int
++        Degree of the fitting polynomial.
++    full : bool, optional
++        If True, return additional information (residuals, rank, singular values).
++    rcond : float, optional
++        Relative condition number of the fit. Singular values smaller than this
++        relative to the largest singular value will be ignored. The default value
++        is len(x)*eps, where eps is the relative precision of the float type,
++        about 2e-16 in most cases.
++    skipna : bool, optional
++        If True, ignore NaN values in the input. Not yet implemented.
++
++    Returns
++    -------
++    coefficients : DataArray
++        Polynomial coefficients ordered from highest degree to lowest.
++        If `full` is True, returns a Dataset with coefficients and additional info.
++    """
++    if skipna is not None:
++        raise NotImplementedError("skipna is not yet implemented for polyfit.")
++
++    # Ensure the dimension exists
++    if dim not in da.dims:
++        raise ValueError(f"Dimension {dim} not found in DataArray.")
++
++    # Get the coordinate along the dimension
++    x = da[dim].values
++    y = da.values
++
++    # Check if the coordinate is datetime-like
++    if _contains_datetime_like_objects(x):
++        # Convert datetime to numeric (seconds since epoch)
++        x = pd.to_datetime(x).astype('datetime64[ns]').astype('float64')
++
++    # Create the Vandermonde matrix
++    lhs = np.vander(x, deg + 1)
++
++    # Solve the least squares problem
++    coeffs, residuals, rank, s = _least_squares(lhs, y, rcond=rcond)
++
++    # Prepare the output
++    if full:
++        # Create a Dataset with coefficients and additional info
++        from .dataset import Dataset
++        coeff_da = DataArray(coeffs, dims=['degree'], coords={'degree': np.arange(deg, -1, -1)})
++        res_da = DataArray(residuals, dims=['residuals_dim'])
++        rank_da = DataArray(rank, dims=[])
++        s_da = DataArray(s, dims=['singular_values_dim'])
++        ds = Dataset({'polyfit_coefficients': coeff_da,
++                      'residuals': res_da,
++                      'rank': rank_da,
++                      'singular_values': s_da})
++        return ds
++    else:
++        # Return a DataArray with coefficients
++        return DataArray(coeffs, dims=['degree'], coords={'degree': np.arange(deg, -1, -1)})
++
++
++def polyval(coord, coeffs):
++    """
++    Evaluate a polynomial at specific values.
++
++    Parameters
++    ----------
++    coord : DataArray or array_like
++        Coordinate at which to evaluate the polynomial.
++    coeffs : DataArray or array_like
++        Polynomial coefficients ordered from highest degree to lowest.
++        If coeffs is a DataArray, it must have a dimension named 'degree'.
++
++    Returns
++    -------
++    values : DataArray
++        Evaluated polynomial.
++    """
++    # Convert inputs to DataArray if they are not
++    from .dataarray import DataArray
++    if not isinstance(coord, DataArray):
++        coord = DataArray(coord)
++    if not isinstance(coeffs, DataArray):
++        coeffs = DataArray(coeffs)
++
++    # Check if coeffs has a dimension named 'degree'
++    if 'degree' not in coeffs.dims:
++        raise ValueError("Coefficients must have a dimension named 'degree'.")
++
++    # Get the degree from the coefficients
++    deg = coeffs.sizes['degree'] - 1
++
++    # Create the Vandermonde matrix for the coordinate
++    x = coord.values
++    if _contains_datetime_like_objects(x):
++        x = pd.to_datetime(x).astype('datetime64[ns]').astype('float64')
++    vander = np.vander(x, deg + 1)
++
++    # Multiply with coefficients
++    # We need to align the dimensions: vander is (N, deg+1), coeffs is (deg+1, ...)
++    # We want to sum over the degree dimension.
++    result = (vander * coeffs.values).sum(axis=1)
++
++    # Return a DataArray with the same coordinates as the input coordinate
++    return DataArray(result, dims=coord.dims, coords=coord.coords)

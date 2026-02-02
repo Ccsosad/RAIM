@@ -1,0 +1,108 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..c085876 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3692,7 +3692,8 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         ----------
+         *dims : Hashable, optional
+             By default, reverse the dimensions on each array. Otherwise,
+-            reorder the dimensions to this order.
++            reorder the dimensions to this order. An ellipsis (`...`) can be used
++            to represent all other dimensions.
+ 
+         Returns
+         -------
+@@ -3711,12 +3712,20 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         numpy.transpose
+         DataArray.transpose
+         """
+-        if dims:
+-            if set(dims) ^ set(self.dims):
+-                raise ValueError(
+-                    "arguments to transpose (%s) must be "
+-                    "permuted dataset dimensions (%s)" % (dims, tuple(self.dims))
+-                )
++        from .transpose import infix_dims
++
++        # If no dimensions are given, reverse the dimensions.
++        if not dims:
++            dims = self.dims[::-1]
++        else:
++            # Expand ellipsis if present
++            dims = infix_dims(dims, self.dims)
++
++        if set(dims) ^ set(self.dims):
++            raise ValueError(
++                "arguments to transpose (%s) must be "
++                "permuted dataset dimensions (%s)" % (dims, tuple(self.dims))
++            )
+         ds = self.copy()
+         for name, var in self._variables.items():
+             var_dims = tuple(dim for dim in dims if dim in var.dims)
+@@ -5449,4 +5458,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/transpose.py b/xarray/core/transpose.py
+new file mode 100644
+index 0000000..a234159
+--- /dev/null
++++ b/xarray/core/transpose.py
+@@ -0,0 +1,55 @@
++"""
++Helper functions for transpose operations.
++"""
++
++from typing import Hashable, Iterable, Tuple
++
++from .utils import is_ellipsis
++
++
++def infix_dims(
++    dims: Iterable[Hashable], all_dims: Iterable[Hashable]
++) -> Tuple[Hashable, ...]:
++    """
++    Expand an ellipsis (...) in a sequence of dimensions to the remaining dimensions.
++
++    Parameters
++    ----------
++    dims : Iterable[Hashable]
++        The input dimensions, possibly containing an ellipsis.
++    all_dims : Iterable[Hashable]
++        All possible dimensions.
++
++    Returns
++    -------
++    Tuple[Hashable, ...]
++        The dimensions with the ellipsis expanded.
++
++    Examples
++    --------
++    >>> infix_dims(('x', ...), ('x', 'y', 'z'))
++    ('x', 'y', 'z')
++    >>> infix_dims((..., 'x'), ('x', 'y', 'z'))
++    ('y', 'z', 'x')
++    >>> infix_dims(('x', 'y'), ('x', 'y', 'z'))
++    ('x', 'y')
++    """
++    dims = tuple(dims)
++    all_dims = tuple(all_dims)
++
++    if ... not in dims:
++        return dims
++
++    if dims.count(...) > 1:
++        raise ValueError("Only one ellipsis may be used.")
++
++    # Split the dimensions at the ellipsis
++    ellipsis_index = dims.index(...)
++    left = dims[:ellipsis_index]
++    right = dims[ellipsis_index + 1 :]
++
++    # Dimensions that are not in left or right
++    remaining = [d for d in all_dims if d not in left and d not in right]
++
++    # Insert the remaining dimensions in place of the ellipsis
++    return left + tuple(remaining) + right

@@ -1,0 +1,10 @@
+diff --git a/astropy/units/cgs.py b/astropy/units/cgs.py
+new file mode 100644
+index 0000000..a65ad8d
+--- /dev/null
++++ b/astropy/units/cgs.py
+@@ -0,0 +1,4 @@
++def_unit(['Angstrom', 'angstrom', 'AA'], 1e-10 * m, namespace=globals(),
++         doc="Angstrom: 10^-10 m",
++         format={'latex': r'\AA', 'unicode': 'Å'},
++         prefixes=[(['m'], ['milli'], 1e-3)])

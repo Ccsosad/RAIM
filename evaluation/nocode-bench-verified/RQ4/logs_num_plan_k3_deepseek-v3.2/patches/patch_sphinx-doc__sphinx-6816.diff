@@ -1,0 +1,60 @@
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index 577f2c2..5d4bac2 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -81,6 +81,8 @@ class CheckExternalLinksBuilder(Builder):
+         self.to_ignore = [re.compile(x) for x in self.app.config.linkcheck_ignore]
+         self.anchors_ignore = [re.compile(x)
+                                for x in self.app.config.linkcheck_anchors_ignore]
++        self.auth = [(re.compile(pattern), auth_info) for pattern, auth_info
++                     in self.app.config.linkcheck_auth]
+         self.good = set()       # type: Set[str]
+         self.broken = {}        # type: Dict[str, str]
+         self.redirected = {}    # type: Dict[str, Tuple[str, int]]
+@@ -109,6 +111,12 @@ class CheckExternalLinksBuilder(Builder):
+         if self.app.config.linkcheck_timeout:
+             kwargs['timeout'] = self.app.config.linkcheck_timeout
+ 
++        def get_auth_for_uri(uri: str) -> Optional[Any]:
++            for pattern, auth_info in self.auth:
++                if pattern.match(uri):
++                    return auth_info
++            return None
++
+         def check_uri() -> Tuple[str, str, int]:
+             # split off anchor
+             if '#' in uri:
+@@ -127,6 +135,11 @@ class CheckExternalLinksBuilder(Builder):
+             except UnicodeError:
+                 req_url = encode_uri(req_url)
+ 
++            # get auth for this URI
++            auth = get_auth_for_uri(uri)
++            if auth:
++                kwargs['auth'] = auth
++
+             try:
+                 if anchor and self.app.config.linkcheck_anchors:
+                     # Read the whole document and see if #anchor exists
+@@ -312,9 +325,10 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     # Anchors starting with ! are ignored since they are
+     # commonly used for dynamic pages
+     app.add_config_value('linkcheck_anchors_ignore', ["^!"], None)
++    app.add_config_value('linkcheck_auth', [], None)
+ 
+     return {
+         'version': 'builtin',
+         'parallel_read_safe': True,
+         'parallel_write_safe': True,
+-    }
++    }
+diff --git a/sphinx/util/requests.py b/sphinx/util/requests.py
+index 09c5895..445627a 100644
+--- a/sphinx/util/requests.py
++++ b/sphinx/util/requests.py
+@@ -147,4 +147,4 @@ def head(url: str, **kwargs) -> requests.Response:
+         headers.setdefault('User-Agent', useragent_header[0][1])
+ 
+     with ignore_insecure_warning(**kwargs):
+-        return requests.get(url, **kwargs)
++        return requests.head(url, **kwargs)

@@ -1,0 +1,264 @@
+diff --git a/_pytest/runner.py b/_pytest/runner.py
+index 2109f65..d67a06a 100644
+--- a/_pytest/runner.py
++++ b/_pytest/runner.py
+@@ -73,11 +73,28 @@ def runtestprotocol(item, log=True, nextitem=None):
+     hasrequest = hasattr(item, "_request")
+     if hasrequest and not item._request:
+         item._initrequest()
++    
++    # Setup logging for this test
++    item.ihook.pytest_runtest_setup(item=item)
++    
+     rep = call_and_report(item, "setup", log)
+     reports = [rep]
+     if rep.passed:
+         if item.config.option.setupshow:
+             show_test_item(item)
++        
++        # Run the test
++        reports.append(call_and_report(item, "call", log))
++    
++    # Teardown logging for this test
++    item.ihook.pytest_runtest_teardown(item=item)
++    
++    reports.append(call_and_report(item, "teardown", log, nextitem=nextitem))
++    
++    # After teardown hook
++    item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
++    
++    return reports
+         if not item.config.option.setuponly:
+             reports.append(call_and_report(item, "call", log))
+     reports.append(call_and_report(item, "teardown", log,
+diff --git a/_pytest/logging.py b/_pytest/logging.py
+new file mode 100644
+index 0000000..6d6c6bb
+--- /dev/null
++++ b/_pytest/logging.py
+@@ -0,0 +1,225 @@
++"""Logging support for pytest."""
++import logging
++import sys
++import os
++from contextlib import contextmanager
++from io import StringIO
++
++import py
++import pytest
++
++
++DEFAULT_LOG_FORMAT = "%(name)s:%(levelname)s:%(message)s"
++DEFAULT_LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
++
++
++class LogCaptureHandler(logging.Handler):
++    """A logging handler that stores log records and the log text."""
++
++    def __init__(self):
++        super().__init__()
++        self.records = []
++        self.stream = StringIO()
++        self.setFormatter(logging.Formatter(DEFAULT_LOG_FORMAT, DEFAULT_LOG_DATE_FORMAT))
++
++    def emit(self, record):
++        self.records.append(record)
++        msg = self.format(record)
++        self.stream.write(msg + '\n')
++
++    def reset(self):
++        self.records = []
++        self.stream = StringIO()
++
++    def get_records(self, attribute, value):
++        return [r for r in self.records if getattr(r, attribute, None) == value]
++
++    @property
++    def text(self):
++        return self.stream.getvalue()
++
++
++class LogCaptureFixture:
++    """Fixture used to capture log messages."""
++
++    def __init__(self, item):
++        self._item = item
++        self._handler = None
++        self._initial_log_levels = {}
++
++    @property
++    def handler(self):
++        return self._handler
++
++    @handler.setter
++    def handler(self, handler):
++        self._handler = handler
++
++    def get_records(self, attribute, value):
++        if self.handler is None:
++            return []
++        return self.handler.get_records(attribute, value)
++
++    @property
++    def records(self):
++        return self.get_records('levelno', None)
++
++    @property
++    def text(self):
++        if self.handler is None:
++            return ''
++        return self.handler.text
++
++    @property
++    def record_tuples(self):
++        return [(r.name, r.levelno, r.getMessage()) for r in self.records]
++
++    def set_level(self, level, logger=None):
++        """Set the threshold level of a logger for the duration of a test."""
++        if logger is None:
++            logger = self.handler
++        else:
++            logger = logging.getLogger(logger)
++        self._initial_log_levels.setdefault(logger, logger.level)
++        logger.setLevel(level)
++
++    @contextmanager
++    def at_level(self, level, logger=None):
++        """Context manager that sets the level for a logger."""
++        if logger is None:
++            logger = self.handler
++        else:
++            logger = logging.getLogger(logger)
++        original_level = logger.level
++        logger.setLevel(level)
++        try:
++            yield
++        finally:
++            logger.setLevel(original_level)
++
++    def clear(self):
++        """Reset the list of log records and the log text."""
++        if self.handler is not None:
++            self.handler.reset()
++
++
++@pytest.fixture
++def caplog(request):
++    """Access and control log capturing."""
++    # Get the fixture from the request context
++    if hasattr(request.node, '_caplog'):
++        fixture = request.node._caplog
++    else:
++        fixture = LogCaptureFixture(request.node)
++        request.node._caplog = fixture
++    return fixture
++
++
++class LoggingPlugin:
++    """A plugin to capture log messages and provide a fixture."""
++
++    def __init__(self, config):
++        self.config = config
++        self.log_level = getattr(logging, config.getoption('log_level', 'NOTSET'))
++        self.log_format = config.getoption('log_format', DEFAULT_LOG_FORMAT)
++        self.log_date_format = config.getoption('log_date_format', DEFAULT_LOG_DATE_FORMAT)
++        self.log_print = config.getoption('log_print', True)
++        self.capture_handler = None
++
++    @pytest.hookimpl(tryfirst=True)
++    def pytest_runtest_setup(self, item):
++        """Set up log capturing for a test item."""
++        # Create a handler for this test
++        handler = LogCaptureHandler()
++        handler.setFormatter(logging.Formatter(self.log_format, self.log_date_format))
++        
++        # Attach to root logger
++        root_logger = logging.getLogger()
++        root_logger.addHandler(handler)
++        root_logger.setLevel(self.log_level)
++        
++        # Store on the item
++        if hasattr(item, '_caplog'):
++            item._caplog.handler = handler
++        else:
++            fixture = LogCaptureFixture(item)
++            fixture.handler = handler
++            item._caplog = fixture
++
++    @pytest.hookimpl(trylast=True)
++    def pytest_runtest_teardown(self, item):
++        """Tear down log capturing for a test item."""
++        if hasattr(item, '_caplog') and item._caplog.handler is not None:
++            handler = item._caplog.handler
++            root_logger = logging.getLogger()
++            root_logger.removeHandler(handler)
++            item._caplog.handler = None
++
++    @pytest.hookimpl(hookwrapper=True)
++    def pytest_runtest_makereport(self, item, call):
++        """Add captured log to the test report if the test failed."""
++        outcome = yield
++        report = outcome.get_result()
++        
++        if not self.log_print:
++            return
++        
++        if report.failed and hasattr(item, '_caplog'):
++            fixture = item._caplog
++            if fixture.handler is not None and fixture.text:
++                # Add the captured log to the report
++                if hasattr(report, 'sections'):
++                    report.sections.append(('Captured stdlog call', fixture.text))
++
++    @pytest.hookimpl(tryfirst=True)
++    def pytest_configure(self, config):
++        """Configure the logging plugin."""
++        config.pluginmanager.register(self, 'logging-plugin')
++
++    @pytest.hookimpl(trylast=True)
++    def pytest_unconfigure(self):
++        """Unconfigure the logging plugin."""
++
++
++def pytest_addoption(parser):
++    """Add command line options for logging."""
++    group = parser.getgroup('logging')
++    
++    group.addoption(
++        '--log-level',
++        dest='log_level',
++        default='NOTSET',
++        help='Set the logging level for tests'
++    )
++    
++    group.addoption(
++        '--log-format',
++        dest='log_format',
++        default=DEFAULT_LOG_FORMAT,
++        help='Set the log format for captured logs'
++    )
++    
++    group.addoption(
++        '--log-date-format',
++        dest='log_date_format',
++        default=DEFAULT_LOG_DATE_FORMAT,
++        help='Set the date format for captured logs'
++    )
++    
++    group.addoption(
++        '--no-print-logs',
++        dest='log_print',
++        action='store_false',
++        default=True,
++        help='Do not print captured logs on failed tests'
++    )
++
++
++def pytest_configure(config):
++    """Configure logging based on command line options."""
++    if config.getoption('help'):
++        return
++    
++    # Register the plugin
++    plugin = LoggingPlugin(config)
++    config.pluginmanager.register(plugin, 'logging-plugin')

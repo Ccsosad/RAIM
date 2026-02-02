@@ -1,0 +1,21 @@
+diff --git a/pylint/reporters/__init__.py b/pylint/reporters/__init__.py
+new file mode 100644
+index 0000000..89f17a8
+--- /dev/null
++++ b/pylint/reporters/__init__.py
+@@ -0,0 +1,15 @@
++MESSAGE_FIELDS = {
++    "path",
++    "module",
++    "obj",
++    "line",
++    "column",
++    "end_line",
++    "end_column",
++    "symbol",
++    "msg",
++    "msg_id",
++    "category",
++    "confidence",
++    "abspath",
++}

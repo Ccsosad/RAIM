@@ -1,0 +1,94 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..791fd97 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -1048,24 +1048,73 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             Any arguments required for the operator (typically, what is to
+             be multiplied with, divided by).
+         """
++        # If there are no differentials, use the original implementation
++        if not self.differentials:
++            results = []
++            for component, cls in self.attr_classes.items():
++                value = getattr(self, component)
++                if issubclass(cls, Angle):
++                    results.append(value)
++                else:
++                    results.append(op(value, *args))
+ 
+-        self._raise_if_has_differentials(op.__name__)
+-
+-        results = []
+-        for component, cls in self.attr_classes.items():
+-            value = getattr(self, component)
+-            if issubclass(cls, Angle):
+-                results.append(value)
+-            else:
+-                results.append(op(value, *args))
+-
+-        # try/except catches anything that cannot initialize the class, such
+-        # as operations that returned NotImplemented or a representation
+-        # instead of a quantity (as would happen for, e.g., rep * rep).
+-        try:
+-            return self.__class__(*results)
+-        except Exception:
++            # try/except catches anything that cannot initialize the class, such
++            # as operations that returned NotImplemented or a representation
++            # instead of a quantity (as would happen for, e.g., rep * rep).
++            try:
++                return self.__class__(*results)
++            except Exception:
++                return NotImplemented
++        else:
++            # For representations with differentials, convert to Cartesian,
++            # apply the operation, and convert back
++            return self._scale_operation_with_differentials(op, *args)
++
++    def _scale_operation_with_differentials(self, op, *args):
++        """Scale a representation with differentials by converting to Cartesian.
++        
++        This implements the requirement that scaling operations on representations
++        with differentials are equivalent to transforming to Cartesian, operating,
++        and transforming back.
++        """
++        # Convert self to Cartesian representation with Cartesian differentials
++        from .cartesian import CartesianRepresentation, CartesianDifferential
++        
++        # Convert representation to Cartesian
++        cart_rep = self.to_cartesian()
++        
++        # Convert differentials to CartesianDifferential if present
++        cart_diffs = {}
++        for key, diff in self.differentials.items():
++            # Represent the differential in Cartesian form
++            cart_diff = diff.represent_as(CartesianDifferential, base=self)
++            cart_diffs[key] = cart_diff
++        
++        # Create a CartesianRepresentation with the differentials
++        cart_with_diffs = cart_rep.with_differentials(cart_diffs)
++        
++        # Apply the scaling operation to the Cartesian representation
++        # This works because CartesianRepresentation._scale_operation doesn't
++        # check for differentials
++        scaled_cart = cart_with_diffs._scale_operation(op, *args)
++        
++        # If the operation returned NotImplemented, propagate it
++        if scaled_cart is NotImplemented:
+             return NotImplemented
++        
++        # Convert back to the original representation type
++        result = scaled_cart.represent_as(self.__class__)
++        
++        # Special case: UnitSphericalRepresentation with scale change
++        # should return SphericalRepresentation
++        from .spherical import UnitSphericalRepresentation, SphericalRepresentation
++        if (isinstance(self, UnitSphericalRepresentation) and 
++            not isinstance(result, UnitSphericalRepresentation)):
++            # The conversion already handled it - ensure it's SphericalRepresentation
++            if not isinstance(result, SphericalRepresentation):
++                result = result.represent_as(SphericalRepresentation)
++        
++        return result
+ 
+     def _combine_operation(self, op, other, reverse=False):
+         """Combine two representation.

@@ -1,0 +1,46 @@
+diff --git a/django/core/management/commands/makemigrations.py b/django/core/management/commands/makemigrations.py
+index 66985c1..ea60988 100644
+--- a/django/core/management/commands/makemigrations.py
++++ b/django/core/management/commands/makemigrations.py
+@@ -57,9 +57,17 @@ class Command(BaseCommand):
+             '--check', action='store_true', dest='check_changes',
+             help='Exit with a non-zero status if model changes are missing migrations.',
+         )
++        parser.add_argument(
++            '--scriptable', action='store_true',
++            help='Diverts log output and input prompts to stderr, writing only paths of '
++                 'generated migration files to stdout.',
++        )
+ 
+     def log(self, msg):
+-        self.stdout.write(msg)
++        if getattr(self, 'scriptable', False):
++            self.stderr.write(msg)
++        else:
++            self.stdout.write(msg)
+ 
+     @no_translations
+     def handle(self, *app_labels, **options):
+@@ -73,6 +81,7 @@ class Command(BaseCommand):
+             raise CommandError('The migration name must be a valid Python identifier.')
+         self.include_header = options['include_header']
+         check_changes = options['check_changes']
++        self.scriptable = options['scriptable']
+ 
+         # Make sure the app they asked for exists
+         app_labels = set(app_labels)
+@@ -223,6 +232,8 @@ class Command(BaseCommand):
+                         migration_string = writer.path
+                     if migration_string.startswith('..'):
+                         migration_string = writer.path
++                    if self.scriptable:
++                        self.stdout.write(writer.path)
+                     self.log('  %s\n' % self.style.MIGRATE_LABEL(migration_string))
+                     for operation in migration.operations:
+                         self.log('    - %s' % operation.describe())
+@@ -334,4 +345,4 @@ class Command(BaseCommand):
+                     self.log(self.style.MIGRATE_HEADING(
+                         "Full merge migrations file '%s':" % writer.filename
+                     ))
+-                    self.log(writer.as_string())
++                    self.log(writer.as_string())

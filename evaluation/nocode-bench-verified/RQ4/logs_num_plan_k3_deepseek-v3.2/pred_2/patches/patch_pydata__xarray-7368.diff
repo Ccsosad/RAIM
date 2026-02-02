@@ -1,0 +1,212 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..2dcc2ee 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -31,44 +31,131 @@ _THIS_ARRAY = ReprObject("<this-array>")
+ 
+ 
+ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+-    _data: DataWithCoords
+-    __slots__ = ("_data",)
++    _data: DataWithCoords | None
++    _variables: dict[Hashable, Variable]
++    _coord_names: set[Hashable]
++    _dims: dict[Hashable, int]
++    _indexes: dict[Hashable, Index]
++    __slots__ = ("_data", "_variables", "_coord_names", "_dims", "_indexes")
++
++    def __init__(
++        self,
++        variables: Mapping[Hashable, Variable] | None = None,
++        coord_names: set[Hashable] | None = None,
++        dims: Mapping[Hashable, int] | None = None,
++        indexes: Mapping[Hashable, Index] | None = None,
++        data: DataWithCoords | None = None,
++    ) -> None:
++        if data is not None:
++            # This is a wrapper around an existing DataWithCoords object
++            self._data = data
++            self._variables = {}
++            self._coord_names = set()
++            self._dims = {}
++            self._indexes = {}
++        else:
++            # This is a standalone Coordinates object
++            self._data = None
++            if variables is None:
++                variables = {}
++            self._variables = dict(variables)
++            if coord_names is None:
++                coord_names = set(variables.keys())
++            self._coord_names = set(coord_names)
++            if dims is None:
++                dims = calculate_dimensions(variables)
++            self._dims = dict(dims)
++            if indexes is None:
++                indexes = {}
++            self._indexes = dict(indexes)
+ 
+     def __getitem__(self, key: Hashable) -> T_DataArray:
+-        raise NotImplementedError()
++        if self._data is not None:
++            # Delegate to the underlying DataWithCoords object
++            if key in self._data.data_vars:
++                raise KeyError(key)
++            return self._data[key]
++        else:
++            from xarray.core.dataarray import DataArray
++            if key not in self._coord_names:
++                raise KeyError(key)
++            var = self._variables[key]
++            return DataArray(var, dims=var.dims, name=key)
+ 
+     def __setitem__(self, key: Hashable, value: Any) -> None:
+         self.update({key: value})
+ 
+     @property
+     def _names(self) -> set[Hashable]:
+-        raise NotImplementedError()
++        if self._data is not None:
++            return self._data._coord_names
++        else:
++            return self._coord_names
+ 
+     @property
+     def dims(self) -> Mapping[Hashable, int] | tuple[Hashable, ...]:
+-        raise NotImplementedError()
++        if self._data is not None:
++            return self._data.dims
++        else:
++            return self._dims
+ 
+     @property
+     def dtypes(self) -> Frozen[Hashable, np.dtype]:
+-        raise NotImplementedError()
++        if self._data is not None:
++            return Frozen({n: v.dtype for n, v in self._data._variables.items() if n in self._data._coord_names})
++        else:
++            return Frozen({n: v.dtype for n, v in self._variables.items() if n in self._coord_names})
+ 
+     @property
+     def indexes(self) -> Indexes[pd.Index]:
+-        return self._data.indexes
++        if self._data is not None:
++            return self._data.indexes
++        else:
++            # Convert Index objects to pandas.Index where possible
++            result = {}
++            for k, idx in self._indexes.items():
++                if isinstance(idx, pd.Index):
++                    result[k] = idx
++                else:
++                    # Try to convert to pandas.Index
++                    try:
++                        result[k] = idx.to_pandas_index()
++                    except (AttributeError, TypeError):
++                        # Skip if not convertible
++                        pass
++            return Indexes(result)
+ 
+     @property
+     def xindexes(self) -> Indexes[Index]:
+-        return self._data.xindexes
++        if self._data is not None:
++            return self._data.xindexes
++        else:
++            return Indexes(self._indexes)
+ 
+     @property
+     def variables(self):
+-        raise NotImplementedError()
++        if self._data is not None:
++            return Frozen({k: v for k, v in self._data.variables.items() if k in self._names})
++        else:
++            return Frozen({k: v for k, v in self._variables.items() if k in self._coord_names})
+ 
+     def _update_coords(self, coords, indexes):
+-        raise NotImplementedError()
++        if self._data is not None:
++            self._data._update_coords(coords, indexes)
++        else:
++            self._variables.update(coords)
++            self._coord_names.update(coords.keys())
++            self._dims.update(calculate_dimensions(coords))
++            self._indexes.update(indexes)
+ 
+     def _maybe_drop_multiindex_coords(self, coords):
+-        raise NotImplementedError()
++        if self._data is not None:
++            self._data._maybe_drop_multiindex_coords(coords)
++        else:
++            variables, indexes = drop_coords(coords, self._variables, self._indexes)
++            self._variables = variables
++            self._coord_names.intersection_update(variables)
++            self._indexes = indexes
+ 
+     def __iter__(self) -> Iterator[Hashable]:
+         # needs to be in the same order as the dataset variables
+@@ -85,8 +172,45 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     def __repr__(self) -> str:
+         return formatting.coords_repr(self)
+ 
++    @classmethod
++    def from_pandas_multiindex(cls, midx: pd.MultiIndex, dim: Hashable) -> "Coordinates":
++        """Create Coordinates from a pandas MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            MultiIndex to convert to coordinates.
++        dim : hashable
++            Name of the dimension to assign to the coordinates.
++
++        Returns
++        -------
++        Coordinates
++            Coordinates object containing the MultiIndex levels as coordinates
++            and the MultiIndex itself as an index.
++        """
++        from xarray.core.variable import Variable
++        from xarray.indexes import PandasMultiIndex
++
++        variables = {}
++        for i, (name, level) in enumerate(zip(midx.names, midx.levels)):
++            if name is None:
++                name = f"level_{i}"
++            variables[name] = Variable((dim,), level[midx.codes[i]])
++        
++        indexes = {dim: PandasMultiIndex(midx, dim)}
++        return cls(variables=variables, indexes=indexes)
++
+     def to_dataset(self) -> Dataset:
+-        raise NotImplementedError()
++        """Convert these coordinates into a new Dataset"""
++        if self._data is not None:
++            # Delegate to the underlying object
++            return self._data.coords.to_dataset()
++        else:
++            from xarray.core.dataset import Dataset
++            coords = {k: v.copy(deep=False) for k, v in self._variables.items()}
++            indexes = dict(self._indexes)
++            return Dataset._construct_direct(coords, set(coords), indexes=indexes)
+ 
+     def to_index(self, ordered_dims: Sequence[Hashable] | None = None) -> pd.Index:
+         """Convert all index coordinates into a :py:class:`pandas.Index`.
+@@ -250,7 +374,7 @@ class DatasetCoordinates(Coordinates):
+     __slots__ = ("_data",)
+ 
+     def __init__(self, dataset: Dataset):
+-        self._data = dataset
++        super().__init__(data=dataset)
+ 
+     @property
+     def _names(self) -> set[Hashable]:
+@@ -355,7 +479,7 @@ class DataArrayCoordinates(Coordinates["T_DataArray"]):
+     __slots__ = ("_data",)
+ 
+     def __init__(self, dataarray: T_DataArray) -> None:
+-        self._data = dataarray
++        super().__init__(data=dataarray)
+ 
+     @property
+     def dims(self) -> tuple[Hashable, ...]:

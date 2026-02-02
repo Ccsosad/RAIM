@@ -1,0 +1,163 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 17fe6af..96ee736 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3733,6 +3733,59 @@ class DataArray(AbstractArray, DataWithCoords):
+         full: bool = False,
+         cov: bool = False,
+     ):
++        """Least squares polynomial fit."""
++        return self._to_temp_dataset().polyfit(
++            dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov
++        )
++
++    def curvefit(
++        self,
++        coords,
++        func,
++        reduce_dims=None,
++        dim=None,
++        p0=None,
++        bounds=(-np.inf, np.inf),
++        param_names=None,
++        kwargs=None,
++    ):
++        """Fit arbitrary functions along dimensions using scipy.optimize.curve_fit.
++        
++        Parameters
++        ----------
++        coords : DataArray or list
++            Independent variable(s) for fitting
++        func : callable
++            Function to fit of form f(x, *params)
++        reduce_dims : str or list, optional
++            Dimensions to reduce by fitting
++        dim : str, optional
++            Alias for reduce_dims (deprecated)
++        p0 : array-like, optional
++            Initial guess for parameters
++        bounds : tuple or dict, optional
++            Lower and upper bounds for parameters
++        param_names : list, optional
++            Names for fitted parameters
++        kwargs : dict, optional
++            Additional kwargs passed to scipy.optimize.curve_fit
++
++        Returns
++        -------
++        Dataset
++            Contains coefficients, covariances and other fit diagnostics
++        """
++        ds = self._to_temp_dataset().curvefit(
++            coords=coords,
++            func=func,
++            reduce_dims=reduce_dims,
++            dim=dim,
++            p0=p0,
++            bounds=bounds,
++            param_names=param_names,
++            kwargs=kwargs,
++        )
++        return self._from_temp_dataset(ds)
+         """
+         Least squares polynomial fit.
+ 
+@@ -4424,4 +4477,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/fitting.py b/xarray/core/fitting.py
+new file mode 100644
+index 0000000..f675132
+--- /dev/null
++++ b/xarray/core/fitting.py
+@@ -0,0 +1,87 @@
++import numpy as np
++from scipy.optimize import curve_fit
++from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
++
++from . import utils
++from .common import AbstractArray, DataWithCoords
++from .dataset import Dataset
++from .variable import Variable
++
++def _get_func_args(func, n_params):
++    """Get argument names from function signature"""
++    import inspect
++    sig = inspect.signature(func)
++    params = list(sig.parameters.keys())[1:]  # Skip first arg (x)
++    if len(params) != n_params:
++        params = [f'param{i}' for i in range(n_params)]
++    return params
++
++def _initialize_curvefit_params(func, p0, param_names):
++    """Initialize parameters for curve fitting"""
++    if p0 is None:
++        # Try to estimate from function defaults
++        import inspect
++        sig = inspect.signature(func)
++        p0 = []
++        for name, param in list(sig.parameters.items())[1:]:  # Skip x
++            if param.default != inspect.Parameter.empty:
++                p0.append(param.default)
++        p0 = np.array(p0) if p0 else None
++
++    if param_names is None:
++        param_names = _get_func_args(func, len(p0) if p0 is not None else 1)
++    
++    return p0, param_names
++
++def dataset_curvefit(
++    dataset,
++    coords,
++    func,
++    reduce_dims=None,
++    dim=None,
++    p0=None,
++    bounds=(-np.inf, np.inf),
++    param_names=None,
++    kwargs=None,
++):
++    """Fit arbitrary functions to dataset variables using curve_fit"""
++    from .dataarray import DataArray
++
++    if dim is not None:
++        reduce_dims = dim
++        warnings.warn(
++            "The 'dim' argument to curvefit is deprecated and will be removed in a "
++            "future version. Use 'reduce_dims' instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++
++    if isinstance(coords, (DataArray, Variable)):
++        coords = [coords]
++    
++    # Handle bounds
++    bounds_defaults = (-np.inf, np.inf)
++    if isinstance(bounds, dict):
++        bounds_dict = bounds
++        bounds = [bounds_dict.get(p, bounds_defaults) for p in param_names]
++    else:
++        bounds = np.broadcast_to(bounds, (2, len(param_names))).T
++    
++    # Initialize parameters
++    p0, param_names = _initialize_curvefit_params(func, p0, param_names)
++    
++    # Prepare fitting kwargs
++    if kwargs is None:
++        kwargs = {}
++    kwargs.setdefault('p0', p0)
++    kwargs.setdefault('bounds', bounds.T)
++    
++    # Perform fit
++    popt, pcov = curve_fit(func, [c.values for c in coords], dataset.values, **kwargs)
++    
++    # Create output dataset
++    result = Dataset()
++    result['coefficients'] = (param_names, popt)
++    result['covariance'] = (param_names, param_names, pcov)
++    
++    return result

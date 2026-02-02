@@ -1,0 +1,129 @@
+diff --git a/django/forms/forms.py b/django/forms/forms.py
+index 3ebacee..3378097 100644
+--- a/django/forms/forms.py
++++ b/django/forms/forms.py
+@@ -66,12 +66,26 @@ class BaseForm(RenderableFormMixin):
+     prefix = None
+     use_required_attribute = True
+ 
+-    template_name = "django/forms/default.html"
+     template_name_p = "django/forms/p.html"
+     template_name_table = "django/forms/table.html"
+     template_name_ul = "django/forms/ul.html"
+     template_name_label = "django/forms/label.html"
+ 
++    @property
++    def template_name(self):
++        if hasattr(self, '_template_name'):
++            return self._template_name
++        # Check for a class-level string override.
++        cls = self.__class__
++        if 'template_name' in cls.__dict__ and isinstance(cls.__dict__['template_name'], str):
++            return cls.__dict__['template_name']
++        # Fall back to the renderer's form_template_name.
++        return self.renderer.form_template_name
++
++    @template_name.setter
++    def template_name(self, value):
++        self._template_name = value
++
+     def __init__(
+         self,
+         data=None,
+@@ -536,4 +550,4 @@ class Form(BaseForm, metaclass=DeclarativeFieldsMetaclass):
+     # self.fields is specified. This class (Form) is the one that does the
+     # fancy metaclass stuff purely for the semantic sugar -- it allows one
+     # to define a form using declarative syntax.
+-    # BaseForm itself has no way of designating self.fields.
++    # BaseForm itself has no way of designating self.fields.
+diff --git a/django/forms/formsets.py b/django/forms/formsets.py
+index bf826c8..36403eb 100644
+--- a/django/forms/formsets.py
++++ b/django/forms/formsets.py
+@@ -62,11 +62,25 @@ class BaseFormSet(RenderableFormMixin):
+             "%(field_names)s. You may need to file a bug report if the issue persists."
+         ),
+     }
+-    template_name = "django/forms/formsets/default.html"
+     template_name_p = "django/forms/formsets/p.html"
+     template_name_table = "django/forms/formsets/table.html"
+     template_name_ul = "django/forms/formsets/ul.html"
+ 
++    @property
++    def template_name(self):
++        if hasattr(self, '_template_name'):
++            return self._template_name
++        # Check for a class-level string override.
++        cls = self.__class__
++        if 'template_name' in cls.__dict__ and isinstance(cls.__dict__['template_name'], str):
++            return cls.__dict__['template_name']
++        # Fall back to the renderer's formset_template_name.
++        return self.renderer.formset_template_name
++
++    @template_name.setter
++    def template_name(self, value):
++        self._template_name = value
++
+     def __init__(
+         self,
+         data=None,
+diff --git a/django/forms/renderers.py b/django/forms/renderers.py
+index f0a7fac..d697b1a 100644
+--- a/django/forms/renderers.py
++++ b/django/forms/renderers.py
+@@ -15,6 +15,9 @@ def get_default_renderer():
+ 
+ 
+ class BaseRenderer:
++    form_template_name = "django/forms/default.html"
++    formset_template_name = "django/forms/formsets/default.html"
++
+     def get_template(self, template_name):
+         raise NotImplementedError("subclasses must implement get_template()")
+ 
+diff --git a/django/forms/descriptors.py b/django/forms/descriptors.py
+new file mode 100644
+index 0000000..68d97c4
+--- /dev/null
++++ b/django/forms/descriptors.py
+@@ -0,0 +1,40 @@
++class TemplateNameDescriptor:
++    """
++    A descriptor for the template_name attribute on forms and formsets.
++    It returns the renderer's form_template_name or formset_template_name by default,
++    but can be overridden by setting template_name on the class or instance.
++    """
++    def __init__(self, renderer_attr):
++        self.renderer_attr = renderer_attr
++
++    def __get__(self, obj, cls):
++        if obj is None:
++            # When accessed on the class, return the class's template_name if it's a string,
++            # otherwise return the descriptor to allow setting.
++            return cls.__dict__.get('template_name', self)
++        # First, check for an instance-specific value.
++        if hasattr(obj, '_template_name'):
++            return obj._template_name
++        # Then, check for a class-specific string value.
++        if 'template_name' in cls.__dict__ and isinstance(cls.__dict__['template_name'], str):
++            return cls.__dict__['template_name']
++        # Finally, fall back to the renderer.
++        renderer = obj.renderer
++        return getattr(renderer, self.renderer_attr)
++
++    def __set__(self, obj, value):
++        if obj is None:
++            # Setting on the class.
++            cls = value
++            # We are actually setting on the class, so we need to store it in the class's __dict__.
++            # But we cannot do that from here because we don't know which class.
++            # Actually, the descriptor is called with the class as 'obj' when setting on the class.
++            # Wait: the __set__ is called with obj=None when setting on the class? No, it's called with obj as the class.
++            # The documentation says: for a class attribute, __set__ is called with obj=None.
++            # So we cannot set the class attribute from here.
++            # Instead, we should allow setting the class attribute directly, which will replace the descriptor.
++            # So we don't do anything here.
++            pass
++        else:
++            # Setting on an instance.
++            obj._template_name = value

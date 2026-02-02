@@ -1,0 +1,196 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index 5d84827..fce51e8 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -231,6 +231,53 @@ def setdiff(table1, table2, keys=None):
+     return t12_diff
+ 
+ 
++def cstack(tables, join_type='outer', metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along the third axis).
++
++    A ``join_type`` of 'exact' means that the tables must all have exactly
++    the same column names (though the order can vary).  If ``join_type``
++    is 'inner' then the intersection of common columns will be the output.
++    A value of 'outer' (default) means the output will have the union of
++    all columns, with table values being masked where no common values are
++    available.
++
++    For this function the length of all input tables must be the same.
++
++    Parameters
++    ----------
++    tables : Table or list of Table objects
++        Table(s) to stack along the third axis (depth-wise) with the current table
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    metadata_conflicts : str
++        How to proceed with metadata conflicts. This should be one of:
++            * ``'silent'``: silently pick the last conflicting meta-data value
++            * ``'warn'``: pick the last conflicting meta-data value, but emit a warning (default)
++            * ``'error'``: raise an exception.
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++
++    Examples
++    --------
++    See the :ref:`stack-depthwise` section in the documentation for an example.
++    """
++    tables = _get_list_of_tables(tables)  # validates input
++    if len(tables) == 1:
++        return tables[0]  # no point in stacking a single table
++    col_name_map = OrderedDict()
++
++    out = _cstack(tables, join_type, col_name_map, metadata_conflicts)
++
++    # Merge table metadata
++    _merge_table_meta(out, tables, metadata_conflicts=metadata_conflicts)
++
++    return out
++
++
+ def vstack(tables, join_type='outer', metadata_conflicts='warn'):
+     """
+     Stack tables vertically (along rows)
+@@ -772,6 +819,137 @@ def _join(left, right, keys=None, join_type='inner',
+     return out
+ 
+ 
++def _cstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along the third axis).
++
++    A ``join_type`` of 'exact' (default) means that the arrays must all
++    have exactly the same column names (though the order can vary).  If
++    ``join_type`` is 'inner' then the intersection of common columns will
++    be the output.  A value of 'outer' means the output will have the union of
++    all columns, with array values being masked where no common values are
++    available.
++
++    Parameters
++    ----------
++    arrays : list of Tables
++        Tables to stack by depth (along the third axis)
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    col_name_map : empty dict or None
++        If passed as a dict then it will be updated in-place with the
++        mapping of output to input column names.
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++    """
++    # Store user-provided col_name_map until the end
++    _col_name_map = col_name_map
++
++    # Input validation
++    if join_type not in ('inner', 'exact', 'outer'):
++        raise ValueError("`join_type` arg must be one of 'inner', 'exact' or 'outer'")
++
++    # Trivial case of one input array
++    if len(arrays) == 1:
++        return arrays[0]
++
++    # Check that all tables have the same number of rows
++    n_rows = len(arrays[0])
++    for arr in arrays[1:]:
++        if len(arr) != n_rows:
++            raise TableMergeError("All tables must have the same number of rows for cstack")
++
++    # Start by assuming an outer match where all names go to output
++    names = set(itertools.chain(*[arr.colnames for arr in arrays]))
++    col_name_map = get_col_name_map(arrays, names)
++
++    # If require_match is True then the output must have exactly the same
++    # number of columns as each input array
++    if join_type == 'exact':
++        for names in col_name_map.values():
++            if any(x is None for x in names):
++                raise TableMergeError('Inconsistent columns in input arrays '
++                                      "(use 'inner' or 'outer' join_type to "
++                                      "allow non-matching columns)")
++        join_type = 'outer'
++
++    # For an inner join, keep only columns where all input arrays have that column
++    if join_type == 'inner':
++        col_name_map = OrderedDict((name, in_names) for name, in_names in col_name_map.items()
++                                   if all(x is not None for x in in_names))
++        if len(col_name_map) == 0:
++            raise TableMergeError('Input arrays have no columns in common')
++
++    out = _get_out_class(arrays)()
++
++    for out_name, in_names in col_name_map.items():
++        # List of input arrays that contribute to this output column
++        cols = [arr[name] for arr, name in zip(arrays, in_names) if name is not None]
++
++        # Check if we need to create a new column that can hold 2D data
++        # We'll stack along a new axis (depth-wise)
++        col_cls = _get_out_class(cols)
++        
++        # For depth-wise stacking, we need to handle the data stacking manually
++        # First, collect the data from each column
++        col_data = []
++        for name, arr in zip(in_names, arrays):
++            if name in arr.colnames:
++                col_data.append(arr[name].data)
++            else:
++                # Create masked array for missing columns
++                col_data.append(np.ma.array(np.empty(n_rows, dtype=object), 
++                                            mask=True))
++
++        # Stack along new axis (depth-wise)
++        # Use np.dstack which stacks along third axis, but we need to handle 1D arrays
++        # First ensure all arrays are at least 2D with shape (n_rows, 1)
++        col_data_reshaped = []
++        for data in col_data:
++            if data.ndim == 1:
++                col_data_reshaped.append(data[:, np.newaxis])
++            else:
++                col_data_reshaped.append(data)
++        
++        # Stack along axis=1 (columns) to get shape (n_rows, n_tables)
++        stacked_data = np.ma.concatenate(col_data_reshaped, axis=1)
++        
++        # Create the output column
++        try:
++            # Try to use the first column's class to create the new column
++            first_col = None
++            for name, arr in zip(in_names, arrays):
++                if name in arr.colnames:
++                    first_col = arr[name]
++                    break
++            
++            if first_col is None:
++                # All columns are missing, create a masked column
++                col = MaskedColumn(stacked_data, name=out_name)
++            else:
++                # Create a new column similar to the first one but with stacked data
++                col = first_col.__class__(stacked_data, name=out_name)
++                
++                # Copy attributes from the first column
++                for attr in ('unit', 'format', 'description', 'meta'):
++                    if hasattr(first_col, attr):
++                        setattr(col, attr, getattr(first_col, attr))
++                
++        except Exception as e:
++            raise TableMergeError(f"Cannot stack column '{out_name}': {e}")
++
++        out[out_name] = col
++
++    # If col_name_map supplied as a dict input, then update.
++    if isinstance(_col_name_map, Mapping):
++        _col_name_map.update(col_name_map)
++
++    return out
++
++
+ def _vstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='warn'):
+     """
+     Stack Tables vertically (by rows)

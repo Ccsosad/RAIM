@@ -1,0 +1,60 @@
+diff --git a/seaborn/_core/plot.py b/seaborn/_core/plot.py
+index 5b43615..beeedff 100644
+--- a/seaborn/_core/plot.py
++++ b/seaborn/_core/plot.py
+@@ -1167,6 +1167,16 @@ class Plotter:
+ 
+         return seed_values
+ 
++    def _adjust_nominal_axis(self, ax, axis):
++        """Adjust axis properties for a nominal scale to resemble seaborn categorical axes."""
++        if axis == "x":
++            ax.set_xmargin(0)
++            ax.xaxis.grid(False)
++        else:
++            ax.set_ymargin(0)
++            ax.yaxis.grid(False)
++            ax.invert_yaxis()
++
+     def _setup_scales(
+         self, p: Plot,
+         common: PlotData,
+@@ -1174,6 +1184,8 @@ class Plotter:
+         variables: list[str] | None = None,
+     ) -> None:
+ 
++        from seaborn._core.scales import Nominal
++
+         if variables is None:
+             # Add variables that have data but not a scale, which happens
+             # because this method can be called multiple time, to handle
+@@ -1238,7 +1250,6 @@ class Plotter:
+             # This only affects us when sharing *paired* axes. This is a novel/niche
+             # behavior, so we will raise rather than hack together a workaround.
+             if axis is not None and Version(mpl.__version__) < Version("3.4.0"):
+-                from seaborn._core.scales import Nominal
+                 paired_axis = axis in p._pair_spec.get("structure", {})
+                 cat_scale = isinstance(scale, Nominal)
+                 ok_dim = {"x": "col", "y": "row"}[axis]
+@@ -1275,6 +1286,15 @@ class Plotter:
+                 view_scale = scale._setup(seed_values, prop, axis=axis_obj)
+                 set_scale_obj(view["ax"], axis, view_scale._matplotlib_scale)
+ 
++                # If the scale is nominal, adjust the axis to look like a categorical axis
++                from seaborn._core.scales import Nominal
++                if isinstance(view_scale, Nominal):
++                    self._adjust_nominal_axis(view["ax"], axis)
++
++                # If the scale is nominal, adjust the axis to look like a categorical axis
++                if isinstance(view_scale, Nominal):
++                    self._adjust_nominal_axis(view["ax"], axis)
++
+                 for layer, new_series in zip(layers, transformed_data):
+                     layer_df = layer["data"].frame
+                     if var in layer_df:
+@@ -1646,4 +1666,4 @@ class Plotter:
+ 
+         engine_default = None if p._target is not None else "tight"
+         layout_engine = p._layout_spec.get("engine", engine_default)
+-        set_layout_engine(self._figure, layout_engine)
++        set_layout_engine(self._figure, layout_engine)

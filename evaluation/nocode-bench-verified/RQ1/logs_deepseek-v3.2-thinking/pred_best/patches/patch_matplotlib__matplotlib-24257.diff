@@ -1,0 +1,96 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..78f9526 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -81,6 +81,73 @@ def _apply_style(d, warn=True):
+     mpl.rcParams.update(_remove_blacklisted_style_params(d, warn=warn))
+ 
+ 
++def _rc_params_from_package(style_spec):
++    """
++    Load rc parameters from a style file in a package.
++    
++    Parameters
++    ----------
++    style_spec : str
++        Dotted package specification like "package.subpackage.style_name"
++    
++    Returns
++    -------
++    dict
++        rc parameters parsed from the style file
++    
++    Raises
++    ------
++    ImportError
++        If the package cannot be accessed
++    IOError
++        If the style file cannot be read
++    """
++    import sys
++    import importlib.util
++    
++    # Split the spec into package and resource name
++    parts = style_spec.split('.')
++    if len(parts) < 2:
++        raise ImportError(f"Invalid package style specification: {style_spec}")
++    
++    # Last part is the style name, rest is the package path
++    style_name = parts[-1]
++    package_path = '.'.join(parts[:-1])
++    
++    # Try to find the package without importing it
++    spec = importlib.util.find_spec(package_path)
++    if spec is None:
++        raise ImportError(f"Package {package_path} not found")
++    
++    # Construct the resource path
++    resource_name = f"{style_name}.mplstyle"
++    
++    # Use importlib.resources for Python >= 3.9, otherwise importlib_resources
++    if sys.version_info >= (3, 9):
++        from importlib import resources
++        try:
++            # Use files() API which is safe and doesn't import the package
++            package = resources.files(package_path)
++            with package.joinpath(resource_name).open('r', encoding='utf-8') as f:
++                return rc_params_from_file(f, use_default_template=False)
++        except (AttributeError, FileNotFoundError, OSError) as e:
++            raise IOError(
++                f"Cannot read style file {resource_name} from package {package_path}"
++            ) from e
++    else:
++        # For Python < 3.9, use importlib_resources
++        import importlib_resources
++        try:
++            # Use the modern API that also avoids importing
++            package = importlib_resources.files(package_path)
++            with package.joinpath(resource_name).open('r', encoding='utf-8') as f:
++                return rc_params_from_file(f, use_default_template=False)
++        except (AttributeError, FileNotFoundError, OSError) as e:
++            raise IOError(
++                f"Cannot read style file {resource_name} from package {package_path}"
++            ) from e
++
++
+ @_docstring.Substitution(
+     "\n".join(map("- {}".format, sorted(STYLE_BLACKLIST, key=str.lower)))
+ )
+@@ -148,6 +215,17 @@ def use(style):
+         elif style in library:
+             _apply_style(library[style])
+         else:
++            # Check if style is a dotted package reference
++            if isinstance(style, str) and '.' in style:
++                # Try to load from package resources
++                try:
++                    rc = _rc_params_from_package(style)
++                    _apply_style(rc)
++                    continue
++                except (ImportError, IOError):
++                    # Not a valid package resource, continue to try as file/URL
++                    pass
++            
+             try:
+                 rc = rc_params_from_file(style, use_default_template=False)
+                 _apply_style(rc)

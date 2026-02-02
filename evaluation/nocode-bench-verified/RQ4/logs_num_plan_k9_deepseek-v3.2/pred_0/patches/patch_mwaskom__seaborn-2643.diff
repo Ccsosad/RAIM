@@ -1,0 +1,63 @@
+diff --git a/seaborn/utils.py b/seaborn/utils.py
+index c64edd8..0fe156a 100644
+--- a/seaborn/utils.py
++++ b/seaborn/utils.py
+@@ -716,6 +716,58 @@ def adjust_legend_subtitles(legend):
+                     text.set_size(font_size)
+ 
+ 
++def move_legend(obj, loc, **kwargs):
++    """
++    Recreate a legend on an existing plot object with a new location and/or other properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.FacetGrid
++        The object with the legend to be moved.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend`.
++    **kwargs
++        Additional keyword arguments are passed to :meth:`matplotlib.axes.Axes.legend`.
++
++    Returns
++    -------
++    None
++
++    """
++    # Get the existing legend
++    if hasattr(obj, "_legend"):
++        old_legend = obj._legend
++    else:
++        old_legend = obj.get_legend()
++
++    if old_legend is None:
++        raise ValueError("No legend found.")
++
++    # Get the handles and labels from the old legend
++    handles = old_legend.legendHandles
++    labels = [t.get_text() for t in old_legend.get_texts()]
++
++    # Get the title
++    title = old_legend.get_title().get_text()
++
++    # Remove the old legend
++    old_legend.remove()
++
++    # Create a new legend
++    if hasattr(obj, "legend"):
++        # For FacetGrid, we have a legend method
++        new_legend = obj.legend(handles, labels, loc=loc, title=title, **kwargs)
++    else:
++        # For axes, use ax.legend
++        new_legend = obj.legend(handles, labels, loc=loc, title=title, **kwargs)
++
++    # For FacetGrid, we need to update the _legend attribute
++    if hasattr(obj, "_legend"):
++        obj._legend = new_legend
++
++    return new_legend
++
++
+ def _deprecate_ci(errorbar, ci):
+     """
+     Warn on usage of ci= and convert to appropriate errorbar= arg.

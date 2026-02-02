@@ -1,0 +1,9 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..6e553f1 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -1,3 +1,4 @@
++
+ """DatetimeIndex analog for cftime.datetime objects"""
+ # The pandas.Index subclass defined here was copied and adapted for
+ # use with cftime.datetime objects based on the source code defining

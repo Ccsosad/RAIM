@@ -1,0 +1,50 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 24b047c..f6d48eb 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -1,3 +1,4 @@
++
+ import numpy as np
+ 
+ 
+@@ -119,13 +120,34 @@ def _check_unknown(values, known_values, return_mask=False):
+ 
+     """
+     if values.dtype == object:
+-        uniques_set = set(known_values)
+-        diff = list(set(values) - uniques_set)
+-        if return_mask:
+-            if diff:
+-                valid_mask = np.array([val in uniques_set for val in values])
++        # We cannot use set because np.nan may be in known_values
++        # So we build a list of known values that can be compared
++        known_values_list = list(known_values)
++        diff = []
++        for v in values:
++            if v is None:
++                if None not in known_values_list:
++                    diff.append(None)
++            elif isinstance(v, float) and np.isnan(v):
++                if not any(isinstance(k, float) and np.isnan(k) for k in known_values_list):
++                    diff.append(v)
+             else:
+-                valid_mask = np.ones(len(values), dtype=bool)
++                if v not in known_values_list:
++                    diff.append(v)
++        # Remove duplicates in diff
++        diff = list(set(diff))
++        if return_mask:
++            valid_mask = np.ones(len(values), dtype=bool)
++            for i, v in enumerate(values):
++                if v is None:
++                    if None not in known_values_list:
++                        valid_mask[i] = False
++                elif isinstance(v, float) and np.isnan(v):
++                    if not any(isinstance(k, float) and np.isnan(k) for k in known_values_list):
++                        valid_mask[i] = False
++                else:
++                    if v not in known_values_list:
++                        valid_mask[i] = False
+             return diff, valid_mask
+         else:
+             return diff

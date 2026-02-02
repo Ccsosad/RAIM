@@ -1,0 +1,76 @@
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..51d2b0c
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,70 @@
++"""
++Configuration for astropy.constants.
++"""
++
++from astropy.config import ScienceState
++
++__all__ = ['physical_constants', 'astronomical_constants']
++
++
++class _PhysicalConstantsState(ScienceState):
++    """
++    ScienceState for the physical constants version.
++
++    The value should be a string representing the version, e.g., 'codata2010'.
++    """
++
++    _value = 'codata2014'
++
++    @classmethod
++    def validate(cls, value):
++        # Check if astropy.units or astropy.constants are already imported.
++        # If so, raise a RuntimeError.
++        import sys
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError("astropy.units is already imported")
++        if 'astropy.constants' in sys.modules:
++            raise RuntimeError("astropy.constants is already imported")
++
++        # Map the module names to the actual version.
++        # This mapping is based on the existing modules.
++        if value == 'astropyconst13':
++            return 'codata2010'
++        elif value == 'astropyconst20':
++            return 'codata2014'
++        else:
++            # Assume it's a valid version string.
++            return value
++
++
++class _AstronomicalConstantsState(ScienceState):
++    """
++    ScienceState for the astronomical constants version.
++
++    The value should be a string representing the version, e.g., 'iau2012'.
++    """
++
++    _value = 'iau2015'
++
++    @classmethod
++    def validate(cls, value):
++        # Check if astropy.units or astropy.constants are already imported.
++        # If so, raise a RuntimeError.
++        import sys
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError("astropy.units is already imported")
++        if 'astropy.constants' in sys.modules:
++            raise RuntimeError("astropy.constants is already imported")
++
++        # Map the module names to the actual version.
++        if value == 'astropyconst13':
++            return 'iau2012'
++        elif value == 'astropyconst20':
++            return 'iau2015'
++        else:
++            return value
++
++
++# Create the instances that will be used in the top-level astropy.
++physical_constants = _PhysicalConstantsState()
++astronomical_constants = _AstronomicalConstantsState()

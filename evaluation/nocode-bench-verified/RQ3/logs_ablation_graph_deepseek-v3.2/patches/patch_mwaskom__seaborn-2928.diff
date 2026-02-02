@@ -1,0 +1,134 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..f62578a 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -36,6 +36,51 @@ class _BaseGrid:
+                 ax.set(**kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It should take the grid
++            object as the first argument and return any value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of calling `func(self, *args, **kwargs)`.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the grid object.
++
++        This method is intended for method chaining. The function should take
++        the grid object as the first argument and return any value. The grid
++        object is then returned by this method.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It should take the grid
++            object as the first argument and return any value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     @property
+     def fig(self):
+         """DEPRECATED: prefer the `figure` property."""
+@@ -84,6 +129,7 @@ class Grid(_BaseGrid):
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+         self._figure.tight_layout(*args, **kwargs)
++        return self
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -1610,6 +1656,44 @@ class PairGrid(Grid):
+         for ax, label in zip(self.axes[:, 0], self.y_vars):
+             ax.set_ylabel(label)
+ 
++    def refline(self, *, x=None, y=None, color='.5', linestyle='--', **line_kws):
++        """Add a reference line(s) to each facet.
++
++        Parameters
++        ----------
++        x, y : numeric
++            Value(s) to draw the line(s) at.
++        color : :mod:`matplotlib color <matplotlib.colors>`
++            Specifies the color of the reference line(s). Pass ``color=None`` to
++            use ``hue`` mapping.
++        linestyle : str
++            Specifies the style of the reference line(s).
++        line_kws : key, value mappings
++            Other keyword arguments are passed to :meth:`matplotlib.axes.Axes.axvline`
++            when ``x`` is not None and :meth:`matplotlib.axes.Axes.axhline` when ``y``
++            is not None.
++
++        Returns
++        -------
++        :class:`PairGrid` instance
++            Returns ``self`` for easy method chaining.
++
++        """
++        line_kws['color'] = color
++        line_kws['linestyle'] = linestyle
++
++        if x is not None:
++            for ax in self.axes.flat:
++                if ax is not None:
++                    ax.axvline(x, **line_kws)
++
++        if y is not None:
++            for ax in self.axes.flat:
++                if ax is not None:
++                    ax.axhline(y, **line_kws)
++
++        return self
++
+     def _find_numeric_cols(self, data):
+         """Find which variables in a DataFrame are numeric."""
+         numeric_cols = []
+@@ -1883,6 +1967,24 @@ class JointGrid(_BaseGrid):
+ 
+         return self
+ 
++    def tight_layout(self, *args, **kwargs):
++        """
++        Call fig.tight_layout on the grid's figure.
++
++        Parameters
++        ----------
++        *args, **kwargs
++            Arguments are passed to :meth:`matplotlib.figure.Figure.tight_layout`.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        self.figure.tight_layout(*args, **kwargs)
++        return self
++
+     def set_axis_labels(self, xlabel="", ylabel="", **kwargs):
+         """Set axis labels on the bivariate axes.
+ 

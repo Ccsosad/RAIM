@@ -1,0 +1,362 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..b9c8972 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -2322,4 +2322,356 @@ def distplot(
+         else:
+             ax.set_xlabel(axlabel)
+ 
+-    return ax
++    return ax
++
++
++@_deprecate_positional_args
++def displot(
++    *,
++    x=None, y=None,
++    hue=None, row=None, col=None,
++    weights=None,
++    kind="hist",
++    rug=False,
++    rug_kws=None,
++    log_scale=None,
++    legend=True,
++    **kwargs
++):
++    """
++    Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distributions of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    `kind` parameter selects the approach to use:
++
++    - :func:`histplot` (with `kind="hist"`; the default)
++    - :func:`kdeplot` (with `kind="kde"`)
++    - :func:`ecdfplot` (with `kind="ecdf"`)
++
++    Additionally, a `rug` plot can be added to any kind of plot to show
++    individual observations.
++
++    Extra keyword arguments are passed to the underlying plotting function,
++    so you should refer to the documentation for each to see type-specific
++    options.
++
++    Parameters
++    ----------
++    x, y : vectors or keys in `data`
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in `data`
++        Variables that define subsets to plot on different facets.
++    weights : vector or key in `data`
++        If provided, weight the contribution of the corresponding data points
++        to the distribution using this vector.
++    kind : {"hist", "kde", "ecdf"}
++        The kind of plot to draw. Corresponds to the underlying plotting
++        function.
++    rug : bool
++        If True, show each observation with marginal ticks (like `rugplot`).
++    rug_kws : dict
++        Keyword arguments for `rugplot` when `rug` is True.
++    log_scale : bool or number, or pair of bools or numbers
++        Set axis scale(s) to log. A single value sets the data axis for any
++        numeric axes in the plot. A pair of values sets each axis independently.
++        Numeric values are interpreted as the desired base (default 10).
++    legend : bool
++        If False, suppress the legend for semantic variables.
++    kwargs : key, value pairings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    g : :class:`FacetGrid`
++        Returns the `FacetGrid` object with the plot on it for further
++        tweaking.
++
++    Examples
++    --------
++
++    .. include:: ../docstrings/displot.ipynb
++
++    """
++    # Handle deprecation of `a` in distplot? Not needed here.
++
++    # Initialize the FacetGrid object
++    g = FacetGrid(
++        data=data,
++        row=row, col=col,
++        hue=hue,
++        legend_out=False,  # We'll handle legend inside
++    )
++
++    # Determine the plotting function
++    if kind == "hist":
++        plot_func = histplot
++    elif kind == "kde":
++        plot_func = kdeplot
++    elif kind == "ecdf":
++        plot_func = ecdfplot
++    else:
++        raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind}")
++
++    # Map the plotting function
++    g.map_dataframe(
++        plot_func,
++        x=x, y=y,
++        weights=weights,
++        **kwargs
++    )
++
++    # Add rug plot if requested
++    if rug:
++        rug_kws = {} if rug_kws is None else rug_kws
++        g.map_dataframe(rugplot, x=x, y=y, **rug_kws)
++
++    # Set log scale if requested
++    if log_scale is not None:
++        g.set_axis_labels(log_scale=log_scale)
++
++    # Add legend if needed
++    if legend and hue is not None:
++        g.add_legend()
++
++    return g
++
++
++@_deprecate_positional_args
++def displot(
++    data=None,
++    *,
++    x=None, y=None,
++    hue=None, row=None, col=None,
++    weights=None,
++    kind="hist",
++    rug=False,
++    rug_kws=None,
++    log_scale=None,
++    legend=True,
++    **kwargs
++):
++    """
++    Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distributions of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    `kind` parameter selects the approach to use:
++
++    - :func:`histplot` (with `kind="hist"`; the default)
++    - :func:`kdeplot` (with `kind="kde"`)
++    - :func:`ecdfplot` (with `kind="ecdf"`)
++
++    Additionally, a `rug` plot can be added to any kind of plot to show
++    individual observations.
++
++    Extra keyword arguments are passed to the underlying plotting function,
++    so you should refer to the documentation for each to see type-specific
++    options.
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure. If `x` and `y` are specified as names, this
++        should be a DataFrame containing those columns.
++    x, y : vectors or keys in `data`
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in `data`
++        Variables that define subsets to plot on different facets.
++    weights : vector or key in `data`
++        If provided, weight the contribution of the corresponding data points
++        to the distribution using this vector.
++    kind : {"hist", "kde", "ecdf"}
++        The kind of plot to draw. Corresponds to the underlying plotting
++        function.
++    rug : bool
++        If True, show each observation with marginal ticks (like `rugplot`).
++    rug_kws : dict
++        Keyword arguments for `rugplot` when `rug` is True.
++    log_scale : bool or number, or pair of bools or numbers
++        Set axis scale(s) to log. A single value sets the data axis for any
++        numeric axes in the plot. A pair of values sets each axis independently.
++        Numeric values are interpreted as the desired base (default 10).
++    legend : bool
++        If False, suppress the legend for semantic variables.
++    kwargs : key, value pairings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    g : :class:`FacetGrid`
++        Returns the `FacetGrid` object with the plot on it for further
++        tweaking.
++
++    Examples
++    --------
++
++    .. include:: ../docstrings/displot.ipynb
++
++    """
++    # Initialize the FacetGrid object
++    g = FacetGrid(
++        data=data,
++        row=row, col=col,
++        hue=hue,
++        legend_out=False,
++    )
++
++    # Determine the plotting function
++    if kind == "hist":
++        plot_func = histplot
++    elif kind == "kde":
++        plot_func = kdeplot
++    elif kind == "ecdf":
++        plot_func = ecdfplot
++    else:
++        raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind}")
++
++    # Map the plotting function
++    g.map_dataframe(
++        plot_func,
++        x=x, y=y,
++        weights=weights,
++        **kwargs
++    )
++
++    # Add rug plot if requested
++    if rug:
++        rug_kws = {} if rug_kws is None else rug_kws
++        g.map_dataframe(rugplot, x=x, y=y, **rug_kws)
++
++    # Set log scale if requested
++    if log_scale is not None:
++        g.set_axis_labels(log_scale=log_scale)
++
++    # Add legend if needed
++    if legend and hue is not None:
++        g.add_legend()
++
++    return g
++
++
++@_deprecate_positional_args
++def displot(
++    data=None,
++    *,
++    x=None, y=None,
++    hue=None, row=None, col=None,
++    weights=None,
++    kind="hist",
++    rug=False,
++    rug_kws=None,
++    log_scale=None,
++    legend=True,
++    **kwargs
++):
++    """
++    Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distributions of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    `kind` parameter selects the approach to use:
++
++    - :func:`histplot` (with `kind="hist"`; the default)
++    - :func:`kdeplot` (with `kind="kde"`)
++    - :func:`ecdfplot` (with `kind="ecdf"`)
++
++    Additionally, a `rug` plot can be added to any kind of plot to show
++    individual observations.
++
++    Extra keyword arguments are passed to the underlying plotting function,
++    so you should refer to the documentation for each to see type-specific
++    options.
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure. If `x` and `y` are specified as names, this
++        should be a DataFrame containing those columns.
++    x, y : vectors or keys in `data`
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in `data`
++        Variables that define subsets to plot on different facets.
++    weights : vector or key in `data`
++        If provided, weight the contribution of the corresponding data points
++        to the distribution using this vector.
++    kind : {"hist", "kde", "ecdf"}
++        The kind of plot to draw. Corresponds to the underlying plotting
++        function.
++    rug : bool
++        If True, show each observation with marginal ticks (like `rugplot`).
++    rug_kws : dict
++        Keyword arguments for `rugplot` when `rug` is True.
++    log_scale : bool or number, or pair of bools or numbers
++        Set axis scale(s) to log. A single value sets the data axis for any
++        numeric axes in the plot. A pair of values sets each axis independently.
++        Numeric values are interpreted as the desired base (default 10).
++    legend : bool
++        If False, suppress the legend for semantic variables.
++    kwargs : key, value pairings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    g : :class:`FacetGrid`
++        Returns the `FacetGrid` object with the plot on it for further
++        tweaking.
++
++    Examples
++    --------
++
++    .. include:: ../docstrings/displot.ipynb
++
++    """
++    # Import here to avoid circular imports
++    from seaborn.axisgrid import FacetGrid
++
++    # Initialize the FacetGrid object
++    g = FacetGrid(
++        data=data,
++        row=row, col=col,
++        hue=hue,
++        legend_out=False,
++    )
++
++    # Determine the plotting function
++    if kind == "hist":
++        plot_func = histplot
++    elif kind == "kde":
++        plot_func = kdeplot
++    elif kind == "ecdf":
++        plot_func = ecdfplot
++    else:
++        raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind}")
++
++    # Map the plotting function
++    g.map_dataframe(
++        plot_func,
++        x=x, y=y,
++        weights=weights,
++        **kwargs
++    )
++
++    # Add rug plot if requested
++    if rug:
++        rug_kws = {} if rug_kws is None else rug_kws
++        g.map_dataframe(rugplot, x=x, y=y, **rug_kws)
++
++    # Set log scale if requested
++    if log_scale is not None:
++        g.set_axis_labels(log_scale=log_scale)
++
++    # Add legend if needed
++    if legend and hue is not None:
++        g.add_legend()
++
++    return g

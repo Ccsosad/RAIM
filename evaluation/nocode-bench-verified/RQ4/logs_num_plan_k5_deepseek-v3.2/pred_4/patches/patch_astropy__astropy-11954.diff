@@ -1,0 +1,85 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..b9bb856 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -339,7 +339,7 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+ def join(left, right, keys=None, join_type='inner',
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -368,6 +368,18 @@ def join(left, right, keys=None, join_type='inner',
+     join_funcs : dict, None
+         Dict of functions to use for matching the corresponding key column(s).
+         See `~astropy.table.join_skycoord` for an example and details.
++    keys_left : column-like or list of column-like, optional
++        Column(s) to use as keys for the left table. If provided, then
++        ``keys_right`` must also be provided and ``keys`` must not be provided.
++        These columns are used as the join keys for the left table and can be
++        any column-like object (e.g., a list, array, or Column). This allows
++        joining on arbitrary data that are not part of the left table.
++    keys_right : column-like or list of column-like, optional
++        Column(s) to use as keys for the right table. If provided, then
++        ``keys_left`` must also be provided and ``keys`` must not be provided.
++        These columns are used as the join keys for the right table and can be
++        any column-like object (e.g., a list, array, or Column). This allows
++        joining on arbitrary data that are not part of the right table.
+ 
+     Returns
+     -------
+@@ -381,6 +393,33 @@ def join(left, right, keys=None, join_type='inner',
+     if not isinstance(right, Table):
+         right = Table(right)
+ 
++    # Handle keys_left and keys_right
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Cannot specify both "keys" and "keys_left"/"keys_right"')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both "keys_left" and "keys_right"')
++        # Create temporary tables with the provided column-like objects
++        left_use = left.copy(copy_data=False)
++        right_use = right.copy(copy_data=False)
++        # Convert keys_left and keys_right to lists if they are not
++        if not isinstance(keys_left, (list, tuple)):
++            keys_left = [keys_left]
++        if not isinstance(keys_right, (list, tuple)):
++            keys_right = [keys_right]
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same length')
++        # Generate temporary column names
++        temp_keys = []
++        for i in range(len(keys_left)):
++            temp_key = f'__temp_key_{i}__'
++            temp_keys.append(temp_key)
++            left_use[temp_key] = keys_left[i]
++            right_use[temp_key] = keys_right[i]
++        keys = temp_keys
++        left = left_use
++        right = right_use
++
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+@@ -1079,6 +1118,18 @@ def _join(left, right, keys=None, join_type='inner',
+     join_funcs : dict, None
+         Dict of functions to use for matching the corresponding key column(s).
+         See `~astropy.table.join_skycoord` for an example and details.
++    keys_left : column-like or list of column-like, optional
++        Column(s) to use as keys for the left table. If provided, then
++        ``keys_right`` must also be provided and ``keys`` must not be provided.
++        These columns are used as the join keys for the left table and can be
++        any column-like object (e.g., a list, array, or Column). This allows
++        joining on arbitrary data that are not part of the left table.
++    keys_right : column-like or list of column-like, optional
++        Column(s) to use as keys for the right table. If provided, then
++        ``keys_left`` must also be provided and ``keys`` must not be provided.
++        These columns are used as the join keys for the right table and can be
++        any column-like object (e.g., a list, array, or Column). This allows
++        joining on arbitrary data that are not part of the right table.
+ 
+     Returns
+     -------

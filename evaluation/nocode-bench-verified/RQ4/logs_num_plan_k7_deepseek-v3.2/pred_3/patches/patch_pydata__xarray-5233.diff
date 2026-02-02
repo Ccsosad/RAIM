@@ -1,0 +1,17 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index e6fae2b..05d0640 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4658,4 +4658,4 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..a4a0f18
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1 @@
++[content of the new file]

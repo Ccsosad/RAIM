@@ -1,0 +1,40 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..e364b3e 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -721,6 +721,35 @@ class Legend(Artist):
+         return self._loc_real
+ 
+     _loc = property(_get_loc, _set_loc)
++    loc = property(_get_loc, _set_loc)
++
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++
++        Parameters
++        ----------
++        loc : str or int or tuple of floats
++            The location of the legend. The valid location codes are::
++
++                'best'          : 0
++                'upper right'   : 1
++                'upper left'    : 2
++                'lower left'    : 3
++                'lower right'   : 4
++                'right'         : 5
++                'center left'   : 6
++                'center right'  : 7
++                'lower center'  : 8
++                'upper center'  : 9
++                'center'        : 10
++
++            Alternatively, the location can be a tuple of two floats
++            representing the position in the legend's parent (axes or figure)
++            in normalized coordinates.
++
++        """
++        self._set_loc(loc)
+ 
+     def _findoffset(self, width, height, xdescent, ydescent, renderer):
+         """Helper function to locate the legend."""

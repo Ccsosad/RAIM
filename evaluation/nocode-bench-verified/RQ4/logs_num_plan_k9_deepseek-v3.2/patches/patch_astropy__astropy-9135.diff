@@ -1,0 +1,159 @@
+diff --git a/astropy/modeling/fixed_input.py b/astropy/modeling/fixed_input.py
+new file mode 100644
+index 0000000..250afb5
+--- /dev/null
++++ b/astropy/modeling/fixed_input.py
+@@ -0,0 +1,153 @@
++"""
++Module for fixing model inputs.
++"""
++
++import numpy as np
++from .core import Model, CompoundModel
++
++__all__ = ['fix_inputs', 'FixedInputModel']
++
++
++class FixedInputModel(Model):
++    """
++    A model that fixes some inputs of another model.
++
++    Parameters
++    ----------
++    model : `~astropy.modeling.Model`
++        The model to fix inputs of.
++    fixed : dict
++        A dictionary mapping input names or indices to fixed values.
++
++    Examples
++    --------
++    >>> from astropy.modeling.models import Polynomial2D
++    >>> poly = Polynomial2D(degree=2)
++    >>> fixed_poly = fix_inputs(poly, {'x': 0})
++    >>> fixed_poly.n_inputs
++    1
++    >>> fixed_poly(5)  # evaluates poly at x=0, y=5
++    """
++
++    def __init__(self, model, fixed, name=None):
++        self._model = model
++        self._fixed = self._parse_fixed(fixed, model)
++
++        # Build the new inputs and outputs
++        self._input_names = [name for name in model.inputs
++                             if name not in self._fixed]
++        self._output_names = model.outputs
++
++        # Initialize the base class
++        super().__init__(name=name)
++
++        # Set the parameters to be the same as the original model
++        self._n_models = model._n_models
++        self._model_set_axis = model._model_set_axis
++        self._param_names = model.param_names
++        self._param_metrics = model._param_metrics
++        self._parameters = model._parameters
++        self._constraints = model._constraints
++
++        # Set the parameter attributes
++        for param_name in self._param_names:
++            setattr(self, param_name, getattr(model, param_name))
++
++    def _parse_fixed(self, fixed, model):
++        """Convert the fixed dictionary to a mapping from input index to value."""
++        result = {}
++        for key, value in fixed.items():
++            if isinstance(key, int):
++                if key < 0 or key >= model.n_inputs:
++                    raise ValueError(f"Input index {key} out of range.")
++                input_name = model.inputs[key]
++            else:
++                if key not in model.inputs:
++                    raise ValueError(f"Input name {key} not found in model.")
++                input_name = key
++            result[input_name] = value
++        return result
++
++    @property
++    def inputs(self):
++        return tuple(self._input_names)
++
++    @property
++    def outputs(self):
++        return tuple(self._output_names)
++
++    @property
++    def n_inputs(self):
++        return len(self._input_names)
++
++    @property
++    def n_outputs(self):
++        return len(self._output_names)
++
++    def evaluate(self, *args):
++        # Expand the args with fixed values in the correct order
++        full_args = []
++        arg_iter = iter(args)
++        for input_name in self._model.inputs:
++            if input_name in self._fixed:
++                full_args.append(self._fixed[input_name])
++            else:
++                full_args.append(next(arg_iter))
++        return self._model(*full_args)
++
++    @property
++    def bounding_box(self):
++        if self._model.bounding_box is None:
++            return None
++        # Remove the dimensions that are fixed
++        bbox = self._model.bounding_box
++        # bbox is a tuple of length n_inputs, with the last dimension first
++        # We need to remove the entries corresponding to fixed inputs
++        # But note: the bounding box is in reverse order of inputs.
++        # So we need to map accordingly.
++        # The bounding box is (x_n-1_limits, ..., x_0_limits) for inputs (x_0, ..., x_n-1)
++        # So we need to remove the entries from the beginning of the bbox tuple.
++        # Let's create a list of indices to keep.
++        keep_indices = [i for i, name in enumerate(self._model.inputs)
++                        if name not in self._fixed]
++        # Now, because the bounding box is reversed, we need to reverse the keep_indices
++        # and then take from the bbox.
++        # Actually, the bounding box is in the same order as the inputs? Let's check the doc:
++        # "The limits are ordered according to the numpy indexing convention, and are the reverse of the model input order"
++        # So for inputs ('x', 'y', 'z'), bounding_box is ((z_low, z_high), (y_low, y_high), (x_low, x_high))
++        # So the first element of bbox corresponds to the last input.
++        # Therefore, we need to keep the bbox elements at positions: [n_inputs - 1 - i for i in keep_indices]
++        n = self._model.n_inputs
++        bbox_indices_to_keep = [n - 1 - i for i in keep_indices]
++        bbox_indices_to_keep.sort(reverse=True)  # because we want to take from the end
++        new_bbox = tuple(bbox[i] for i in bbox_indices_to_keep)
++        if len(new_bbox) == 1:
++            return new_bbox[0]
++        return new_bbox
++
++
++def fix_inputs(model, fixed):
++    """
++    Fix one or more inputs of a model.
++
++    Parameters
++    ----------
++    model : `~astropy.modeling.Model`
++        The model to fix inputs of.
++    fixed : dict
++        A dictionary mapping input names or indices to fixed values.
++
++    Returns
++    -------
++    fixed_model : `~astropy.modeling.Model`
++        A new model with fewer inputs.
++
++    Examples
++    --------
++    >>> from astropy.modeling.models import Polynomial2D
++    >>> poly = Polynomial2D(degree=2)
++    >>> fixed_poly = fix_inputs(poly, {'x': 0})
++    >>> fixed_poly.n_inputs
++    1
++    """
++    return FixedInputModel(model, fixed)

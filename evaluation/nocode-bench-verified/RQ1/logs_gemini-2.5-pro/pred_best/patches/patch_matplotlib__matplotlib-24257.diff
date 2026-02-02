@@ -1,0 +1,65 @@
+diff --git a/lib/matplotlib/__init__.py b/lib/matplotlib/__init__.py
+index f649360..0f65f73 100644
+--- a/lib/matplotlib/__init__.py
++++ b/lib/matplotlib/__init__.py
+@@ -208,6 +208,7 @@ class __getattr__:
+ 
+ 
+ def _check_versions():
++    import sys
+ 
+     # Quickfix to ensure Microsoft Visual C++ redistributable
+     # DLLs are loaded before importing kiwisolver
+@@ -219,6 +220,8 @@ def _check_versions():
+             ("kiwisolver", "1.0.1"),
+             ("numpy", "1.19"),
+             ("pyparsing", "2.3.1"),
++            *([("importlib_resources", "3.2.0")]
++              if sys.version_info < (3, 10) else []),
+     ]:
+         module = importlib.import_module(modname)
+         if parse_version(module.__version__) < parse_version(minver):
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..31dbcc0 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -15,8 +15,15 @@ import contextlib
+ import logging
+ import os
+ from pathlib import Path
++import sys
+ import warnings
+ 
++if sys.version_info < (3, 10):
++    # files() is not always available on 3.9, see bpo-43319
++    import importlib_resources
++else:
++    import importlib.resources as importlib_resources
++
+ import matplotlib as mpl
+ from matplotlib import _api, _docstring, rc_params_from_file, rcParamsDefault
+ 
+@@ -152,10 +159,19 @@ def use(style):
+                 rc = rc_params_from_file(style, use_default_template=False)
+                 _apply_style(rc)
+             except IOError as err:
+-                raise IOError(
+-                    "{!r} not found in the style library and input is not a "
+-                    "valid URL or path; see `style.available` for list of "
+-                    "available styles".format(style)) from err
++                try:
++                    package, style_name = style.rsplit('.', 1)
++                    path = (importlib_resources.files(package)
++                            / f'{style_name}.{STYLE_EXTENSION}')
++                    with importlib_resources.as_file(path) as f:
++                        rc = rc_params_from_file(f, use_default_template=False)
++                    _apply_style(rc)
++                except (ImportError, AttributeError, ValueError,
++                        FileNotFoundError, NotADirectoryError):
++                    raise IOError(
++                        f"{style!r} not found in the style library and input "
++                        f"is not a valid URL or path; see `style.available` "
++                        f"for list of available styles") from err
+ 
+ 
+ @contextlib.contextmanager

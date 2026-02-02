@@ -1,0 +1,48 @@
+diff --git a/sphinx/ext/autosummary/__init__.py b/sphinx/ext/autosummary/__init__.py
+index 0f35f73..9f7443b 100644
+--- a/sphinx/ext/autosummary/__init__.py
++++ b/sphinx/ext/autosummary/__init__.py
+@@ -764,8 +764,9 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.connect('doctree-read', process_autosummary_toc)
+     app.connect('builder-inited', process_generate_options)
+     app.add_config_value('autosummary_generate', [], True, [bool])
++    app.add_config_value('autosummary_generate_overwrite', True, 'env', [bool])
+     app.add_config_value('autosummary_mock_imports',
+                          lambda config: config.autodoc_mock_imports, 'env')
+     app.add_config_value('autosummary_imported_members', [], False, [bool])
+ 
+-    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}
++    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index 6ecf807..0be9165 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -247,8 +247,8 @@ def generate_autosummary_docs(sources: List[str], output_dir: str = None,
+ 
+         fn = os.path.join(path, name + suffix)
+ 
+-        # skip it if it exists
+-        if os.path.isfile(fn):
++        # skip it if it exists and overwrite is disabled
++        if not app.config.autosummary_generate_overwrite and os.path.isfile(fn):
+             continue
+ 
+         new_files.append(fn)
+@@ -427,6 +427,9 @@ The format of the autosummary directive is documented in the
+                         dest='imported_members', default=False,
+                         help=__('document imported members (default: '
+                                 '%(default)s)'))
++    parser.add_argument('--no-overwrite', action='store_false',
++                        dest='autosummary_generate_overwrite', default=True,
++                        help=__('do not overwrite existing files'))
+ 
+     return parser
+ 
+@@ -439,6 +442,7 @@ def main(argv: List[str] = sys.argv[1:]) -> None:
+     logging.setup(app, sys.stdout, sys.stderr)  # type: ignore
+     setup_documenters(app)
+     args = get_parser().parse_args(argv)
++    app.config.autosummary_generate_overwrite = args.autosummary_generate_overwrite
+     generate_autosummary_docs(args.source_file, args.output_dir,
+                               '.' + args.suffix,
+                               template_dir=args.templates,

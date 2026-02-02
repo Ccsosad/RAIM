@@ -1,0 +1,13 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..4ecb356 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -120,6 +120,8 @@ def do_constrained_layout(fig, h_pad, w_pad,
+                             w_pad=w_pad, hspace=hspace, wspace=wspace)
+         make_margin_suptitles(layoutgrids, fig, renderer, h_pad=h_pad,
+                               w_pad=w_pad)
++        make_margin_legends(layoutgrids, fig, renderer, h_pad=h_pad,
++                            w_pad=w_pad)
+ 
+         # if a layout is such that a columns (or rows) margin has no
+         # constraints, we need to make all such instances in the grid

@@ -1,0 +1,65 @@
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index daf5951..bfa8abe 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1380,13 +1380,34 @@ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+                 return value
+ 
+     def __setitem__(self, key, value):
+-        raise TypeError(
+-            "this variable's data is stored in a dask array, "
+-            "which does not support item assignment. To "
+-            "assign to this variable, you must first load it "
+-            "into memory explicitly using the .load() "
+-            "method or accessing its .values attribute."
+-        )
++        from .dask_compat import dask_supports_item_assignment
++
++        if not dask_supports_item_assignment():
++            raise TypeError(
++                "this variable's data is stored in a dask array, "
++                "which does not support item assignment. To "
++                "assign to this variable, you must first load it "
++                "into memory explicitly using the .load() "
++                "method or accessing its .values attribute."
++            )
++
++        # If dask supports item assignment, delegate to the underlying array.
++        if isinstance(key, BasicIndexer):
++            self.array[key.tuple] = value
++        elif isinstance(key, VectorizedIndexer):
++            self.array.vindex[key.tuple] = value
++        elif isinstance(key, OuterIndexer):
++            # Try direct assignment first.
++            try:
++                self.array[key.tuple] = value
++            except NotImplementedError:
++                # Manual orthogonal assignment is not implemented.
++                raise TypeError(
++                    "Orthogonal indexing assignment is not supported for dask arrays. "
++                    "Consider using .load() to convert to numpy array first."
++                )
++        else:
++            raise TypeError(f"Unsupported indexer type: {type(key)}")
+ 
+     def transpose(self, order):
+         return self.array.transpose(order)
+diff --git a/xarray/core/dask_compat.py b/xarray/core/dask_compat.py
+new file mode 100644
+index 0000000..c6ba3d7
+--- /dev/null
++++ b/xarray/core/dask_compat.py
+@@ -0,0 +1,13 @@
++"""
++Compatibility functions for dask.
++"""
++import dask
++
++
++def dask_supports_item_assignment():
++    """
++    Return True if dask version supports item assignment for dask arrays.
++    """
++    # Dask array item assignment is supported from version 2.6.0 onwards.
++    # We check the version string.
++    return dask.__version__ >= "2.6.0"

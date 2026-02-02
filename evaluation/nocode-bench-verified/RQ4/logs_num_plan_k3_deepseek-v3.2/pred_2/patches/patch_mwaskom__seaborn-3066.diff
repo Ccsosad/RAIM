@@ -1,0 +1,37 @@
+diff --git a/seaborn/_core/moves.py b/seaborn/_core/moves.py
+index 0a4056b..5cd42b6 100644
+--- a/seaborn/_core/moves.py
++++ b/seaborn/_core/moves.py
+@@ -26,7 +26,7 @@ class Jitter(Move):
+     """
+     Random displacement of marks along either or both axes to reduce overplotting.
+     """
+-    width: float = 0
++    width: float = 0.2
+     x: float = 0
+     y: float = 0
+ 
+@@ -52,7 +52,22 @@ class Jitter(Move):
+             return data[col] + offsets
+ 
+         if self.width:
+-            data[orient] = jitter(data, orient, self.width * data["width"])
++            if "width" in data:
++                scale = self.width * data["width"]
++            else:
++                # Compute the spacing between unique values in the orientation axis
++                unique_vals = np.sort(data[orient].unique())
++                if len(unique_vals) > 1:
++                    # For numeric data, use the minimum difference
++                    if np.issubdtype(unique_vals.dtype, np.number):
++                        spacing = np.min(np.diff(unique_vals))
++                    else:
++                        # For categorical data, use 1
++                        spacing = 1
++                else:
++                    spacing = 1
++                scale = self.width * spacing
++            data[orient] = jitter(data, orient, scale)
+         if self.x:
+             data["x"] = jitter(data, "x", self.x)
+         if self.y:

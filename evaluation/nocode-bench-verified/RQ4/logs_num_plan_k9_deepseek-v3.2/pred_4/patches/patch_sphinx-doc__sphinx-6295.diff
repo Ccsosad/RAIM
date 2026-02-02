@@ -1,0 +1,46 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index 612ff28..1b6d112 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -573,6 +573,7 @@ class PyMethod(PyObject):
+ 
+     option_spec = PyObject.option_spec.copy()
+     option_spec.update({
++        'async': directives.flag,
+         'classmethod': directives.flag,
+         'staticmethod': directives.flag,
+     })
+@@ -587,6 +588,8 @@ class PyMethod(PyObject):
+             return 'static '
+         elif 'classmethod' in self.options:
+             return 'classmethod '
++        elif 'async' in self.options:
++            return 'async '
+         else:
+             return ''
+ 
+@@ -599,14 +602,22 @@ class PyMethod(PyObject):
+                 clsname = '.'.join([modname, clsname])
+         except ValueError:
+             if modname:
+-                return _('%s() (in module %s)') % (name, modname)
++                if 'async' in self.options:
++                    return _('%s() (async function in module %s)') % (name, modname)
++                else:
++                    return _('%s() (in module %s)') % (name, modname)
+             else:
+-                return '%s()' % name
++                if 'async' in self.options:
++                    return _('%s() (async function)') % name
++                else:
++                    return '%s()' % name
+ 
+         if 'staticmethod' in self.options:
+             return _('%s() (%s static method)') % (methname, clsname)
+         elif 'classmethod' in self.options:
+             return _('%s() (%s class method)') % (methname, clsname)
++        elif 'async' in self.options:
++            return _('%s() (%s async method)') % (methname, clsname)
+         else:
+             return _('%s() (%s method)') % (methname, clsname)
+ 

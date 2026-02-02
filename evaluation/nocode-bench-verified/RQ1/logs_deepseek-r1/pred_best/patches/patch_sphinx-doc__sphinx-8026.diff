@@ -1,0 +1,35 @@
+diff --git a/sphinx/util/i18n.py b/sphinx/util/i18n.py
+index 539ba29..4f5433e 100644
+--- a/sphinx/util/i18n.py
++++ b/sphinx/util/i18n.py
+@@ -309,12 +309,23 @@ def get_image_filename_for_language(filename: str, env: "BuildEnvironment") -> s
+     d['path'] = dirname
+     d['basename'] = path.basename(d['root'])
+     d['language'] = env.config.language
++
++    # Add {docpath} token: the directory of the current document, with trailing slash if non-empty.
++    if hasattr(env, 'docname') and env.docname:
++        # Convert the docname (which uses '/' as separator) to the native separator
++        docname_native = env.docname.replace('/', path.sep)
++        docdir = path.dirname(docname_native)
++        if docdir:
++            docdir += path.sep
++        d['docpath'] = docdir
++    else:
++        d['docpath'] = ''
++
+     try:
+         return filename_format.format(**d)
+     except KeyError as exc:
+         raise SphinxError('Invalid figure_language_filename: %r' % exc) from exc
+ 
+-
+ def search_image_for_language(filename: str, env: "BuildEnvironment") -> str:
+     if not env.config.language:
+         return filename
+@@ -324,4 +335,4 @@ def search_image_for_language(filename: str, env: "BuildEnvironment") -> str:
+     if path.exists(abspath):
+         return translated
+     else:
+-        return filename
++        return filename

@@ -1,0 +1,328 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..4616e47 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -717,9 +717,205 @@ def kdeplot(
+     return ax
+ 
+ 
++@_deprecate_positional_args
++def histplot(
++    x=None,  # Allow positional x, similar to kdeplot
++    *,
++    y=None,
++    bins=None,
++    binwidth=None,
++    binrange=None,
++    discrete=None,
++    kde=False,
++    log_scale=None,
++    element="bars",
++    fill=None,
++    multiple="layer",
++    common_norm=True,
++    stat="count",
++    weights=None,
++    cumulative=False,
++    shrink=1,
++    thresh=None,
++    pthresh=None,
++    pmax=None,
++    cbar=False,
++    cbar_ax=None,
++    cbar_kws=None,
++    hue=None,
++    palette=None,
++    hue_order=None,
++    hue_norm=None,
++    color=None,
++    ax=None,
++    data=None,
++    **kwargs,
++):
++    """Plot a histogram.
++
++    Parameters
++    ----------
++    x, y : vector or key in `data`
++        Variables that specify positions on the x and y axes.
++    bins : int, list, or string
++        Specification for bins, as in numpy.histogram().
++    binwidth : float
++        Width of each bin, overrides `bins`.
++    binrange : pair of scalars
++        Lower and upper bounds for bins, overrides `bins`.
++    discrete : bool
++        If True, set bin edges to be centered on integer values.
++    kde : bool
++        If True, compute a KDE and draw a smooth density curve over the histogram.
++    log_scale : bool or number
++        Set axis scale to log. If bool, use base 10. If number, use as base.
++    element : {"bars", "step", "poly"}
++        Visual representation of the histogram.
++    fill : bool
++        If True, fill in the space under the histogram.
++    multiple : {"layer", "dodge", "stack", "fill"}
++        How to draw histograms for multiple variables.
++    common_norm : bool
++        If True, normalize such that the area of each histogram is 1.
++    stat : {"count", "frequency", "density", "probability"}
++        Aggregate statistic to compute for each bin.
++    weights : vector
++        If provided, weight each observation by these values.
++    cumulative : bool
++        If True, plot the cumulative distribution.
++    shrink : float
++        Scale the width of bars when using "dodge" for discrete data.
++    thresh : float
++        Threshold for bivariate histograms, below which cells are transparent.
++    pthresh : float
++        Threshold for bivariate histograms in proportion of maximum count.
++    pmax : float
++        Saturation point for bivariate histograms in proportion of maximum count.
++    cbar : bool
++        If True, add a colorbar for bivariate histograms.
++    cbar_ax : matplotlib axes
++        Axes to draw the colorbar in.
++    cbar_kws : dict
++        Keyword arguments for the colorbar.
++    hue : vector or key in `data`
++        Grouping variable that will produce multiple histograms.
++    palette : string, list, or dict
++        Colors to use for the different levels of the hue variable.
++    hue_order : list
++        Order for the levels of the hue variable.
++    hue_norm : tuple or matplotlib.colors.Normalize
++        Normalization for the hue variable.
++    color : matplotlib color
++        Color for the plot elements.
++    ax : matplotlib axes
++        Axes object to draw the plot onto.
++    data : DataFrame
++        Tidy ("long-form") dataframe where each column is a variable and each row is an observation.
++    kwargs : key, value mappings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    ax : matplotlib Axes
++        Returns the Axes object with the plot drawn onto it.
++
++    Examples
++    --------
++    .. include:: ../docstrings/histplot.rst
++    """
++    p = _HistPlotter(
++        data=data,
++        variables=_HistPlotter.get_semantics(locals()),
++    )
++
++    p.map_hue(palette=palette, order=hue_order, norm=hue_norm)
++
++    if ax is None:
++        ax = plt.gca()
++
++    # Set defaults that depend on other parameters
++    if fill is None:
++        fill = multiple in ("stack", "fill")
++
++    # Determine the kind of plot to use
++    univariate = "y" not in p.variables
++
++    if univariate:
++        p.plot_univariate(
++            ax=ax,
++            bins=bins,
++            binwidth=binwidth,
++            binrange=binrange,
++            discrete=discrete,
++            log_scale=log_scale,
++            element=element,
++            fill=fill,
++            multiple=multiple,
++            common_norm=common_norm,
++            stat=stat,
++            weights=weights,
++            cumulative=cumulative,
++            shrink=shrink,
++        )
++        
++        # Add KDE if requested
++        if kde:
++            kdeplot(
++                x=p.plot_data["x"],
++                hue=p.plot_data["hue"],
++                palette=palette,
++                hue_order=hue_order,
++                hue_norm=hue_norm,
++                color=color,
++                ax=ax,
++                **kwargs
++            )
++    else:
++        p.plot_bivariate(
++            ax=ax,
++            bins=bins,
++            binwidth=binwidth,
++            binrange=binrange,
++            discrete=discrete,
++            log_scale=log_scale,
++            thresh=thresh,
++            pthresh=pthresh,
++            pmax=pmax,
++            cbar=cbar,
++            cbar_ax=cbar_ax,
++            cbar_kws=cbar_kws,
++        )
++
++    return ax
++
++
++histplot.__doc__ = """\
++Plot a histogram.
++
++A histogram is a classic visualization tool that represents the distribution
++of one or more variables by counting the number of observations that fall into
++discretized intervals.
++
++{params}
++
++{returns}
++
++{seealso}
++
++Examples
++--------
++
++.. include:: ../docstrings/histplot.rst
++
++""".format(
++    params=_param_docs,
++    returns=_core_docs["returns"],
++    seealso=_core_docs["seealso"],
++)
++
++
+ kdeplot.__doc__ = """\
+ Plot univariate or bivariate distributions using kernel density estimation.
+-
+ A kernel density estimate (KDE) plot is a method for visualizing the
+ distribution of observations in a dataset, analagous to a histogram. KDE
+ represents the data using a continuous probability density curve in one or
+@@ -886,6 +1082,116 @@ class _RugPlotter(_DistributionPlotter):
+ 
+         super().__init__(data=data, variables=variables)
+ 
++
++class _HistPlotter(_DistributionPlotter):
++
++    def __init__(
++        self,
++        data=None,
++        variables={},
++    ):
++
++        super().__init__(data=data, variables=variables)
++
++    def define_bin_edges(self, x, bins, binwidth, binrange, discrete, log_scale):
++        """Calculate bin edges for the histogram."""
++        if log_scale:
++            if binrange is None:
++                nonnull = x[~pd.isna(x)]
++                binrange = nonnull.min(), nonnull.max()
++            x = np.log10(x)
++            binrange = np.log10(binrange)
++        
++        if discrete:
++            bin_edges = np.arange(binrange[0] - 0.5, binrange[1] + 1.5)
++        elif binwidth is not None:
++            bin_edges = np.arange(binrange[0], binrange[1] + binwidth, binwidth)
++        elif bins == "auto":
++            bin_edges = np.histogram_bin_edges(x, bins=bins, range=binrange)
++        else:
++            bin_edges = np.linspace(binrange[0], binrange[1], bins + 1)
++        
++        if log_scale:
++            bin_edges = 10 ** bin_edges
++            
++        return bin_edges
++
++    def plot_univariate(self, ax, **kws):
++        """Plot a univariate histogram."""
++        x = self.plot_data["x"]
++        hue = self.plot_data["hue"]
++        
++        # Handle log scale
++        log_scale = kws.get("log_scale", False)
++        if log_scale:
++            x = np.log10(x)
++        
++        # Determine bin edges
++        bin_edges = self.define_bin_edges(
++            x, kws.get("bins", "auto"), kws.get("binwidth", None),
++            kws.get("binrange", None), kws.get("discrete", False), log_scale
++        )
++        
++        # Compute histogram
++        hist, edges = np.histogram(x, bins=bin_edges)
++        
++        # Plot based on element type
++        element = kws.get("element", "bars")
++        if element == "bars":
++            ax.bar(edges[:-1], hist, width=np.diff(edges), align="edge")
++        elif element == "step":
++            ax.step(edges[:-1], hist, where="post")
++        elif element == "poly":
++            ax.fill_between(edges[:-1], hist, step="post", alpha=0.5)
++        
++        # Handle log scale restoration
++        if log_scale:
++            ax.set_xscale("log")
++        
++        return ax
++
++    def plot_bivariate(self, ax, **kws):
++        """Plot a bivariate histogram."""
++        x = self.plot_data["x"]
++        y = self.plot_data["y"]
++        
++        # Handle log scale
++        log_scale = kws.get("log_scale", (False, False))
++        x_log, y_log = log_scale if isinstance(log_scale, tuple) else (log_scale, log_scale)
++        
++        if x_log:
++            x = np.log10(x)
++        if y_log:
++            y = np.log10(y)
++        
++        # Determine bin edges
++        x_edges = self.define_bin_edges(
++            x, kws.get("bins", "auto"), kws.get("binwidth", None),
++            kws.get("binrange", None), kws.get("discrete", False), x_log
++        )
++        y_edges = self.define_bin_edges(
++            y, kws.get("bins", "auto"), kws.get("binwidth", None),
++            kws.get("binrange", None), kws.get("discrete", False), y_log
++        )
++        
++        # Compute 2D histogram
++        hist, x_edges, y_edges = np.histogram2d(x, y, bins=[x_edges, y_edges])
++        
++        # Plot heatmap
++        mesh = ax.pcolormesh(x_edges, y_edges, hist.T, shading="auto")
++        
++        # Handle log scale restoration
++        if x_log:
++            ax.set_xscale("log")
++        if y_log:
++            ax.set_yscale("log")
++        
++        # Add colorbar if requested
++        if kws.get("cbar", False):
++            plt.colorbar(mesh, ax=ax, **(kws.get("cbar_kws", {}) or {}))
++        
++        return ax
++
+     def plot(self, height, expand_margins, legend, ax, kws):
+ 
+         kws = _normalize_kwargs(kws, mpl.lines.Line2D)

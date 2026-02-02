@@ -1,0 +1,98 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..a0431a6 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -232,7 +232,22 @@ class _StyleLibrary(dict):
+             _api.warn_deprecated("3.6", message=_DEPRECATED_SEABORN_MSG)
+             key = _DEPRECATED_SEABORN_STYLES[key]
+ 
+-        return dict.__getitem__(self, key)
++        try:
++            return dict.__getitem__(self, key)
++        except KeyError:
++            # Try to load from a package.
++            from .entry_points import read_style_from_package
++            try:
++                params = read_style_from_package(key)
++            except (OSError, ValueError) as e:
++                raise KeyError(
++                    f"{key!r} is not a valid style name. "
++                    f"It is not found in the style library and cannot be loaded "
++                    f"from a package. Error: {e}"
++                ) from e
++            # Cache the loaded style.
++            self[key] = params
++            return params
+ 
+ 
+ # Load style library
+diff --git a/lib/matplotlib/style/entry_points.py b/lib/matplotlib/style/entry_points.py
+new file mode 100644
+index 0000000..826e399
+--- /dev/null
++++ b/lib/matplotlib/style/entry_points.py
+@@ -0,0 +1,64 @@
++"""
++Support for loading style files from third-party packages.
++"""
++
++import importlib.resources
++import sys
++
++if sys.version_info < (3, 10):
++    import importlib_resources as resources
++else:
++    import importlib.resources as resources
++
++from matplotlib import rc_params_from_file
++
++
++def read_style_from_package(style_name):
++    """
++    Read a style sheet from a package.
++
++    Parameters
++    ----------
++    style_name : str
++        The style name in the form "package.subpackage.style", where the last
++        dot separates the style file name from the package path.
++
++    Returns
++    -------
++    dict
++        The rcParams dictionary.
++
++    Raises
++    ------
++    OSError
++        If the style file cannot be read.
++    """
++    # Split the style name into package and style file name.
++    parts = style_name.split('.')
++    if len(parts) < 2:
++        raise ValueError(
++            f"Invalid style name {style_name!r}. "
++            "Expected format 'package.style' or 'package.subpackage.style'."
++        )
++    package_name = '.'.join(parts[:-1])
++    file_name = parts[-1]
++
++    # Use importlib.resources to access the file without importing the package.
++    try:
++        package = resources.files(package_name)
++    except (ModuleNotFoundError, AttributeError) as e:
++        raise OSError(
++            f"Cannot find package {package_name!r} for style {style_name!r}."
++        ) from e
++
++    # Look for the style file with the .mplstyle extension.
++    style_file = package / f"{file_name}.mplstyle"
++    if not style_file.is_file():
++        # Try without extension? No, we require the extension.
++        raise OSError(
++            f"Cannot find style file {file_name}.mplstyle in package {package_name}."
++        )
++
++    # Read the style file.
++    with style_file.open('r', encoding='utf-8') as f:
++        return rc_params_from_file(f, use_default_template=False)

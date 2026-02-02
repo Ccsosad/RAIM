@@ -1,0 +1,36 @@
+diff --git a/xarray/coding/times.py b/xarray/coding/times.py
+index 3885b1c..5acb166 100644
+--- a/xarray/coding/times.py
++++ b/xarray/coding/times.py
+@@ -685,13 +685,24 @@ class CFDatetimeCoder(VariableCoder):
+         if isinstance(units, str) and "since" in units:
+             units = pop_to(attrs, encoding, "units")
+             calendar = pop_to(attrs, encoding, "calendar")
+-            dtype = _decode_cf_datetime_dtype(data, units, calendar, self.use_cftime)
+-            transform = partial(
+-                decode_cf_datetime,
+-                units=units,
+-                calendar=calendar,
+-                use_cftime=self.use_cftime,
+-            )
++            try:
++                dtype = _decode_cf_datetime_dtype(
++                    data, units, calendar, self.use_cftime
++                )
++            except Exception as e:
++                raise type(e)(f"Failed to decode variable {name!r}: {e}") from e
++
++            def transform(data_chunk):
++                try:
++                    return decode_cf_datetime(
++                        data_chunk,
++                        units=units,
++                        calendar=calendar,
++                        use_cftime=self.use_cftime,
++                    )
++                except Exception as e:
++                    raise type(e)(f"Failed to decode variable {name!r}: {e}") from e
++
+             data = lazy_elemwise_func(data, transform, dtype)
+ 
+         return Variable(dims, data, attrs, encoding)

@@ -1,0 +1,21 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index e770a09..886f2ee 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -989,6 +989,10 @@ class LeapSeconds(QTable):
+         # Remove empty entries.
+         files = [f for f in files if f]
+ 
++        # If auto_download is False, remove any remote files from the list.
++        if not conf.auto_download:
++            files = [f for f in files if not urlparse(f).netloc]
++
+         # Our trials start with normal files and remote ones that are
+         # already in cache.  The bools here indicate that the cache
+         # should be used.
+@@ -1173,4 +1177,4 @@ class LeapSeconds(QTable):
+             if initialize_erfa == 'only':
+                 return 0
+ 
+-        return erfa.leap_seconds.update(self)
++        return erfa.leap_seconds.update(self)

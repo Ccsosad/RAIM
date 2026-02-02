@@ -1,0 +1,60 @@
+diff --git a/astropy/visualization/wcsaxes/wcsapi.py b/astropy/visualization/wcsaxes/wcsapi.py
+index 18817a1..97f03c7 100644
+--- a/astropy/visualization/wcsaxes/wcsapi.py
++++ b/astropy/visualization/wcsaxes/wcsapi.py
+@@ -34,7 +34,13 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+                              "has pixel dimensions (should be {})"
+                              .format(wcs.pixel_n_dim))
+     elif wcs.pixel_n_dim < 2:
+-        raise ValueError("WCS should have at least 2 pixel dimensions")
++        # New feature: support 1D plotting
++        if slices is not None and 'x' in slices:
++            pass
++        elif slices is None:
++            pass
++        else:
++            raise ValueError("Invalid slices for 1D WCS")
+     elif slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
+         raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
+ 
+@@ -141,7 +147,13 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+     if invert_xy:
+         m = m[:, ::-1]
+ 
+-    if frame_class is RectangularFrame:
++    # Handle rectangular 1D frame
++    if frame_class.__name__ == "RectangularFrame1D":
++        for index in world_keep:
++            coord_meta['default_axislabel_position'][index] = 'b'
++            coord_meta['default_ticklabel_position'][index] = 'b'
++            coord_meta['default_ticks_position'][index] = 'b'
++    elif frame_class is RectangularFrame:
+ 
+         for i, spine_name in enumerate('bltr'):
+             pos = np.nonzero(m[:, i % 2])[0]
+diff --git a/astropy/visualization/wcsaxes/frames.py b/astropy/visualization/wcsaxes/frames.py
+new file mode 100644
+index 0000000..d69afc0
+--- /dev/null
++++ b/astropy/visualization/wcsaxes/frames.py
+@@ -0,0 +1,20 @@
++class RectangularFrame1D(BaseFrame):
++    """
++    A 1D rectangular frame for plotting one-dimensional WCS axes.
++    """
++
++    spine_names = 'b'
++
++    def __init__(self, axes):
++        super().__init__(axes)
++        self.spines = {'b': self._new_spine()}
++
++    def _new_spine(self):
++        from matplotlib.spines import Spine
++        return Spine.linear_spine(self._axes, 'bottom')
++
++    def update_spines(self):
++        self.spines['b'].set_position(('outward', 0))
++
++    def draw(self, renderer):
++        self.spines['b'].draw(renderer)

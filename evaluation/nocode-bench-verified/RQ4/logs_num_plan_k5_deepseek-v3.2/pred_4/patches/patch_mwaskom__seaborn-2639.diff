@@ -1,0 +1,78 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..e4ccecd 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -41,6 +41,11 @@ class Grid:
+         # don't add proxy artists onto the Axes. We need an overall cleaner approach.
+         self._extract_legend_handles = False
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` instance."""
++        return self._figure
++
+     def set(self, **kwargs):
+         """Set attributes on each subplot Axes."""
+         for ax in self.axes.flat:
+@@ -419,6 +424,7 @@ class FacetGrid(Grid):
+         # Attributes that are part of the public API but accessed through
+         # a  property so that Sphinx adds them to the auto class doc
+         self._fig = fig
++        self._figure = fig
+         self._axes = axes
+         self._axes_dict = axes_dict
+         self._legend = None
+@@ -994,7 +1000,7 @@ class FacetGrid(Grid):
+     @property
+     def fig(self):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+-        return self._fig
++        return self._figure
+ 
+     @property
+     def axes(self):
+@@ -1116,6 +1122,11 @@ class PairGrid(Grid):
+     See the :ref:`tutorial <grid_tutorial>` for more information.
+ 
+     """
++
++    @property
++    def fig(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
+     @_deprecate_positional_args
+     def __init__(
+         self, data, *,
+@@ -1234,6 +1245,7 @@ class PairGrid(Grid):
+                 axes[i, j] = None
+ 
+         self.fig = fig
++        self._figure = fig
+         self.axes = axes
+         self.data = data
+ 
+@@ -1626,6 +1638,16 @@ class JointGrid(object):
+ 
+     """
+ 
++    @property
++    def fig(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
+     @_deprecate_positional_args
+     def __init__(
+         self, *,
+@@ -1651,6 +1673,7 @@ class JointGrid(object):
+         ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint)
+ 
+         self.fig = f
++        self._figure = f
+         self.ax_joint = ax_joint
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y

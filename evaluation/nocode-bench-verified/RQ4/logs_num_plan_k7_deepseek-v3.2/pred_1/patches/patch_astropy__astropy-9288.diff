@@ -1,0 +1,100 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index 0d1d769..f3231b7 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -801,48 +801,65 @@ def _join(left, right, keys=None, join_type='inner',
+     # Store user-provided col_name_map until the end
+     _col_name_map = col_name_map
+ 
+-    if join_type not in ('inner', 'outer', 'left', 'right'):
++    if join_type not in ('inner', 'outer', 'left', 'right', 'cartesian'):
+         raise ValueError("The 'join_type' argument should be in 'inner', "
+-                         "'outer', 'left' or 'right' (got '{}' instead)".
++                         "'outer', 'left', 'right' or 'cartesian' (got '{}' instead)".
+                          format(join_type))
+ 
+-    # If we have a single key, put it in a tuple
+-    if keys is None:
+-        keys = tuple(name for name in left.colnames if name in right.colnames)
+-        if len(keys) == 0:
+-            raise TableMergeError('No keys in common between left and right tables')
+-    elif isinstance(keys, str):
+-        keys = (keys,)
+-
+-    # Check the key columns
+-    for arr, arr_label in ((left, 'Left'), (right, 'Right')):
+-        for name in keys:
+-            if name not in arr.colnames:
+-                raise TableMergeError('{} table does not have key column {!r}'
+-                                      .format(arr_label, name))
+-            if hasattr(arr[name], 'mask') and np.any(arr[name].mask):
+-                raise TableMergeError('{} key column {!r} has missing values'
+-                                      .format(arr_label, name))
+-
+     len_left, len_right = len(left), len(right)
+ 
+     if len_left == 0 or len_right == 0:
+         raise ValueError('input tables for join must both have at least one row')
+ 
++    # Handle keys for different join types
++    if join_type == 'cartesian':
++        if keys is not None:
++            raise TableMergeError('cannot supply keys for a cartesian join')
++        keys = ()
++    else:
++        # If we have a single key, put it in a tuple
++        if keys is None:
++            keys = tuple(name for name in left.colnames if name in right.colnames)
++            if len(keys) == 0:
++                raise TableMergeError('No keys in common between left and right tables')
++        elif isinstance(keys, str):
++            keys = (keys,)
++
++        # Check the key columns
++        for arr, arr_label in ((left, 'Left'), (right, 'Right')):
++            for name in keys:
++                if name not in arr.colnames:
++                    raise TableMergeError('{} table does not have key column {!r}'
++                                          .format(arr_label, name))
++                if hasattr(arr[name], 'mask') and np.any(arr[name].mask):
++                    raise TableMergeError('{} key column {!r} has missing values'
++                                          .format(arr_label, name))
++
+     # Joined array dtype as a list of descr (name, type_str, shape) tuples
+     col_name_map = get_col_name_map([left, right], keys, uniq_col_name, table_names)
+     out_descrs = get_descrs([left, right], col_name_map)
+ 
+-    try:
+-        idxs, idx_sort = _get_join_sort_idxs(keys, left, right)
+-    except NotImplementedError:
+-        raise TypeError('one or more key columns are not sortable')
+-
+-    # Main inner loop in Cython to compute the cartesian product
+-    # indices for the given join type
+-    int_join_type = {'inner': 0, 'outer': 1, 'left': 2, 'right': 3}[join_type]
+-    masked, n_out, left_out, left_mask, right_out, right_mask = \
+-        _np_utils.join_inner(idxs, idx_sort, len_left, int_join_type)
++    if join_type == 'cartesian':
++        # Generate indices for cartesian product
++        total = len_left * len_right
++        left_out = np.repeat(np.arange(len_left), len_right)
++        right_out = np.tile(np.arange(len_right), len_left)
++        # For cartesian, there are no masked rows.
++        left_mask = np.zeros(total, dtype=bool)
++        right_mask = np.zeros(total, dtype=bool)
++        masked = False
++        n_out = total
++    else:
++        try:
++            idxs, idx_sort = _get_join_sort_idxs(keys, left, right)
++        except NotImplementedError:
++            raise TypeError('one or more key columns are not sortable')
++
++        # Main inner loop in Cython to compute the cartesian product
++        # indices for the given join type
++        int_join_type = {'inner': 0, 'outer': 1, 'left': 2, 'right': 3}[join_type]
++        masked, n_out, left_out, left_mask, right_out, right_mask = \
++            _np_utils.join_inner(idxs, idx_sort, len_left, int_join_type)
+ 
+     out = _get_out_class([left, right])()
+ 

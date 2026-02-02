@@ -1,0 +1,28 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index b0a0822..0b0d568 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -508,8 +508,10 @@ class Continuous(ContinuousBase):
+             Either a format pattern (e.g., `".2f"`), a format string with fields named
+             `x` and/or `pos` (e.g., `"${x:.2f}"`), or a callable that consumes a number
+             and returns a string.
+-        base : number
++        base : number or None
+             Use log formatter (with scientific notation) having this value as the base.
++            If None and the scale has a log transform, the base is inferred from the transform.
++            If None and the scale does not have a log transform, a base-10 log formatter is used.
+         unit : str or (str, str) tuple
+             Use  SI prefixes with these units (e.g., with `unit="g"`, a tick value
+             of 5000 will appear as `5 kg`). When a tuple, the first element gives the
+@@ -618,6 +620,11 @@ class Continuous(ContinuousBase):
+                 log_base = 10
+             base = log_base
+ 
++        # If base is None, we want to use a log formatter with base 10.
++        # This allows base=None to override the default formatter with a log transform.
++        if base is None:
++            base = 10
++
+         if formatter is not None:
+             return formatter
+ 

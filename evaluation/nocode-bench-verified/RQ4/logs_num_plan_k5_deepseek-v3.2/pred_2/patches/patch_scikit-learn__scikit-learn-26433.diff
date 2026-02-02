@@ -1,0 +1,48 @@
+diff --git a/sklearn/datasets/_openml.py b/sklearn/datasets/_openml.py
+index 2578f63..7708673 100644
+--- a/sklearn/datasets/_openml.py
++++ b/sklearn/datasets/_openml.py
+@@ -552,6 +552,7 @@ def _download_data_to_bunch(
+     n_retries: int = 3,
+     delay: float = 1.0,
+     parser: str,
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Download ARFF data, load it to a specific container and create to Bunch.
+ 
+@@ -657,6 +658,7 @@ def _download_data_to_bunch(
+         md5_checksum=md5_checksum,
+         n_retries=n_retries,
+         delay=delay,
++        read_csv_kwargs=read_csv_kwargs,
+     )
+ 
+     return Bunch(
+@@ -725,6 +727,7 @@ def fetch_openml(
+     n_retries: int = 3,
+     delay: float = 1.0,
+     parser: Optional[str] = "warn",
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Fetch dataset from openml by name or dataset id.
+ 
+@@ -829,6 +832,11 @@ def fetch_openml(
+            warning. Therefore, an `ImportError` will be raised from 1.4 if
+            the dataset is dense and pandas is not installed.
+ 
++    read_csv_kwargs : dict, default=None
++        Keyword arguments to pass to `pandas.read_csv` when using the pandas
++        parser. It allows to overwrite the default options. Ignored when
++        using the liac-arff parser.
++
+     Returns
+     -------
+     data : :class:`~sklearn.utils.Bunch`
+@@ -1096,6 +1104,7 @@ def fetch_openml(
+         n_retries=n_retries,
+         delay=delay,
+         parser=parser_,
++        read_csv_kwargs=read_csv_kwargs,
+     )
+ 
+     if return_X_y:

@@ -1,0 +1,221 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..5f94435 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4360,4 +4360,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..2edb4d5 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6789,6 +6789,53 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+         )
+ 
++    def query(self, expr, parser=None, engine='numexpr'):
++        """Return a new dataset with each array indexed by the boolean result
++        of the query expression.
++
++        The query expression is evaluated on the data variables in the dataset.
++        The expression should return a boolean array. The dataset is then
++        indexed along the first dimension where the boolean array is True.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression.
++        parser : Parser, optional
++            Parser for the expression. If not provided, a default parser is used.
++        engine : str, optional
++            Evaluation engine ('numexpr' or 'python'). Default is 'numexpr'.
++
++        Returns
++        -------
++        queried : Dataset
++            A new Dataset with the same variables as the original, but indexed
++            by the query result.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({
++        ...     'temperature': (['x', 'y'], 20 * np.random.rand(4, 5)),
++        ...     'pressure': (['x', 'y'], 500 * np.random.rand(4, 5)),
++        ... })
++        >>> ds.query('temperature > 10')
++        <xarray.Dataset>
++        Dimensions:      (x: 4, y: 5)
++        Coordinates:
++          * x           (x) int64 0 1 2 3
++          * y           (y) int64 0 1 2 3 4
++        Data variables:
++            temperature  (x, y) float64 15.0 18.0 12.0 14.0 11.0 ...
++            pressure     (x, y) float64 250.0 300.0 200.0 150.0 400.0 ...
++
++        See Also
++        --------
++        Dataset.isel
++        Dataset.sel
++        """
++        from .lazy_query import query as lazy_query
++        return lazy_query(self, expr, parser=parser, engine=engine)
++
+     def idxmax(
+         self,
+         dim: Hashable = None,
+@@ -7002,4 +7049,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/lazy_query.py b/xarray/core/lazy_query.py
+new file mode 100644
+index 0000000..e182a06
+--- /dev/null
++++ b/xarray/core/lazy_query.py
+@@ -0,0 +1,141 @@
++"""
++Lazy query evaluation for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from .common import AbstractArray, DataWithCoords
++from .utils import is_dict_like, is_scalar
++from .variable import Variable, IndexVariable
++from .alignment import align
++from .merge import merge
++from .computation import apply_ufunc
++import operator
++import numexpr as ne
++
++class QueryEngine:
++    """Engine for evaluating query expressions on xarray objects."""
++    
++    def __init__(self, parser=None, engine='numexpr'):
++        self.parser = parser
++        self.engine = engine
++    
++    def evaluate(self, expr, data_vars):
++        """Evaluate an expression on a dictionary of data variables.
++        
++        Parameters
++        ----------
++        expr : str
++            Query expression.
++        data_vars : dict
++            Dictionary of variable names to arrays.
++            
++        Returns
++        -------
++        mask : array-like
++            Boolean mask for indexing.
++        """
++        # Use numexpr by default for fast evaluation
++        if self.engine == 'numexpr':
++            return ne.evaluate(expr, local_dict=data_vars)
++        else:
++            # Fallback to Python evaluation (slower)
++            return eval(expr, {'np': np}, data_vars)
++
++class Parser:
++    """Parser for query expressions."""
++    
++    def __init__(self, engine=None):
++        self.engine = engine
++    
++    def parse(self, expr):
++        """Parse a query expression.
++        
++        Parameters
++        ----------
++        expr : str
++            Query expression.
++            
++        Returns
++        -------
++        parsed_expr : str
++            Validated expression.
++        """
++        # For now, just return the expression as is.
++        # In a more advanced implementation, we could validate syntax.
++        return expr
++
++def query(dataset, expr, parser=None, engine='numexpr'):
++    """Evaluate a query expression on a dataset.
++    
++    Parameters
++    ----------
++    dataset : Dataset
++        Input dataset.
++    expr : str
++        Query expression.
++    parser : Parser, optional
++        Parser for the expression.
++    engine : str, optional
++        Evaluation engine ('numexpr' or 'python').
++        
++    Returns
++    -------
++    result : Dataset
++        Dataset filtered by the query.
++    """
++    if parser is None:
++        parser = Parser(engine=engine)
++    
++    engine_obj = QueryEngine(parser=parser, engine=engine)
++    
++    # Extract data variables as numpy arrays
++    data_vars = {}
++    for name, var in dataset.data_vars.items():
++        # Convert to numpy array for evaluation
++        data_vars[name] = var.values
++    
++    # Evaluate the expression to get a boolean mask
++    mask = engine_obj.evaluate(expr, data_vars)
++    
++    # Apply the mask to each variable
++    result_vars = {}
++    for name, var in dataset.variables.items():
++        if name in dataset.data_vars:
++            # For data variables, index along all dimensions
++            # We need to broadcast the mask to the variable's shape
++            var_dims = var.dims
++            # The mask should have the same shape as the dataset's dimensions
++            # We need to align the mask with the variable's dimensions
++            # For simplicity, assume the mask is 1D and corresponds to the first dimension?
++            # Actually, the mask should have the same shape as the dataset's data variables.
++            # This is complex. Instead, we require that the expression returns a 1D mask
++            # along a single dimension? But the query might be multi-dimensional.
++            # For now, we assume the mask is 1D and we index along the first dimension.
++            # This is a limitation.
++            if mask.ndim == 1:
++                # Index along the first dimension
++                dim = dataset.dims.keys()[0]
++                if dim in var_dims:
++                    # Create an indexer for this dimension
++                    indexer = {dim: mask}
++                    result_vars[name] = var.isel(indexer)
++                else:
++                    result_vars[name] = var
++            else:
++                raise NotImplementedError("Multi-dimensional masks are not yet supported.")
++        else:
++            # For coordinates, we keep them as is? Actually, we should also index them.
++            # But if they don't depend on the dimension being indexed, we keep them.
++            # This is handled by isel.
++            pass
++    
++    # Instead of the above, we can use the existing isel method with a dict of indices.
++    # But we need to convert the mask to indices.
++    if mask.ndim == 1:
++        # Get the indices where mask is True
++        indices = np.where(mask)[0]
++        # Use the first dimension for indexing
++        dim = list(dataset.dims.keys())[0]
++        return dataset.isel({dim: indices})
++    else:
++        raise NotImplementedError("Multi-dimensional masks are not yet supported.")

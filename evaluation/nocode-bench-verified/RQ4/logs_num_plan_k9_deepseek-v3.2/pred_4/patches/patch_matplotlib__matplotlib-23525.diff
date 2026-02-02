@@ -1,0 +1,72 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 677b319..dfeb105 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -2335,6 +2335,16 @@ class Axes(_AxesBase):
+         label = kwargs.pop('label', '')
+         tick_labels = kwargs.pop('tick_label', None)
+ 
++        # Handle label: if it's a list, assign to each bar; otherwise, use the same for all.
++        if isinstance(label, (list, tuple, np.ndarray)):
++            # We'll check the length later when we know the number of bars.
++            bar_labels = label
++            container_label = '_nolegend_'
++        else:
++            # If it's a string, we'll use it for the container and set each bar to '_nolegend_'.
++            bar_labels = None  # Will be filled later
++            container_label = label
++
+         y = bottom  # Matches barh call signature.
+         if orientation == 'vertical':
+             if y is None:
+@@ -2373,6 +2383,17 @@ class Axes(_AxesBase):
+             # Make args iterable too.
+             np.atleast_1d(x), height, width, y, linewidth, hatch)
+ 
++        # Now that we know the number of bars, we can validate bar_labels.
++        n_bars = len(x)
++        if bar_labels is not None:
++            if len(bar_labels) != n_bars:
++                raise ValueError("The length of the label list must match the number of bars.")
++            # Convert bar_labels to a list for easy indexing.
++            bar_labels = list(bar_labels)
++        else:
++            # If bar_labels is None, we use '_nolegend_' for each bar.
++            bar_labels = ['_nolegend_'] * n_bars
++
+         # Now that units have been converted, set the tick locations.
+         if orientation == 'vertical':
+             tick_label_axis = self.xaxis
+@@ -2420,14 +2441,14 @@ class Axes(_AxesBase):
+ 
+         patches = []
+         args = zip(left, bottom, width, height, color, edgecolor, linewidth,
+-                   hatch)
+-        for l, b, w, h, c, e, lw, htch in args:
++                   hatch, bar_labels)
++        for l, b, w, h, c, e, lw, htch, lbl in args:
+             r = mpatches.Rectangle(
+                 xy=(l, b), width=w, height=h,
+                 facecolor=c,
+                 edgecolor=e,
+                 linewidth=lw,
+-                label='_nolegend_',
++                label=lbl,
+                 hatch=htch,
+                 )
+             r._internal_update(kwargs)
+@@ -2466,7 +2487,7 @@ class Axes(_AxesBase):
+             datavalues = width
+ 
+         bar_container = BarContainer(patches, errorbar, datavalues=datavalues,
+-                                     orientation=orientation, label=label)
++                                     orientation=orientation, label=container_label)
+         self.add_container(bar_container)
+ 
+         if tick_labels is not None:
+@@ -8162,4 +8183,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

@@ -1,0 +1,22 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..ece7569 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -177,11 +177,12 @@ class Nominal(Scale):
+             name = None  # To work around mpl<3.4 compat issues
+ 
+             def set_default_locators_and_formatters(self, axis):
+-                ...
+-                # axis.set_major_locator(major_locator)
+-                # if minor_locator is not None:
+-                #     axis.set_minor_locator(minor_locator)
+-                # axis.set_major_formatter(major_formatter)
++                axis.set_major_locator(mpl.ticker.FixedLocator(np.arange(len(units_seed))))
++                axis.set_major_formatter(mpl.ticker.FixedFormatter(units_seed))
++                axis.set_view_interval(-.5, len(units_seed) - .5)
++                axis.grid(False)
++                if axis is axis.axes.yaxis:
++                    axis.axes.invert_yaxis()
+ 
+         mpl_scale = CatScale(data.name)
+         if axis is None:

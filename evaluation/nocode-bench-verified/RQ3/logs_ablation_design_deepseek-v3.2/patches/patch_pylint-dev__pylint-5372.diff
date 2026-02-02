@@ -1,0 +1,55 @@
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 3ddbdf2..149521e 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -1345,4 +1345,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 0981994..2210daa 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -97,6 +97,40 @@ MESSAGE_FIELDS = {i.name for i in fields(Message)}
+ """All fields of the Message class."""
+ 
+ 
++# Fields that are available in the Message object for template formatting
++MESSAGE_FIELDS = {
++    "path",
++    "abspath", 
++    "module",
++    "obj",
++    "line",
++    "column",
++    "end_line",
++    "end_column",
++    "msg_id",
++    "symbol",
++    "msg",
++    "confidence",
++}
++
++
++# Fields that are available in the Message object for template formatting
++MESSAGE_FIELDS = {
++    "path",
++    "abspath",
++    "module",
++    "obj",
++    "line",
++    "column",
++    "end_line",
++    "end_column",
++    "msg_id",
++    "symbol",
++    "msg",
++    "confidence",
++}
++
++
+ def colorize_ansi(msg: str, msg_style: MessageStyle) -> str:
+     """Colorize message by wrapping it with ANSI escape codes."""
+     return msg_style._colorize_ansi(msg)

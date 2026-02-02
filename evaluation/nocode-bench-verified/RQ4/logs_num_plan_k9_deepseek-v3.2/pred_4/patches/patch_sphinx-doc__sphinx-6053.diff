@@ -1,0 +1,17 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ae23792..d3b27ef 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1432,7 +1432,11 @@ def autodoc_attrgetter(app, obj, name, *defargs):
+ 
+ def merge_autodoc_default_flags(app, config):
+     # type: (Sphinx, Config) -> None
+-    """This merges the autodoc_default_flags to autodoc_default_options."""
++    """This merges the autodoc_default_flags to autodoc_default_options.
++    
++    Note: In autodoc_default_options, both None and True are accepted as
++    values that enable an option without arguments.
++    """
+     if not config.autodoc_default_flags:
+         return
+ 

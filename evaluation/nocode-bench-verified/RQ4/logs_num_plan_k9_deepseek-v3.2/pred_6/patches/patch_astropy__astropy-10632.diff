@@ -1,0 +1,34 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..f6bcd1b 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -1000,6 +1000,18 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+             f"URL {remote_url} was supposed to be downloaded but timeout was set to 0; "
+             f"if this is unexpected check the astropy config file for the option "
+             f"remote_timeout")
++    if not conf.allow_internet:
++        raise urllib.error.URLError(
++            f"URL {remote_url} was supposed to be downloaded but allow_internet is set to False; "
++            f"if this is unexpected check the astropy config file for the option "
++            f"allow_internet")
++    # Check if it's a network URL and internet is not allowed
++    parsed_url = urllib.parse.urlparse(remote_url)
++    if parsed_url.scheme in ('http', 'https', 'ftp') and not conf.allow_internet:
++        raise urllib.error.URLError(
++            f"URL {remote_url} was supposed to be downloaded but allow_internet is set to False; "
++            f"if this is unexpected check the astropy config file for the option "
++            f"allow_internet")
+ 
+     if remote_url is None:
+         remote_url = source_url
+@@ -1168,6 +1180,10 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+         timeout = conf.remote_timeout
+     if sources is None:
+         sources = [remote_url]
++    if not conf.allow_internet:
++        # If we are not allowed to use the internet, we should only use the cache.
++        # So we set sources to an empty list.
++        sources = []
+     if http_headers is None:
+         http_headers = {'User-Agent': conf.default_http_user_agent,
+                         'Accept': '*/*'}

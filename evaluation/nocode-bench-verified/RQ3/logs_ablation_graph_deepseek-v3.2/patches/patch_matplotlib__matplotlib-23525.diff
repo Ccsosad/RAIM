@@ -1,0 +1,50 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 677b319..c8e4665 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -2419,15 +2419,27 @@ class Axes(_AxesBase):
+             bottom = y
+ 
+         patches = []
++        # Process the label argument: if it's a list, we assign each bar its own label.
++        if isinstance(label, (list, tuple, np.ndarray)):
++            # Check length
++            if len(label) != len(left):
++                raise ValueError(f"The number of labels ({len(label)}) must match the number of bars ({len(left)})")
++            bar_labels = label
++            container_label = '_nolegend_'
++        else:
++            # If label is a string or None, we use it for the container and set bar labels to '_nolegend_'
++            bar_labels = ['_nolegend_'] * len(left)
++            container_label = label
++
+         args = zip(left, bottom, width, height, color, edgecolor, linewidth,
+-                   hatch)
+-        for l, b, w, h, c, e, lw, htch in args:
++                   hatch, bar_labels)
++        for l, b, w, h, c, e, lw, htch, lbl in args:
+             r = mpatches.Rectangle(
+                 xy=(l, b), width=w, height=h,
+                 facecolor=c,
+                 edgecolor=e,
+                 linewidth=lw,
+-                label='_nolegend_',
++                label=lbl,
+                 hatch=htch,
+                 )
+             r._internal_update(kwargs)
+@@ -2466,7 +2478,7 @@ class Axes(_AxesBase):
+             datavalues = width
+ 
+         bar_container = BarContainer(patches, errorbar, datavalues=datavalues,
+-                                     orientation=orientation, label=label)
++                                     orientation=orientation, label=container_label)
+         self.add_container(bar_container)
+ 
+         if tick_labels is not None:
+@@ -8162,4 +8174,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

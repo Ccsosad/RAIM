@@ -1,0 +1,103 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1017cc4..06a1281 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -452,6 +452,10 @@ class Documenter:
+             return '%s:docstring of %s' % (self.analyzer.srcname, self.fullname)
+         return 'docstring of %s' % self.fullname
+ 
++    def format_typehints(self) -> List[str]:
++        """Format type hints for the object as a list of reST lines."""
++        return []
++
+     def add_content(self, more_content: Any, no_docstring: bool = False) -> None:
+         """Add content from docstrings, attribute documentation and user."""
+         # set sourcename and add content from attribute documentation
+@@ -474,6 +478,14 @@ class Documenter:
+                 # autodoc-process-docstring is fired and can add some
+                 # content if desired
+                 docstrings.append([])
++
++            # If autodoc_typehints is set to 'description', add type hints
++            if self.env.config.autodoc_typehints == 'description':
++                typehint_lines = self.format_typehints()
++                if typehint_lines:
++                    # Insert the type hints at the beginning of the first docstring
++                    docstrings[0] = typehint_lines + docstrings[0]
++
+             for i, line in enumerate(self.process_doc(docstrings)):
+                 self.add_line(line, sourcename, i)
+ 
+@@ -1744,7 +1756,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_config_value('autodoc_default_options', {}, True)
+     app.add_config_value('autodoc_docstring_signature', True, True)
+     app.add_config_value('autodoc_mock_imports', [], True)
+-    app.add_config_value('autodoc_typehints', "signature", True, ENUM("signature", "none"))
++    app.add_config_value('autodoc_typehints', "signature", True, ENUM("signature", "description", "none"))
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
+     app.add_event('autodoc-before-process-signature')
+diff --git a/sphinx/ext/autodoc/typehint_formatter.py b/sphinx/ext/autodoc/typehint_formatter.py
+new file mode 100644
+index 0000000..cf237bd
+--- /dev/null
++++ b/sphinx/ext/autodoc/typehint_formatter.py
+@@ -0,0 +1,58 @@
++"""
++    sphinx.ext.autodoc.typehint_formatter
++    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++
++    Formatter for type hints to be displayed in the description.
++
++    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
++    :license: BSD, see LICENSE for details.
++"""
++
++import inspect
++import typing
++from typing import Any, List, Optional, Tuple
++
++from sphinx.util import inspect as sphinx_inspect
++
++
++def format_annotation(annotation: Any) -> str:
++    """Format a type annotation as a string."""
++    if annotation is inspect.Parameter.empty:
++        return ''
++    if annotation is None:
++        return 'None'
++    if isinstance(annotation, str):
++        return annotation
++    if typing.get_origin(annotation) is not None:
++        # For Python 3.7+ with typing module
++        return str(annotation).replace('typing.', '')
++    try:
++        return annotation.__name__
++    except AttributeError:
++        return str(annotation)
++
++
++def format_typehints(obj: Any) -> List[str]:
++    """Format type hints for a function or method as a list of reST lines."""
++    lines = []
++    try:
++        signature = inspect.signature(obj)
++    except (TypeError, ValueError):
++        return lines
++
++    for param_name, param in signature.parameters.items():
++        if param.annotation is not inspect.Parameter.empty:
++            formatted = format_annotation(param.annotation)
++            lines.append(':type %s: %s' % (param_name, formatted))
++        if param.default is not inspect.Parameter.empty:
++            lines.append(':param %s: ' % param_name)
++            # We don't include the default value in the description because
++            # it might be long. But we could add it.
++            # Alternatively, we can add a separate line for the default.
++            # For now, just leave it empty.
++
++    if signature.return_annotation is not inspect.Parameter.empty:
++        formatted = format_annotation(signature.return_annotation)
++        lines.append(':rtype: %s' % formatted)
++
++    return lines

@@ -1,0 +1,60 @@
+diff --git a/sklearn/datasets/_samples_generator.py b/sklearn/datasets/_samples_generator.py
+index 3e148f7..22cb84f 100644
+--- a/sklearn/datasets/_samples_generator.py
++++ b/sklearn/datasets/_samples_generator.py
+@@ -727,11 +727,14 @@ def make_moons(n_samples=100, shuffle=True, noise=None, random_state=None):
+     if noise is not None:
+         X += generator.normal(scale=noise, size=X.shape)
+ 
++    if return_centers:
++        return X, y, centers
+     return X, y
+ 
+ 
+ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+-               center_box=(-10.0, 10.0), shuffle=True, random_state=None):
++               center_box=(-10.0, 10.0), shuffle=True, random_state=None,
++               return_centers=False):
+     """Generate isotropic Gaussian blobs for clustering.
+ 
+     Read more in the :ref:`User Guide <sample_generators>`.
+@@ -769,6 +772,9 @@ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+         for reproducible output across multiple function calls.
+         See :term:`Glossary <random_state>`.
+ 
++    return_centers : bool, optional (default=False)
++        If True, returns the centers of each cluster.
++
+     Returns
+     -------
+     X : array of shape [n_samples, n_features]
+@@ -777,6 +783,9 @@ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+     y : array of shape [n_samples]
+         The integer labels for cluster membership of each sample.
+ 
++    centers : array of shape [n_centers, n_features], optional
++        The centers of each cluster. Only returned if `return_centers` is True.
++
+     Examples
+     --------
+     >>> from sklearn.datasets import make_blobs
+@@ -792,6 +801,10 @@ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+     (10, 2)
+     >>> y
+     array([0, 1, 2, 0, 2, 2, 2, 1, 1, 0])
++    >>> X, y, centers = make_blobs(n_samples=5, centers=2, n_features=2,
++    ...                            return_centers=True, random_state=0)
++    >>> print(centers.shape)
++    (2, 2)
+ 
+     See also
+     --------
+@@ -869,6 +882,8 @@ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+         X = X[indices]
+         y = y[indices]
+ 
++    if return_centers:
++        return X, y, centers
+     return X, y
+ 
+ 

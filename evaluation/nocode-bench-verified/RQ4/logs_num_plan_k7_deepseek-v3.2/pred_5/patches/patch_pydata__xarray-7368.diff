@@ -1,0 +1,104 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..0b10724 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -88,6 +88,26 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     def to_dataset(self) -> Dataset:
+         raise NotImplementedError()
+ 
++    def copy(self, deep: bool = True) -> "Coordinates":
++        """Return a copy of the coordinates.
++
++        Parameters
++        ----------
++        deep : bool, default True
++            If True, the underlying data array is copied. Otherwise, a shallow
++            copy is made.
++
++        Returns
++        -------
++        Coordinates
++            The copied coordinates.
++        """
++        variables = {k: v.copy(deep=deep) for k, v in self.variables.items()}
++        indexes = {k: v.copy(deep=deep) for k, v in self.xindexes.items()}
++        from xarray.core.dataset import Dataset
++        ds = Dataset._construct_direct(variables=variables, coord_names=set(variables), indexes=indexes)
++        return ds.coords
++
+     def to_index(self, ordered_dims: Sequence[Hashable] | None = None) -> pd.Index:
+         """Convert all index coordinates into a :py:class:`pandas.Index`.
+ 
+@@ -171,6 +191,72 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+         )
+         self._update_coords(coords, indexes)
+ 
++    @classmethod
++    def from_pandas_multiindex(cls, midx: pd.MultiIndex, dim: Hashable | None = None) -> "Coordinates":
++        """Create Coordinates from a pandas MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            The MultiIndex to convert.
++        dim : hashable, optional
++            The dimension name to use for the coordinates. If not provided,
++            the name of the MultiIndex will be used, or if it has no name,
++            a default name will be assigned.
++
++        Returns
++        -------
++        Coordinates
++            A Coordinates object containing the MultiIndex as coordinate(s).
++        """
++        from xarray.core.dataset import Dataset
++
++        if dim is None:
++            dim = midx.names[0] if len(midx.names) == 1 else None
++        ds = Dataset.from_pandas_multiindex(midx, dim)
++        return ds.coords
++
++    def equals(self, other: "Coordinates") -> bool:
++        """True if two Coordinates objects have the same variables and indexes.
++
++        This method checks the equality of the variables and indexes, but not
++        the data structure identity. It is similar to :py:meth:`Dataset.equals`.
++
++        Parameters
++        ----------
++        other : Coordinates
++            The other Coordinates object to compare.
++
++        Returns
++        -------
++        bool
++            True if the two Coordinates objects are equal.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        return self.variables.equals(other.variables) and self.xindexes.equals(other.xindexes)
++
++    def identical(self, other: "Coordinates") -> bool:
++        """True if two Coordinates objects have the same variables and indexes,
++        and the same underlying data.
++
++        This method checks the identity of the variables and indexes. It is
++        similar to :py:meth:`Dataset.identical`.
++
++        Parameters
++        ----------
++        other : Coordinates
++            The other Coordinates object to compare.
++
++        Returns
++        -------
++        bool
++            True if the two Coordinates objects are identical.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        return self.variables.identical(other.variables) and self.xindexes.identical(other.xindexes)
++
+     def _merge_raw(self, other, reflexive):
+         """For use with binary arithmetic."""
+         if other is None:

@@ -1,0 +1,65 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..bc304f6 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -415,7 +415,7 @@ class CFTimeIndex(pd.Index):
+ 
+     def _get_string_slice(self, key):
+         """Adapted from pandas.tseries.index.DatetimeIndex._get_string_slice"""
+-        parsed, resolution = _parse_iso8601_with_reso(self.date_type, key)
++        parsed, resolution = parse_iso8601_like(self.date_type, key)
+         try:
+             loc = self._partial_date_slice(resolution, parsed)
+         except KeyError:
+@@ -459,7 +459,7 @@ class CFTimeIndex(pd.Index):
+         """Adapted from
+         pandas.tseries.index.DatetimeIndex._maybe_cast_slice_bound"""
+         if isinstance(label, str):
+-            parsed, resolution = _parse_iso8601_with_reso(self.date_type, label)
++            parsed, resolution = parse_iso8601_like(self.date_type, label)
+             start, end = _parsed_string_to_bounds(self.date_type, resolution, parsed)
+             if self.is_monotonic_decreasing and len(self) > 1:
+                 return end if side == "left" else start
+@@ -742,8 +742,41 @@ class CFTimeIndex(pd.Index):
+         return self._round_via_method(freq, _round_to_nearest_half_even)
+ 
+ 
++def parse_iso8601_like(date_type, datetime_str):
++    """Parse a datetime string that may be in ISO 8601 format or the default cftime format.
++
++    This function supports the following formats:
++    - ISO 8601 basic: YYYYMMDDHHMMSS
++    - ISO 8601 extended: YYYY-MM-DDTHH:MM:SS
++    - cftime default: YYYY-MM-DD HH:MM:SS
++
++    Parameters
++    ----------
++    date_type : type
++        The cftime.datetime class.
++    datetime_str : str
++        The datetime string to parse.
++
++    Returns
++    -------
++    tuple
++        A tuple (parsed, resolution) where parsed is a cftime.datetime object and
++        resolution is a string representing the resolution of the parsed string.
++    """
++    # First, try to parse with the original function.
++    # If it fails, try replacing space with 'T' and parse again.
++    try:
++        return _parse_iso8601_with_reso(date_type, datetime_str)
++    except ValueError:
++        if ' ' in datetime_str:
++            datetime_str_t = datetime_str.replace(' ', 'T')
++            return _parse_iso8601_with_reso(date_type, datetime_str_t)
++        else:
++            raise
++
++
+ def _parse_iso8601_without_reso(date_type, datetime_str):
+-    date, _ = _parse_iso8601_with_reso(date_type, datetime_str)
++    date, _ = parse_iso8601_like(date_type, datetime_str)
+     return date
+ 
+ 

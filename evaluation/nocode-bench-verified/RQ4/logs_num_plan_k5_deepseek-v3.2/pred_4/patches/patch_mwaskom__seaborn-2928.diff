@@ -1,0 +1,264 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..2013af9 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -974,6 +974,64 @@ class FacetGrid(Grid):
+                 self.axes.flat[i].set_title(title, **kwargs)
+         return self
+ 
++    def tight_layout(self, pad=1.08, h_pad=None, w_pad=None, rect=None):
++        """Call fig.tight_layout on the grid figure and return self.
++
++        Parameters
++        ----------
++        pad : float
++            Padding between the figure edge and the edges of subplots, as a fraction of the font size.
++        h_pad, w_pad : float
++            Padding (height/width) between edges of adjacent subplots, as a fraction of the font size.
++        rect : tuple (left, bottom, right, top)
++            A rectangle in normalized figure coordinates to fit the subplots into.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++        """
++        self._figure.tight_layout(pad=pad, h_pad=h_pad, w_pad=w_pad, rect=rect)
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It should take the grid object as the first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of applying the function.
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++
++        This method is similar to `apply`, but is intended for chaining.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It should take the grid object as the first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of applying the function.
++        """
++        return func(self, *args, **kwargs)
++
+     def refline(self, *, x=None, y=None, color='.5', linestyle='--', **line_kws):
+         """Add a reference line(s) to each facet.
+ 
+@@ -1303,6 +1361,64 @@ class PairGrid(Grid):
+             utils.despine(fig=fig)
+         self.tight_layout(pad=layout_pad)
+ 
++    def tight_layout(self, pad=1.08, h_pad=None, w_pad=None, rect=None):
++        """Call fig.tight_layout on the grid figure and return self.
++
++        Parameters
++        ----------
++        pad : float
++            Padding between the figure edge and the edges of subplots, as a fraction of the font size.
++        h_pad, w_pad : float
++            Padding (height/width) between edges of adjacent subplots, as a fraction of the font size.
++        rect : tuple (left, bottom, right, top)
++            A rectangle in normalized figure coordinates to fit the subplots into.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++        """
++        self._figure.tight_layout(pad=pad, h_pad=h_pad, w_pad=w_pad, rect=rect)
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It should take the grid object as the first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of applying the function.
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++
++        This method is similar to `apply`, but is intended for chaining.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It should take the grid object as the first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of applying the function.
++        """
++        return func(self, *args, **kwargs)
++
+     def map(self, func, **kwargs):
+         """Plot with the same function in every subplot.
+ 
+@@ -1610,6 +1726,64 @@ class PairGrid(Grid):
+         for ax, label in zip(self.axes[:, 0], self.y_vars):
+             ax.set_ylabel(label)
+ 
++    def tight_layout(self, pad=1.08, h_pad=None, w_pad=None, rect=None):
++        """Call fig.tight_layout on the grid figure and return self.
++
++        Parameters
++        ----------
++        pad : float
++            Padding between the figure edge and the edges of subplots, as a fraction of the font size.
++        h_pad, w_pad : float
++            Padding (height/width) between edges of adjacent subplots, as a fraction of the font size.
++        rect : tuple (left, bottom, right, top)
++            A rectangle in normalized figure coordinates to fit the subplots into.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++        """
++        self._figure.tight_layout(pad=pad, h_pad=h_pad, w_pad=w_pad, rect=rect)
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It should take the grid object as the first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of applying the function.
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++
++        This method is similar to `apply`, but is intended for chaining.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It should take the grid object as the first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of applying the function.
++        """
++        return func(self, *args, **kwargs)
++
+     def _find_numeric_cols(self, data):
+         """Find which variables in a DataFrame are numeric."""
+         numeric_cols = []
+@@ -1906,6 +2080,64 @@ class JointGrid(_BaseGrid):
+         self.ax_joint.set_ylabel(ylabel, **kwargs)
+         return self
+ 
++    def tight_layout(self, pad=1.08, h_pad=None, w_pad=None, rect=None):
++        """Call fig.tight_layout on the grid figure and return self.
++
++        Parameters
++        ----------
++        pad : float
++            Padding between the figure edge and the edges of subplots, as a fraction of the font size.
++        h_pad, w_pad : float
++            Padding (height/width) between edges of adjacent subplots, as a fraction of the font size.
++        rect : tuple (left, bottom, right, top)
++            A rectangle in normalized figure coordinates to fit the subplots into.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++        """
++        self._figure.tight_layout(pad=pad, h_pad=h_pad, w_pad=w_pad, rect=rect)
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It should take the grid object as the first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of applying the function.
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++
++        This method is similar to `apply`, but is intended for chaining.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It should take the grid object as the first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of applying the function.
++        """
++        return func(self, *args, **kwargs)
++
+ 
+ JointGrid.__init__.__doc__ = """\
+ Set up the grid of subplots and store data internally for easy plotting.

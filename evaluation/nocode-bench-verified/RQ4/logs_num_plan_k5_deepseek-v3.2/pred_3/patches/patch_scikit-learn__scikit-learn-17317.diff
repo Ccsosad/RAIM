@@ -1,0 +1,26 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..af8a703 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -41,10 +41,10 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         """
+         if not (hasattr(X, 'iloc') and getattr(X, 'ndim', 0) == 2):
+             # if not a dataframe, do normal check_array validation
+-            X_temp = check_array(X, dtype=None)
++            X_temp = check_array(X, dtype=None, force_all_finite='allow-nan')
+             if (not hasattr(X, 'dtype')
+                     and np.issubdtype(X_temp.dtype, np.str_)):
+-                X = check_array(X, dtype=object)
++                X = check_array(X, dtype=object, force_all_finite='allow-nan')
+             else:
+                 X = X_temp
+             needs_validation = False
+@@ -59,7 +59,7 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         for i in range(n_features):
+             Xi = self._get_feature(X, feature_idx=i)
+             Xi = check_array(Xi, ensure_2d=False, dtype=None,
+-                             force_all_finite=needs_validation)
++                             force_all_finite='allow-nan')
+             X_columns.append(Xi)
+ 
+         return X_columns, n_samples, n_features

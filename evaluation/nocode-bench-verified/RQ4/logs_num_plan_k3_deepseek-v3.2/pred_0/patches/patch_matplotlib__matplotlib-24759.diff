@@ -1,0 +1,45 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index c85af9f..777ab89 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -8291,4 +8291,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index 7d25be3..75ac3bd 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -346,7 +346,8 @@ class Legend(Artist):
+         alignment="center",       # control the alignment within the legend box
+         *,
+         ncol=1,  # synonym for ncols (backward compatibility)
+-        draggable=False  # whether the legend can be dragged with the mouse
++        draggable=False,  # whether the legend can be dragged with the mouse
++        reverse=False     # reverse the order of legend entries
+     ):
+         """
+         Parameters
+@@ -552,6 +553,8 @@ class Legend(Artist):
+         self._draggable = None
+         self.set_draggable(state=draggable)
+ 
++        self._reverse = reverse
++
+         # set the text color
+ 
+         color_getters = {  # getter function depends on line or patch
+@@ -784,6 +787,11 @@ class Legend(Artist):
+         # manually set their transform to the self.get_transform().
+         legend_handler_map = self.get_legend_handler_map()
+ 
++        # If reverse is True, reverse the order of handles and labels
++        if self._reverse:
++            handles = list(reversed(handles))
++            labels = list(reversed(labels))
++
+         for orig_handle, label in zip(handles, labels):
+             handler = self.get_legend_handler(legend_handler_map, orig_handle)
+             if handler is None:

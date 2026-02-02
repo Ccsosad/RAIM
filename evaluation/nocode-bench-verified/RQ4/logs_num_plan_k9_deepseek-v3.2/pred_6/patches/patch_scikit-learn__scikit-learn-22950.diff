@@ -1,0 +1,41 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..13f0231 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -137,7 +137,7 @@ def _solve_sparse_cg(
+     return coefs
+ 
+ 
+-def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
++def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3, X_offset=None, X_scale=None):
+     n_samples, n_features = X.shape
+     coefs = np.empty((y.shape[1], n_features), dtype=X.dtype)
+     n_iter = np.empty(y.shape[1], dtype=np.int32)
+@@ -145,6 +145,18 @@ def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
+     # According to the lsqr documentation, alpha = damp^2.
+     sqrt_alpha = np.sqrt(alpha)
+ 
++    # If X_offset and X_scale are given, we need to center the data.
++    if X_offset is not None and X_scale is not None:
++        # Create a linear operator that centers the data on the fly.
++        X_offset_scale = X_offset / X_scale
++        def matvec(b):
++            return X.dot(b) - b.dot(X_offset_scale)
++        def rmatvec(b):
++            return X.T.dot(b) - X_offset_scale * b.sum()
++        X1 = sparse.linalg.LinearOperator(shape=X.shape, matvec=matvec, rmatvec=rmatvec)
++    else:
++        X1 = sp_linalg.aslinearoperator(X)
++
+     for i in range(y.shape[1]):
+         y_column = y[:, i]
+         info = sp_linalg.lsqr(
+@@ -629,7 +641,7 @@ def _ridge_regression(
+         )
+ 
+     elif solver == "lsqr":
+-        coef, n_iter = _solve_lsqr(X, y, alpha, max_iter, tol)
++        coef, n_iter = _solve_lsqr(X, y, alpha, max_iter, tol, X_offset, X_scale)
+ 
+     elif solver == "cholesky":
+         if n_features > n_samples:

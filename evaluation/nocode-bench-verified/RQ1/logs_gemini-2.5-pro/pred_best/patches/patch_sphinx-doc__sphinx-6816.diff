@@ -1,0 +1,43 @@
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index 577f2c2..6690f11 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -79,6 +79,7 @@ class CheckExternalLinksBuilder(Builder):
+ 
+     def init(self) -> None:
+         self.to_ignore = [re.compile(x) for x in self.app.config.linkcheck_ignore]
++        self.auth = [(re.compile(p), a) for p, a in self.app.config.linkcheck_auth]
+         self.anchors_ignore = [re.compile(x)
+                                for x in self.app.config.linkcheck_anchors_ignore]
+         self.good = set()       # type: Set[str]
+@@ -192,11 +193,19 @@ class CheckExternalLinksBuilder(Builder):
+                     return 'ignored', '', 0
+ 
+             # need to actually check the URI
+-            for _ in range(self.app.config.linkcheck_retries):
+-                status, info, code = check_uri()
+-                if status != "broken":
++            for pattern, auth in self.auth:
++                if pattern.match(uri):
++                    kwargs['auth'] = auth
+                     break
+ 
++            try:
++                for _ in range(self.app.config.linkcheck_retries):
++                    status, info, code = check_uri()
++                    if status != "broken":
++                        break
++            finally:
++                kwargs.pop('auth', None)
++
+             if status == "working":
+                 self.good.add(uri)
+             elif status == "broken":
+@@ -309,6 +318,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_config_value('linkcheck_timeout', None, None, [int])
+     app.add_config_value('linkcheck_workers', 5, None)
+     app.add_config_value('linkcheck_anchors', True, None)
++    app.add_config_value('linkcheck_auth', [], None)
+     # Anchors starting with ! are ignored since they are
+     # commonly used for dynamic pages
+     app.add_config_value('linkcheck_anchors_ignore', ["^!"], None)

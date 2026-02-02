@@ -1,0 +1,148 @@
+diff --git a/seaborn/categorical.py b/seaborn/categorical.py
+index 8858341..af2d965 100644
+--- a/seaborn/categorical.py
++++ b/seaborn/categorical.py
+@@ -1435,7 +1435,7 @@ class _CategoricalStatPlotter(_CategoricalPlotter):
+             width = self.width
+         return width
+ 
+-    def estimate_statistic(self, estimator, ci, n_boot, seed):
++    def estimate_statistic(self, estimator, errorbar, n_boot, seed):
+ 
+         if self.hue_names is None:
+             statistic = []
+@@ -1467,25 +1467,45 @@ class _CategoricalStatPlotter(_CategoricalPlotter):
+                     statistic.append(estimator(stat_data))
+ 
+                 # Get a confidence interval for this estimate
+-                if ci is not None:
++                if errorbar is not None:
+ 
+                     if stat_data.size < 2:
+                         confint.append([np.nan, np.nan])
+                         continue
+ 
+-                    if ci == "sd":
+-
++                    # Handle the new errorbar parameter
++                    if errorbar == "sd":
+                         estimate = estimator(stat_data)
+                         sd = np.std(stat_data)
+                         confint.append((estimate - sd, estimate + sd))
+-
++                    elif errorbar == "se":
++                        estimate = estimator(stat_data)
++                        se = np.std(stat_data) / np.sqrt(len(stat_data))
++                        confint.append((estimate - se, estimate + se))
++                    elif isinstance(errorbar, tuple) and errorbar[0] == "pi":
++                        # Percentile interval
++                        width = errorbar[1] if len(errorbar) > 1 else 50
++                        low = (100 - width) / 2
++                        high = 100 - low
++                        confint.append((np.percentile(stat_data, low), 
++                                       np.percentile(stat_data, high)))
++                    elif errorbar == "ci" or (isinstance(errorbar, tuple) and errorbar[0] == "ci"):
++                        # Bootstrap confidence interval
++                        ci_width = 95
++                        if isinstance(errorbar, tuple) and len(errorbar) > 1:
++                            ci_width = errorbar[1]
++                        boots = bootstrap(stat_data, func=estimator,
++                                          n_boot=n_boot,
++                                          units=unit_data,
++                                          seed=seed)
++                        confint.append(utils.ci(boots, ci_width))
+                     else:
+-
++                        # Default to confidence interval
+                         boots = bootstrap(stat_data, func=estimator,
+                                           n_boot=n_boot,
+                                           units=unit_data,
+                                           seed=seed)
+-                        confint.append(utils.ci(boots, ci))
++                        confint.append(utils.ci(boots, errorbar))
+ 
+             # Option 2: we are grouping by a hue layer
+             # ----------------------------------------
+@@ -1575,14 +1595,14 @@ class _BarPlotter(_CategoricalStatPlotter):
+     """Show point estimates and confidence intervals with bars."""
+ 
+     def __init__(self, x, y, hue, data, order, hue_order,
+-                 estimator, ci, n_boot, units, seed,
++                 estimator, errorbar, n_boot, units, seed,
+                  orient, color, palette, saturation, width,
+                  errcolor, errwidth, capsize, dodge):
+         """Initialize the plotter."""
+         self.establish_variables(x, y, hue, data, orient,
+                                  order, hue_order, units)
+         self.establish_colors(color, palette, saturation)
+-        self.estimate_statistic(estimator, ci, n_boot, seed)
++        self.estimate_statistic(estimator, errorbar, n_boot, seed)
+ 
+         self.dodge = dodge
+         self.width = width
+@@ -1647,14 +1667,14 @@ class _PointPlotter(_CategoricalStatPlotter):
+ 
+     """Show point estimates and confidence intervals with (joined) points."""
+     def __init__(self, x, y, hue, data, order, hue_order,
+-                 estimator, ci, n_boot, units, seed,
++                 estimator, errorbar, n_boot, units, seed,
+                  markers, linestyles, dodge, join, scale,
+                  orient, color, palette, errwidth=None, capsize=None):
+         """Initialize the plotter."""
+         self.establish_variables(x, y, hue, data, orient,
+                                  order, hue_order, units)
+         self.establish_colors(color, palette, 1)
+-        self.estimate_statistic(estimator, ci, n_boot, seed)
++        self.estimate_statistic(estimator, errorbar, n_boot, seed)
+ 
+         # Override the default palette for single-color plots
+         if hue is None and color is None and palette is None:
+@@ -2746,12 +2766,21 @@ def barplot(
+     estimator=np.mean, ci=95, n_boot=1000, units=None, seed=None,
+     orient=None, color=None, palette=None, saturation=.75, width=.8,
+     errcolor=".26", errwidth=None, capsize=None, dodge=True,
+-    ax=None,
++    errorbar=None, ax=None,
+     **kwargs,
+ ):
+-
++    # Handle backward compatibility: convert ci to errorbar
++    if errorbar is None:
++        if ci is not None:
++            if ci == "sd":
++                errorbar = "sd"
++            else:
++                errorbar = ("ci", ci)
++        else:
++            errorbar = None
++    
+     plotter = _BarPlotter(x, y, hue, data, order, hue_order,
+-                          estimator, ci, n_boot, units, seed,
++                          estimator, errorbar, n_boot, units, seed,
+                           orient, color, palette, saturation,
+                           width, errcolor, errwidth, capsize, dodge)
+ 
+@@ -2829,11 +2858,20 @@ def pointplot(
+     estimator=np.mean, ci=95, n_boot=1000, units=None, seed=None,
+     markers="o", linestyles="-", dodge=False, join=True, scale=1,
+     orient=None, color=None, palette=None, errwidth=None,
+-    capsize=None, ax=None,
++    capsize=None, errorbar=None, ax=None,
+ ):
+-
++    # Handle backward compatibility: convert ci to errorbar
++    if errorbar is None:
++        if ci is not None:
++            if ci == "sd":
++                errorbar = "sd"
++            else:
++                errorbar = ("ci", ci)
++        else:
++            errorbar = None
++    
+     plotter = _PointPlotter(x, y, hue, data, order, hue_order,
+-                            estimator, ci, n_boot, units, seed,
++                            estimator, errorbar, n_boot, units, seed,
+                             markers, linestyles, dodge, join, scale,
+                             orient, color, palette, errwidth, capsize)
+ 

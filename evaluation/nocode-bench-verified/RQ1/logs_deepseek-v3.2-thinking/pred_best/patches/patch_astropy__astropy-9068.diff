@@ -1,0 +1,102 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..c3add0a 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3021,6 +3021,97 @@ class Table:
+ 
+         return result
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise.
++
++        This returns a Table of booleans with the same shape as the original
++        table, where each element indicates whether the corresponding table
++        element matches the comparison value.
++
++        Parameters
++        ----------
++        other : Table, array-like, or scalar
++            The object to compare with the table. If a Table, it must have
++            the same column names. If an array, it should be broadcastable
++            column-wise (length must match number of rows). If a scalar,
++            it is compared to each element.
++
++        Returns
++        -------
++        result : Table
++            A Table of booleans with the same shape and column names.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table with different column names.
++
++        Examples
++        --------
++        >>> t1 = Table([[1, 2, 3], [4, 5, 6], [7, 7, 9]],
++        ...            names=['a', 'b', 'c'])
++        >>> t2 = Table([[1, 2, -1], [4, -1, 6], [7, 7, 9]],
++        ...            names=['a', 'b', 'c'])
++        >>> t1.values_equal(t2)
++        <Table length=3>
++         a     b     c
++        bool  bool  bool
++        ---- ----- -----
++        True  True False
++        True False  True
++        True  True  True
++
++        >>> t1.values_equal([2, 4, 7])
++        <Table length=3>
++          a     b     c
++         bool  bool  bool
++        ----- ----- -----
++        False  True False
++         True False False
++         True  True False
++
++        >>> t1.values_equal(7)
++        <Table length=3>
++          a     b     c
++         bool  bool  bool
++        ----- ----- -----
++        False False False
++        False False False
++         True  True False
++        """
++        if isinstance(other, Table):
++            # Check for same column names
++            if set(self.colnames) != set(other.colnames):
++                raise ValueError('cannot compare tables with different column names')
++            
++            if len(self) != len(other):
++                raise ValueError('cannot compare tables with different number of rows')
++            
++            # Compare column by column
++            out_cols = []
++            for name in self.colnames:
++                col1 = self[name]
++                col2 = other[name]
++                # Element-wise comparison
++                eq = (col1 == col2)
++                # Handle masked arrays
++                if isinstance(eq, np.ma.MaskedArray):
++                    eq = eq.filled(False)
++                out_cols.append(Column(eq, name=name, dtype=bool))
++        else:
++            # other is array-like or scalar
++            out_cols = []
++            for col in self.itercols():
++                # Broadcast comparison
++                eq = (col == other)
++                if isinstance(eq, np.ma.MaskedArray):
++                    eq = eq.filled(False)
++                out_cols.append(Column(eq, name=col.info.name, dtype=bool))
++        
++        # Return new table with boolean results
++        return self.__class__(out_cols, copy=False)
++
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 

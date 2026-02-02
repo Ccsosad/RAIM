@@ -1,0 +1,89 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 1dd2ee6..13c16f2 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4174,7 +4174,7 @@ class DataArray(
+             zarr_version=zarr_version,
+         )
+ 
+-    def to_dict(self, data: bool = True, encoding: bool = False) -> dict[str, Any]:
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
+         """
+         Convert this xarray.DataArray into a dictionary following xarray
+         naming conventions.
+@@ -4185,9 +4185,10 @@ class DataArray(
+ 
+         Parameters
+         ----------
+-        data : bool, default: True
++        data : bool or str, default: True
+             Whether to include the actual data in the dictionary. When set to
+-            False, returns just the schema.
++            False, returns just the schema. If 'array', returns the data as the
++            underlying array type. If 'list' or True, returns data as Python lists.
+         encoding : bool, default: False
+             Whether to include the Dataset's encoding in the dictionary.
+ 
+@@ -6883,4 +6884,4 @@ class DataArray(
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor["DataArray"])
++    str = utils.UncachedAccessor(StringAccessor["DataArray"])
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c4bcfde..48b08f4 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -2127,6 +2127,46 @@ class Dataset(
+             return f"<pre>{escape(repr(self))}</pre>"
+         return formatting_html.dataset_repr(self)
+ 
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
++        """
++        Convert this xarray.Dataset into a dictionary following xarray
++        naming conventions.
++
++        Converts all variables and attributes to native Python objects.
++        Useful for converting to json. To avoid datetime incompatibility
++        use decode_times=False kwarg in xarray.open_dataset.
++
++        Parameters
++        ----------
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary. When set to
++            False, returns just the schema. If 'array', returns the data as the
++            underlying array type. If 'list' or True, returns data as Python lists.
++        encoding : bool, default: False
++            Whether to include the Dataset's encoding in the dictionary.
++
++        Returns
++        -------
++        dict: dict
++
++        See Also
++        --------
++        Dataset.from_dict
++        DataArray.to_dict
++        """
++        d: dict[str, Any] = {
++            "coords": {},
++            "data_vars": {},
++            "attrs": dict(self.attrs),
++        }
++        for k, coord in self.coords.items():
++            d["coords"][k] = coord.variable.to_dict(data=data)
++        for k, var in self.data_vars.items():
++            d["data_vars"][k] = var.variable.to_dict(data=data)
++        if encoding:
++            d["encoding"] = dict(self.encoding)
++        return d
++
+     def info(self, buf: IO | None = None) -> None:
+         """
+         Concise summary of a Dataset variables and attributes.
+@@ -9252,4 +9292,4 @@ class Dataset(
+             loffset=loffset,
+             restore_coord_dims=restore_coord_dims,
+             **indexer_kwargs,
+-        )
++        )

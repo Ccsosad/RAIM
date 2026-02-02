@@ -1,0 +1,106 @@
+diff --git a/seaborn/categorical.py b/seaborn/categorical.py
+index 27d5801..f74819a 100644
+--- a/seaborn/categorical.py
++++ b/seaborn/categorical.py
+@@ -1497,10 +1497,11 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+         dpi = ax.figure.dpi
+         d = (np.sqrt(s) + lw) * (dpi / 72)
+ 
+-        # Transform the data coordinates to point coordinates.
+-        # We'll figure out the swarm positions in the latter
+-        # and then convert back to data coordinates and replot
+-        orig_xy = ax.transData.transform(points.get_offsets())
++        # Use the stored original data if available, otherwise use current offsets
++        if hasattr(points, 'orig_xyr'):
++            orig_xy = ax.transData.transform(points.orig_xyr)
++        else:
++            orig_xy = ax.transData.transform(points.get_offsets())
+ 
+         # Order the variables so that x is the categorical axis
+         if self.orient == "h":
+@@ -1556,12 +1557,7 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                 swarm_data = np.asarray(group_data[hue_mask])
+                 point_colors = np.asarray(self.point_colors[i][hue_mask])
+ 
+-                # Sort the points for the beeswarm algorithm
+-                sorter = np.argsort(swarm_data)
+-                swarm_data = swarm_data[sorter]
+-                point_colors = point_colors[sorter]
+-
+-                # Plot the points in centered positions
++                # Plot the points in centered positions (without sorting)
+                 cat_pos = np.ones(swarm_data.size) * i
+                 kws.update(c=palette[point_colors])
+                 if self.orient == "v":
+@@ -1569,6 +1565,13 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                 else:
+                     points = ax.scatter(swarm_data, cat_pos, s=s, **kws)
+ 
++                # Store the original data (in data coordinates) for draw-time swarming
++                points.orig_xyr = np.c_[cat_pos, swarm_data]
++                points.center = i
++                points.width = width
++                points.s = s
++                points.kws = kws
++
+                 centers.append(i)
+                 swarms.append(points)
+ 
+@@ -1581,12 +1584,7 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                     swarm_data = np.asarray(group_data[hue_mask])
+                     point_colors = np.asarray(self.point_colors[i][hue_mask])
+ 
+-                    # Sort the points for the beeswarm algorithm
+-                    sorter = np.argsort(swarm_data)
+-                    swarm_data = swarm_data[sorter]
+-                    point_colors = point_colors[sorter]
+-
+-                    # Plot the points in centered positions
++                    # Plot the points in centered positions (without sorting)
+                     center = i + offsets[j]
+                     cat_pos = np.ones(swarm_data.size) * center
+                     kws.update(c=palette[point_colors])
+@@ -1595,17 +1593,20 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                     else:
+                         points = ax.scatter(swarm_data, cat_pos, s=s, **kws)
+ 
++                    # Store the original data (in data coordinates) for draw-time swarming
++                    points.orig_xyr = np.c_[cat_pos, swarm_data]
++                    points.center = center
++                    points.width = width
++                    points.s = s
++                    points.kws = kws
++
+                     centers.append(center)
+                     swarms.append(points)
+ 
+         # Autoscale the valus axis to set the data/axes transforms properly
+         ax.autoscale_view(scalex=self.orient == "h", scaley=self.orient == "v")
+ 
+-        # Update the position of each point on the categorical axis
+-        # Do this after plotting so that the numerical axis limits are correct
+-        for center, swarm in zip(centers, swarms):
+-            if swarm.get_offsets().size:
+-                self.swarm_points(ax, swarm, center, width, s, **kws)
++        # We no longer swarm here; it will be done in the draw callback
+ 
+     def plot(self, ax, kws):
+         """Make the full plot."""
+@@ -1615,6 +1616,17 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+         if self.orient == "h":
+             ax.invert_yaxis()
+ 
++        # Attach a callback to update swarms on draw
++        def update_swarms(event):
++            for artist in ax.collections:
++                if hasattr(artist, 'orig_xyr'):
++                    self.swarm_points(ax, artist, artist.center, artist.width, artist.s, **artist.kws)
++
++        # Avoid multiple callbacks
++        if not hasattr(ax, '_swarm_callback_id'):
++            cid = ax.figure.canvas.mpl_connect('draw_event', update_swarms)
++            ax._swarm_callback_id = cid
++
+ 
+ class _CategoricalStatPlotter(_CategoricalPlotter):
+ 

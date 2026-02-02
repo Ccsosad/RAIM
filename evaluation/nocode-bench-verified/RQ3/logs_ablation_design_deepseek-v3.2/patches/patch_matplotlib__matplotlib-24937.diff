@@ -1,0 +1,52 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..4e31f28 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3075,7 +3075,7 @@ class Axes(_AxesBase):
+             autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
+             startangle=0, radius=1, counterclock=True,
+             wedgeprops=None, textprops=None, center=(0, 0),
+-            frame=False, rotatelabels=False, *, normalize=True):
++            frame=False, rotatelabels=False, *, normalize=True, hatch=None):
+         """
+         Plot a pie chart.
+ 
+@@ -3219,6 +3219,22 @@ class Axes(_AxesBase):
+         if textprops is None:
+             textprops = {}
+ 
++        # Handle hatch patterns
++        if hatch is None:
++            hatches = [None] * len(x)
++        elif isinstance(hatch, str):
++            hatches = [hatch] * len(x)
++        elif isinstance(hatch, (list, tuple)):
++            if len(hatch) != len(x):
++                raise ValueError(
++                    "hatch must be a string or a list/tuple of strings "
++                    f"with the same length as x (got {len(hatch)} hatches "
++                    f"but x has length {len(x)})")
++            hatches = list(hatch)
++        else:
++            raise TypeError(
++                "hatch must be a string, a list/tuple of strings, or None")
++
+         texts = []
+         slices = []
+         autotexts = []
+@@ -3236,6 +3252,9 @@ class Axes(_AxesBase):
+                                clip_on=False,
+                                label=label)
+             w.set(**wedgeprops)
++            # Apply hatch pattern to the wedge
++            if hatches[i] is not None:
++                w.set_hatch(hatches[i])
+             slices.append(w)
+             self.add_patch(w)
+ 
+@@ -8280,4 +8299,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

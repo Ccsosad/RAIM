@@ -1,0 +1,19 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..23e6f13 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -58,8 +58,13 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+ 
+         for i in range(n_features):
+             Xi = self._get_feature(X, feature_idx=i)
++            # For object dtype, allow missing values
++            if hasattr(Xi, 'dtype') and Xi.dtype.kind == 'O':
++                force_all_finite = False
++            else:
++                force_all_finite = needs_validation
+             Xi = check_array(Xi, ensure_2d=False, dtype=None,
+-                             force_all_finite=needs_validation)
++                             force_all_finite=force_all_finite)
+             X_columns.append(Xi)
+ 
+         return X_columns, n_samples, n_features

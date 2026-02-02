@@ -1,0 +1,262 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..6477e76 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3605,6 +3605,36 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().integrate(coord, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def query(self, expr, engine=None):
++        """Return a new dataarray with elements that satisfy the query.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression.
++        engine : str, optional
++            Engine to use for evaluation. Currently only 'pandas' is supported.
++
++        Returns
++        -------
++        DataArray
++            New dataarray with only the elements that satisfy the query.
++
++        Examples
++        --------
++        >>> da = xr.DataArray([1, 2, 3], dims="x")
++        >>> da.query("x > 1")
++        <xarray.DataArray (x: 2)>
++        array([2, 3])
++        Dimensions without coordinates: x
++
++        See Also
++        --------
++        Dataset.query
++        """
++        from .query import query_dataarray
++        return query_dataarray(self, expr, engine=engine)
++
+     def unify_chunks(self) -> "DataArray":
+         """Unify chunk size along all chunked dimensions of this DataArray.
+ 
+@@ -4360,4 +4390,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..94d4f54 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6183,6 +6183,39 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+                 selection.append(var_name)
+         return self[selection]
+ 
++    def query(self, expr, engine=None):
++        """Return a new dataset with elements that satisfy the query.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression.
++        engine : str, optional
++            Engine to use for evaluation. Currently only 'pandas' is supported.
++
++        Returns
++        -------
++        Dataset
++            New dataset with only the elements that satisfy the query.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({"a": ("x", [1, 2, 3]), "b": ("x", [4, 5, 6])})
++        >>> ds.query("a > 1")
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Dimensions without coordinates: x
++        Data variables:
++            a        (x) int64 2 3
++            b        (x) int64 5 6
++
++        See Also
++        --------
++        DataArray.query
++        """
++        from .query import query_dataset
++        return query_dataset(self, expr, engine=engine)
++
+     def unify_chunks(self) -> "Dataset":
+         """Unify chunk size along all chunked dimensions of this Dataset.
+ 
+@@ -7002,4 +7035,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query.py b/xarray/core/query.py
+new file mode 100644
+index 0000000..fa9bc1b
+--- /dev/null
++++ b/xarray/core/query.py
+@@ -0,0 +1,159 @@
++"""
++Query functionality for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from .common import AbstractArray, DataWithCoords
++from .dataset import Dataset
++from .dataarray import DataArray
++from .variable import Variable
++from .utils import is_dict_like
++
++class QueryEngine:
++    """Engine for evaluating query expressions on xarray objects."""
++
++    def __init__(self, parser=None, engine=None):
++        self.parser = parser
++        self.engine = engine
++
++    def evaluate(self, expr, variables):
++        """Evaluate a query expression given a dictionary of variables.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression.
++        variables : dict
++            Dictionary of variable names to arrays.
++
++        Returns
++        -------
++        mask : array-like
++            Boolean mask indicating which elements satisfy the query.
++        """
++        # For now, we use pandas.eval as the default engine.
++        # This can be extended to support other engines.
++        if self.engine is None:
++            self.engine = 'pandas'
++
++        if self.engine == 'pandas':
++            return self._evaluate_with_pandas(expr, variables)
++        else:
++            raise ValueError(f"Unsupported engine: {self.engine}")
++
++    def _evaluate_with_pandas(self, expr, variables):
++        """Evaluate using pandas.eval."""
++        # Convert xarray variables to pandas Series or DataFrames as needed.
++        pd_vars = {}
++        for name, var in variables.items():
++            if isinstance(var, (DataArray, Variable)):
++                # Convert to pandas Series if 1D, else raise error?
++                # For now, we only support 1D variables in the query.
++                if var.ndim == 1:
++                    pd_vars[name] = pd.Series(var.values)
++                else:
++                    raise ValueError(
++                        f"Variable {name} has {var.ndim} dimensions. "
++                        "Only 1D variables are supported in queries."
++                    )
++            elif isinstance(var, np.ndarray):
++                if var.ndim == 1:
++                    pd_vars[name] = pd.Series(var)
++                else:
++                    raise ValueError(
++                        f"Array {name} has {var.ndim} dimensions. "
++                        "Only 1D arrays are supported in queries."
++                    )
++            else:
++                pd_vars[name] = var
++
++        # Use pandas.eval to evaluate the expression.
++        try:
++            result = pd.eval(expr, local_dict=pd_vars)
++        except Exception as e:
++            raise ValueError(f"Failed to evaluate query expression: {expr}") from e
++
++        # The result should be a boolean Series.
++        if not isinstance(result, pd.Series):
++            raise ValueError(
++                f"Query expression must return a boolean array, got {type(result)}"
++            )
++        return result.values
++
++
++def query_dataset(dataset, expr, engine=None):
++    """Return a new dataset with elements that satisfy the query.
++
++    Parameters
++    ----------
++    dataset : Dataset
++        Dataset to query.
++    expr : str
++        Query expression.
++    engine : str, optional
++        Engine to use for evaluation. Currently only 'pandas' is supported.
++
++    Returns
++    -------
++    Dataset
++        New dataset with only the elements that satisfy the query.
++    """
++    # Collect all data variables and coordinates that are 1D.
++    variables = {}
++    for name, var in dataset.variables.items():
++        if var.ndim == 1:
++            variables[name] = var
++
++    # Evaluate the query expression to get a boolean mask.
++    qengine = QueryEngine(engine=engine)
++    mask = qengine.evaluate(expr, variables)
++
++    # The mask should have the same length as the first dimension?
++    # Actually, the mask should be applied to all dimensions? 
++    # We assume the query is over the entire dataset (all dimensions).
++    # But the mask is 1D, so we need to broadcast it to the dataset's dimensions.
++    # For simplicity, we assume the mask is over the first dimension.
++    # This is a limitation for now.
++    if len(mask) != len(dataset[list(dataset.dims)[0]]):
++        raise ValueError(
++            "Query result does not match the length of the first dimension."
++        )
++
++    # Apply the mask to all variables that have the first dimension.
++    dim0 = list(dataset.dims)[0]
++    new_vars = {}
++    for name, var in dataset.variables.items():
++        if dim0 in var.dims:
++            # Index the variable along the first dimension.
++            # We use isel with a boolean mask.
++            new_vars[name] = var.isel({dim0: mask})
++        else:
++            new_vars[name] = var
++
++    # Create a new dataset.
++    return Dataset(new_vars)
++
++
++def query_dataarray(dataarray, expr, engine=None):
++    """Return a new dataarray with elements that satisfy the query.
++
++    Parameters
++    ----------
++    dataarray : DataArray
++        DataArray to query.
++    expr : str
++        Query expression.
++    engine : str, optional
++        Engine to use for evaluation. Currently only 'pandas' is supported.
++
++    Returns
++    -------
++    DataArray
++        New dataarray with only the elements that satisfy the query.
++    """
++    # Convert the dataarray to a dataset with a single variable.
++    dataset = dataarray.to_dataset()
++    # Use the dataset query function.
++    result = query_dataset(dataset, expr, engine=engine)
++    # Convert back to dataarray.
++    return result[dataarray.name]

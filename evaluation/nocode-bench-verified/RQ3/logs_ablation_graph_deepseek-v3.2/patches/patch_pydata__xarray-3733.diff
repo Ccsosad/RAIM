@@ -1,0 +1,346 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..19bdb1c 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3202,6 +3202,73 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().integrate(dim, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        cov: bool = False,
++        **kwargs,
++    ) -> "Dataset":
++        """
++        Least squares polynomial fit along the given dimension.
++
++        Parameters
++        ----------
++        dim : hashable
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the polynomial.
++        full : bool, optional
++            Whether to return additional information.
++        cov : bool or str, optional
++            Whether to return the covariance matrix.
++        **kwargs : dict
++            Additional keyword arguments passed to numpy.polyfit.
++
++        Returns
++        -------
++        polyfit_coefficients : Dataset
++            Dataset containing the coefficients and optionally other information.
++
++        See Also
++        --------
++        numpy.polyfit
++        xarray.polyval
++        """
++        from .vandermonde import polyfit
++
++        # Get the coordinate along the dimension
++        coord = self.coords[dim]
++        # Convert to numeric if it's datetime-like
++        if _contains_datetime_like_objects(coord):
++            coord = coord._to_numeric()
++        x = coord.values
++        y = self.values
++
++        # Fit the polynomial
++        result = polyfit(x, y, deg, full=full, cov=cov, **kwargs)
++
++        if full:
++            coeffs, residuals, rank, singular_values, rcond = result
++        else:
++            coeffs = result
++
++        # Create a dataset for the coefficients
++        # The coefficients have shape (deg+1, ...) where ... are the other dimensions.
++        # We need to create a new dimension for the polynomial degree.
++        coeff_dim = "degree"
++        coeff_var = xr.Variable((coeff_dim,) + self.dims, coeffs)
++        ds = xr.Dataset({"polyfit_coefficients": coeff_var})
++
++        if full:
++            ds["residuals"] = xr.Variable(self.dims, residuals)
++            ds["rank"] = rank
++            ds["singular_values"] = xr.Variable((coeff_dim,), singular_values)
++            ds["rcond"] = rcond
++
++        return ds
++
+     def unify_chunks(self) -> "DataArray":
+         """ Unify chunk size along all chunked dimensions of this DataArray.
+ 
+@@ -3449,4 +3516,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 16f0e97..8ae4c1e 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5483,6 +5483,73 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             result = result._integrate_one(c, datetime_unit=datetime_unit)
+         return result
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        cov: bool = False,
++        **kwargs,
++    ) -> "Dataset":
++        """
++        Least squares polynomial fit for each variable along the given dimension.
++
++        Parameters
++        ----------
++        dim : hashable
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the polynomial.
++        full : bool, optional
++            Whether to return additional information.
++        cov : bool or str, optional
++            Whether to return the covariance matrix.
++        **kwargs : dict
++            Additional keyword arguments passed to numpy.polyfit.
++
++        Returns
++        -------
++        polyfit_coefficients : Dataset
++            Dataset containing the coefficients for each variable and optionally other information.
++
++        See Also
++        --------
++        numpy.polyfit
++        xarray.polyval
++        """
++        from .vandermonde import polyfit
++
++        # Get the coordinate along the dimension
++        coord = self.coords[dim]
++        # Convert to numeric if it's datetime-like
++        if _contains_datetime_like_objects(coord):
++            coord = coord._to_numeric()
++        x = coord.values
++
++        result_vars = {}
++        for name, var in self.data_vars.items():
++            if dim in var.dims:
++                y = var.values
++                # Fit the polynomial
++                out = polyfit(x, y, deg, full=full, cov=cov, **kwargs)
++                if full:
++                    coeffs, residuals, rank, singular_values, rcond = out
++                else:
++                    coeffs = out
++
++                # Create a variable for the coefficients
++                coeff_dim = "degree"
++                coeff_var = xr.Variable((coeff_dim,) + var.dims, coeffs)
++                result_vars[name] = coeff_var
++
++                if full:
++                    result_vars[name + "_residuals"] = xr.Variable(var.dims, residuals)
++                    result_vars[name + "_rank"] = rank
++                    result_vars[name + "_singular_values"] = xr.Variable((coeff_dim,), singular_values)
++                    result_vars[name + "_rcond"] = rcond
++
++        return xr.Dataset(result_vars)
++
+     def _integrate_one(self, coord, datetime_unit=None):
+         from .variable import Variable
+ 
+@@ -5915,4 +5982,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self._replace_vars_and_dims(variables)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/vandermonde.py b/xarray/core/vandermonde.py
+new file mode 100644
+index 0000000..d5969e8
+--- /dev/null
++++ b/xarray/core/vandermonde.py
+@@ -0,0 +1,172 @@
++"""
++Polynomial fitting via least-squares for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++
++from . import duck_array_ops
++from .common import _contains_datetime_like_objects
++from .computation import dot
++from .utils import is_duck_dask_array
++
++
++def _least_squares(lhs, rhs, rcond=None):
++    """
++    Return the coefficients of a polynomial of degree `deg` that fits the data `y`
++    in a least-squares sense. This is a wrapper around numpy.linalg.lstsq.
++
++    Parameters
++    ----------
++    lhs : array_like
++        Vandermonde matrix of shape (M, deg + 1).
++    rhs : array_like
++        y-coordinates of the sample points, shape (M,) or (M, K).
++    rcond : float, optional
++        Cut-off ratio for small singular values.
++
++    Returns
++    -------
++    coeffs : ndarray
++        Polynomial coefficients, shape (deg + 1,) or (deg + 1, K).
++    residuals : ndarray
++        Squared residuals of the least-squares solution.
++    rank : int
++        Rank of the coefficient matrix.
++    s : ndarray
++        Singular values of the coefficient matrix.
++    """
++    if is_duck_dask_array(lhs) or is_duck_dask_array(rhs):
++        import dask.array.linalg
++
++        # dask's lstsq doesn't support rcond
++        if rcond is not None:
++            raise NotImplementedError(
++                "rcond is not supported for dask arrays in least squares"
++            )
++        return dask_array.linalg.lstsq(lhs, rhs)
++    else:
++        return np.linalg.lstsq(lhs, rhs, rcond=rcond)
++
++
++def _vander(x, deg):
++    """
++    Vandermonde matrix of degree `deg`.
++
++    Parameters
++    ----------
++    x : array_like
++        Array of points. The dtype is converted to float64 or complex128.
++    deg : int
++        Degree of the resulting matrix.
++
++    Returns
++    -------
++    vander : ndarray
++        The Vandermonde matrix.
++    """
++    x = np.asarray(x, dtype=np.float64)
++    return np.vander(x, deg + 1, increasing=True)
++
++
++def polyfit(x, y, deg, rcond=None, full=False, w=None, cov=False):
++    """
++    Least squares polynomial fit.
++
++    Parameters
++    ----------
++    x : array_like
++        x-coordinates of the sample points.
++    y : array_like
++        y-coordinates of the sample points.
++    deg : int
++        Degree of the fitting polynomial.
++    rcond : float, optional
++        Cut-off ratio for small singular values.
++    full : bool, optional
++        Return full output.
++    w : array_like, optional
++        Weights.
++    cov : bool or str, optional
++        Return the covariance matrix.
++
++    Returns
++    -------
++    coeffs : ndarray
++        Polynomial coefficients.
++    [residuals, rank, singular_values, rcond] : list
++        Present only if `full` is True.
++    V : ndarray
++        Present only if `cov` is True or 'unscaled'.
++    """
++    # This is a simplified version of numpy.polyfit.
++    # We don't support all features (like weights) yet.
++    if w is not None:
++        raise NotImplementedError("Weighted polynomial fit is not yet implemented.")
++    if cov:
++        raise NotImplementedError("Covariance matrix is not yet implemented.")
++
++    x = np.asarray(x)
++    y = np.asarray(y)
++
++    # Check arguments.
++    if deg < 0:
++        raise ValueError("expected deg >= 0")
++    if x.ndim != 1:
++        raise TypeError("expected 1D vector for x")
++    if x.size == 0:
++        raise TypeError("expected non-empty vector for x")
++    if y.ndim < 1 or y.ndim > 2:
++        raise TypeError("expected 1D or 2D array for y")
++
++    # Set rcond
++    if rcond is None:
++        rcond = len(x) * np.finfo(x.dtype).eps
++
++    # Scale x to improve condition number of the Vandermonde matrix.
++    # This is the same as in numpy.polyfit.
++    x = np.asarray(x, dtype=np.float64)
++    y = np.asarray(y, dtype=np.float64)
++
++    # Vandermonde matrix.
++    lhs = _vander(x, deg)
++
++    # Solve least squares.
++    if full:
++        coeffs, residuals, rank, s = _least_squares(lhs, y, rcond)
++        return coeffs, residuals, rank, s, rcond
++    else:
++        coeffs, residuals, rank, s = _least_squares(lhs, y, rcond)
++        return coeffs
++
++
++def polyval(x, coeffs):
++    """
++    Evaluate a polynomial at specific values.
++
++    Parameters
++    ----------
++    x : array_like
++        Points at which to evaluate the polynomial.
++    coeffs : array_like
++        Polynomial coefficients, in increasing order.
++
++    Returns
++    -------
++    values : ndarray
++        Evaluated polynomial.
++    """
++    x = np.asarray(x)
++    coeffs = np.asarray(coeffs)
++    if coeffs.ndim == 1:
++        # For 1D coefficients, we can use numpy.polyval (but note the order).
++        # Since we use increasing order, we need to reverse.
++        return np.polyval(coeffs[::-1], x)
++    else:
++        # For 2D coefficients (multiple polynomials), we need to do a dot product.
++        # coeffs shape: (deg+1, ...) and x is broadcasted.
++        # We'll compute using a dot product along the first axis.
++        # This is equivalent to: sum_{i} coeffs[i] * x**i
++        # We'll use a Vandermonde matrix.
++        deg = coeffs.shape[0] - 1
++        v = _vander(x, deg)
++        return dot(v, coeffs)

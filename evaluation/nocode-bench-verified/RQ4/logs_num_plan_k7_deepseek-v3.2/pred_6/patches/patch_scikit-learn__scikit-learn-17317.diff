@@ -1,0 +1,103 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 24b047c..73ca3c0 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -1,3 +1,4 @@
++
+ import numpy as np
+ 
+ 
+@@ -32,15 +33,45 @@ def _unique(values, *, return_inverse=False):
+ 
+ def _unique_python(values, *, return_inverse):
+     # Only used in `_uniques`, see docstring there for details
++    # Separate missing values (None and np.nan) from the rest
++    missing_mask = np.array([val is None or (isinstance(val, float) and np.isnan(val)) for val in values])
++    non_missing_values = [val for val, is_missing in zip(values, missing_mask) if not is_missing]
++    missing_values = [val for val, is_missing in zip(values, missing_mask) if is_missing]
++
++    # For non-missing values, we try to sort them
+     try:
+-        uniques = sorted(set(values))
+-        uniques = np.array(uniques, dtype=values.dtype)
++        uniques_non_missing = sorted(set(non_missing_values))
+     except TypeError:
+         types = sorted(t.__qualname__
+-                       for t in set(type(v) for v in values))
++                       for t in set(type(v) for v in non_missing_values))
+         raise TypeError("Encoders require their input to be uniformly "
+                         f"strings or numbers. Got {types}")
+ 
++    # For missing values, we want to keep their order: None first, then np.nan
++    # But we also want to remove duplicates among missing values.
++    unique_missing = []
++    has_none = False
++    has_nan = False
++    for val in missing_values:
++        if val is None and not has_none:
++            unique_missing.append(None)
++            has_none = True
++        elif val is not None and np.isnan(val) and not has_nan:
++            unique_missing.append(np.nan)
++            has_nan = True
++
++    uniques_list = uniques_non_missing + unique_missing
++    uniques = np.array(uniques_list, dtype=values.dtype)
++
++    if return_inverse:
++        # Create a mapping from value to index
++        index_map = {}
++        for i, val in enumerate(uniques_list):
++            index_map[val] = i
++        inverse = np.array([index_map[val] for val in values])
++        return uniques, inverse
++    return uniques
++
+     if return_inverse:
+         table = {val: i for i, val in enumerate(uniques)}
+         inverse = np.array([table[v] for v in values])
+@@ -119,13 +150,38 @@ def _check_unknown(values, known_values, return_mask=False):
+ 
+     """
+     if values.dtype == object:
+-        uniques_set = set(known_values)
+-        diff = list(set(values) - uniques_set)
+-        if return_mask:
+-            if diff:
+-                valid_mask = np.array([val in uniques_set for val in values])
++        # We cannot use a set because np.nan is not hashable.
++        # So we split the known_values into three parts: non-missing, None, np.nan
++        known_non_missing = [val for val in known_values if not (val is None or (isinstance(val, float) and np.isnan(val)))]
++        known_has_none = None in known_values
++        known_has_nan = any(isinstance(val, float) and np.isnan(val) for val in known_values)
++        known_non_missing_set = set(known_non_missing)
++
++        diff = []
++        valid_mask = np.ones(len(values), dtype=bool) if return_mask else None
++
++        for i, val in enumerate(values):
++            is_missing = val is None or (isinstance(val, float) and np.isnan(val))
++            if is_missing:
++                if val is None:
++                    if not known_has_none:
++                        diff.append(val)
++                        if return_mask:
++                            valid_mask[i] = False
++                else:  # np.nan
++                    if not known_has_nan:
++                        diff.append(val)
++                        if return_mask:
++                            valid_mask[i] = False
+             else:
+-                valid_mask = np.ones(len(values), dtype=bool)
++                if val not in known_non_missing_set:
++                    diff.append(val)
++                    if return_mask:
++                        valid_mask[i] = False
++
++        # Remove duplicates in diff
++        diff = list(set(diff))
++        if return_mask:
+             return diff, valid_mask
+         else:
+             return diff

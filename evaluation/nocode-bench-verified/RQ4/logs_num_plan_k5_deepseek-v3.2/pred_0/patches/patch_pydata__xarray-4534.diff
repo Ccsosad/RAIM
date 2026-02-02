@@ -1,0 +1,66 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..324c6d8 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -304,6 +304,61 @@ class DatetimeAccessor(Properties):
+             result, name="strftime", coords=self._obj.coords, dims=self._obj.dims
+         )
+ 
++    def isocalendar(self):
++        """
++        Returns a Dataset with three variables: year, week, and weekday
++        according to the ISO 8601 calendar.
++
++        Returns
++        -------
++        Dataset
++            Dataset with three variables: year, week, weekday.
++
++        Examples
++        --------
++        >>> import pandas as pd
++        >>> import xarray as xr
++        >>> dates = pd.date_range(start="2000-01-01", freq="D", periods=10)
++        >>> ts = xr.DataArray(dates, dims=("time"))
++        >>> ts.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 10)
++        Coordinates:
++          * time     (time) datetime64[ns] 2000-01-01 2000-01-02 ... 2000-01-10
++        Data variables:
++            year     (time) int64 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000
++            week     (time) int64 52 52 52 1 1 1 1 1 1 1
++            weekday  (time) int64 6 7 1 2 3 4 5 6 7 1
++
++        Notes
++        -----
++        This method requires pandas version 1.1.0 or greater.
++        """
++        from xarray import Dataset, DataArray
++        import pandas as pd
++        from distutils.version import LooseVersion
++
++        if LooseVersion(pd.__version__) < LooseVersion("1.1.0"):
++            raise AttributeError(
++                "isocalendar requires pandas version 1.1.0 or greater."
++            )
++
++        data = self._obj.data
++        original_shape = self._obj.shape
++        flat_data = data.ravel()
++        s = pd.Series(flat_data)
++        df = s.dt.isocalendar()
++        # df has columns: year, week, weekday
++        year = df["year"].values.reshape(original_shape)
++        week = df["week"].values.reshape(original_shape)
++        weekday = df["weekday"].values.reshape(original_shape)
++
++        year_da = DataArray(year, coords=self._obj.coords, dims=self._obj.dims, name="year")
++        week_da = DataArray(week, coords=self._obj.coords, dims=self._obj.dims, name="week")
++        weekday_da = DataArray(weekday, coords=self._obj.coords, dims=self._obj.dims, name="weekday")
++
++        return Dataset({"year": year_da, "week": week_da, "weekday": weekday_da})
++
+     year = Properties._tslib_field_accessor(
+         "year", "The year of the datetime", np.int64
+     )

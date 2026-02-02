@@ -1,0 +1,55 @@
+diff --git a/sklearn/datasets/_samples_generator.py b/sklearn/datasets/_samples_generator.py
+index 3e148f7..ca37087 100644
+--- a/sklearn/datasets/_samples_generator.py
++++ b/sklearn/datasets/_samples_generator.py
+@@ -727,11 +727,15 @@ def make_moons(n_samples=100, shuffle=True, noise=None, random_state=None):
+     if noise is not None:
+         X += generator.normal(scale=noise, size=X.shape)
+ 
+-    return X, y
++    if return_centers:
++        return X, y, centers
++    else:
++        return X, y
+ 
+ 
+ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+-               center_box=(-10.0, 10.0), shuffle=True, random_state=None):
++               center_box=(-10.0, 10.0), shuffle=True, random_state=None,
++               return_centers=False):
+     """Generate isotropic Gaussian blobs for clustering.
+ 
+     Read more in the :ref:`User Guide <sample_generators>`.
+@@ -769,6 +773,9 @@ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+         for reproducible output across multiple function calls.
+         See :term:`Glossary <random_state>`.
+ 
++    return_centers : bool, optional (default=False)
++        If True, then return the centers of each cluster.
++
+     Returns
+     -------
+     X : array of shape [n_samples, n_features]
+@@ -777,6 +784,10 @@ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+     y : array of shape [n_samples]
+         The integer labels for cluster membership of each sample.
+ 
++    centers : array of shape [n_centers, n_features], optional
++        The centers of each cluster. This is returned only if
++        `return_centers` is True.
++
+     Examples
+     --------
+     >>> from sklearn.datasets import make_blobs
+@@ -869,7 +880,10 @@ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+         X = X[indices]
+         y = y[indices]
+ 
+-    return X, y
++    if return_centers:
++        return X, y, centers
++    else:
++        return X, y
+ 
+ 
+ def make_friedman1(n_samples=100, n_features=10, noise=0.0, random_state=None):

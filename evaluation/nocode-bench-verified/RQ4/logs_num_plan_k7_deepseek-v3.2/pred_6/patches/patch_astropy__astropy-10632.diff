@@ -1,0 +1,58 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..5b64808 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -69,9 +69,11 @@ class Conf(_config.ConfigNamespace):
+         'This only provides the default value when not set by https_headers.')
+     remote_timeout = _config.ConfigItem(
+         10.,
+-        'Time to wait for remote data queries (in seconds). Set this to zero '
+-        'to prevent any attempt to download anything.',
++        'Time to wait for remote data queries (in seconds).',
+         aliases=['astropy.coordinates.name_resolve.name_resolve_timeout'])
++    allow_internet = _config.ConfigItem(
++        True,
++        'If False, prevent any attempt to download any file from the Internet.')
+     compute_hash_block_size = _config.ConfigItem(
+         2 ** 16,  # 64K
+         'Block size for computing file hashes.')
+@@ -187,8 +189,10 @@ def get_readable_fileobj(name_or_obj, encoding=None, cache=False,
+ 
+     remote_timeout : float
+         Timeout for remote requests in seconds (default is the configurable
+-        `astropy.utils.data.Conf.remote_timeout`, which is 3s by default).
+-        Set this to zero to prevent any attempt at downloading.
++        `astropy.utils.data.Conf.remote_timeout`, which is 10s by default).
++        Set this to zero to prevent any attempt at downloading. Alternatively,
++        set `astropy.utils.data.Conf.allow_internet` to `False` to disable all
++        downloads.
+ 
+     sources : list of str, optional
+         If provided, a list of URLs to try to obtain the file from. The
+@@ -995,11 +999,11 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+                                http_headers=None, ftp_tls=None):
+     from astropy.utils.console import ProgressBarOrSpinner
+ 
+-    if timeout == 0:
++    if timeout == 0 or not conf.allow_internet:
+         raise urllib.error.URLError(
+-            f"URL {remote_url} was supposed to be downloaded but timeout was set to 0; "
+-            f"if this is unexpected check the astropy config file for the option "
+-            f"remote_timeout")
++            f"URL {remote_url} was supposed to be downloaded but downloads are disabled; "
++            f"if this is unexpected check the astropy config file for the options "
++            f"remote_timeout and allow_internet")
+ 
+     if remote_url is None:
+         remote_url = source_url
+@@ -1122,7 +1126,9 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+     timeout : float, optional
+         The timeout, in seconds.  Otherwise, use
+         `astropy.utils.data.Conf.remote_timeout`. Set this to zero to prevent
+-        any attempt to download anything.
++        any attempt to download anything. Alternatively, set
++        `astropy.utils.data.Conf.allow_internet` to `False` to disable all
++        downloads.
+ 
+     sources : list of str, optional
+         If provided, a list of URLs to try to obtain the file from. The

@@ -1,0 +1,52 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..3c79fb7 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -415,10 +415,47 @@ def make_layout_margins(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0,
+                 if (cbp_rspan.start == ss.rowspan.start and
+                         cbbbox.y1 > bbox.y1):
+                     margin['top'] += cbbbox.y1 - bbox.y1
++        # handle axes legend that is outside
++        leg = ax.get_legend()
++        if leg is not None:
++            loc = leg._loc
++            if isinstance(loc, str) and loc.startswith('outside'):
++                # parse the location string to determine which side
++                tokens = loc.split()
++                if len(tokens) > 1:
++                    side = tokens[1]  # 'upper', 'lower', 'left', 'right'
++                    leg_pos, leg_bbox = get_pos_and_bbox(leg, renderer)
++                    if side == 'upper':
++                        margin['topcb'] += leg_bbox.height
++                    elif side == 'lower':
++                        margin['bottomcb'] += leg_bbox.height
++                    elif side == 'left':
++                        margin['leftcb'] += leg_bbox.width
++                    elif side == 'right':
++                        margin['rightcb'] += leg_bbox.width
+         # pass the new margins down to the layout grid for the solution...
+         layoutgrids[gs].edit_outer_margin_mins(margin, ss)
+ 
+ 
++    # handle figure-level legends that are outside
++    for leg in fig.legends:
++        loc = leg._loc
++        if isinstance(loc, str) and loc.startswith('outside'):
++            tokens = loc.split()
++            if len(tokens) > 1:
++                side = tokens[1]  # 'upper', 'lower', 'left', 'right'
++                leg_pos, leg_bbox = get_pos_and_bbox(leg, renderer)
++                # we need to add margin to the figure's layoutgrid
++                figlg = layoutgrids[fig]
++                if side == 'upper':
++                    figlg.edit_outer_margin_mins({'topcb': leg_bbox.height}, None)
++                elif side == 'lower':
++                    figlg.edit_outer_margin_mins({'bottomcb': leg_bbox.height}, None)
++                elif side == 'left':
++                    figlg.edit_outer_margin_mins({'leftcb': leg_bbox.width}, None)
++                elif side == 'right':
++                    figlg.edit_outer_margin_mins({'rightcb': leg_bbox.width}, None)
++
+ def make_margin_suptitles(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
+     # Figure out how large the suptitle is and make the
+     # top level figure margin larger.

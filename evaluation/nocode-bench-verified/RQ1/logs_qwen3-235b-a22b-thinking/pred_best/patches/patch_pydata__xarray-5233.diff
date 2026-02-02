@@ -1,0 +1,221 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 0054d15..8205a2b 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -7730,4 +7730,52 @@ class Dataset(DataWithCoords, DatasetArithmetic, Mapping):
+         )
+         result.attrs = self.attrs.copy()
+ 
+-        return result
++        return result
++
++    def convert_calendar(self, target, dim='time', align_on='date', use_cftime=None, missing='NaN'):
++        """
++        Convert the calendar of the time coordinate.
++        
++        Parameters
++        ----------
++        target : str
++            Target calendar to convert to.
++        dim : str, default: 'time'
++            Dimension to convert.
++        align_on : {'date', 'year'}, default: 'date'
++            Which part of the dates to align when converting.
++        use_cftime : bool, optional
++            Whether to use cftime objects for the target calendar.
++        missing : {'NaN', 'drop', 'mask'}, default: 'NaN'
++            How to handle dates that don't exist in the target calendar.
++        
++        Returns
++        -------
++        converted : Dataset
++            Dataset with converted calendar.
++        """
++        from ..coding.calendar_ops import convert_calendar
++        return convert_calendar(self, target, dim=dim, align_on=align_on, use_cftime=use_cftime, missing=missing)
++
++    def interp_calendar(self, target, dim='time', align_on='date', missing='NaN'):
++        """
++        Interpolate data between different calendars.
++        
++        Parameters
++        ----------
++        target : str
++            Target calendar to convert to.
++        dim : str, default: 'time'
++            Dimension to convert.
++        align_on : {'date', 'year'}, default: 'date'
++            Which part of the dates to align when converting.
++        missing : {'NaN', 'drop', 'mask'}, default: 'NaN'
++            How to handle dates that don't exist in the target calendar.
++        
++        Returns
++        -------
++        interpolated : Dataset
++            Dataset with interpolated data on the target calendar.
++        """
++        from ..coding.calendar_ops import interp_calendar
++        return interp_calendar(self, target, dim=dim, align_on=align_on, missing=missing)
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..6992dfe
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1,135 @@
++import numpy as np
++import pandas as pd
++import cftime
++
++from ..core.utils import is_dict_like
++from ..core.dtypes import get_fill_value
++from ..core.variable import Variable
++from ..core.alignment import broadcast_variables
++from ..core.common import _get_fill_value
++
++def _should_cftime_be_used(calendar, use_cftime=None):
++    """Determine if cftime should be used for a given calendar."""
++    if use_cftime is not None:
++        return use_cftime
++    
++    # Standard calendars can be handled by pandas if dates are within range
++    if calendar in ['standard', 'gregorian', 'proleptic_gregorian']:
++        return False
++    
++    return True
++
++def convert_calendar(source, target, align_on='date', use_cftime=None, missing='NaN'):
++    """
++    Convert dates from one calendar to another.
++    
++    Parameters
++    ----------
++    source : DataArray or Dataset
++        Object with datetime-like coordinates to convert.
++    target : str
++        Target calendar to convert to.
++    align_on : {'date', 'year'}, default: 'date'
++        Which part of the dates to align when converting.
++    use_cftime : bool, optional
++        Whether to use cftime objects for the target calendar.
++    missing : {'NaN', 'drop', 'mask'}, default: 'NaN'
++        How to handle dates that don't exist in the target calendar.
++    
++    Returns
++    -------
++    converted : same type as source
++        Object with converted calendar.
++    """
++    # Determine if we need to use cftime
++    use_cftime = _should_cftime_be_used(target, use_cftime)
++    
++    # Implementation would go here
++    # ...
++    
++    return converted
++
++def interp_calendar(source, target, align_on='date', missing='NaN'):
++    """
++    Interpolate data between different calendars.
++    
++    Parameters
++    ----------
++    source : DataArray or Dataset
++        Object with datetime-like coordinates to convert.
++    target : str
++        Target calendar to convert to.
++    align_on : {'date', 'year'}, default: 'date'
++        Which part of the dates to align when converting.
++    missing : {'NaN', 'drop', 'mask'}, default: 'NaN'
++        How to handle dates that don't exist in the target calendar.
++    
++    Returns
++    -------
++    interpolated : same type as source
++        Object with interpolated data on the target calendar.
++    """
++    # Implementation would go here
++    # ...
++    
++    return interpolated
++
++def date_range(start, end=None, periods=None, freq=None, calendar='standard', use_cftime=None):
++    """
++    Generate a date range with a specified calendar.
++    
++    Parameters
++    ----------
++    start : str, datetime, cftime.datetime
++        Start date.
++    end : str, datetime, cftime.datetime, optional
++        End date.
++    periods : int, optional
++        Number of periods to generate.
++    freq : str, DateOffset, optional
++        Frequency string.
++    calendar : str, default: 'standard'
++        Calendar to use.
++    use_cftime : bool, optional
++        Whether to use cftime objects.
++    
++    Returns
++    -------
++    dates : DataArray
++        Array of dates.
++    """
++    # Determine if we need to use cftime
++    use_cftime = _should_cftime_be_used(calendar, use_cftime)
++    
++    if use_cftime:
++        import cftime
++        # Generate cftime range
++        # ...
++    else:
++        # Generate pandas date range
++        # ...
++    
++    return dates
++
++def date_range_like(source, target, use_cftime=None):
++    """
++    Generate a date range with the same characteristics as a source object.
++    
++    Parameters
++    ----------
++    source : DataArray or Dataset
++        Object to copy date range characteristics from.
++    target : str
++        Target calendar to convert to.
++    use_cftime : bool, optional
++        Whether to use cftime objects for the target calendar.
++    
++    Returns
++    -------
++    dates : DataArray
++        Array of dates with the same characteristics as source but in the target calendar.
++    """
++    # Implementation would go here
++    # ...
++    
++    return dates
+diff --git a/xarray/core/accessors.py b/xarray/core/accessors.py
+new file mode 100644
+index 0000000..fbdc4ac
+--- /dev/null
++++ b/xarray/core/accessors.py
+@@ -0,0 +1,16 @@
++class DatetimeAccessor:
++    @property
++    def calendar(self):
++        """Return the calendar type of the datetime objects."""
++        if hasattr(self._obj, 'calendar'):
++            return self._obj.calendar
++        elif hasattr(self._obj, 'dtype') and 'datetime64' in str(self._obj.dtype):
++            return 'standard'
++        else:
++            try:
++                import cftime
++                if isinstance(self._obj.values[0], cftime.datetime):
++                    return self._obj.values[0].calendar
++            except (IndexError, ImportError):
++                pass
++        return 'standard'

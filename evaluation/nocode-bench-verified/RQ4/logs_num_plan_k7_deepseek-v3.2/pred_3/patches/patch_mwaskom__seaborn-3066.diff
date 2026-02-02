@@ -1,0 +1,20 @@
+diff --git a/seaborn/_core/moves.py b/seaborn/_core/moves.py
+index 0a4056b..01d3bde 100644
+--- a/seaborn/_core/moves.py
++++ b/seaborn/_core/moves.py
+@@ -51,8 +51,13 @@ class Jitter(Move):
+             offsets = noise * scale
+             return data[col] + offsets
+ 
+-        if self.width:
+-            data[orient] = jitter(data, orient, self.width * data["width"])
++        # Apply a small default jitter if no parameters are set
++        width = self.width
++        if width == 0 and self.x == 0 and self.y == 0:
++            width = 0.1
++
++        if width:
++            data[orient] = jitter(data, orient, width * data["width"])
+         if self.x:
+             data["x"] = jitter(data, "x", self.x)
+         if self.y:

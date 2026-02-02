@@ -1,0 +1,41 @@
+diff --git a/astropy/io/fits/connect.py b/astropy/io/fits/connect.py
+index 8c70ca8..3793ab0 100644
+--- a/astropy/io/fits/connect.py
++++ b/astropy/io/fits/connect.py
+@@ -112,7 +112,7 @@ def _decode_mixins(tbl):
+ 
+ 
+ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+-                    character_as_bytes=True):
++                    character_as_bytes=True, unit_parse_strict="warn"):
+     """
+     Read a Table object from an FITS file
+ 
+@@ -212,7 +212,8 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+ 
+         try:
+             return read_table_fits(hdulist, hdu=hdu,
+-                                   astropy_native=astropy_native)
++                                   astropy_native=astropy_native,
++                                   unit_parse_strict=unit_parse_strict)
+         finally:
+             hdulist.close()
+ 
+@@ -249,7 +250,16 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+ 
+         # Copy over units
+         if col.unit is not None:
+-            column.unit = u.Unit(col.unit, format='fits', parse_strict='silent')
++            try:
++                column.unit = u.Unit(col.unit, format='fits', parse_strict='warn' if unit_parse_strict is None else unit_parse_strict)
++            except ValueError as err:
++                if unit_parse_strict == "warn":
++                    warnings.warn(f"Invalid FITS unit for column {col.name}: {col.unit}", AstropyUserWarning)
++                    column.unit = None
++                elif unit_parse_strict == "silent":
++                    column.unit = None
++                else:
++                    raise
+ 
+         # Copy over display format
+         if col.disp is not None:

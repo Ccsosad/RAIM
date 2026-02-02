@@ -1,0 +1,95 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..8e23cc2 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -415,6 +415,80 @@ def make_layout_margins(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0,
+                 if (cbp_rspan.start == ss.rowspan.start and
+                         cbbbox.y1 > bbox.y1):
+                     margin['top'] += cbbbox.y1 - bbox.y1
++        # make margin for legends placed outside the figure
++        if ax.legend_ is not None and getattr(ax.legend_, '_outside', False):
++            legend = ax.legend_
++            # Get the legend's bounding box in display coordinates
++            legend_bbox = legend.get_window_extent(renderer)
++            # The legend is in figure coordinates, but we need to convert to
++            # the subfigure's coordinates? Actually, we are working in the
++            # parent subfigure's coordinates.
++            # We need to determine which side of the figure the legend is on.
++            loc = getattr(legend, '_outside_loc', 'outside upper right')
++            # Parse the location string to determine the side
++            if loc.startswith('outside'):
++                parts = loc.split()
++                if len(parts) >= 3:
++                    # e.g., "outside upper right"
++                    side1 = parts[1]
++                    side2 = parts[2]
++                    # The first word after "outside" indicates the primary side
++                    # We'll use the first side to determine the margin
++                    if side1 in ['upper', 'lower']:
++                        side = side1
++                    else:
++                        side = side2
++                else:
++                    # fallback to 'upper'
++                    side = 'upper'
++                # Map to margin keys
++                if side == 'upper':
++                    margin_key = 'topcb'
++                elif side == 'lower':
++                    margin_key = 'bottomcb'
++                elif side == 'left':
++                    margin_key = 'leftcb'
++                else:  # 'right'
++                    margin_key = 'rightcb'
++                # Add the legend's size to the margin
++                if side in ['upper', 'lower']:
++                    margin[margin_key] += legend_bbox.height
++                else:
++                    margin[margin_key] += legend_bbox.width
++        # make margin for legends placed outside the figure
++        if ax.legend_ is not None and getattr(ax.legend_, '_outside', False):
++            legend = ax.legend_
++            # Get the legend's bounding box in display coordinates
++            legend_bbox = legend.get_window_extent(renderer)
++            loc = getattr(legend, '_outside_loc', 'outside upper right')
++            if loc.startswith('outside'):
++                parts = loc.split()
++                if len(parts) >= 3:
++                    side1 = parts[1]
++                    side2 = parts[2]
++                    # Determine which side the legend is on
++                    if side1 in ['upper', 'lower']:
++                        side = side1
++                    else:
++                        side = side2
++                else:
++                    side = 'upper'
++                # Get the gridspec to know the number of rows and columns
++                gs = ss.get_gridspec()
++                nrows, ncols = gs.nrows, gs.ncols
++                # Check if the axes is at the edge in that direction
++                if side == 'upper':
++                    if ss.rowspan.start == 0:
++                        margin['topcb'] += legend_bbox.height
++                elif side == 'lower':
++                    if ss.rowspan.stop == nrows:
++                        margin['bottomcb'] += legend_bbox.height
++                elif side == 'left':
++                    if ss.colspan.start == 0:
++                        margin['leftcb'] += legend_bbox.width
++                else:  # 'right'
++                    if ss.colspan.stop == ncols:
++                        margin['rightcb'] += legend_bbox.width
+         # pass the new margins down to the layout grid for the solution...
+         layoutgrids[gs].edit_outer_margin_mins(margin, ss)
+ 
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index f694dd3..8780095 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -8283,4 +8283,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

@@ -1,0 +1,51 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..5b717dd 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -366,8 +366,8 @@ class Documenter:
+             return False
+         return True
+ 
+-    def format_args(self, **kwargs):
+-        # type: (Any) -> str
++    def format_args(self, show_annotation=True, **kwargs):
++        # type: (bool, Any) -> str
+         """Format the argument signature of *self.object*.
+ 
+         Should return None if the object does not have a signature.
+@@ -392,6 +392,9 @@ class Documenter:
+ 
+         Let the user process it via the ``autodoc-process-signature`` event.
+         """
++        # Determine if we should show annotations
++        show_annotation = self.env.config.autodoc_typehints != 'none'
++
+         if self.args is not None:
+             # signature given explicitly
+             args = "(%s)" % self.args
+@@ -399,7 +402,7 @@ class Documenter:
+             # try to introspect the signature
+             try:
+                 try:
+-                    args = self.format_args(**kwargs)
++                    args = self.format_args(show_annotation=show_annotation, **kwargs)
+                 except TypeError:
+                     # retry without arguments for old documenters
+                     args = self.format_args()
+@@ -408,7 +411,7 @@ class Documenter:
+                                (self.fullname, err), type='autodoc')
+                 args = None
+ 
+-        retann = self.retann
++        retann = self.retann if show_annotation else None
+ 
+         result = self.env.events.emit_firstresult('autodoc-process-signature',
+                                                   self.objtype, self.fullname,
+@@ -1614,6 +1617,7 @@ def setup(app):
+     app.add_config_value('autodoc_mock_imports', [], True)
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
++    app.add_config_value('autodoc_typehints', 'signature', True)
+     app.add_event('autodoc-process-docstring')
+     app.add_event('autodoc-process-signature')
+     app.add_event('autodoc-skip-member')

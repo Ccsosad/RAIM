@@ -1,0 +1,150 @@
+diff --git a/astropy/__init__.py b/astropy/__init__.py
+index 9e1bf3a..832529b 100644
+--- a/astropy/__init__.py
++++ b/astropy/__init__.py
+@@ -161,6 +161,9 @@ conf = Conf()
+ from .tests.runner import TestRunner
+ test = TestRunner.make_test_runner_in(__path__[0])
+ 
++# ScienceState for constants versioning
++from .constants.config import physical_constants, astronomical_constants
++
+ 
+ # if we are *not* in setup mode, import the logger and possibly populate the
+ # configuration file with the defaults
+diff --git a/astropy/constants/__init__.py b/astropy/constants/__init__.py
+index b9b3036..93e6e2f 100644
+--- a/astropy/constants/__init__.py
++++ b/astropy/constants/__init__.py
+@@ -27,7 +27,29 @@ except ImportError:
+ from .constant import Constant, EMConstant  # noqa
+ from . import si  # noqa
+ from . import cgs  # noqa
+-from . import codata2014, iau2015  # noqa
++# Import the ScienceState classes to get the current version.
++from .config import physical_constants, astronomical_constants
++
++# Determine which modules to import based on ScienceState.
++_physical_module_name = physical_constants.get()
++_astronomical_module_name = astronomical_constants.get()
++
++# Import the appropriate modules.
++if _physical_module_name == 'codata2014':
++    from . import codata2014 as _current_physical_module
++else:
++    # Dynamically import the module.
++    _current_physical_module = __import__(__name__ + '.' + _physical_module_name, fromlist=['*'])
++
++if _astronomical_module_name == 'iau2015':
++    from . import iau2015 as _current_astronomical_module
++else:
++    _current_astronomical_module = __import__(__name__ + '.' + _astronomical_module_name, fromlist=['*'])
++
++# Keep the old names for backward compatibility.
++codata2014 = _current_physical_module
++iau2015 = _current_astronomical_module
++
+ from . import utils as _utils
+ 
+ # for updating the constants module docstring
+@@ -90,8 +112,8 @@ def set_enabled_constants(modname):
+     finally:
+         with warnings.catch_warnings():
+             warnings.simplefilter('ignore')
+-            # NOTE: Update this when default changes.
+-            _utils._set_c(codata2014, iau2015, module,
++            # Revert to the current modules (which are the ones set by ScienceState).
++            _utils._set_c(_current_physical_module, _current_astronomical_module, module,
+                           not_in_module_only=False, set_class=True)
+ 
+ 
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..fb3f0dc
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,84 @@
++"""
++Configuration for constants, using ScienceState to allow setting the version
++of physical and astronomical constants.
++"""
++
++import sys
++from astropy.config import ScienceState
++
++__all__ = ['physical_constants', 'astronomical_constants']
++
++
++class _ConstantsScienceState(ScienceState):
++    """
++    Base class for constants science state.
++    """
++    _module_map = {
++        'astropyconst13': {
++            'physical': 'codata2010',
++            'astronomical': 'iau2012'
++        },
++        # Add more mappings as new versions are added.
++    }
++
++    def _check_imported(self):
++        """
++        Check if astropy.constants or astropy.units is already imported.
++        """
++        if 'astropy.constants' in sys.modules:
++            raise RuntimeError("astropy.constants is already imported")
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError("astropy.units is already imported")
++
++    def _get_module_name(self, value):
++        """
++        Convert input value to the actual module name.
++        """
++        # If the value is in the module map, use the mapped value.
++        for key, mapping in self._module_map.items():
++            if value == key:
++                return mapping[self._type]
++        # Otherwise, assume it's a direct module name.
++        return value
++
++
++class physical_constants(_ConstantsScienceState):
++    """
++    ScienceState for setting the version of physical constants.
++
++    This must be set before the first import of `astropy.constants` or
++    `astropy.units`.
++
++    Examples
++    --------
++    >>> from astropy import physical_constants
++    >>> physical_constants.set('codata2010')
++    <ScienceState physical_constants: 'codata2010'>
++    """
++    _type = 'physical'
++    _value = 'codata2014'  # default
++
++    def validate(self, value):
++        self._check_imported()
++        return self._get_module_name(value)
++
++
++class astronomical_constants(_ConstantsScienceState):
++    """
++    ScienceState for setting the version of astronomical constants.
++
++    This must be set before the first import of `astropy.constants` or
++    `astropy.units`.
++
++    Examples
++    --------
++    >>> from astropy import astronomical_constants
++    >>> astronomical_constants.set('iau2012')
++    <ScienceState astronomical_constants: 'iau2012'>
++    """
++    _type = 'astronomical'
++    _value = 'iau2015'  # default
++
++    def validate(self, value):
++        self._check_imported()
++        return self._get_module_name(value)

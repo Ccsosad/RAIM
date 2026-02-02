@@ -1,0 +1,60 @@
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+index 9e23fee..b841725 100644
+--- a/astropy/cosmology/parameter.py
++++ b/astropy/cosmology/parameter.py
+@@ -1,3 +1,4 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ import astropy.units as u
+@@ -211,7 +212,49 @@ class Parameter:
+     # -------------------------------------------
+ 
+     def __repr__(self):
+-        return f"<Parameter {self._attr_name!r} at {hex(id(self))}>"
++        try:
++            # attempt roundtrippable repr
++            args = []
++            if self._fvalidate in self._registry_validators.values():
++                key = next(k for k, v in self._registry_validators.items() if v is self._fvalidate)
++                args.append(f"fvalidate={key!r}")
++            else:
++                args.append(f"fvalidate={self._fvalidate!r}")
++            if self.__doc__ is not None:
++                args.append(f"doc={self.__doc__!r}")
++            if self.unit is not None:
++                args.append(f"unit={self.unit!r}")
++            if self.equivalencies:
++                args.append(f"equivalencies={self.equivalencies!r}")
++            if self.format_spec != ".3g":
++                args.append(f"fmt={self.format_spec!r}")
++            if self.derived:
++                args.append(f"derived={self.derived!r}")
++            return f"{type(self).__name__}({', '.join(args)})"
++        except Exception:
++            return f"<Parameter {getattr(self, '_attr_name', None)!r} at {hex(id(self))}>"
++
++    def __eq__(self, other):
++        if not isinstance(other, Parameter):
++            return NotImplemented
++        return (self._fvalidate == other._fvalidate and
++                self.__doc__ == other.__doc__ and
++                self.unit == other.unit and
++                self.equivalencies == other.equivalencies and
++                self.format_spec == other.format_spec and
++                self.derived == other.derived)
++
++    def clone(self, **kwargs):
++        """Deep-copy this Parameter with changes to any constructor arguments."""
++        from copy import deepcopy
++        params = dict(fvalidate=self._fvalidate,
++                      doc=self.__doc__,
++                      unit=self.unit,
++                      equivalencies=deepcopy(self.equivalencies),
++                      fmt=self.format_spec,
++                      derived=self.derived)
++        params.update(kwargs)
++        return type(self)(**params)
+ 
+ 
+ # ===================================================================

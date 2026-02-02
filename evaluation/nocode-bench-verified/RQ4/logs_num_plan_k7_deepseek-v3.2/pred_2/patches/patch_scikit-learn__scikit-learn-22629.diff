@@ -1,0 +1,82 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..6ee79e0 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -96,7 +96,7 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         self : returns an instance of self.
+             Fitted label encoder.
+         """
+-        y = column_or_1d(y, warn=True)
++        y = column_or_1d(y, warn=True, dtype=None)
+         self.classes_ = _unique(y)
+         return self
+ 
+@@ -113,7 +113,7 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         y : array-like of shape (n_samples,)
+             Encoded labels.
+         """
+-        y = column_or_1d(y, warn=True)
++        y = column_or_1d(y, warn=True, dtype=None)
+         self.classes_, y = _unique(y, return_inverse=True)
+         return y
+ 
+@@ -131,7 +131,7 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+             Labels as normalized encodings.
+         """
+         check_is_fitted(self)
+-        y = column_or_1d(y, warn=True)
++        y = column_or_1d(y, warn=True, dtype=None)
+         # transform of empty array is empty array
+         if _num_samples(y) == 0:
+             return np.array([])
+@@ -152,7 +152,7 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+             Original encoding.
+         """
+         check_is_fitted(self)
+-        y = column_or_1d(y, warn=True)
++        y = column_or_1d(y, warn=True, dtype=None)
+         # inverse transform of empty array is empty array
+         if _num_samples(y) == 0:
+             return np.array([])
+diff --git a/sklearn/utils/validation.py b/sklearn/utils/validation.py
+index 5a024da..2f7dad4 100644
+--- a/sklearn/utils/validation.py
++++ b/sklearn/utils/validation.py
+@@ -1140,7 +1140,7 @@ def _check_y(y, multi_output=False, y_numeric=False, estimator=None):
+     return y
+ 
+ 
+-def column_or_1d(y, *, warn=False):
++def column_or_1d(y, *, warn=False, dtype=None):
+     """Ravel column or 1d numpy array, else raises an error.
+ 
+     Parameters
+@@ -1150,6 +1150,10 @@ def column_or_1d(y, *, warn=False):
+ 
+     warn : bool, default=False
+        To control display of warnings.
++       
++    dtype : data-type, default=None
++       Data type for the output array. If None, the dtype is inferred from
++       the input data.
+ 
+     Returns
+     -------
+@@ -1165,7 +1169,7 @@ def column_or_1d(y, *, warn=False):
+     y = xp.asarray(y)
+     shape = y.shape
+     if len(shape) == 1:
+-        return _asarray_with_order(xp.reshape(y, -1), order="C", xp=xp)
++        return _asarray_with_order(xp.reshape(y, -1), order="C", xp=xp, dtype=dtype)
+     if len(shape) == 2 and shape[1] == 1:
+         if warn:
+             warnings.warn(
+@@ -1175,7 +1179,7 @@ def column_or_1d(y, *, warn=False):
+                 DataConversionWarning,
+                 stacklevel=2,
+             )
+-        return _asarray_with_order(xp.reshape(y, -1), order="C", xp=xp)
++        return _asarray_with_order(xp.reshape(y, -1), order="C", xp=xp, dtype=dtype)
+ 
+     raise ValueError(
+         "y should be a 1d array, got an array of shape {} instead.".format(shape)

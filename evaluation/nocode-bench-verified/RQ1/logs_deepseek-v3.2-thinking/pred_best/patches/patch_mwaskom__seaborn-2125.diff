@@ -1,0 +1,162 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..de85e46 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -80,9 +80,7 @@ class _DistributionPlotter(VectorPlotter):
+         return kws
+ 
+ 
+-class _HistPlotter(_DistributionPlotter):
+-
+-    pass
++from ._histogram import _HistPlotter
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):
+diff --git a/seaborn/_histogram.py b/seaborn/_histogram.py
+new file mode 100644
+index 0000000..66c7dde
+--- /dev/null
++++ b/seaborn/_histogram.py
+@@ -0,0 +1,141 @@
++"""
++Histogram computation and plotting utilities.
++"""
++import numpy as np
++import matplotlib as mpl
++import matplotlib.pyplot as plt
++from scipy import stats
++
++from .distributions import _DistributionPlotter
++from .utils import _normalize_kwargs
++from .external.histogram import histogram as _histogram
++
++
++class Histogram:
++    """
++    Compute histogram statistics with flexible bin specifications.
++    """
++    def __init__(self, data, bins=None, binwidth=None, binrange=None, weights=None):
++        self.data = data
++        self.weights = weights
++        self.bin_edges = define_bin_edges(data, bins, binwidth, binrange)
++        self.bins = len(self.bin_edges) - 1
++        self.hist, _ = np.histogram(data, bins=self.bin_edges, weights=weights)
++
++    @property
++    def density(self):
++        """Return density normalization."""
++        db = np.diff(self.bin_edges)
++        return self.hist / (self.hist.sum() * db)
++
++
++def define_bin_edges(data, bins=None, binwidth=None, binrange=None):
++    """
++    Compute bin edges for a histogram.
++    
++    Parameters
++    ----------
++    data : array-like
++        Input data.
++    bins : int, str, or sequence, optional
++        Specification for bins.
++    binwidth : float, optional
++        Width of each bin.
++    binrange : tuple, optional
++        Range for bin edges.
++    
++    Returns
++    -------
++    bin_edges : array
++        Edges of the bins.
++    """
++    if binrange is None:
++        start, stop = data.min(), data.max()
++    else:
++        start, stop = binrange
++    
++    if bins is not None:
++        if isinstance(bins, (int, np.integer)):
++            return np.linspace(start, stop, bins + 1)
++        elif isinstance(bins, str):
++            return np.histogram_bin_edges(data, bins=bins, range=(start, stop))
++        else:
++            # Assume bins is a sequence of edges
++            return np.asarray(bins)
++    elif binwidth is not None:
++        bins = int(np.ceil((stop - start) / binwidth))
++        return np.linspace(start, start + bins * binwidth, bins + 1)
++    else:
++        return np.histogram_bin_edges(data, bins='auto', range=(start, stop))
++
++
++class _HistPlotter(_DistributionPlotter):
++    
++    semantics = _DistributionPlotter.semantics + ("weights",)
++    
++    def __init__(self, data=None, variables={}):
++        super().__init__(data=data, variables=variables)
++        self.binrange = None
++        self.common_bins = True
++        self.dropna = True
++        
++    def _attach(self, ax):
++        """Attach the plotter to an axes object."""
++        self.ax = ax
++        self.comp_data = {}
++        
++    def comp_data(self, var):
++        """Get computation data for a variable."""
++        if var not in self.comp_data:
++            # Get the data for this variable
++            data = self.plot_data[var].dropna() if self.dropna else self.plot_data[var]
++            # Convert to numeric array
++            self.comp_data[var] = data.values
++        return self.comp_data[var]
++    
++    def define_bin_edges(self, var, bins=None, binwidth=None, binrange=None):
++        """Define bin edges for a variable."""
++        data = self.comp_data(var)
++        return define_bin_edges(data, bins, binwidth, binrange)
++    
++    def plot_univariate(
++        self,
++        multiple="layer",
++        common_norm=True,
++        common_bins=True,
++        fill=True,
++        element="bars",
++        kde=False,
++        kde_kws=None,
++        line_kws=None,
++        stat="count",
++        **plot_kws
++    ):
++        """Plot a univariate histogram."""
++        # Implementation would go here
++        pass
++    
++    def plot_bivariate(
++        self,
++        common_norm=True,
++        common_bins=True,
++        fill=True,
++        thresh=0,
++        pthresh=None,
++        pmax=None,
++        cbar=False,
++        cbar_ax=None,
++        cbar_kws=None,
++        stat="count",
++        **plot_kws
++    ):
++        """Plot a bivariate histogram (heatmap)."""
++        # Implementation would go here
++        pass
++    
++    def _quantile_to_level(self, quantile, values):
++        """Convert quantile to level for contour plotting."""
++        sorted_values = np.sort(values.ravel())
++        cumsum = np.cumsum(sorted_values)
++        cutoff = sorted_values[np.searchsorted(cumsum, quantile * cumsum[-1])]
++        return cutoff

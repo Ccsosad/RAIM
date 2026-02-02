@@ -1,0 +1,45 @@
+diff --git a/django/db/models/expressions.py b/django/db/models/expressions.py
+index bf6e882..8d4429f 100644
+--- a/django/db/models/expressions.py
++++ b/django/db/models/expressions.py
+@@ -1,3 +1,4 @@
++
+ import copy
+ import datetime
+ 
+@@ -457,6 +458,35 @@ class F(Combinable):
+         return OrderBy(self, descending=True)
+ 
+ 
++class ExpressionWrapper(Expression):
++    """
++    An expression that wraps another expression. Used to provide a stable
++    output_field for expressions that might not have one.
++    """
++    def __init__(self, expression, output_field):
++        super(ExpressionWrapper, self).__init__(output_field=output_field)
++        self.expression = expression
++
++    def __repr__(self):
++        return "{}({}, {})".format(
++            self.__class__.__name__,
++            self.expression,
++            self.output_field
++        )
++
++    def get_source_expressions(self):
++        return [self.expression]
++
++    def set_source_expressions(self, exprs):
++        self.expression, = exprs
++
++    def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
++        return self.copy()
++
++    def copy(self):
++        return ExpressionWrapper(self.expression, self.output_field)
++
++
+ class Func(Expression):
+     """
+     A SQL function call.

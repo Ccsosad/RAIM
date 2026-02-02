@@ -1,0 +1,14 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..8633069 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -355,7 +355,8 @@ class Documenter:
+         """Check if *self.object* is really defined in the module given by
+         *self.modname*.
+         """
+-        if self.options.imported_members:
++        # support 'imported-members' option
++        if getattr(self.options, 'imported_members', False):
+             return True
+ 
+         modname = self.get_attr(self.object, '__module__', None)

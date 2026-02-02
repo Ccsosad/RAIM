@@ -1,0 +1,117 @@
+diff --git a/astropy/table/__init__.py b/astropy/table/__init__.py
+index 728a414..acafd51 100644
+--- a/astropy/table/__init__.py
++++ b/astropy/table/__init__.py
+@@ -42,7 +42,7 @@ from .column import Column, MaskedColumn, StringTruncateWarning, ColumnInfo
+ from .groups import TableGroups, ColumnGroups
+ from .table import (Table, QTable, TableColumns, Row, TableFormatter,
+                     NdarrayMixin, TableReplaceWarning)
+-from .operations import join, setdiff, hstack, vstack, unique, TableMergeError
++from .operations import join, setdiff, hstack, vstack, cstack, unique, TableMergeError
+ from .bst import BST, FastBST, FastRBT
+ from .sorted_array import SortedArray
+ from .soco import SCEngine
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index 5d84827..ec53473 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -368,6 +368,99 @@ def hstack(tables, join_type='outer',
+     return out
+ 
+ 
++def cstack(tables, join_type='outer', metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along the third axis)
++
++    A ``join_type`` of 'exact' means that the tables must all have exactly
++    the same column names (though the order can vary).  If ``join_type``
++    is 'inner' then the intersection of common columns will be the output.
++    A value of 'outer' (default) means the output will have the union of
++    all columns, with table values being masked where no common values are
++    available.
++
++    Parameters
++    ----------
++    tables : Table or list of Table objects
++        Table(s) to stack depth-wise with the current table
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    metadata_conflicts : str
++        How to proceed with metadata conflicts. This should be one of:
++            * ``'silent'``: silently pick the last conflicting meta-data value
++            * ``'warn'``: pick the last conflicting meta-data value, but emit a warning (default)
++            * ``'error'``: raise an exception.
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++
++    Examples
++    --------
++    To stack two tables depth-wise do::
++
++      >>> from astropy.table import Table, cstack
++      >>> t1 = Table({'a': [1, 2], 'b': [3, 4]}, names=('a', 'b'))
++      >>> t2 = Table({'a': [5, 6], 'b': [7, 8]}, names=('a', 'b'))
++      >>> print(cstack([t1, t2]))
++       a [2]   b [2]
++      -------- --------
++       1 .. 5  3 .. 7
++       2 .. 6  4 .. 8
++    """
++    tables = _get_list_of_tables(tables)  # validates input
++    if len(tables) == 1:
++        return tables[0]  # no point in stacking a single table
++
++    # Check that all tables have the same number of rows
++    n_rows = {len(t) for t in tables}
++    if len(n_rows) > 1:
++        raise ValueError("All tables must have the same number of rows for depth-wise stacking")
++
++    # Determine the common columns based on join_type
++    all_cols = [set(t.colnames) for t in tables]
++    if join_type == 'exact':
++        if not all(all_cols[0] == cols for cols in all_cols[1:]):
++            raise TableMergeError("In 'exact' join type, all tables must have exactly the same column names")
++        common_cols = all_cols[0]
++    elif join_type == 'inner':
++        common_cols = set.intersection(*all_cols)
++    elif join_type == 'outer':
++        common_cols = set.union(*all_cols)
++    else:
++        raise ValueError("join_type must be one of 'inner', 'exact', or 'outer'")
++
++    # Create a new table with the same number of rows
++    out = Table()
++    out.meta = {}
++
++    # For each column in the output, stack the columns depth-wise
++    for col_name in common_cols:
++        col_arrays = []
++        for t in tables:
++            if col_name in t.colnames:
++                col = t[col_name]
++                # Convert to array if it's a Column
++                col_arrays.append(col.data if hasattr(col, 'data') else col)
++            else:
++                # For outer join, we need to mask missing values
++                # Create a masked array with the same length
++                from numpy import ma
++                masked_array = ma.masked_all((len(t),), dtype=float)  # default dtype?
++                col_arrays.append(masked_array)
++        # Stack depth-wise: we want to create an array of shape (n_rows, n_tables)
++        # Use np.column_stack to get (n_rows, n_tables)
++        import numpy as np
++        stacked = np.column_stack(col_arrays)
++        out[col_name] = stacked
++
++    # Merge table metadata
++    _merge_table_meta(out, tables, metadata_conflicts=metadata_conflicts)
++
++    return out
++
++
+ def unique(input_table, keys=None, silent=False, keep='first'):
+     """
+     Returns the unique rows of a table.

@@ -1,0 +1,98 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..d479c64 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,10 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -349,9 +349,10 @@ def join(left, right, keys=None, join_type='inner',
+         Left side table in the join. If not a Table, will call ``Table(left)``
+     right : `~astropy.table.Table`-like object
+         Right side table in the join. If not a Table, will call ``Table(right)``
+-    keys : str or list of str
++    keys : str or list of str, optional
+         Name(s) of column(s) used to match rows of left and right tables.
+         Default is to use all columns which are common to both tables.
++        Cannot be used together with ``keys_left`` and ``keys_right``.
+     join_type : str
+         Join type ('inner' | 'outer' | 'left' | 'right' | 'cartesian'), default is 'inner'
+     uniq_col_name : str or None
+@@ -368,6 +369,14 @@ def join(left, right, keys=None, join_type='inner',
+     join_funcs : dict, None
+         Dict of functions to use for matching the corresponding key column(s).
+         See `~astropy.table.join_skycoord` for an example and details.
++    keys_left : str, list of str, or column-like, optional
++        Name(s) of column(s) in the left table used to match rows, or column-like
++        objects of the same length as the left table. If provided, ``keys_right``
++        must also be provided and ``keys`` must be None.
++    keys_right : str, list of str, or column-like, optional
++        Name(s) of column(s) in the right table used to match rows, or column-like
++        objects of the same length as the right table. If provided, ``keys_left``
++        must also be provided and ``keys`` must be None.
+ 
+     Returns
+     -------
+@@ -381,6 +390,53 @@ def join(left, right, keys=None, join_type='inner',
+     if not isinstance(right, Table):
+         right = Table(right)
+ 
++    # Handle keys_left/keys_right
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Cannot specify both keys and keys_left/keys_right')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both keys_left and keys_right')
++        # Convert to lists if single string
++        if isinstance(keys_left, str):
++            keys_left = [keys_left]
++        if isinstance(keys_right, str):
++            keys_right = [keys_right]
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have same length')
++        
++        # Create temporary tables with the key columns
++        left_temp = left.copy()
++        right_temp = right.copy()
++        
++        # Process keys_left: if column-like, add as temporary column
++        for i, key in enumerate(keys_left):
++            if not isinstance(key, str):
++                # Assume column-like object
++                col_name = f'__temp_key_left_{i}__'
++                left_temp[col_name] = key
++                keys_left[i] = col_name
++            elif key not in left_temp.colnames:
++                raise TableMergeError(f'Left table does not have key column {key!r}')
++        
++        # Process keys_right similarly
++        for i, key in enumerate(keys_right):
++            if not isinstance(key, str):
++                col_name = f'__temp_key_right_{i}__'
++                right_temp[col_name] = key
++                keys_right[i] = col_name
++            elif key not in right_temp.colnames:
++                raise TableMergeError(f'Right table does not have key column {key!r}')
++        
++        # Use the temporary column names as keys
++        keys = keys_left
++        # Rename right table columns to match left for the join
++        for kl, kr in zip(keys_left, keys_right):
++            if kl != kr:
++                right_temp.rename_column(kr, kl)
++        
++        left = left_temp
++        right = right_temp
++
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,

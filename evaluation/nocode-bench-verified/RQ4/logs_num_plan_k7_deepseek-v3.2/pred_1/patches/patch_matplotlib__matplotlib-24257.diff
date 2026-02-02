@@ -1,0 +1,150 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..658b404 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -238,7 +238,27 @@ class _StyleLibrary(dict):
+ # Load style library
+ # ==================
+ _base_library = read_style_directory(BASE_LIBRARY_PATH)
+-library = _StyleLibrary()
++
++class _StyleLibraryWithPackages(_StyleLibrary):
++    """
++    A style library that can also load styles from packages.
++    """
++    def __getitem__(self, key):
++        try:
++            return super().__getitem__(key)
++        except KeyError:
++            # Check if the key is a dotted package style.
++            if '.' in key:
++                from .package_registry import load_package_style, is_package_style
++                if is_package_style(key):
++                    package_name, style_name = key.rsplit('.', 1)
++                    style = load_package_style(package_name, style_name)
++                    # Cache it for future use.
++                    self[key] = style
++                    return style
++            raise
++
++library = _StyleLibraryWithPackages()
+ available = []
+ 
+ 
+@@ -249,4 +269,4 @@ def reload_library():
+     available[:] = sorted(library.keys())
+ 
+ 
+-reload_library()
++reload_library()
+diff --git a/lib/matplotlib/style/package_registry.py b/lib/matplotlib/style/package_registry.py
+new file mode 100644
+index 0000000..5fa6fdd
+--- /dev/null
++++ b/lib/matplotlib/style/package_registry.py
+@@ -0,0 +1,105 @@
++"""
++Registry for style files distributed in third-party packages.
++"""
++
++import sys
++import warnings
++
++if sys.version_info >= (3, 10):
++    from importlib import resources
++else:
++    # On older Python versions, we require importlib_resources.
++    try:
++        import importlib_resources as resources
++    except ImportError:
++        resources = None
++        warnings.warn(
++            "The optional dependency 'importlib_resources' is required on "
++            "Python < 3.10 to use styles from packages. Please install it "
++            "with `pip install importlib_resources`.",
++            RuntimeWarning,
++        )
++
++
++def load_package_style(package_name, style_name):
++    """
++    Load a style sheet from a package.
++
++    Parameters
++    ----------
++    package_name : str
++        The dotted name of the package (e.g., "mypackage").
++    style_name : str
++        The name of the style file without the .mplstyle extension.
++
++    Returns
++    -------
++    dict
++        The style dictionary.
++
++    Raises
++    ------
++    ImportError
++        If the package cannot be accessed (e.g., not installed).
++    OSError
++        If the style file does not exist in the package.
++    """
++    if resources is None:
++        raise ImportError(
++            "importlib_resources is required on Python < 3.10 to load styles "
++            "from packages."
++        )
++
++    # We don't import the package itself, but we need to get its spec.
++    # We'll use importlib.util.find_spec to check if the package exists.
++    import importlib.util
++    spec = importlib.util.find_spec(package_name)
++    if spec is None:
++        raise ImportError(f"Cannot find package {package_name!r}.")
++
++    # The style file is expected to be in the package directory.
++    # The resource path is: package_name / f"{style_name}.mplstyle"
++    resource_path = f"{style_name}.mplstyle"
++    try:
++        # Use importlib.resources to read the file.
++        if hasattr(resources, 'files'):
++            # Python 3.9+ and importlib_resources >= 1.3
++            package = resources.files(package_name)
++            file = package / resource_path
++            if not file.is_file():
++                raise FileNotFoundError(f"{resource_path} not found in {package_name}")
++            data = file.read_text(encoding='utf-8')
++        else:
++            # Fallback for older importlib_resources
++            data = resources.read_text(package_name, resource_path, encoding='utf-8')
++    except Exception as e:
++        raise OSError(
++            f"Cannot load style file {style_name!r} from package {package_name!r}."
++        ) from e
++
++    # Parse the style file content.
++    from matplotlib.style.core import read_style_file
++    return read_style_file(data, f"{package_name}.{style_name}")
++
++
++def is_package_style(style_name):
++    """
++    Check if a style name refers to a package style.
++
++    Parameters
++    ----------
++    style_name : str
++        The style name (e.g., "mypackage.presentation").
++
++    Returns
++    -------
++    bool
++        True if the style name contains a dot and the part before the dot
++        is a valid package name.
++    """
++    if '.' not in style_name:
++        return False
++    package_name, style = style_name.rsplit('.', 1)
++    # Check if the package exists without importing it.
++    import importlib.util
++    return importlib.util.find_spec(package_name) is not None

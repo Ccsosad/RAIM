@@ -1,0 +1,244 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 2dcd0f6..adea8c8 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -22,7 +22,7 @@ import pandas as pd
+ 
+ from ..coding.calendar_ops import convert_calendar, interp_calendar
+ from ..coding.cftimeindex import CFTimeIndex
+-from ..plot.plot import _PlotMethods
++from ..plot.dataarray_plot import DataArrayPlotAccessor
+ from ..plot.utils import _get_units_from_attrs
+ from . import alignment, computation, dtypes, indexing, ops, utils
+ from ._reductions import DataArrayReductions
+@@ -4189,7 +4189,7 @@ class DataArray(
+     def _copy_attrs_from(self, other: DataArray | Dataset | Variable) -> None:
+         self.attrs = other.attrs
+ 
+-    plot = utils.UncachedAccessor(_PlotMethods)
++    plot = utils.UncachedAccessor(DataArrayPlotAccessor)
+ 
+     def _title_for_slice(self, truncate: int = 50) -> str:
+         """
+diff --git a/xarray/plot/dataarray_plot.py b/xarray/plot/dataarray_plot.py
+new file mode 100644
+index 0000000..13ff95d
+--- /dev/null
++++ b/xarray/plot/dataarray_plot.py
+@@ -0,0 +1,216 @@
++"""
++Plotting methods for DataArray objects.
++"""
++from __future__ import annotations
++
++import functools
++from typing import TYPE_CHECKING, Any, Hashable, Literal
++
++import numpy as np
++
++from . import plot
++from .facetgrid import FacetGrid
++
++if TYPE_CHECKING:
++    from ..core.dataarray import DataArray
++
++
++class DataArrayPlotAccessor:
++    """
++    Accessor for DataArray plotting methods.
++
++    This provides a namespace for all plotting methods available to DataArray
++    objects. Methods are called as ``da.plot.method_name``.
++    """
++
++    def __init__(self, da: DataArray) -> None:
++        self._da = da
++
++    def __call__(self, **kwargs: Any) -> Any:
++        """
++        Default plot method for DataArray.
++
++        Calls :func:`xarray.plot.plot` with the DataArray.
++        """
++        return plot(self._da, **kwargs)
++
++    def line(self, *args: Any, **kwargs: Any) -> Any:
++        """
++        Line plot of DataArray.
++
++        Calls :func:`xarray.plot.line` with the DataArray.
++        """
++        from .plot import line
++
++        return line(self._da, *args, **kwargs)
++
++    def step(self, *args: Any, **kwargs: Any) -> Any:
++        """
++        Step plot of DataArray.
++
++        Calls :func:`xarray.plot.step` with the DataArray.
++        """
++        from .plot import step
++
++        return step(self._da, *args, **kwargs)
++
++    def scatter(
++        self,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """
++        Scatter plot of DataArray.
++
++        Parameters
++        ----------
++        x, y : Hashable, optional
++            Coordinates for x, y axes.
++        *args
++            Additional arguments to :func:`xarray.plot.scatter`.
++        **kwargs
++            Additional keyword arguments to :func:`xarray.plot.scatter`.
++
++        Returns
++        -------
++        plot : matplotlib.collections.PathCollection or FacetGrid
++            Scatter plot or FacetGrid of scatter plots.
++        """
++        from .plot import scatter
++
++        return scatter(self._da, x=x, y=y, *args, **kwargs)
++
++    def pcolormesh(self, *args: Any, **kwargs: Any) -> Any:
++        """
++        Pseudocolor plot of DataArray.
++
++        Calls :func:`xarray.plot.pcolormesh` with the DataArray.
++        """
++        from .plot import pcolormesh
++
++        return pcolormesh(self._da, *args, **kwargs)
++
++    def imshow(self, *args: Any, **kwargs: Any) -> Any:
++        """
++        Image plot of DataArray.
++
++        Calls :func:`xarray.plot.imshow` with the DataArray.
++        """
++        from .plot import imshow
++
++        return imshow(self._da, *args, **kwargs)
++
++    def surface(self, *args: Any, **kwargs: Any) -> Any:
++        """
++        3D surface plot of DataArray.
++
++        Calls :func:`xarray.plot.surface` with the DataArray.
++        """
++        from .plot import surface
++
++        return surface(self._da, *args, **kwargs)
++
++    def hist(self, *args: Any, **kwargs: Any) -> Any:
++        """
++        Histogram plot of DataArray.
++
++        Calls :func:`xarray.plot.hist` with the DataArray.
++        """
++        from .plot import hist
++
++        return hist(self._da, *args, **kwargs)
++
++    def contour(self, *args: Any, **kwargs: Any) -> Any:
++        """
++        Contour plot of DataArray.
++
++        Calls :func:`xarray.plot.contour` with the DataArray.
++        """
++        from .plot import contour
++
++        return contour(self._da, *args, **kwargs)
++
++    def contourf(self, *args: Any, **kwargs: Any) -> Any:
++        """
++        Filled contour plot of DataArray.
++
++        Calls :func:`xarray.plot.contourf` with the DataArray.
++        """
++        from .plot import contourf
++
++        return contourf(self._da, *args, **kwargs)
++
++    # Faceting methods
++    def _facetgrid(
++        self,
++        plotfunc: Any,
++        kind: Literal["line", "dataarray", "dataset", "plot1d"],
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        **kwargs: Any,
++    ) -> FacetGrid:
++        """
++        Create a faceted plot using FacetGrid.
++
++        Parameters
++        ----------
++        plotfunc : callable
++            Plotting function to apply to each facet.
++        kind : {"line", "dataarray", "dataset", "plot1d"}
++            Type of plotting function.
++        x, y : Hashable, optional
++            Coordinates for x, y axes.
++        row, col : Hashable, optional
++            Dimensions to facet on.
++        **kwargs
++            Additional keyword arguments passed to plotfunc.
++
++        Returns
++        -------
++        g : FacetGrid
++        """
++        from .facetgrid import _easy_facetgrid
++
++        return _easy_facetgrid(
++            self._da,
++            plotfunc,
++            kind=kind,
++            x=x,
++            y=y,
++            row=row,
++            col=col,
++            **kwargs,
++        )
++
++    def _plot1d_facetgrid(
++        self,
++        plotfunc: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        **kwargs: Any,
++    ) -> FacetGrid:
++        """
++        Create a faceted 1D plot using FacetGrid.
++
++        Parameters
++        ----------
++        plotfunc : callable
++            1D plotting function (e.g., scatter, line).
++        x, y : Hashable, optional
++            Coordinates for x, y axes.
++        row, col : Hashable, optional
++            Dimensions to facet on.
++        **kwargs
++            Additional keyword arguments passed to plotfunc.
++
++        Returns
++        -------
++        g : FacetGrid
++        """
++        return self._facetgrid(plotfunc, "plot1d", x=x, y=y, row=row, col=col, **kwargs)

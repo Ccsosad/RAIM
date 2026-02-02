@@ -1,0 +1,77 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..b7719f7 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -418,7 +418,7 @@ class FacetGrid(Grid):
+ 
+         # Attributes that are part of the public API but accessed through
+         # a  property so that Sphinx adds them to the auto class doc
+-        self._fig = fig
++        self._figure = fig
+         self._axes = axes
+         self._axes_dict = axes_dict
+         self._legend = None
+@@ -801,7 +801,7 @@ class FacetGrid(Grid):
+ 
+     def despine(self, **kwargs):
+         """Remove axis spines from the facets."""
+-        utils.despine(self.fig, **kwargs)
++        utils.despine(self._figure, **kwargs)
+         return self
+ 
+     def set_axis_labels(self, x_var=None, y_var=None, clear_inner=True, **kwargs):
+@@ -991,10 +991,20 @@ class FacetGrid(Grid):
+ 
+     # ------ Properties that are part of the public API and documented by Sphinx
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
+     @property
+     def fig(self):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+-        return self._fig
++        msg = (
++            "The `FacetGrid.fig` attribute is deprecated and will be removed in a "
++            "future version. Please use the `FacetGrid.figure` attribute instead."
++        )
++        warnings.warn(msg, FutureWarning)
++        return self._figure
+ 
+     @property
+     def axes(self):
+@@ -1650,7 +1660,7 @@ class JointGrid(object):
+         ax_marg_x = f.add_subplot(gs[0, :-1], sharex=ax_joint)
+         ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint)
+ 
+-        self.fig = f
++        self._figure = f
+         self.ax_joint = ax_joint
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y
+@@ -1920,7 +1930,22 @@ class JointGrid(object):
+ 
+         """
+         kwargs.setdefault("bbox_inches", "tight")
+-        self.fig.savefig(*args, **kwargs)
++        self._figure.savefig(*args, **kwargs)
++
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
++    @property
++    def fig(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        msg = (
++            "The `JointGrid.fig` attribute is deprecated and will be removed in a "
++            "future version. Please use the `JointGrid.figure` attribute instead."
++        )
++        warnings.warn(msg, FutureWarning)
++        return self._figure
+ 
+ 
+ JointGrid.__init__.__doc__ = """\

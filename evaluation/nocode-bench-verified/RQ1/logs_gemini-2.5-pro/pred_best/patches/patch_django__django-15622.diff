@@ -1,0 +1,49 @@
+diff --git a/django/forms/forms.py b/django/forms/forms.py
+index 3ebacee..10cc172 100644
+--- a/django/forms/forms.py
++++ b/django/forms/forms.py
+@@ -529,6 +529,10 @@ class BaseForm(RenderableFormMixin):
+             value = value.replace(microsecond=0)
+         return value
+ 
++    @property
++    def template_name(self):
++        return self.renderer.form_template_name
++
+ 
+ class Form(BaseForm, metaclass=DeclarativeFieldsMetaclass):
+     "A collection of Fields, plus their associated data."
+diff --git a/django/forms/formsets.py b/django/forms/formsets.py
+index bf826c8..f5c7719 100644
+--- a/django/forms/formsets.py
++++ b/django/forms/formsets.py
+@@ -62,11 +62,14 @@ class BaseFormSet(RenderableFormMixin):
+             "%(field_names)s. You may need to file a bug report if the issue persists."
+         ),
+     }
+-    template_name = "django/forms/formsets/default.html"
+     template_name_p = "django/forms/formsets/p.html"
+     template_name_table = "django/forms/formsets/table.html"
+     template_name_ul = "django/forms/formsets/ul.html"
+ 
++    @property
++    def template_name(self):
++        return self.renderer.formset_template_name
++
+     def __init__(
+         self,
+         data=None,
+diff --git a/django/forms/renderers.py b/django/forms/renderers.py
+index f0a7fac..d697b1a 100644
+--- a/django/forms/renderers.py
++++ b/django/forms/renderers.py
+@@ -15,6 +15,9 @@ def get_default_renderer():
+ 
+ 
+ class BaseRenderer:
++    form_template_name = "django/forms/default.html"
++    formset_template_name = "django/forms/formsets/default.html"
++
+     def get_template(self, template_name):
+         raise NotImplementedError("subclasses must implement get_template()")
+ 

@@ -1,0 +1,160 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..f295996 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -1274,6 +1274,155 @@ class _DistributionPlotter(VectorPlotter):
+ # External API
+ # ==================================================================================== #
+ 
++def displot(
++    data=None, *,
++    # Vector variables
++    x=None, y=None, hue=None, row=None, col=None,
++    weights=None,
++    # Faceting
++    col_wrap=None, row_order=None, col_order=None,
++    # Figure and axes
++    height=5, aspect=1, facet_kws=None,
++    # Distribution parameters
++    kind="hist", rug=False, rug_kws=None,
++    # Other parameters
++    legend=True, **kwargs
++):
++    """
++    Figure-level interface for drawing distribution plots onto a FacetGrid.
++    
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distributions of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    `kind` parameter selects the approach to use:
++    
++    - `hist` for histogram (the default)
++    - `kde` for kernel density estimate
++    - `ecdf` for empirical cumulative distribution function
++    
++    Additionally, a `rug` plot can be added to any of these kinds of plots,
++    which shows each individual observation.
++    
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure.
++    x, y : vectors or keys in `data`
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in `data`
++        Variables that define subsets to plot on different facets.
++    weights : vector or key in `data`
++        Observation weights for weighted histograms or density estimates.
++    col_wrap : int
++        "Wrap" the column variable at this width, so that the column facets
++        span multiple rows.
++    row_order, col_order : lists of strings
++        Order to organize the rows and/or columns of the facet grid.
++    height : scalar
++        Height (in inches) of each facet. See also: `aspect`.
++    aspect : scalar
++        Aspect ratio of each facet, so that `aspect * height` gives the width
++        of each facet in inches.
++    facet_kws : dict
++        Additional parameters passed to :class:`FacetGrid`.
++    kind : {"hist", "kde", "ecdf"}
++        The kind of plot to draw.
++    rug : bool
++        If True, show each observation with marginal ticks (like `rugplot`).
++    rug_kws : dict
++        Additional parameters passed to `rugplot`.
++    legend : bool
++        If False, suppress the legend for semantic variables.
++    **kwargs
++        Other keyword arguments are passed to the underlying plotting function.
++    
++    Returns
++    -------
++    g : FacetGrid
++        Returns the :class:`FacetGrid` object with the plot on it for further
++        tweaking.
++    
++    See Also
++    --------
++    histplot : Draw a histogram with optional kernel density estimate.
++    kdeplot : Draw a kernel density estimate.
++    ecdfplot : Draw an empirical cumulative distribution function.
++    rugplot : Draw a rug plot for univariate or bivariate data.
++    
++    Examples
++    --------
++    See the API documentation for detailed examples.
++    """
++    
++    # Handle defaults for rug_kws
++    if rug_kws is None:
++        rug_kws = {}
++    
++    # Initialize a FacetGrid
++    facet_kws = {} if facet_kws is None else facet_kws.copy()
++    facet_kws.update(
++        data=data, row=row, col=col, hue=hue,
++        col_wrap=col_wrap, row_order=row_order, col_order=col_order,
++        height=height, aspect=aspect, legend_out=False,
++    )
++    
++    # Remove the hue from facet_kws if it's None to let FacetGrid handle it
++    if hue is None:
++        facet_kws.pop("hue", None)
++    
++    g = FacetGrid(**facet_kws)
++    
++    # Determine which plotting function to use based on kind
++    if kind == "hist":
++        plot_func = histplot
++    elif kind == "kde":
++        plot_func = kdeplot
++    elif kind == "ecdf":
++        plot_func = ecdfplot
++    else:
++        raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind!r}")
++    
++    # Remove parameters that are specific to displot and not the underlying function
++    kwargs.pop("kind", None)
++    kwargs.pop("rug", None)
++    kwargs.pop("rug_kws", None)
++    
++    # Map the plotting function to the grid
++    g.map_dataframe(plot_func, x=x, y=y, weights=weights, **kwargs)
++    
++    # Add rug plot if requested
++    if rug:
++        # We need to add rug plots to each axes
++        # First, get the data for each facet
++        for (row_i, col_j, hue_k), data_ijk in g.facet_data():
++            ax = g.facet_axis(row_i, col_j)
++            
++            # Prepare rug data
++            rug_data = {}
++            if x is not None:
++                rug_data["x"] = data_ijk[x]
++            if y is not None:
++                rug_data["y"] = data_ijk[y]
++            if hue is not None:
++                rug_data["hue"] = data_ijk[hue]
++            
++            # Create a temporary plotter to handle the rug plot
++            # This is a bit hacky, but it works
++            plotter = _DistributionPlotter(data=rug_data)
++            plotter.map_variables(x=x, y=y, hue=hue)
++            
++            # Plot the rug
++            plotter.plot_rug(legend=False, ax=ax, **rug_kws)
++    
++    # Add legend if needed
++    if legend and hue is not None:
++        g.add_legend()
++    
++    return g
++
++
+ def histplot(
+     data=None, *,
+     # Vector variables

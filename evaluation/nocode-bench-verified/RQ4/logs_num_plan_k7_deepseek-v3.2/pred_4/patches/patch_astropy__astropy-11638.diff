@@ -1,0 +1,36 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index e770a09..7f411d2 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -832,6 +832,9 @@ class earth_orientation_table(ScienceState):
+     `~astropy.utils.iers.IERS_Auto` class, should suffice for most
+     purposes.
+ 
++    Note: The leap second table update is now separate and occurs only when
++    a Time transform involving UTC is performed.
++
+     Examples
+     --------
+     To temporarily use the IERS-B file packaged with astropy::
+@@ -874,6 +877,21 @@ class LeapSeconds(QTable):
+     IETF/ntp ``leap-seconds.list``, or built-in ERFA/SOFA, and to update the
+     list used by ERFA.
+ 
++    The update of the leap second table from internet resources is controlled
++    by the `iers.conf.auto_download` setting. If set to False, no internet
++    queries will be made.
++
++    The update of the leap second table from internet resources is controlled
++    by the `iers.conf.auto_download` setting. If set to False, no internet
++    queries will be made.
++    
++    def update_erfa_leap_seconds_if_needed(self):
++        """Update the ERFA leap second list if auto_download is True."""
++        from .conf import auto_download
++        if auto_download:
++            # Call the original update method
++            self.update_erfa_leap_seconds()
++
+     Notes
+     -----
+     Astropy has a built-in ``iers.IERS_LEAP_SECONDS_FILE``. Up to date versions

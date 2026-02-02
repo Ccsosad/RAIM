@@ -1,0 +1,88 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..3437359 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1260,6 +1260,32 @@ class DataArray(AbstractArray, DataWithCoords):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def query(self, expr, **kwargs):
++        """Query the data array with a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            A boolean expression to evaluate on the data array's values.
++            You can refer to the data array by its name.
++        **kwargs
++            Additional keyword arguments passed to `pandas.DataFrame.query`.
++
++        Returns
++        -------
++        queried : DataArray
++            A new data array with the same structure as the original, but with
++            only the rows that satisfy the query.
++
++        See Also
++        --------
++        pandas.DataFrame.query
++        Dataset.query
++        """
++        # Convert to a temporary dataset, query it, and then convert back.
++        ds = self._to_temp_dataset().query(expr, **kwargs)
++        return self._from_temp_dataset(ds)
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -4360,4 +4386,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..a87e9ea 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -2244,6 +2244,34 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         result = self.isel(indexers=pos_indexers, drop=drop)
+         return result._overwrite_indexes(new_indexes)
+ 
++    def query(self, expr, **kwargs):
++        """Query the dataset with a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            A boolean expression to evaluate on the dataset's data variables.
++            You can refer to variables in the dataset by their name.
++        **kwargs
++            Additional keyword arguments passed to `pandas.DataFrame.query`.
++
++        Returns
++        -------
++        queried : Dataset
++            A new dataset with the same structure as the original, but with
++            only the rows that satisfy the query.
++
++        See Also
++        --------
++        pandas.DataFrame.query
++        """
++        # Convert to a DataFrame
++        df = self.to_dataframe()
++        # Query the DataFrame
++        df = df.query(expr, **kwargs)
++        # Convert back to a Dataset
++        return type(self).from_dataframe(df)
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -7002,4 +7030,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

@@ -1,0 +1,87 @@
+diff --git a/astropy/__init__.py b/astropy/__init__.py
+index 9e1bf3a..b007100 100644
+--- a/astropy/__init__.py
++++ b/astropy/__init__.py
+@@ -155,13 +155,17 @@ class Conf(_config.ConfigNamespace):
+         aliases=['astropy.table.pprint.max_width'])
+ 
+ 
++# ScienceState instances for constants versioning
++from .constants.config import PhysicalScienceState, AstronomicalScienceState
++physical_constants = PhysicalScienceState()
++astronomical_constants = AstronomicalScienceState()
++
++
+ conf = Conf()
+ 
+ # Create the test() function
+ from .tests.runner import TestRunner
+ test = TestRunner.make_test_runner_in(__path__[0])
+-
+-
+ # if we are *not* in setup mode, import the logger and possibly populate the
+ # configuration file with the defaults
+ def _initialize_astropy():
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..10a453d
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,57 @@
++from astropy.config import ScienceState
++from astropy.utils.imports import _ASTROPY_SETUP_
++
++__all__ = ['PhysicalScienceState', 'AstronomicalScienceState']
++
++# Mapping from version module names to actual constant versions
++_VERSION_MAPPING = {
++    'astropyconst13': {
++        'physical': 'codata2010',
++        'astronomical': 'iau2012'
++    },
++    'astropyconst20': {
++        'physical': 'codata2018',
++        'astronomical': 'iau2015'
++    }
++}
++
++def _check_imported():
++    """Check if critical modules are already imported"""
++    if not _ASTROPY_SETUP_:
++        import sys
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError("astropy.units is already imported")
++        if 'astropy.constants' in sys.modules:
++            raise RuntimeError("astropy.constants is already imported")
++
++class PhysicalScienceState(ScienceState):
++    """
++    ScienceState for physical constants version.
++    """
++    _value = 'codata2018'  # default value
++
++    @classmethod
++    def validate(cls, value):
++        if value in _VERSION_MAPPING:
++            value = _VERSION_MAPPING[value]['physical']
++        if value not in ('codata2010', 'codata2014', 'codata2018'):
++            raise ValueError(f"Invalid physical constants version: {value}")
++            
++        _check_imported()
++        return value
++
++class AstronomicalScienceState(ScienceState):
++    """
++    ScienceState for astronomical constants version.
++    """
++    _value = 'iau2015'  # default value
++
++    @classmethod
++    def validate(cls, value):
++        if value in _VERSION_MAPPING:
++            value = _VERSION_MAPPING[value]['astronomical']
++        if value not in ('iau2009', 'iau2012', 'iau2015'):
++            raise ValueError(f"Invalid astronomical constants version: {value}")
++            
++        _check_imported()
++        return value

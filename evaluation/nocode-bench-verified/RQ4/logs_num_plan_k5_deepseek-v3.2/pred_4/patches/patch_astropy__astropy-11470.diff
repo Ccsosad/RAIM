@@ -1,0 +1,136 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..01d037f 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -1049,23 +1049,48 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             be multiplied with, divided by).
+         """
+ 
+-        self._raise_if_has_differentials(op.__name__)
+-
+-        results = []
+-        for component, cls in self.attr_classes.items():
+-            value = getattr(self, component)
+-            if issubclass(cls, Angle):
+-                results.append(value)
+-            else:
+-                results.append(op(value, *args))
++        if self.differentials:
++            # Convert to cartesian, scale, and convert back.
++            # First, convert to cartesian representation with differentials.
++            cartesian = self.represent_as(CartesianRepresentation,
++                                          differential_class=CartesianDifferential)
++            # Scale the cartesian components.
++            scaled_components = []
++            for component in cartesian.components:
++                value = getattr(cartesian, component)
++                scaled_components.append(op(value, *args))
++            # Scale the cartesian differentials.
++            scaled_differentials = {}
++            for key, differential in cartesian.differentials.items():
++                diff_components = []
++                for diff_component in differential.components:
++                    value = getattr(differential, diff_component)
++                    diff_components.append(op(value, *args))
++                scaled_differential = differential.__class__(*diff_components)
++                scaled_differentials[key] = scaled_differential
++            # Create a new cartesian representation with scaled components and differentials.
++            scaled_cartesian = cartesian.__class__(*scaled_components,
++                                                   differentials=scaled_differentials,
++                                                   copy=False)
++            # Convert back to the original representation.
++            diffs_cls = {k: diff.__class__ for k, diff in self.differentials.items()}
++            return scaled_cartesian.represent_as(self.__class__, diffs_cls)
++        else:
++            results = []
++            for component, cls in self.attr_classes.items():
++                value = getattr(self, component)
++                if issubclass(cls, Angle):
++                    results.append(value)
++                else:
++                    results.append(op(value, *args))
+ 
+-        # try/except catches anything that cannot initialize the class, such
+-        # as operations that returned NotImplemented or a representation
+-        # instead of a quantity (as would happen for, e.g., rep * rep).
+-        try:
+-            return self.__class__(*results)
+-        except Exception:
+-            return NotImplemented
++            # try/except catches anything that cannot initialize the class, such
++            # as operations that returned NotImplemented or a representation
++            # instead of a quantity (as would happen for, e.g., rep * rep).
++            try:
++                return self.__class__(*results)
++            except Exception:
++                return NotImplemented
+ 
+     def _combine_operation(self, op, other, reverse=False):
+         """Combine two representation.
+@@ -1082,13 +1107,60 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             Whether the operands should be reversed (e.g., as we got here via
+             ``self.__rsub__`` because ``self`` is a subclass of ``other``).
+         """
+-        self._raise_if_has_differentials(op.__name__)
+-
+-        result = self.to_cartesian()._combine_operation(op, other, reverse)
+-        if result is NotImplemented:
+-            return NotImplemented
++        if self.differentials or (isinstance(other, BaseRepresentation) and other.differentials):
++            # Convert both to cartesian with differentials.
++            self_cartesian = self.represent_as(CartesianRepresentation,
++                                               differential_class=CartesianDifferential)
++            if isinstance(other, BaseRepresentation):
++                other_cartesian = other.represent_as(CartesianRepresentation,
++                                                     differential_class=CartesianDifferential)
++                # Combine the cartesian representations and their differentials.
++                # We do this by combining the components and the differentials separately.
++                combined_components = []
++                for c1, c2 in zip(self_cartesian.components, other_cartesian.components):
++                    val1 = getattr(self_cartesian, c1)
++                    val2 = getattr(other_cartesian, c2)
++                    if reverse:
++                        combined_components.append(op(val2, val1))
++                    else:
++                        combined_components.append(op(val1, val2))
++                # Combine the differentials.
++                combined_differentials = {}
++                all_keys = set(self_cartesian.differentials.keys()) | set(other_cartesian.differentials.keys())
++                for key in all_keys:
++                    diff1 = self_cartesian.differentials.get(key)
++                    diff2 = other_cartesian.differentials.get(key)
++                    if diff1 is None or diff2 is None:
++                        # If one of them doesn't have the differential, we cannot combine.
++                        # This should not happen for addition/subtraction of the same representation.
++                        raise ValueError(f"Cannot combine differentials: missing key {key}")
++                    diff_components = []
++                    for d1, d2 in zip(diff1.components, diff2.components):
++                        val1 = getattr(diff1, d1)
++                        val2 = getattr(diff2, d2)
++                        if reverse:
++                            diff_components.append(op(val2, val1))
++                        else:
++                            diff_components.append(op(val1, val2))
++                    combined_differential = diff1.__class__(*diff_components)
++                    combined_differentials[key] = combined_differential
++                # Create a new cartesian representation with combined components and differentials.
++                combined_cartesian = self_cartesian.__class__(*combined_components,
++                                                              differentials=combined_differentials,
++                                                              copy=False)
++                # Convert back to the original representation of self.
++                diffs_cls = {k: diff.__class__ for k, diff in self.differentials.items()}
++                return combined_cartesian.represent_as(self.__class__, diffs_cls)
++            else:
++                # other is not a representation, so we cannot have differentials.
++                # This should not happen because the operation would have been handled elsewhere.
++                return NotImplemented
+         else:
+-            return self.from_cartesian(result)
++            result = self.to_cartesian()._combine_operation(op, other, reverse)
++            if result is NotImplemented:
++                return NotImplemented
++            else:
++                return self.from_cartesian(result)
+ 
+     # We need to override this setter to support differentials
+     @BaseRepresentationOrDifferential.shape.setter

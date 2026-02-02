@@ -1,0 +1,287 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..0aed7d1 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -34,6 +34,47 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     _data: DataWithCoords
+     __slots__ = ("_data",)
+ 
++    @classmethod
++    def from_pandas_multiindex(
++        cls,
++        midx: pd.MultiIndex,
++        dim: Hashable,
++        *,
++        index_type: type[Index] | None = None,
++    ) -> "Coordinates":
++        """Create Coordinates from a pandas MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            MultiIndex to convert to coordinates.
++        dim : hashable
++            Name of the dimension for the MultiIndex.
++        index_type : type of Index, optional
++            Type of index to create. Defaults to PandasMultiIndex.
++
++        Returns
++        -------
++        Coordinates
++            Coordinates object containing the MultiIndex coordinates.
++        """
++        from xarray.core.dataset import Dataset
++        from xarray.indexes import PandasMultiIndex
++
++        if index_type is None:
++            index_type = PandasMultiIndex
++        
++        idx = index_type(midx, dim)
++        index_vars = idx.create_variables()
++        
++        # Create a Dataset with these variables and indexes
++        ds = Dataset._construct_direct(
++            variables=index_vars,
++            coord_names=set(index_vars),
++            indexes={k: idx for k in index_vars},
++        )
++        return ds.coords
++
+     def __getitem__(self, key: Hashable) -> T_DataArray:
+         raise NotImplementedError()
+ 
+@@ -70,6 +111,11 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     def _maybe_drop_multiindex_coords(self, coords):
+         raise NotImplementedError()
+ 
++    @property
++    def sizes(self) -> Mapping[Hashable, int]:
++        """Mapping from dimension names to lengths."""
++        return self._data.sizes
++
+     def __iter__(self) -> Iterator[Hashable]:
+         # needs to be in the same order as the dataset variables
+         for k in self.variables:
+@@ -86,7 +132,114 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+         return formatting.coords_repr(self)
+ 
+     def to_dataset(self) -> Dataset:
+-        raise NotImplementedError()
++        """Convert to a Dataset containing only coordinates.
++
++        Returns
++        -------
++        Dataset
++            Dataset with these coordinates.
++        """
++        from xarray.core.dataset import Dataset
++        
++        return Dataset._construct_direct(
++            variables=self.variables,
++            coord_names=set(self.variables),
++            indexes=self.xindexes,
++        )
++
++    def copy(self, deep: bool = True) -> "Coordinates":
++        """Return a copy of these coordinates.
++
++        Parameters
++        ----------
++        deep : bool, default: True
++            Whether to create a deep copy of the underlying data.
++
++        Returns
++        -------
++        Coordinates
++            Copied coordinates.
++        """
++        from xarray.core.dataset import Dataset
++        
++        ds = self.to_dataset()
++        if deep:
++            ds = ds.copy(deep=True)
++        return ds.coords
++
++    def equals(self, other: "Coordinates") -> bool:
++        """Two Coordinates objects are equal if they have matching variables
++        and indexes.
++
++        Parameters
++        ----------
++        other : Coordinates
++            Other coordinates to compare.
++
++        Returns
++        -------
++        bool
++            True if coordinates are equal.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        
++        # Compare variables
++        if set(self.variables) != set(other.variables):
++            return False
++        
++        for key in self.variables:
++            if not self.variables[key].equals(other.variables[key]):
++                return False
++        
++        # Compare indexes
++        if set(self.xindexes) != set(other.xindexes):
++            return False
++        
++        for key in self.xindexes:
++            if self.xindexes[key] is not other.xindexes[key]:
++                # For indexes, we check identity first (same object)
++                # If not the same object, check equality
++                if not self.xindexes[key].equals(other.xindexes[key]):
++                    return False
++        
++        return True
++
++    def identical(self, other: "Coordinates") -> bool:
++        """Like equals, but also checks attributes.
++
++        Parameters
++        ----------
++        other : Coordinates
++            Other coordinates to compare.
++
++        Returns
++        -------
++        bool
++            True if coordinates are identical.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        
++        # Compare variables
++        if set(self.variables) != set(other.variables):
++            return False
++        
++        for key in self.variables:
++            if not self.variables[key].identical(other.variables[key]):
++                return False
++        
++        # Compare indexes
++        if set(self.xindexes) != set(other.xindexes):
++            return False
++        
++        for key in self.xindexes:
++            if self.xindexes[key] is not other.xindexes[key]:
++                # For indexes, we check identity first (same object)
++                # If not the same object, they're not identical
++                return False
++        
++        return True
+ 
+     def to_index(self, ordered_dims: Sequence[Hashable] | None = None) -> pd.Index:
+         """Convert all index coordinates into a :py:class:`pandas.Index`.
+@@ -181,6 +334,27 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+             variables, indexes = merge_coordinates_without_align(coord_list)
+         return variables, indexes
+ 
++    def get(self, key: Hashable, default: Any = None) -> T_DataArray | Any:
++        """Return the value for key if key is in the coordinates, else default."""
++        try:
++            return self[key]
++        except KeyError:
++            return default
++
++    def items(self) -> Iterator[tuple[Hashable, T_DataArray]]:
++        """Return an iterator over (key, value) pairs."""
++        for key in self:
++            yield key, self[key]
++
++    def keys(self) -> Iterator[Hashable]:
++        """Return an iterator over coordinate names."""
++        return iter(self)
++
++    def values(self) -> Iterator[T_DataArray]:
++        """Return an iterator over coordinate values."""
++        for key in self:
++            yield self[key]
++
+     @contextmanager
+     def _merge_inplace(self, other):
+         """For use with in-place binary arithmetic."""
+diff --git a/xarray/core/merge.py b/xarray/core/merge.py
+index aaecee5..d419603 100644
+--- a/xarray/core/merge.py
++++ b/xarray/core/merge.py
+@@ -375,6 +375,74 @@ def collect_from_coordinates(
+         for name, variable in variables.items():
+             grouped[name].append((variable, indexes.get(name)))
+ 
++def merge_coordinates_without_align(
++    list_of_coords: list[Coordinates],
++    prioritized: dict[Hashable, tuple[Variable, Index | None]] | None = None,
++) -> tuple[dict[Hashable, Variable], dict[Hashable, Index]]:
++    """Merge coordinates without aligning.
++
++    This is used for binary operations where coordinates should not be aligned
++    (e.g., in-place operations).
++
++    Parameters
++    ----------
++    list_of_coords : list of Coordinates
++        Coordinates to merge.
++    prioritized : dict, optional
++        Variables and indexes that should take priority.
++
++    Returns
++    -------
++    merged_vars : dict
++        Merged variables.
++    merged_indexes : dict
++        Merged indexes.
++    """
++    from xarray.core.alignment import merge_attrs
++
++    if prioritized is None:
++        prioritized = {}
++
++    grouped = collect_from_coordinates(list_of_coords)
++    
++    # Add prioritized items
++    for name, (var, idx) in prioritized.items():
++        grouped[name].insert(0, (var, idx))
++
++    merged_vars: dict[Hashable, Variable] = {}
++    merged_indexes: dict[Hashable, Index] = {}
++
++    for name, elements in grouped.items():
++        variables = [var for var, _ in elements]
++        indexes = [idx for _, idx in elements]
++        
++        # Merge variables
++        merged_var = variables[0]
++        for var in variables[1:]:
++            if not merged_var.equals(var):
++                raise MergeError(
++                    f"conflicting values for coordinate {name!r}: "
++                    f"first value = {merged_var!r}, second value = {var!r}"
++                )
++        
++        merged_vars[name] = merged_var
++        
++        # Merge indexes
++        merged_idx = None
++        for idx in indexes:
++            if idx is not None:
++                if merged_idx is None:
++                    merged_idx = idx
++                elif merged_idx is not idx and not merged_idx.equals(idx):
++                    raise MergeError(
++                        f"conflicting indexes for coordinate {name!r}"
++                    )
++        
++        if merged_idx is not None:
++            merged_indexes[name] = merged_idx
++
++    return merged_vars, merged_indexes
++
+     return grouped
+ 
+ 

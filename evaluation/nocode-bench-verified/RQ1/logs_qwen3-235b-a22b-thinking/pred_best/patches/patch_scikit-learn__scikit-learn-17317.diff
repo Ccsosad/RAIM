@@ -1,0 +1,13 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..7f9baf2 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -59,7 +59,7 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         for i in range(n_features):
+             Xi = self._get_feature(X, feature_idx=i)
+             Xi = check_array(Xi, ensure_2d=False, dtype=None,
+-                             force_all_finite=needs_validation)
++                             force_all_finite='allow-nan')
+             X_columns.append(Xi)
+ 
+         return X_columns, n_samples, n_features

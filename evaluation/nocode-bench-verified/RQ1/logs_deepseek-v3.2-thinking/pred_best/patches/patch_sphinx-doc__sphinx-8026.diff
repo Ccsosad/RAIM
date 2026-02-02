@@ -1,0 +1,22 @@
+diff --git a/sphinx/util/template.py b/sphinx/util/template.py
+index 9c883b2..8a5ebd5 100644
+--- a/sphinx/util/template.py
++++ b/sphinx/util/template.py
+@@ -60,6 +60,8 @@ class SphinxRenderer(FileRenderer):
+         if template_path is None:
+             template_path = os.path.join(package_dir, 'templates')
+         super().__init__(template_path)
++        # add docpath as a global variable (can be overridden by context)
++        self.env.globals['docpath'] = ''
+ 
+     @classmethod
+     def render_from_file(cls, filename: str, context: Dict) -> str:
+@@ -75,6 +77,8 @@ class LaTeXRenderer(SphinxRenderer):
+         # use texescape as escape filter
+         escape = partial(texescape.escape, latex_engine=latex_engine)
+         self.env.filters['e'] = escape
++        # add docpath as a global variable (can be overridden by context)
++        self.env.globals['docpath'] = ''
+         self.env.filters['escape'] = escape
+         self.env.filters['eabbr'] = texescape.escape_abbr
+ 

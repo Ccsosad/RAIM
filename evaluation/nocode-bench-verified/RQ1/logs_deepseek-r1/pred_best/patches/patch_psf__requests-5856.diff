@@ -1,0 +1,36 @@
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..2db3d98 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -882,12 +882,7 @@ class Response(object):
+         r"""Returns the json-encoded content of a response, if any.
+ 
+         :param \*\*kwargs: Optional arguments that ``json.loads`` takes.
+-        :raises simplejson.JSONDecodeError: If the response body does not
+-            contain valid json and simplejson is installed.
+-        :raises json.JSONDecodeError: If the response body does not contain
+-            valid json and simplejson is not installed on Python 3.
+-        :raises ValueError: If the response body does not contain valid
+-            json and simplejson is not installed on Python 2.        
++        :raises requests.exceptions.JSONDecodeError: If the response body does not contain valid JSON.
+         """
+ 
+         if not self.encoding and self.content and len(self.content) > 3:
+@@ -907,7 +902,10 @@ class Response(object):
+                     # and the server didn't bother to tell us what codec *was*
+                     # used.
+                     pass
+-        return complexjson.loads(self.text, **kwargs)
++        try:
++            return complexjson.loads(self.text, **kwargs)
++        except ValueError as e:
++            raise JSONDecodeError(e)
+ 
+     @property
+     def links(self):
+@@ -963,4 +961,4 @@ class Response(object):
+ 
+         release_conn = getattr(self.raw, 'release_conn', None)
+         if release_conn is not None:
+-            release_conn()
++            release_conn()

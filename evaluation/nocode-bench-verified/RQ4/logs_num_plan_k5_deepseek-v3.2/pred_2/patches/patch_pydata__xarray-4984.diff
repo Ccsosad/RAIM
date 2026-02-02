@@ -1,0 +1,223 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..68dc5f1 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3081,6 +3081,77 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+         return title
+ 
++    def query(self, expr: str, parser: str = "pandas", engine: str = None, **kwargs) -> "DataArray":
++        """Return a new DataArray with data filtered by the query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        parser : {"pandas"}, optional
++            Parser to use. Currently only "pandas" is supported.
++        engine : {"python", "numexpr"}, optional
++            Engine to use for evaluation. If None, defaults to 'numexpr' if installed,
++            otherwise 'python'.
++        **kwargs
++            Additional keyword arguments passed to pandas.eval.
++
++        Returns
++        -------
++        DataArray
++            DataArray with the same dimensions as the original, but with only the
++            elements that satisfy the query.
++
++        See Also
++        --------
++        Dataset.query
++        """
++        if parser != "pandas":
++            raise ValueError("Only parser='pandas' is supported.")
++        # Convert to dataset, query, and convert back
++        ds = self._to_temp_dataset().query(expr, parser=parser, engine=engine, **kwargs)
++        return self._from_temp_dataset(ds)
++
++    def query(self, expr: str, parser: str = "pandas", engine: str = None, **kwargs) -> "DataArray":
++        """Return a new DataArray with data filtered by the query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        parser : {"pandas"}, optional
++            Parser to use. Currently only "pandas" is supported.
++        engine : {"python", "numexpr"}, optional
++            Engine to use for evaluation. If None, defaults to 'numexpr' if installed,
++            otherwise 'python'.
++        **kwargs
++            Additional keyword arguments passed to pandas.eval.
++
++        Returns
++        -------
++        DataArray
++            DataArray with the same dimensions as the original, but with only the
++            elements that satisfy the query.
++
++        See Also
++        --------
++        Dataset.query
++        """
++        if parser != "pandas":
++            raise ValueError("Only parser='pandas' is supported.")
++        import pandas as pd
++
++        # Evaluate the query on the data array's values
++        # We create a temporary dataset with a single variable named '_' to evaluate the query.
++        temp_ds = self._to_temp_dataset(name="_")
++        result_ds = temp_ds.query(expr, parser=parser, engine=engine, **kwargs)
++        # Convert back to DataArray
++        result = self._from_temp_dataset(result_ds)
++        # The result dataset has the same name as the original? Actually, we used '_'.
++        # We need to restore the original name.
++        result.name = self.name
++        return result
++
+     def diff(self, dim: Hashable, n: int = 1, label: Hashable = "upper") -> "DataArray":
+         """Calculate the n-th order discrete difference along given axis.
+ 
+@@ -4360,4 +4431,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..010edd2 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5451,6 +5451,124 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             if v in self.variables:
+                 self.variables[v].attrs = other.variables[v].attrs
+ 
++    def query(self, expr: str, parser: str = "pandas", engine: str = None, **kwargs) -> "Dataset":
++        """Return a new Dataset with data filtered by the query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        parser : {"pandas"}, optional
++            Parser to use. Currently only "pandas" is supported.
++        engine : {"python", "numexpr"}, optional
++            Engine to use for evaluation. If None, defaults to 'numexpr' if installed,
++            otherwise 'python'.
++        **kwargs
++            Additional keyword arguments passed to pandas.eval.
++
++        Returns
++        -------
++        Dataset
++            Dataset with the same dimensions as the original, but with only the
++            elements that satisfy the query.
++
++        See Also
++        --------
++        DataArray.query
++        """
++        if parser != "pandas":
++            raise ValueError("Only parser='pandas' is supported.")
++        import pandas as pd
++        import numpy as np
++
++        # Prepare the environment for evaluation
++        env = {k: v.variable for k, v in self.data_vars.items()}
++        # Also include coordinates? Probably not, but we can include them.
++        env.update({k: v.variable for k, v in self.coords.items()})
++
++        # Convert variables to numpy arrays for evaluation
++        local_dict = {k: v.values for k, v in env.items()}
++
++        # Evaluate the query
++        mask = pd.eval(expr, local_dict=local_dict, engine=engine, **kwargs)
++
++        # Convert mask to a boolean array
++        if not isinstance(mask, np.ndarray):
++            mask = np.asarray(mask)
++        if mask.dtype != bool:
++            raise ValueError("Query expression must return a boolean array.")
++
++        # Find the dimension that matches the mask length
++        for dim in self.dims:
++            if self.dims[dim] == len(mask):
++                break
++        else:
++            raise ValueError("Cannot find a dimension with the same length as the mask.")
++        from .dataarray import DataArray
++        mask_da = DataArray(mask, dims=[dim])
++        return self.where(mask_da, drop=True)
++
++    def query(self, expr: str, parser: str = "pandas", engine: str = None, **kwargs) -> "Dataset":
++        """Return a new Dataset with data filtered by the query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        parser : {"pandas"}, optional
++            Parser to use. Currently only "pandas" is supported.
++        engine : {"python", "numexpr"}, optional
++            Engine to use for evaluation. If None, defaults to 'numexpr' if installed,
++            otherwise 'python'.
++        **kwargs
++            Additional keyword arguments passed to pandas.eval.
++
++        Returns
++        -------
++        Dataset
++            Dataset with the same dimensions as the original, but with only the
++            elements that satisfy the query.
++
++        See Also
++        --------
++        DataArray.query
++        """
++        if parser != "pandas":
++            raise ValueError("Only parser='pandas' is supported.")
++        import pandas as pd
++
++        # Prepare the environment for evaluation
++        env = {k: v.variable for k, v in self.data_vars.items()}
++        # Also include coordinates? Probably not, but we can include them.
++        env.update({k: v.variable for k, v in self.coords.items()})
++
++        # Convert variables to numpy arrays for evaluation
++        local_dict = {k: v.values for k, v in env.items()}
++
++        # Evaluate the query
++        mask = pd.eval(expr, local_dict=local_dict, engine=engine, **kwargs)
++
++        # Convert mask to a boolean array
++        if not isinstance(mask, np.ndarray):
++            mask = np.asarray(mask)
++        if mask.dtype != bool:
++            raise ValueError("Query expression must return a boolean array.")
++
++        # Now we need to index the dataset with the mask.
++        # Since the mask is the same shape as the data variables? Actually, it might be 1D.
++        # We assume the mask is the same shape as the dataset? Actually, the query is evaluated
++        # on the data variables, which might have different shapes.
++        # We require that the query returns a boolean array with the same shape as the dataset's dimensions.
++        # But how to handle multi-dimensional masks? We'll flatten the mask and then index.
++        # This is complex. For now, we assume the mask is 1D and corresponds to the first dimension.
++        # This is a temporary implementation.
++        # TODO: Implement proper multi-dimensional boolean indexing.
++        if mask.ndim != 1:
++            raise NotImplementedError("Multi-dimensional boolean indexing is not yet supported.")
++        # We'll index along the first dimension.
++        dim = self.dims[0]
++        return self.isel({dim: np.where(mask)[0]})
++
+     def diff(self, dim, n=1, label="upper"):
+         """Calculate the n-th order discrete difference along given axis.
+ 
+@@ -7002,4 +7120,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

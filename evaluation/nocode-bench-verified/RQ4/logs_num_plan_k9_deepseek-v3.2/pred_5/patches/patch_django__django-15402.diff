@@ -1,0 +1,44 @@
+diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py
+index eb43231..7985cf6 100644
+--- a/django/urls/resolvers.py
++++ b/django/urls/resolvers.py
+@@ -41,10 +41,20 @@ class ResolverMatch:
+         namespaces=None,
+         route=None,
+         tried=None,
++        captured_kwargs=None,
++        extra_kwargs=None,
+     ):
+         self.func = func
+         self.args = args
+-        self.kwargs = kwargs
++        if captured_kwargs is not None and extra_kwargs is not None:
++            self.captured_kwargs = captured_kwargs
++            self.extra_kwargs = extra_kwargs
++            self.kwargs = {**self.captured_kwargs, **self.extra_kwargs}
++        else:
++            # For backward compatibility
++            self.captured_kwargs = kwargs
++            self.extra_kwargs = {}
++            self.kwargs = kwargs
+         self.url_name = url_name
+         self.route = route
+         self.tried = tried
+@@ -78,7 +88,7 @@ class ResolverMatch:
+             func = self._func_path
+         return (
+             "ResolverMatch(func=%s, args=%r, kwargs=%r, url_name=%r, "
+-            "app_names=%r, namespaces=%r, route=%r)"
++            "app_names=%r, namespaces=%r, route=%r, captured_kwargs=%r, extra_kwargs=%r)"
+             % (
+                 func,
+                 self.args,
+@@ -87,6 +97,8 @@ class ResolverMatch:
+                 self.app_names,
+                 self.namespaces,
+                 self.route,
++                self.captured_kwargs,
++                self.extra_kwargs,
+             )
+         )
+ 

@@ -1,0 +1,48 @@
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..7d1f52c 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2869,7 +2869,10 @@ class AutoMinorLocator(Locator):
+         major ticks; e.g., n=2 will place a single minor tick midway
+         between major ticks.
+ 
+-        If *n* is omitted or None, it will be set to 5 or 4.
++        If *n* is omitted or None, it will be set to the value of the
++        rcParams :rc:`xtick.minor.ndivs` or :rc:`ytick.minor.ndivs` (depending
++        on the axis). If the rcParam is set to ``'auto'``, it will be set to 5
++        or 4 (depending on the major step).
+         """
+         self.ndivs = n
+ 
+@@ -2891,13 +2894,19 @@ class AutoMinorLocator(Locator):
+             return []
+ 
+         if self.ndivs is None:
+-
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
++            # Get the axis name (either 'x' or 'y')
++            axis_name = self.axis.axis_name
++            # Get the rcParam for this axis
++            rc_param = mpl.rcParams[f'{axis_name}tick.minor.ndivs']
++            if rc_param == 'auto':
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+             else:
+-                ndivs = 4
++                # Assume it's an integer
++                ndivs = int(rc_param)
+         else:
+             ndivs = self.ndivs
+ 
+@@ -2916,4 +2925,4 @@ class AutoMinorLocator(Locator):
+ 
+     def tick_values(self, vmin, vmax):
+         raise NotImplementedError('Cannot get tick locations for a '
+-                                  '%s type.' % type(self))
++                                  '%s type.' % type(self))

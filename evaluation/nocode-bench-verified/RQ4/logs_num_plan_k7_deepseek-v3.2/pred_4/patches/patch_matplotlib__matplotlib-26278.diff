@@ -1,0 +1,28 @@
+diff --git a/lib/matplotlib/contour.py b/lib/matplotlib/contour.py
+index 4305dde..02ea8a2 100644
+--- a/lib/matplotlib/contour.py
++++ b/lib/matplotlib/contour.py
+@@ -752,7 +752,7 @@ class ContourSet(ContourLabeler, mcoll.Collection):
+                  cmap=None, colors=None, norm=None, vmin=None, vmax=None,
+                  extend='neither', antialiased=None, nchunk=0, locator=None,
+                  transform=None, negative_linestyles=None,
+-                 **kwargs):
++                 clip_path=None, **kwargs):
+         """
+         Draw contour lines or filled regions, depending on
+         whether keyword arg *filled* is ``False`` (default) or ``True``.
+@@ -802,11 +802,14 @@ class ContourSet(ContourLabeler, mcoll.Collection):
+             antialiased = False
+             # The default for line contours will be taken from the
+             # LineCollection default, which uses :rc:`lines.antialiased`.
++        clip_path = kwargs.pop('clip_path', None)
+         super().__init__(
+             antialiaseds=antialiased,
+             alpha=alpha,
+             transform=transform,
+         )
++        if clip_path is not None:
++            self.set_clip_path(clip_path)
+         self.axes = ax
+         self.levels = levels
+         self.filled = filled

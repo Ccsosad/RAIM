@@ -1,0 +1,58 @@
+diff --git a/pylint/pyreverse/diadefslib.py b/pylint/pyreverse/diadefslib.py
+index 7f83c91..5d67fd8 100644
+--- a/pylint/pyreverse/diadefslib.py
++++ b/pylint/pyreverse/diadefslib.py
+@@ -12,6 +12,7 @@ from typing import Any
+ 
+ import astroid
+ from astroid import nodes
++from astroid.modutils import is_standard_module
+ 
+ from pylint.pyreverse.diagrams import ClassDiagram, PackageDiagram
+ from pylint.pyreverse.inspector import Linker, Project
+@@ -70,7 +71,17 @@ class DiaDefGenerator:
+         """True if builtins and not show_builtins."""
+         if self.config.show_builtin:
+             return True
+-        return node.root().name != "builtins"  # type: ignore[no-any-return]
++        if node.root().name == "builtins":
++            return False
++        if not self.config.show_stdlib:
++            # Check if the module is from the standard library
++            try:
++                module = node.root()
++                if is_standard_module(module.name):
++                    return False
++            except Exception:
++                pass
++        return True
+ 
+     def add_class(self, node: nodes.ClassDef) -> None:
+         """Visit one class and add it to diagram."""
+diff --git a/pylint/pyreverse/main.py b/pylint/pyreverse/main.py
+index 946d88c..f40e321 100644
+--- a/pylint/pyreverse/main.py
++++ b/pylint/pyreverse/main.py
+@@ -246,6 +246,16 @@ OPTIONS: Options = (
+             "used to determine a package namespace for modules located under the source root.",
+         },
+     ),
++    (
++        "show-stdlib",
++        dict(
++            short="L",
++            action="store_true",
++            dest="show_stdlib",
++            default=False,
++            help="Include standard library modules in the diagram.",
++        ),
++    ),
+ )
+ 
+ 
+@@ -301,4 +311,4 @@ class Run(_ArgumentsManager, _ArgumentsProvider):
+ 
+ 
+ if __name__ == "__main__":
+-    Run(sys.argv[1:])
++    Run(sys.argv[1:])

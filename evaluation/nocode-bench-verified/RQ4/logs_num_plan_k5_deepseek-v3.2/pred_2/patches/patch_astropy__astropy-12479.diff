@@ -1,0 +1,114 @@
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+index 9e23fee..15d6284 100644
+--- a/astropy/cosmology/parameter.py
++++ b/astropy/cosmology/parameter.py
+@@ -1,3 +1,4 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ import astropy.units as u
+@@ -46,12 +47,13 @@ class Parameter:
+ 
+     _registry_validators = {}
+ 
+-    def __init__(self, fvalidate="default", doc=None, *,
++    def __init__(self, *, fvalidate="default", doc=None,
+                  unit=None, equivalencies=[], fmt=".3g", derived=False):
+         # parse registered fvalidate
+         if callable(fvalidate):
+-            pass
++            self._fvalidate_arg = None  # cannot roundtrip
+         elif fvalidate in self._registry_validators:
++            self._fvalidate_arg = fvalidate
+             fvalidate = self._registry_validators[fvalidate]
+         elif isinstance(fvalidate, str):
+             raise ValueError("`fvalidate`, if str, must be in "
+@@ -209,9 +211,87 @@ class Parameter:
+         return register
+ 
+     # -------------------------------------------
++    # cloning
++
++    def clone(self, *, fvalidate=None, doc=None, unit=None,
++              equivalencies=None, fmt=None, derived=None):
++        """Create a copy of this Parameter, optionally changing some arguments.
++
++        Parameters
++        ----------
++        fvalidate : callable[[object, object, Any], Any] or str, optional
++            If provided, replace the current validator.
++        doc : str or None, optional
++            If provided, replace the current docstring.
++        unit : unit-like or None, optional
++            If provided, replace the current unit.
++        equivalencies : `~astropy.units.Equivalency` or sequence thereof, optional
++            If provided, replace the current equivalencies.
++        fmt : str, optional
++            If provided, replace the current format specification.
++        derived : bool, optional
++            If provided, replace the current derived flag.
++
++        Returns
++        -------
++        `~astropy.cosmology.Parameter`
++            A new Parameter instance with the requested changes.
++        """
++        # Start with the current attributes.
++        new_fvalidate = self._fvalidate_arg if fvalidate is None else fvalidate
++        # If the current fvalidate is a callable (so _fvalidate_arg is None) and
++        # no new fvalidate is given, we cannot roundtrip. So we pass the callable.
++        if new_fvalidate is None:
++            new_fvalidate = self._fvalidate
++
++        new_doc = self.__doc__ if doc is None else doc
++        new_unit = self._unit if unit is None else unit
++        new_equivalencies = self._equivalencies if equivalencies is None else equivalencies
++        new_fmt = self._fmt if fmt is None else fmt
++        new_derived = self._derived if derived is None else derived
++
++        return type(self)(fvalidate=new_fvalidate, doc=new_doc,
++                          unit=new_unit, equivalencies=new_equivalencies,
++                          fmt=new_fmt, derived=new_derived)
++
++    # -------------------------------------------
++
++    def __eq__(self, other):
++        if not isinstance(other, Parameter):
++            return NotImplemented
++        # Compare all attributes that define the Parameter.
++        # Note: we don't compare _attr_name because that is set by __set_name__
++        # and is not part of the constructor.
++        return (self._fvalidate_arg == other._fvalidate_arg and
++                self.__doc__ == other.__doc__ and
++                self._unit == other._unit and
++                self._equivalencies == other._equivalencies and
++                self._fmt == other._fmt and
++                self._derived == other._derived)
+ 
+     def __repr__(self):
+-        return f"<Parameter {self._attr_name!r} at {hex(id(self))}>"
++        # Try to produce a roundtrippable repr.
++        # Only if all arguments are repr-able.
++        # For fvalidate, we need the original string argument.
++        if self._fvalidate_arg is not None:
++            # We have a string fvalidate.
++            args = [f"fvalidate={self._fvalidate_arg!r}"]
++        else:
++            # fvalidate is a callable, cannot roundtrip.
++            return f"<Parameter {self._attr_name!r} at {hex(id(self))}>"
++
++        if self.__doc__ is not None:
++            args.append(f"doc={self.__doc__!r}")
++        if self._unit is not None:
++            args.append(f"unit={self._unit!r}")
++        if self._equivalencies:
++            args.append(f"equivalencies={self._equivalencies!r}")
++        if self._fmt != ".3g":
++            args.append(f"fmt={self._fmt!r}")
++        if self._derived:
++            args.append(f"derived={self._derived!r}")
++
++        return f"Parameter({', '.join(args)})"
+ 
+ 
+ # ===================================================================

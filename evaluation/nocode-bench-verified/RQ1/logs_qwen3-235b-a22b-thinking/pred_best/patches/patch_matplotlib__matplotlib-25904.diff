@@ -1,0 +1,24 @@
+diff --git a/lib/matplotlib/spines.py b/lib/matplotlib/spines.py
+index 915b34c..3f4ee60 100644
+--- a/lib/matplotlib/spines.py
++++ b/lib/matplotlib/spines.py
+@@ -490,6 +490,11 @@ class SpinesProxy:
+     def __init__(self, spine_dict):
+         self._spine_dict = spine_dict
+ 
++    def set(self, **kwargs):
++        for spine in self._spine_dict.values():
++            if hasattr(spine, 'set'):
++                spine.set(**kwargs)
++
+     def __getattr__(self, name):
+         broadcast_targets = [spine for spine in self._spine_dict.values()
+                              if hasattr(spine, name)]
+@@ -509,6 +514,7 @@ class SpinesProxy:
+         for spine in self._spine_dict.values():
+             names.extend(name
+                          for name in dir(spine) if name.startswith('set_'))
++        names.append('set')
+         return list(sorted(set(names)))
+ 
+ 

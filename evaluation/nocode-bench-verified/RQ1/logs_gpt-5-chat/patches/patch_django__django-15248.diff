@@ -1,0 +1,52 @@
+diff --git a/django/db/models/base.py b/django/db/models/base.py
+index d077219..61cb4d7 100644
+--- a/django/db/models/base.py
++++ b/django/db/models/base.py
+@@ -988,6 +988,7 @@ class Model(metaclass=ModelBase):
+             )
+         using = using or router.db_for_write(self.__class__, instance=self)
+         collector = Collector(using=using)
++        collector.origin = self
+         collector.collect([self], keep_parents=keep_parents)
+         return collector.delete()
+ 
+diff --git a/django/db/models/deletion.py b/django/db/models/deletion.py
+index 96922fd..f9098f6 100644
+--- a/django/db/models/deletion.py
++++ b/django/db/models/deletion.py
+@@ -404,7 +404,7 @@ class Collector:
+             for model, obj in self.instances_with_model():
+                 if not model._meta.auto_created:
+                     signals.pre_delete.send(
+-                        sender=model, instance=obj, using=self.using
++                        sender=model, instance=obj, using=self.using, origin=getattr(self, "origin", None)
+                     )
+ 
+             # fast deletes
+@@ -435,7 +435,7 @@ class Collector:
+                 if not model._meta.auto_created:
+                     for obj in instances:
+                         signals.post_delete.send(
+-                            sender=model, instance=obj, using=self.using
++                            sender=model, instance=obj, using=self.using, origin=getattr(self, "origin", None)
+                         )
+ 
+         # update collected instances
+@@ -446,4 +446,4 @@ class Collector:
+         for model, instances in self.data.items():
+             for instance in instances:
+                 setattr(instance, model._meta.pk.attname, None)
+-        return sum(deleted_counter.values()), dict(deleted_counter)
++        return sum(deleted_counter.values()), dict(deleted_counter)
+diff --git a/django/db/models/query.py b/django/db/models/query.py
+index 1013471..f752ef5 100644
+--- a/django/db/models/query.py
++++ b/django/db/models/query.py
+@@ -754,6 +754,7 @@ class QuerySet:
+         del_query.query.clear_ordering(force=True)
+ 
+         collector = Collector(using=del_query.db)
++        collector.origin = self
+         collector.collect(del_query)
+         deleted, _rows_count = collector.delete()
+ 

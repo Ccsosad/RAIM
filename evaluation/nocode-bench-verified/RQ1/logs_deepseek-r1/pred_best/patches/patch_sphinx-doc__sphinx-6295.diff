@@ -1,0 +1,21 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index 612ff28..3cbf763 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -208,6 +208,7 @@ class PyObject(ObjectDescription):
+         'noindex': directives.flag,
+         'module': directives.unchanged,
+         'annotation': directives.unchanged,
++        'async': directives.flag,
+     }
+ 
+     doc_field_types = [
+@@ -236,6 +237,8 @@ class PyObject(ObjectDescription):
+         """May return a prefix to put before the object name in the
+         signature.
+         """
++        if self.needs_arglist() and 'async' in self.options:
++            return 'async '
+         return ''
+ 
+     def needs_arglist(self):

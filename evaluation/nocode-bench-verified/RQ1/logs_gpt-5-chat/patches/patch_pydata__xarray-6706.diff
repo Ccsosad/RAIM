@@ -1,0 +1,70 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 3d4fbde..75479ff 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -296,6 +296,16 @@ class DatasetCoordinates(Coordinates):
+             if key not in self._data.data_vars
+         ]
+ 
++    @property
++    def dtypes(self) -> Mapping[Hashable, np.dtype]:
++        """Mapping from coordinate variable names to dtypes.
++
++        Returns
++        -------
++        Mapping of coordinate names to their dtypes.
++        """
++        return Frozen({k: v.dtype for k, v in self.variables.items()})
++
+ 
+ class DataArrayCoordinates(Coordinates):
+     """Dictionary like container for DataArray coordinates.
+@@ -362,6 +372,16 @@ class DataArrayCoordinates(Coordinates):
+         """Provide method for the key-autocompletions in IPython."""
+         return self._data._ipython_key_completions_()
+ 
++    @property
++    def dtypes(self) -> Mapping[Hashable, np.dtype]:
++        """Mapping from dataarray coordinate names to dtypes.
++
++        Returns
++        -------
++        Mapping of coordinate names to their dtypes.
++        """
++        return Frozen({k: v.dtype for k, v in self.variables.items()})
++
+ 
+ def assert_coordinate_consistent(
+     obj: DataArray | Dataset, coords: Mapping[Any, Variable]
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 15487c2..84ea749 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -1629,6 +1629,21 @@ class Dataset(
+         """
+         return DatasetCoordinates(self)
+ 
++    @property
++    def dtypes(self) -> Mapping[Hashable, np.dtype]:
++        """Mapping from variable names to dtypes.
++
++        Returns
++        -------
++        Mapping of variable name to dtype for all variables in the dataset.
++
++        See Also
++        --------
++        DatasetCoordinates.dtypes
++        DataArrayCoordinates.dtypes
++        """
++        return Frozen({k: v.dtype for k, v in self.variables.items()})
++
+     @property
+     def data_vars(self) -> DataVariables:
+         """Dictionary of DataArray objects corresponding to data variables"""
+@@ -8516,4 +8531,4 @@ class Dataset(
+         DataArray
+             The source interpolated on the decimal years of target,
+         """
+-        return interp_calendar(self, target, dim=dim)
++        return interp_calendar(self, target, dim=dim)

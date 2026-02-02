@@ -1,0 +1,87 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..5f27279 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -52,7 +52,7 @@ class Grid:
+         """Save the figure."""
+         kwargs = kwargs.copy()
+         kwargs.setdefault("bbox_inches", "tight")
+-        self.fig.savefig(*args, **kwargs)
++        self.figure.savefig(*args, **kwargs)
+ 
+     def tight_layout(self, *args, **kwargs):
+         """Call fig.tight_layout within rect that exclude the legend."""
+@@ -60,7 +60,7 @@ class Grid:
+         kwargs.setdefault("rect", self._tight_layout_rect)
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+-        self.fig.tight_layout(*args, **kwargs)
++        self.figure.tight_layout(*args, **kwargs)
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -215,6 +215,11 @@ class Grid:
+ 
+         return palette
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._fig
++
+     @property
+     def legend(self):
+         """The :class:`matplotlib.legend.Legend` object, if present."""
+@@ -996,6 +1001,11 @@ class FacetGrid(Grid):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+         return self._fig
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._fig
++
+     @property
+     def axes(self):
+         """An array of the :class:`matplotlib.axes.Axes` objects in the grid."""
+@@ -1234,6 +1244,7 @@ class PairGrid(Grid):
+                 axes[i, j] = None
+ 
+         self.fig = fig
++        self.figure = fig
+         self.axes = axes
+         self.data = data
+ 
+@@ -1301,6 +1312,11 @@ class PairGrid(Grid):
+             utils.despine(fig=fig)
+         self.tight_layout(pad=layout_pad)
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+     def map(self, func, **kwargs):
+         """Plot with the same function in every subplot.
+ 
+@@ -1913,6 +1929,11 @@ class JointGrid(object):
+         self.ax_joint.set_ylabel(ylabel, **kwargs)
+         return self
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+     def savefig(self, *args, **kwargs):
+         """Save the figure using a "tight" bounding box by default.
+ 
+@@ -1920,7 +1941,7 @@ class JointGrid(object):
+ 
+         """
+         kwargs.setdefault("bbox_inches", "tight")
+-        self.fig.savefig(*args, **kwargs)
++        self.figure.savefig(*args, **kwargs)
+ 
+ 
+ JointGrid.__init__.__doc__ = """\

@@ -1,0 +1,19 @@
+diff --git a/sklearn/base.py b/sklearn/base.py
+index 487600c..f1a4677 100644
+--- a/sklearn/base.py
++++ b/sklearn/base.py
+@@ -80,9 +80,11 @@ def _clone_parametrized(estimator, *, safe=True):
+     """Default implementation of clone. See :func:`sklearn.base.clone` for details."""
+ 
+     estimator_type = type(estimator)
+-    # XXX: not handling dictionaries
+-    if estimator_type in (list, tuple, set, frozenset):
+-        return estimator_type([clone(e, safe=safe) for e in estimator])
++    if estimator_type in (list, tuple, set, frozenset, dict):
++        if estimator_type is dict:
++            return {key: clone(value, safe=safe) for key, value in estimator.items()}
++        else:
++            return estimator_type([clone(e, safe=safe) for e in estimator])
+     elif not hasattr(estimator, "get_params") or isinstance(estimator, type):
+         if not safe:
+             return copy.deepcopy(estimator)

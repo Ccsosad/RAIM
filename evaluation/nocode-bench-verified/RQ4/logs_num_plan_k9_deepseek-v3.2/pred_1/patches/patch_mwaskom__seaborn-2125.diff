@@ -1,0 +1,90 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..e4a9e0c 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -80,9 +80,84 @@ class _DistributionPlotter(VectorPlotter):
+         return kws
+ 
+ 
++class Histogram:
++    """Compute histogram bins and counts."""
++    def __init__(self, binwidth=None, bins=None, binrange=None, discrete=False):
++        self.binwidth = binwidth
++        self.bins = bins
++        self.binrange = binrange
++        self.discrete = discrete
++
++    def define_bin_edges(self, data, weights=None):
++        """Compute bin edges for data."""
++        if self.bins is not None:
++            if isinstance(self.bins, str):
++                bin_edges = np.histogram_bin_edges(data, bins=self.bins, range=self.binrange)
++            else:
++                bin_edges = np.histogram_bin_edges(data, bins=self.bins, range=self.binrange)
++        else:
++            if self.binrange is None:
++                start = data.min()
++                stop = data.max()
++            else:
++                start, stop = self.binrange
++            bin_edges = np.arange(start, stop + self.binwidth, self.binwidth)
++        return bin_edges
++
++    def __call__(self, data, weights=None):
++        """Compute histogram counts and bin edges."""
++        bin_edges = self.define_bin_edges(data, weights)
++        counts, _ = np.histogram(data, bins=bin_edges, weights=weights)
++        return counts, bin_edges
++
++
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    def plot_univariate(
++        self,
++        binwidth=None,
++        bins=None,
++        binrange=None,
++        discrete=False,
++        cumulative=False,
++        stat="count",
++        common_bins=True,
++        common_norm=True,
++        multiple="layer",
++        element="bars",
++        fill=True,
++        shrink=1,
++        kde=False,
++        kde_kws=None,
++        line_kws=None,
++        legend=True,
++        color=None,
++        ax=None,
++    ):
++        # TODO: Implement univariate histogram
++        raise NotImplementedError("Univariate histogram not yet implemented")
++
++    def plot_bivariate(
++        self,
++        binwidth=None,
++        bins=None,
++        binrange=None,
++        discrete=None,
++        cumulative=False,
++        stat="count",
++        common_bins=True,
++        common_norm=True,
++        thresh=0,
++        pthresh=None,
++        pmax=None,
++        cbar=False,
++        cbar_ax=None,
++        cbar_kws=None,
++        color=None,
++        ax=None,
++    ):
++        # TODO: Implement bivariate histogram
++        raise NotImplementedError("Bivariate histogram not yet implemented")
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):

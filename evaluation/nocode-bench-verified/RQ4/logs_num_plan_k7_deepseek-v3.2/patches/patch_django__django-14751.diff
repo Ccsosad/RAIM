@@ -1,0 +1,139 @@
+diff --git a/django/core/management/commands/makemigrations.py b/django/core/management/commands/makemigrations.py
+index 66985c1..0a0e05b 100644
+--- a/django/core/management/commands/makemigrations.py
++++ b/django/core/management/commands/makemigrations.py
+@@ -19,12 +19,14 @@ from django.db.migrations.questioner import (
+ from django.db.migrations.state import ProjectState
+ from django.db.migrations.utils import get_migration_name_timestamp
+ from django.db.migrations.writer import MigrationWriter
++from django.core.management.mixins import ScriptableOutputMixin
+ 
+ 
+-class Command(BaseCommand):
++class Command(ScriptableOutputMixin, BaseCommand):
+     help = "Creates new migration(s) for apps."
+ 
+     def add_arguments(self, parser):
++        super().add_arguments(parser)
+         parser.add_argument(
+             'args', metavar='app_label', nargs='*',
+             help='Specify the app label(s) to create migrations for.',
+@@ -58,8 +60,7 @@ class Command(BaseCommand):
+             help='Exit with a non-zero status if model changes are missing migrations.',
+         )
+ 
+-    def log(self, msg):
+-        self.stdout.write(msg)
++    # The log method is provided by ScriptableOutputMixin.
+ 
+     @no_translations
+     def handle(self, *app_labels, **options):
+@@ -73,6 +74,8 @@ class Command(BaseCommand):
+             raise CommandError('The migration name must be a valid Python identifier.')
+         self.include_header = options['include_header']
+         check_changes = options['check_changes']
++        self.scriptable = options.get('scriptable', False)
++        self.set_scriptable(self.scriptable)
+ 
+         # Make sure the app they asked for exists
+         app_labels = set(app_labels)
+@@ -144,10 +147,11 @@ class Command(BaseCommand):
+             return self.handle_merge(loader, conflicts)
+ 
+         if self.interactive:
++            prompt_output = self.stderr if self.scriptable else self.stdout
+             questioner = InteractiveMigrationQuestioner(
+                 specified_apps=app_labels,
+                 dry_run=self.dry_run,
+-                prompt_output=self.stdout,
++                prompt_output=prompt_output,
+             )
+         else:
+             questioner = NonInteractiveMigrationQuestioner(
+@@ -214,7 +218,10 @@ class Command(BaseCommand):
+             for migration in app_migrations:
+                 # Describe the migration
+                 writer = MigrationWriter(migration, self.include_header)
+-                if self.verbosity >= 1:
++                if not self.dry_run and self.scriptable:
++                    # In scriptable mode, write the path to stdout when we are about to write the file.
++                    self.stdout.write(writer.path)
++                if self.verbosity >= 1 and not self.scriptable:
+                     # Display a relative path if it's below the current working
+                     # directory, or an absolute path otherwise.
+                     try:
+@@ -239,7 +246,7 @@ class Command(BaseCommand):
+                     migration_string = writer.as_string()
+                     with open(writer.path, "w", encoding='utf-8') as fh:
+                         fh.write(migration_string)
+-                elif self.verbosity == 3:
++                elif self.verbosity == 3 and not self.scriptable:
+                     # Alternatively, makemigrations --dry-run --verbosity 3
+                     # will log the migrations rather than saving the file to
+                     # the disk.
+@@ -254,7 +261,8 @@ class Command(BaseCommand):
+         if it's safe; otherwise, advises on how to fix it.
+         """
+         if self.interactive:
+-            questioner = InteractiveMigrationQuestioner(prompt_output=self.stdout)
++            prompt_output = self.stderr if self.scriptable else self.stdout
++            questioner = InteractiveMigrationQuestioner(prompt_output=prompt_output)
+         else:
+             questioner = MigrationQuestioner(defaults={'ask_merge': True})
+ 
+@@ -334,4 +342,4 @@ class Command(BaseCommand):
+                     self.log(self.style.MIGRATE_HEADING(
+                         "Full merge migrations file '%s':" % writer.filename
+                     ))
+-                    self.log(writer.as_string())
++                    self.log(writer.as_string())
+diff --git a/django/core/management/mixins.py b/django/core/management/mixins.py
+new file mode 100644
+index 0000000..71143fc
+--- /dev/null
++++ b/django/core/management/mixins.py
+@@ -0,0 +1,44 @@
++"""
++Mixin classes for management command output handling.
++"""
++import sys
++
++
++class ScriptableOutputMixin:
++    """
++    Mixin for commands that support scriptable output.
++
++    When the --scriptable option is used, all log output and prompts are
++    written to stderr, and only machine-readable output (e.g., file paths)
++    are written to stdout.
++    """
++    def __init__(self, *args, **kwargs):
++        super().__init__(*args, **kwargs)
++        self.scriptable = False
++
++    def add_arguments(self, parser):
++        if not hasattr(super(), 'add_arguments'):
++            super().add_arguments(parser)
++        parser.add_argument(
++            '--scriptable',
++            action='store_true',
++            help='Divert log output and input prompts to stderr, writing only '
++                 'paths of generated migration files to stdout.',
++        )
++
++    def set_scriptable(self, value):
++        self.scriptable = value
++
++    def log(self, msg, style=None):
++        """
++        Log a message to the appropriate output stream.
++
++        In scriptable mode, logs go to stderr. Otherwise, they go to stdout.
++        """
++        if self.scriptable:
++            stream = self.stderr
++        else:
++            stream = self.stdout
++        if style:
++            msg = style(msg)
++        stream.write(msg)

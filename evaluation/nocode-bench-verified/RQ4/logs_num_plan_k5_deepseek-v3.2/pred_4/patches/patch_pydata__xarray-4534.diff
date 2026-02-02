@@ -1,0 +1,151 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..82f2501 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -304,6 +304,39 @@ class DatetimeAccessor(Properties):
+             result, name="strftime", coords=self._obj.coords, dims=self._obj.dims
+         )
+ 
++    def isocalendar(self):
++        """
++        Returns a Dataset with three components: year, week, and weekday
++        according to the ISO 8601 calendar.
++
++        Returns
++        -------
++        Dataset with fields year, week, and weekday.
++
++        Examples
++        --------
++        >>> import xarray as xr
++        >>> import pandas as pd
++        >>> dates = pd.date_range(start="2000-01-01", freq="D", periods=10)
++        >>> ts = xr.DataArray(dates, dims=("time"))
++        >>> ts.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 10)
++        Coordinates:
++          * time     (time) datetime64[ns] 2000-01-01 2000-01-02 ... 2000-01-10
++        Data variables:
++            year     (time) int64 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000
++            week     (time) int64 52 52 52 1 1 1 1 1 1 1
++            weekday  (time) int64 6 7 1 2 3 4 5 6 7 1
++
++        Notes
++        -----
++        Requires pandas version 1.1.0 or greater.
++        """
++        from xarray.core.datetime_utils import _isocalendar
++
++        return _isocalendar(self._obj)
++
+     year = Properties._tslib_field_accessor(
+         "year", "The year of the datetime", np.int64
+     )
+@@ -326,10 +359,27 @@ class DatetimeAccessor(Properties):
+     nanosecond = Properties._tslib_field_accessor(
+         "nanosecond", "The nanoseconds of the datetime", np.int64
+     )
+-    weekofyear = Properties._tslib_field_accessor(
+-        "weekofyear", "The week ordinal of the year", np.int64
+-    )
+-    week = weekofyear
++    @property
++    def weekofyear(self):
++        from xarray.core.datetime_utils import _deprecate_weekofyear
++
++        _deprecate_weekofyear()
++        obj_type = type(self._obj)
++        result = self._obj.data.weekofyear
++        if callable(result):
++            result = result()
++        result = result.astype(np.int64)
++        return obj_type(
++            result, name="weekofyear", coords=self._obj.coords, dims=self._obj.dims
++        )
++
++    @property
++    def week(self):
++        from xarray.core.datetime_utils import _deprecate_weekofyear
++
++        _deprecate_weekofyear()
++        return self.weekofyear
++
+     dayofweek = Properties._tslib_field_accessor(
+         "dayofweek", "The day of the week with Monday=0, Sunday=6", np.int64
+     )
+diff --git a/xarray/core/datetime_utils.py b/xarray/core/datetime_utils.py
+new file mode 100644
+index 0000000..b62f3e4
+--- /dev/null
++++ b/xarray/core/datetime_utils.py
+@@ -0,0 +1,69 @@
++"""
++Utilities for datetime operations.
++"""
++import warnings
++from distutils.version import LooseVersion
++
++import pandas as pd
++
++from xarray.core.dataset import Dataset
++from xarray.core.dataarray import DataArray
++
++__all__ = ["_isocalendar", "_deprecate_weekofyear"]
++
++
++def _check_pandas_version(required_version="1.1.0"):
++    """Check if pandas version is at least required_version."""
++    if LooseVersion(pd.__version__) < LooseVersion(required_version):
++        raise AttributeError(
++            f"isocalendar requires pandas version {required_version} or greater"
++        )
++
++
++def _deprecate_weekofyear():
++    """Emit a deprecation warning for weekofyear and week."""
++    warnings.warn(
++        "weekofyear and week have been deprecated. Use DataArray.dt.isocalendar().week instead.",
++        FutureWarning,
++        stacklevel=3,
++    )
++
++
++def _isocalendar(obj):
++    """
++    Return a Dataset with ISO calendar year, week, and weekday.
++
++    Parameters
++    ----------
++    obj : DataArray
++        Must have datetime-like dtype.
++
++    Returns
++    -------
++    Dataset with three variables: year, week, weekday.
++    """
++    _check_pandas_version("1.1.0")
++
++    # pandas 1.1.0+ has isocalendar method on Series.dt
++    # It returns a DataFrame with columns year, week, weekday
++    if isinstance(obj, DataArray):
++        data = obj.data
++    else:
++        raise TypeError("obj must be a DataArray")
++
++    # Call the pandas isocalendar method
++    result = data.isocalendar()
++
++    # Create a Dataset from the result
++    coords = obj.coords
++    dims = obj.dims
++
++    # The result is a DataFrame with columns year, week, weekday
++    # We convert each column to a DataArray and then combine into a Dataset.
++    ds = Dataset()
++    for name in result.columns:
++        ds[name] = DataArray(
++            result[name].values, coords=coords, dims=dims, attrs=obj.attrs
++        )
++
++    return ds

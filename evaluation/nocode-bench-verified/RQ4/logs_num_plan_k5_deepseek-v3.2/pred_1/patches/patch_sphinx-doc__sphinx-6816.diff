@@ -1,0 +1,35 @@
+diff --git a/sphinx/util/requests.py b/sphinx/util/requests.py
+index 09c5895..99b3f80 100644
+--- a/sphinx/util/requests.py
++++ b/sphinx/util/requests.py
+@@ -127,6 +127,13 @@ def get(url: str, **kwargs) -> requests.Response:
+     if config:
+         kwargs.setdefault('verify', _get_tls_cacert(url, config))
+         headers.setdefault('User-Agent', _get_user_agent(config))
++        # Set authentication if configured
++        if hasattr(config, 'linkcheck_auth') and 'auth' not in kwargs:
++            import re
++            for pattern, auth_info in config.linkcheck_auth:
++                if re.match(pattern, url):
++                    kwargs['auth'] = auth_info
++                    break
+     else:
+         headers.setdefault('User-Agent', useragent_header[0][1])
+ 
+@@ -143,8 +150,15 @@ def head(url: str, **kwargs) -> requests.Response:
+     if config:
+         kwargs.setdefault('verify', _get_tls_cacert(url, config))
+         headers.setdefault('User-Agent', _get_user_agent(config))
++        # Set authentication if configured
++        if hasattr(config, 'linkcheck_auth') and 'auth' not in kwargs:
++            import re
++            for pattern, auth_info in config.linkcheck_auth:
++                if re.match(pattern, url):
++                    kwargs['auth'] = auth_info
++                    break
+     else:
+         headers.setdefault('User-Agent', useragent_header[0][1])
+ 
+     with ignore_insecure_warning(**kwargs):
+-        return requests.get(url, **kwargs)
++        return requests.head(url, **kwargs)

@@ -1,0 +1,63 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..e0e4616 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3075,7 +3075,7 @@ class Axes(_AxesBase):
+             autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
+             startangle=0, radius=1, counterclock=True,
+             wedgeprops=None, textprops=None, center=(0, 0),
+-            frame=False, rotatelabels=False, *, normalize=True):
++            frame=False, rotatelabels=False, *, normalize=True, hatch=None):
+         """
+         Plot a pie chart.
+ 
+@@ -3219,22 +3219,41 @@ class Axes(_AxesBase):
+         if textprops is None:
+             textprops = {}
+ 
++        # Handle hatch patterns
++        if hatch is not None:
++            if isinstance(hatch, str):
++                # Single hatch pattern for all wedges
++                hatch = [hatch] * len(x)
++            elif len(hatch) != len(x):
++                raise ValueError(
++                    "hatch must be a single hatch pattern or a list of "
++                    f"hatch patterns with the same length as x (got {len(hatch)} "
++                    f"hatches for {len(x)} wedges)")
++            # hatch is now a list of hatch patterns
++        else:
++            hatch = [None] * len(x)
++
+         texts = []
+         slices = []
+         autotexts = []
+ 
+-        for frac, label, expl in zip(x, labels, explode):
++        for i, (frac, label, expl) in enumerate(zip(x, labels, explode)):
+             x, y = center
+             theta2 = (theta1 + frac) if counterclock else (theta1 - frac)
+             thetam = 2 * np.pi * 0.5 * (theta1 + theta2)
+             x += expl * math.cos(thetam)
+             y += expl * math.sin(thetam)
+ 
++            # Create a copy of wedgeprops to avoid modifying the original dict
++            wp = wedgeprops.copy()
++            if hatch[i] is not None:
++                wp['hatch'] = hatch[i]
+             w = mpatches.Wedge((x, y), radius, 360. * min(theta1, theta2),
+                                360. * max(theta1, theta2),
+                                facecolor=get_next_color(),
+                                clip_on=False,
+-                               label=label)
++                               label=label,
++                               **wp)
+             w.set(**wedgeprops)
+             slices.append(w)
+             self.add_patch(w)
+@@ -8280,4 +8299,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

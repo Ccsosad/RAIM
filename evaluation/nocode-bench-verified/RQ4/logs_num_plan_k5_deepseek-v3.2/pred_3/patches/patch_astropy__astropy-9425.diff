@@ -1,0 +1,25 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index dbde177..820fb28 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -820,11 +820,19 @@ class Table:
+         cols = {}
+         for name in names_from_data:
+             cols[name] = []
++            mask = []
+             for i, row in enumerate(data):
+                 try:
+                     cols[name].append(row[name])
++                    mask.append(False)
+                 except KeyError:
+-                    raise ValueError(f'Row {i} has no value for column {name}')
++                    # Put a placeholder value and mark as masked
++                    cols[name].append(None)
++                    mask.append(True)
++
++            # Create a masked array if there are any missing values
++            if any(mask):
++                cols[name] = np.ma.array(cols[name], mask=mask)
+ 
+         if all(name is None for name in names):
+             names = names_from_data

@@ -1,0 +1,170 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..5f94435 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4360,4 +4360,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..3fe3132 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5451,6 +5451,28 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             if v in self.variables:
+                 self.variables[v].attrs = other.variables[v].attrs
+ 
++    def query(self, expr, engine=None):
++        """Return a new Dataset with data filtered by the query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate against the data variables.
++        engine : str, optional
++            Evaluation engine to use. Default is 'numexpr' if installed, else 'python'.
++
++        Returns
++        -------
++        filtered : Dataset
++            New Dataset with only the elements that satisfy the query.
++
++        See Also
++        --------
++        DataArray.query
++        """
++        from .query import query
++        return query(self, expr, engine=engine)
++
+     def diff(self, dim, n=1, label="upper"):
+         """Calculate the n-th order discrete difference along given axis.
+ 
+@@ -7002,4 +7024,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query.py b/xarray/core/query.py
+new file mode 100644
+index 0000000..0d407dd
+--- /dev/null
++++ b/xarray/core/query.py
+@@ -0,0 +1,115 @@
++"""
++Query functionality for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from .common import AbstractArray, DataWithCoords
++from .dataset import Dataset
++from .dataarray import DataArray
++from .variable import Variable
++from .utils import is_dict_like
++
++class QueryEngine:
++    """Engine for evaluating query expressions on xarray objects."""
++
++    def __init__(self, parser=None, engine=None):
++        self.parser = parser
++        self.engine = engine
++
++    def evaluate(self, expr, data_vars):
++        """Evaluate a query expression against data variables.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression.
++        data_vars : dict
++            Dictionary of data variables.
++
++        Returns
++        -------
++        mask : array-like
++            Boolean mask indicating which elements satisfy the query.
++        """
++        # For now, we use a simple implementation that evaluates the expression
++        # in a namespace built from data_vars.
++        # This is similar to pandas.DataFrame.query.
++        # We'll use pandas.eval for now, but could be extended to support other engines.
++        if self.engine is None:
++            self.engine = 'numexpr' if self._is_numexpr_available() else 'python'
++
++        # Build a dictionary of variables for evaluation
++        local_dict = {}
++        for name, var in data_vars.items():
++            if hasattr(var, 'values'):
++                local_dict[name] = var.values
++            else:
++                local_dict[name] = var
++
++        # Use pandas.eval to evaluate the expression
++        try:
++            result = pd.eval(expr, engine=self.engine, local_dict=local_dict)
++        except Exception as e:
++            raise ValueError(f"Failed to evaluate query {expr!r}: {e}")
++
++        # Ensure the result is a boolean array
++        if not isinstance(result, np.ndarray):
++            result = np.asarray(result, dtype=bool)
++        if result.dtype != bool:
++            raise TypeError(f"Query result must be boolean, got {result.dtype}")
++
++        return result
++
++    def _is_numexpr_available(self):
++        try:
++            import numexpr
++            return True
++        except ImportError:
++            return False
++
++
++def query(obj, expr, engine=None):
++    """Return a new object with data filtered by the query expression.
++
++    Parameters
++    ----------
++    obj : Dataset or DataArray
++        Object to query.
++    expr : str
++        Query expression.
++    engine : str, optional
++        Evaluation engine to use. Default is 'numexpr' if installed, else 'python'.
++
++    Returns
++    -------
++    filtered : same type as obj
++        New object with only the elements that satisfy the query.
++    """
++    if not isinstance(obj, (Dataset, DataArray)):
++        raise TypeError("Query only supports Dataset and DataArray")
++
++    # Create a query engine
++    qe = QueryEngine(engine=engine)
++
++    # For DataArray, we convert to a Dataset with a single variable
++    if isinstance(obj, DataArray):
++        # Use the name of the DataArray or a default
++        name = obj.name if obj.name is not None else 'var'
++        ds = obj.to_dataset(name=name)
++        # Evaluate the query on the dataset
++        mask = qe.evaluate(expr, ds.data_vars)
++        # Apply the mask to the original DataArray
++        return obj.where(mask, drop=True)
++    else:
++        # For Dataset, we evaluate the query using all data variables
++        mask = qe.evaluate(expr, obj.data_vars)
++        # Apply the mask to all data variables
++        filtered_vars = {}
++        for name, var in obj.data_vars.items():
++            filtered_vars[name] = var.where(mask, drop=True)
++        # Build a new dataset with the filtered variables
++        # We need to preserve coordinates that are not dimensions
++        coords = {k: v for k, v in obj.coords.items() if k not in obj.dims}
++        # Also include dimension coordinates that are still present after filtering
++        # This is handled by the where(drop=True) above.
++        return Dataset(filtered_vars, coords=coords, attrs=obj.attrs)

@@ -1,0 +1,64 @@
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index 31d7f5b..6bf9c4f 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -84,6 +84,20 @@ class CheckExternalLinksBuilder(Builder):
+                                for x in self.app.config.linkcheck_anchors_ignore]
+         self.auth = [(re.compile(pattern), auth_info) for pattern, auth_info
+                      in self.app.config.linkcheck_auth]
++        
++        # Process request headers configuration
++        self.request_headers = []
++        if hasattr(self.app.config, 'linkcheck_request_headers'):
++            for baseurl, headers in self.app.config.linkcheck_request_headers.items():
++                if baseurl == '*':
++                    # Special wildcard pattern for all URLs
++                    self.request_headers.append((re.compile(r'.*'), headers))
++                else:
++                    # Convert baseurl to regex pattern
++                    pattern = re.escape(baseurl) + r'.*'
++                    self.request_headers.append((re.compile(pattern), headers))
++            # Sort by specificity (longer patterns first)
++            self.request_headers.sort(key=lambda x: len(x[0].pattern), reverse=True)
+         self.good = set()       # type: Set[str]
+         self.broken = {}        # type: Dict[str, str]
+         self.redirected = {}    # type: Dict[str, Tuple[str, int]]
+@@ -105,11 +119,23 @@ class CheckExternalLinksBuilder(Builder):
+             self.workers.append(thread)
+ 
+     def check_thread(self) -> None:
++        # Base headers
++        base_headers = {
++            'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
++        }
++        
++        # Function to get headers for a specific URI
++        def get_headers_for_uri(uri: str) -> dict:
++            headers = base_headers.copy()
++            # Apply matching request headers
++            for pattern, extra_headers in self.request_headers:
++                if pattern.match(uri):
++                    headers.update(extra_headers)
++                    break
++            return headers
++        
+         kwargs = {
+             'allow_redirects': True,
+-            'headers': {
+-                'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+-            },
+         }
+         if self.app.config.linkcheck_timeout:
+             kwargs['timeout'] = self.app.config.linkcheck_timeout
+@@ -344,9 +370,10 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     # Anchors starting with ! are ignored since they are
+     # commonly used for dynamic pages
+     app.add_config_value('linkcheck_anchors_ignore', ["^!"], None)
++    app.add_config_value('linkcheck_request_headers', {}, None)
+ 
+     return {
+         'version': 'builtin',
+         'parallel_read_safe': True,
+         'parallel_write_safe': True,
+-    }
++    }

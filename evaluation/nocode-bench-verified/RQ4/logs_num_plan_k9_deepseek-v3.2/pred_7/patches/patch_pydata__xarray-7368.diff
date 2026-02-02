@@ -1,0 +1,139 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..9c58903 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -34,6 +34,38 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     _data: DataWithCoords
+     __slots__ = ("_data",)
+ 
++    def __init__(
++        self,
++        data: DataWithCoords | None = None,
++        coords: Mapping[Any, Any] | None = None,
++        indexes: Mapping[Any, Index] | None = None,
++    ) -> None:
++        """Create a standalone Coordinates object.
++
++        Parameters
++        ----------
++        data : DataWithCoords, optional
++            Internal data object. If provided, `coords` and `indexes` are ignored.
++        coords : mapping, optional
++            Mapping from coordinate names to arrays. The arrays may be
++            numpy arrays, DataArrays, or pandas objects.
++        indexes : mapping, optional
++            Mapping from coordinate names to Index objects. If not provided,
++            indexes will be inferred from the coordinate data.
++        """
++        from xarray.core.dataset import Dataset
++
++        if data is not None:
++            self._data = data
++        else:
++            if coords is None:
++                coords = {}
++            if indexes is None:
++                indexes = {}
++            # Create a dataset from the coords and indexes
++            dataset = Dataset(coords, indexes=indexes)
++            self._data = dataset
++
+     def __getitem__(self, key: Hashable) -> T_DataArray:
+         raise NotImplementedError()
+ 
+@@ -70,6 +102,95 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     def _maybe_drop_multiindex_coords(self, coords):
+         raise NotImplementedError()
+ 
++    @classmethod
++    def from_pandas_multiindex(
++        cls,
++        midx: pd.MultiIndex,
++        dim: Hashable,
++        index_type: type[Index] | None = None,
++    ) -> "Coordinates":
++        """Create Coordinates from a pandas MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            The MultiIndex to convert.
++        dim : hashable
++            The name of the dimension to assign to the MultiIndex.
++        index_type : type of Index, optional
++            The type of index to create. If not provided, defaults to
++            PandasMultiIndex.
++
++        Returns
++        -------
++        Coordinates
++            A Coordinates object with the MultiIndex converted to coordinates.
++        """
++        from xarray.core.dataset import Dataset
++        from xarray.indexes import PandasMultiIndex
++
++        if index_type is None:
++            index_type = PandasMultiIndex
++
++        # Create a dataset from the MultiIndex
++        dataset = Dataset.from_pandas_multiindex(midx, dim, index_type=index_type)
++        return dataset.coords
++
++    def copy(self, deep: bool = False) -> "Coordinates":
++        """Return a copy of the coordinates.
++
++        Parameters
++        ----------
++        deep : bool, default: False
++            If True, make a deep copy of the underlying data.
++
++        Returns
++        -------
++        Coordinates
++            New coordinates object.
++        """
++        from xarray.core.dataset import Dataset
++
++        dataset = self.to_dataset()
++        copied_dataset = dataset.copy(deep=deep)
++        return copied_dataset.coords
++
++    def equals(self, other: "Coordinates") -> bool:
++        """Two Coordinates objects are equal if they have the same variables
++        and indexes.
++
++        Parameters
++        ----------
++        other : Coordinates
++            The other Coordinates object.
++
++        Returns
++        -------
++        bool
++            True if the two Coordinates are equal.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        return self.to_dataset().equals(other.to_dataset())
++
++    def identical(self, other: "Coordinates") -> bool:
++        """Two Coordinates objects are identical if they have the same variables,
++        indexes, and attributes.
++
++        Parameters
++        ----------
++        other : Coordinates
++            The other Coordinates object.
++
++        Returns
++        -------
++        bool
++            True if the two Coordinates are identical.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        return self.to_dataset().identical(other.to_dataset())
++
+     def __iter__(self) -> Iterator[Hashable]:
+         # needs to be in the same order as the dataset variables
+         for k in self.variables:

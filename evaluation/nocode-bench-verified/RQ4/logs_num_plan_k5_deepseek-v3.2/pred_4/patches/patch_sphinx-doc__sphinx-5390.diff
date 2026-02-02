@@ -1,0 +1,56 @@
+diff --git a/sphinx/builders/html.py b/sphinx/builders/html.py
+index 0939a74..341ce0b 100644
+--- a/sphinx/builders/html.py
++++ b/sphinx/builders/html.py
+@@ -283,13 +283,8 @@ class StandaloneHTMLBuilder(Builder):
+         self.init_highlighter()
+         self.init_css_files()
+         self.init_js_files()
+-        if self.config.html_file_suffix is not None:
+-            self.out_suffix = self.config.html_file_suffix
+-
+-        if self.config.html_link_suffix is not None:
+-            self.link_suffix = self.config.html_link_suffix
+-        else:
+-            self.link_suffix = self.out_suffix
++        self.out_suffix = self.get_out_suffix()
++        self.link_suffix = self.get_link_suffix()
+ 
+         self.use_index = self.get_builder_config('use_index', 'html')
+ 
+@@ -302,6 +297,18 @@ class StandaloneHTMLBuilder(Builder):
+         # type: () -> BuildInfo
+         return BuildInfo(self.config, self.tags, ['html'])
+ 
++    def get_out_suffix(self):
++        # type: () -> unicode
++        if self.config.html_file_suffix is not None:
++            return self.config.html_file_suffix
++        return '.html'
++
++    def get_link_suffix(self):
++        # type: () -> unicode
++        if self.config.html_link_suffix is not None:
++            return self.config.html_link_suffix
++        return self.out_suffix
++
+     def _get_translations_js(self):
+         # type: () -> unicode
+         candidates = [path.join(dir, self.config.language,
+diff --git a/sphinx/builders/htmlhelp.py b/sphinx/builders/htmlhelp.py
+index 4273245..de14a1b 100644
+--- a/sphinx/builders/htmlhelp.py
++++ b/sphinx/builders/htmlhelp.py
+@@ -341,9 +341,11 @@ def setup(app):
+     app.add_builder(HTMLHelpBuilder)
+ 
+     app.add_config_value('htmlhelp_basename', lambda self: make_filename(self.project), None)
++    app.add_config_value('htmlhelp_file_suffix', '.html', 'html')
++    app.add_config_value('htmlhelp_link_suffix', '.html', 'html')
+ 
+     return {
+         'version': 'builtin',
+         'parallel_read_safe': True,
+         'parallel_write_safe': True,
+-    }
++    }

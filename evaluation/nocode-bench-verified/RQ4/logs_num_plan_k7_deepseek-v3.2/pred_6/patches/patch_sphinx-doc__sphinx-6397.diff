@@ -1,0 +1,38 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..f0e8137 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -410,6 +410,12 @@ class Documenter:
+ 
+         retann = self.retann
+ 
++        # handle autodoc_typehints config
++        if self.env.config.autodoc_typehints == 'none':
++            retann = None
++            # Note: we cannot easily remove argument typehints here because
++            # args is a string. This will be handled in the subclasses.
++
+         result = self.env.events.emit_firstresult('autodoc-process-signature',
+                                                   self.objtype, self.fullname,
+                                                   self.object, self.options, args, retann)
+@@ -1614,6 +1620,7 @@ def setup(app):
+     app.add_config_value('autodoc_mock_imports', [], True)
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
++    app.add_config_value('autodoc_typehints', 'signature', True)
+     app.add_event('autodoc-process-docstring')
+     app.add_event('autodoc-process-signature')
+     app.add_event('autodoc-skip-member')
+diff --git a/sphinx/ext/autodoc/formatters.py b/sphinx/ext/autodoc/formatters.py
+new file mode 100644
+index 0000000..1912f3b
+--- /dev/null
++++ b/sphinx/ext/autodoc/formatters.py
+@@ -0,0 +1,7 @@
++"""
++Formatters for autodoc.
++
++This module provides functions to format typehints and signatures.
++"""
++
++# This file is a placeholder for future formatters.

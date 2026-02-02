@@ -1,0 +1,28 @@
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index d43c130..55f1edc 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -92,6 +92,9 @@ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
+                               warn=_simple_warn, info=_simple_info,
+                               base_path=None, builder=None, template_dir=None,
+                               imported_members=False, app=None):
++    # If app is provided, use the configuration value
++    if app is not None:
++        imported_members = app.config.autosummary_imported_members
+     # type: (List[str], str, str, Callable, Callable, str, Builder, str, bool, Any) -> None
+ 
+     showed_sources = list(sorted(sources))
+diff --git a/sphinx/ext/autosummary/__init__.py b/sphinx/ext/autosummary/__init__.py
+new file mode 100644
+index 0000000..07a114a
+--- /dev/null
++++ b/sphinx/ext/autosummary/__init__.py
+@@ -0,0 +1,8 @@
++def setup(app):
++    # type: (Sphinx) -> Dict[str, Any]
++    app.add_config_value('autosummary_context', {}, True)
++    app.add_config_value('autosummary_filename_map', {}, True)
++    app.add_config_value('autosummary_ignore_module_all', False, True)
++    app.add_config_value('autosummary_imports', [], True)
++    app.add_config_value('autosummary_mock_imports', [], True)
++    app.add_config_value('autosummary_imported_members', False, 'env')

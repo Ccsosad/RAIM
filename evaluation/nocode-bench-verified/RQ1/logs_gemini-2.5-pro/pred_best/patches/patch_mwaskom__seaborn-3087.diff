@@ -1,0 +1,22 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index b0a0822..4633655 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -494,7 +494,7 @@ class Continuous(ContinuousBase):
+         self,
+         formatter: Formatter | None = None, *,
+         like: str | Callable | None = None,
+-        base: int | None = None,
++        base: int | None | Literal["auto"] = "auto",
+         unit: str | None = None,
+     ) -> Continuous:
+         """
+@@ -613,7 +613,7 @@ class Continuous(ContinuousBase):
+     def _get_formatter(self, locator, formatter, like, base, unit):
+ 
+         log_base, symlog_thresh = self._parse_for_log_params(self.trans)
+-        if base is None:
++        if base == "auto":
+             if symlog_thresh:
+                 log_base = 10
+             base = log_base

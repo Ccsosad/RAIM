@@ -1,0 +1,20 @@
+diff --git a/xarray/plot/plot.py b/xarray/plot/plot.py
+index b16caf5..52a6f7e 100644
+--- a/xarray/plot/plot.py
++++ b/xarray/plot/plot.py
+@@ -573,11 +573,14 @@ def override_signature(f):
+     return wrapper
+ 
+ 
+-def _plot1d(plotfunc):
++def _plot1d(plotfunc: Callable) -> Callable:
+     """
+     Decorator for common 1d plotting logic.
+ 
+     Also adds the 1d plot method to class _PlotMethods.
++
++    This decorator is used to create 1D plot methods such as line, scatter, etc.
++    It handles both single plots and faceted plots.
+     """
+     commondoc = """
+     Parameters

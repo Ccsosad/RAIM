@@ -1,0 +1,50 @@
+diff --git a/pylint/lint/base_options.py b/pylint/lint/base_options.py
+index 055eb4f..ce6799c 100644
+--- a/pylint/lint/base_options.py
++++ b/pylint/lint/base_options.py
+@@ -103,7 +103,7 @@ def _make_linter_options(linter: PyLinter) -> Options:
+                 "short": "f",
+                 "group": "Reports",
+                 "help": "Set the output format. Available formats are text,"
+-                " parseable, colorized, json and msvs (visual studio)."
++                " parseable, colorized, json, msvs (visual studio) and no-header."
+                 " You can also give a reporter class, e.g. mypackage.mymodule."
+                 "MyReporterClass.",
+                 "kwargs": {"linter": linter},
+diff --git a/pylint/reporters/no_header_reporter.py b/pylint/reporters/no_header_reporter.py
+new file mode 100644
+index 0000000..b6e2f14
+--- /dev/null
++++ b/pylint/reporters/no_header_reporter.py
+@@ -0,0 +1,31 @@
++"""NoHeaderReporter class for pylint, which outputs messages without module header."""
++from pylint.reporters.text import TextReporter
++
++
++class NoHeaderReporter(TextReporter):
++    """Reports messages without the module header."""
++
++    name = "no-header"
++    """Name of the reporter."""
++
++    def _display(self, layout):
++        """Override to skip the header section."""
++        # Only output the messages section (skip the header)
++        if layout.children:
++            # The layout is a Section with children:
++            #   [0] is the header (module name)
++            #   [1] is the messages
++            # We want to skip the header and only show messages
++            for child in layout.children:
++                # Check if this child is the messages section
++                # We can identify it by its title being empty or None
++                if child.title is None or child.title == "":
++                    self._display_messages(child)
++        else:
++            # Fallback: just display the layout as is
++            super()._display(layout)
++
++    def _display_messages(self, messages_section):
++        """Display only the messages part."""
++        for message in messages_section.children:
++            self.writeln(message)

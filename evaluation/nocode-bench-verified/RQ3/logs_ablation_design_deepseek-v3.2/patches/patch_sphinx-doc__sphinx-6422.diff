@@ -1,0 +1,29 @@
+diff --git a/sphinx/ext/autosummary/__init__.py b/sphinx/ext/autosummary/__init__.py
+index 0f35f73..9ec2db1 100644
+--- a/sphinx/ext/autosummary/__init__.py
++++ b/sphinx/ext/autosummary/__init__.py
+@@ -747,6 +747,7 @@ def process_generate_options(app: Sphinx) -> None:
+ def setup(app: Sphinx) -> Dict[str, Any]:
+     # I need autodoc
+     app.setup_extension('sphinx.ext.autodoc')
++    app.add_config_value('autosummary_generate_overwrite', True, True)
+     app.add_node(autosummary_toc,
+                  html=(autosummary_toc_visit_html, autosummary_noop),
+                  latex=(autosummary_noop, autosummary_noop),
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index 6ecf807..3a1a9e0 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -247,9 +247,10 @@ def generate_autosummary_docs(sources: List[str], output_dir: str = None,
+ 
+         fn = os.path.join(path, name + suffix)
+ 
+-        # skip it if it exists
++        # skip it if it exists and overwrite is disabled
+         if os.path.isfile(fn):
+-            continue
++            if app is not None and not app.config.autosummary_generate_overwrite:
++                continue
+ 
+         new_files.append(fn)
+ 

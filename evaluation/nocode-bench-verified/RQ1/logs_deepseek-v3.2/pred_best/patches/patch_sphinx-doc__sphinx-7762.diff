@@ -1,0 +1,57 @@
+diff --git a/sphinx/util/requests.py b/sphinx/util/requests.py
+index 930b64d..4cc656c 100644
+--- a/sphinx/util/requests.py
++++ b/sphinx/util/requests.py
+@@ -95,6 +95,28 @@ def _get_user_agent(config: Config) -> str:
+         ])
+ 
+ 
++def _get_request_headers(url: str, config: Config) -> dict:
++    """Get additional request headers for the given URL from the config."""
++    if not hasattr(config, 'linkcheck_request_headers'):
++        return {}
++    rules = config.linkcheck_request_headers
++    headers = {}
++    # First, collect all matches
++    matches = []
++    for base, base_headers in rules.items():
++        if base == "*":
++            matches.append((0, base_headers))  # wildcard has lowest priority
++        elif url.startswith(base):
++            matches.append((len(base), base_headers))
++    # Sort by the length of the base (longest first)
++    matches.sort(key=lambda x: x[0], reverse=True)
++    if matches:
++        # Use the first (most specific) match
++        _, matched_headers = matches[0]
++        headers.update(matched_headers)
++    return headers
++
++
+ def get(url: str, **kwargs: Any) -> requests.Response:
+     """Sends a GET request like requests.get().
+ 
+@@ -103,6 +125,9 @@ def get(url: str, **kwargs: Any) -> requests.Response:
+     config = kwargs.pop('config', None)
+     if config:
+         kwargs.setdefault('verify', _get_tls_cacert(url, config))
++        # Add headers from linkcheck_request_headers
++        extra_headers = _get_request_headers(url, config)
++        headers.update(extra_headers)
+         headers.setdefault('User-Agent', _get_user_agent(config))
+     else:
+         headers.setdefault('User-Agent', useragent_header[0][1])
+@@ -119,9 +144,12 @@ def head(url: str, **kwargs: Any) -> requests.Response:
+     config = kwargs.pop('config', None)
+     if config:
+         kwargs.setdefault('verify', _get_tls_cacert(url, config))
++        # Add headers from linkcheck_request_headers
++        extra_headers = _get_request_headers(url, config)
++        headers.update(extra_headers)
+         headers.setdefault('User-Agent', _get_user_agent(config))
+     else:
+         headers.setdefault('User-Agent', useragent_header[0][1])
+ 
+     with ignore_insecure_warning(**kwargs):
+-        return requests.get(url, **kwargs)
++        return requests.get(url, **kwargs)

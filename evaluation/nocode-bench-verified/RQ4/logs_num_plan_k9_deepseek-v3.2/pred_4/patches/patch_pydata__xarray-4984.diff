@@ -1,0 +1,160 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..75d071e 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1997,6 +1997,32 @@ class DataArray(AbstractArray, DataWithCoords):
+         coords.update(replace_coords)
+         return self._replace(coords=coords)
+ 
++    def query(self, expr, parser='pandas', engine=None):
++        """Return a new DataArray with elements selected by the query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        parser : {'pandas', 'python'}, default 'pandas'
++            Parser to use for evaluating the expression.
++        engine : {'numexpr', 'python'}, optional
++            Evaluation engine to use. Only valid when parser='pandas'.
++
++        Returns
++        -------
++        DataArray
++            A new DataArray with the same dimensions as the original, but with
++            elements that do not satisfy the query condition removed.
++
++        See Also
++        --------
++        Dataset.query
++        """
++        from .query_ast import evaluate_query
++        mask = evaluate_query(self, expr, parser=parser, engine=engine)
++        return self.where(mask, drop=True)
++
+     def stack(
+         self,
+         dimensions: Mapping[Hashable, Sequence[Hashable]] = None,
+@@ -4360,4 +4386,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..104570c 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3521,6 +3521,32 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+ 
+         return self._replace(variables, indexes=indexes)
+ 
++    def query(self, expr, parser='pandas', engine=None):
++        """Return a new Dataset with elements selected by the query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        parser : {'pandas', 'python'}, default 'pandas'
++            Parser to use for evaluating the expression.
++        engine : {'numexpr', 'python'}, optional
++            Evaluation engine to use. Only valid when parser='pandas'.
++
++        Returns
++        -------
++        Dataset
++            A new Dataset with the same dimensions as the original, but with
++            elements that do not satisfy the query condition removed.
++
++        See Also
++        --------
++        DataArray.query
++        """
++        from .query_ast import evaluate_query
++        mask = evaluate_query(self, expr, parser=parser, engine=engine)
++        return self.where(mask, drop=True)
++
+     def _stack_once(self, dims, new_dim):
+         if ... in dims:
+             dims = list(infix_dims(dims, self.dims))
+@@ -7002,4 +7028,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query_ast.py b/xarray/core/query_ast.py
+new file mode 100644
+index 0000000..514a9e3
+--- /dev/null
++++ b/xarray/core/query_ast.py
+@@ -0,0 +1,68 @@
++"""
++Query expression parsing and evaluation for xarray.
++
++This module provides a way to evaluate query expressions on xarray objects.
++"""
++import pandas as pd
++import numpy as np
++
++from xarray.core.utils import is_scalar
++
++def _get_query_namespace(obj):
++    """Build a namespace for query evaluation from an xarray object."""
++    # For DataArray, we only have one variable.
++    # For Dataset, we have multiple variables.
++    if hasattr(obj, 'variables'):
++        # Dataset
++        return {k: v._data for k, v in obj.variables.items()}
++    else:
++        # DataArray
++        return {obj.name: obj._data} if obj.name is not None else {}
++
++def evaluate_query(obj, expr, parser='pandas', engine=None):
++    """
++    Evaluate a query expression on an xarray object.
++
++    Parameters
++    ----------
++    obj : DataArray or Dataset
++        The object to query.
++    expr : str
++        The query expression.
++    parser : {'pandas', 'python'}, default 'pandas'
++        The parser to use. 'pandas' uses pandas.eval, 'python' uses Python's eval.
++    engine : {'numexpr', 'python'}, optional
++        The evaluation engine. Only used when parser='pandas'.
++
++    Returns
++    -------
++    mask : array-like
++        Boolean mask of the same shape as the object's data.
++    """
++    namespace = _get_query_namespace(obj)
++    
++    if parser == 'pandas':
++        # Use pandas.eval
++        result = pd.eval(expr, local_dict=namespace, parser=parser, engine=engine)
++    elif parser == 'python':
++        # Use Python's eval with a restricted environment?
++        # We'll just use eval with the namespace.
++        result = eval(expr, {'__builtins__': {}}, namespace)
++    else:
++        raise ValueError(f"Unsupported parser: {parser}")
++    
++    # Convert to boolean array
++    if is_scalar(result):
++        # If the expression returns a scalar, we broadcast it.
++        # This is useful for expressions like "temperature > 300"
++        # which should be applied elementwise.
++        # Actually, pandas.eval returns a scalar only if the expression is scalar.
++        # But we want a mask. So we should have the expression return a boolean array.
++        # However, if the expression is a scalar, we cannot form a mask.
++        # So we assume the expression is elementwise.
++        # But we cannot broadcast without knowing the shape.
++        # So we raise an error.
++        raise ValueError("Query expression must return an array, not a scalar.")
++    
++    # Ensure it's a boolean array
++    return result.astype(bool)

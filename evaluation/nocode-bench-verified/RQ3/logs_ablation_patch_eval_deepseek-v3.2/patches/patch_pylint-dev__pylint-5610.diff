@@ -1,0 +1,53 @@
+diff --git a/pylint/extensions/__init__.py b/pylint/extensions/__init__.py
+new file mode 100644
+index 0000000..fb1b21e
+--- /dev/null
++++ b/pylint/extensions/__init__.py
+@@ -0,0 +1,2 @@
++"""Optional extensions for pylint."""
++from pylint.extensions.private_import import PrivateImportChecker
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..6917aa5
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,39 @@
++"""Checker for private imports (names starting with underscore)."""
++from typing import TYPE_CHECKING, List
++
++import astroid
++from pylint import checkers, interfaces
++from pylint.checkers.utils import only_required_for_messages
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++
++class PrivateImportChecker(checkers.BaseChecker):
++    """Check for imports of private names (starting with underscore)."""
++
++    __implements__ = interfaces.IAstroidChecker
++
++    name = "private-import"
++    msgs = {
++        "W5501": (
++            "Import of private name %s",
++            "import-private-name",
++            "Used when a private name (starting with underscore) is imported.",
++        )
++    }
++
++    @only_required_for_messages("import-private-name")
++    def visit_importfrom(self, node: astroid.ImportFrom) -> None:
++        """Check imports from a module."""
++        for name, alias in node.names:
++            # Check if the imported name starts with underscore
++            if name.startswith("_"):
++                # Build the full name if there's an alias
++                display_name = alias or name
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=(display_name,),
++                    confidence=interfaces.HIGH,
++                )

@@ -1,0 +1,77 @@
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..696fe10
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,71 @@
++"""Private import checker for pylint."""
++from typing import TYPE_CHECKING, List
++
++import astroid
++from pylint import checkers, interfaces
++from pylint.checkers import utils
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++
++class PrivateImportChecker(checkers.BaseChecker):
++    """Check for imports of private objects (prefixed with '_') from external packages."""
++
++    __implements__ = interfaces.IAstroidChecker
++
++    name = "private-import"
++    msgs = {
++        "W5501": (
++            "Import of private object %s",
++            "import-private-name",
++            "Used when a private object (prefixed with '_') is imported from an external package.",
++        )
++    }
++
++    def __init__(self, linter: "PyLinter") -> None:
++        super().__init__(linter)
++        self._imported_modules: List[str] = []
++
++    def visit_import(self, node: astroid.Import) -> None:
++        """Check regular imports."""
++        for name, _ in node.names:
++            # Check if the imported module is private (starts with '_')
++            # and is not from the current package.
++            if name.startswith("_"):
++                # Check if it's a top-level module or a submodule
++                parts = name.split(".")
++                if parts[0].startswith("_"):
++                    self.add_message(
++                        "import-private-name",
++                        node=node,
++                        args=(name,),
++                        confidence=interfaces.HIGH,
++                    )
++
++    def visit_importfrom(self, node: astroid.ImportFrom) -> None:
++        """Check from ... import ... statements."""
++        # If the module being imported from is private (starts with '_')
++        if node.modname and node.modname.startswith("_"):
++            self.add_message(
++                "import-private-name",
++                node=node,
++                args=(node.modname,),
++                confidence=interfaces.HIGH,
++            )
++        # Check the imported names
++        for name, _ in node.names:
++            if name.startswith("_"):
++                # Construct the full name for the message
++                full_name = f"{node.modname}.{name}" if node.modname else name
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=(full_name,),
++                    confidence=interfaces.HIGH,
++                )
++
++
++def register(linter: "PyLinter") -> None:
++    """Required method to auto-register this checker."""
++    linter.register_checker(PrivateImportChecker(linter))

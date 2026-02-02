@@ -1,0 +1,84 @@
+diff --git a/django/forms/forms.py b/django/forms/forms.py
+index 3ebacee..e8e9025 100644
+--- a/django/forms/forms.py
++++ b/django/forms/forms.py
+@@ -66,7 +66,9 @@ class BaseForm(RenderableFormMixin):
+     prefix = None
+     use_required_attribute = True
+ 
+-    template_name = "django/forms/default.html"
++    @property
++    def template_name(self):
++        return self.renderer.form_template_name
+     template_name_p = "django/forms/p.html"
+     template_name_table = "django/forms/table.html"
+     template_name_ul = "django/forms/ul.html"
+@@ -536,4 +538,4 @@ class Form(BaseForm, metaclass=DeclarativeFieldsMetaclass):
+     # self.fields is specified. This class (Form) is the one that does the
+     # fancy metaclass stuff purely for the semantic sugar -- it allows one
+     # to define a form using declarative syntax.
+-    # BaseForm itself has no way of designating self.fields.
++    # BaseForm itself has no way of designating self.fields.
+diff --git a/django/forms/formsets.py b/django/forms/formsets.py
+index bf826c8..c36678a 100644
+--- a/django/forms/formsets.py
++++ b/django/forms/formsets.py
+@@ -54,6 +54,7 @@ class BaseFormSet(RenderableFormMixin):
+     A collection of instances of the same Form class.
+     """
+ 
++    default_renderer = None
+     deletion_widget = CheckboxInput
+     ordering_widget = NumberInput
+     default_error_messages = {
+@@ -62,7 +63,9 @@ class BaseFormSet(RenderableFormMixin):
+             "%(field_names)s. You may need to file a bug report if the issue persists."
+         ),
+     }
+-    template_name = "django/forms/formsets/default.html"
++    @property
++    def template_name(self):
++        return self.renderer.formset_template_name
+     template_name_p = "django/forms/formsets/p.html"
+     template_name_table = "django/forms/formsets/table.html"
+     template_name_ul = "django/forms/formsets/ul.html"
+@@ -77,6 +80,7 @@ class BaseFormSet(RenderableFormMixin):
+         error_class=ErrorList,
+         form_kwargs=None,
+         error_messages=None,
++        renderer=None,
+     ):
+         self.is_bound = data is not None or files is not None
+         self.prefix = prefix or self.get_default_prefix()
+@@ -89,6 +93,17 @@ class BaseFormSet(RenderableFormMixin):
+         self._errors = None
+         self._non_form_errors = None
+ 
++        # Initialize formset renderer. Use a global default if not specified
++        # either as an argument or as self.default_renderer.
++        if renderer is None:
++            if self.default_renderer is None:
++                renderer = get_default_renderer()
++            else:
++                renderer = self.default_renderer
++                if isinstance(self.default_renderer, type):
++                    renderer = renderer()
++        self.renderer = renderer
++
+         messages = {}
+         for cls in reversed(type(self).__mro__):
+             messages.update(getattr(cls, "default_error_messages", {}))
+diff --git a/django/forms/renderers.py b/django/forms/renderers.py
+index f0a7fac..d697b1a 100644
+--- a/django/forms/renderers.py
++++ b/django/forms/renderers.py
+@@ -15,6 +15,9 @@ def get_default_renderer():
+ 
+ 
+ class BaseRenderer:
++    form_template_name = "django/forms/default.html"
++    formset_template_name = "django/forms/formsets/default.html"
++
+     def get_template(self, template_name):
+         raise NotImplementedError("subclasses must implement get_template()")
+ 

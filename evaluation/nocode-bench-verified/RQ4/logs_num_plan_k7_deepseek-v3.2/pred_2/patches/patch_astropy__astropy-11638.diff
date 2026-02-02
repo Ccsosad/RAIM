@@ -1,0 +1,29 @@
+diff --git a/astropy/time/formats.py b/astropy/time/formats.py
+index d2e12de..bad9dba 100644
+--- a/astropy/time/formats.py
++++ b/astropy/time/formats.py
+@@ -325,6 +325,14 @@ class TimeFormat(metaclass=TimeFormatMeta):
+                                   "allowed values {}"
+                                   .format(scale, TIME_SCALES))
+ 
++        # Update leap seconds only when the scale is UTC and auto_download is True
++        if scale == 'utc':
++            from astropy.utils.iers import conf
++            if conf.auto_download:
++                from astropy.time.core import _get_leap_seconds
++                # This will update the leap second table if out of date and auto_download is True
++                _get_leap_seconds(update=True)
++
+         return scale
+ 
+     def set_jds(self, val1, val2):
+diff --git a/astropy/utils/iers/__init__.py b/astropy/utils/iers/__init__.py
+index c88b0b3..4c996d0 100644
+--- a/astropy/utils/iers/__init__.py
++++ b/astropy/utils/iers/__init__.py
+@@ -1,2 +1,4 @@
+ 
+-from .iers import *
++
++from .iers import *
++from .conf import auto_download

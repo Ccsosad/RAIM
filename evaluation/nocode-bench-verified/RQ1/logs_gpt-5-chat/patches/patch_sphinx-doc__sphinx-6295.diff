@@ -1,0 +1,40 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index 612ff28..34f760b 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -575,6 +575,7 @@ class PyMethod(PyObject):
+     option_spec.update({
+         'classmethod': directives.flag,
+         'staticmethod': directives.flag,
++        'async': directives.flag,
+     })
+ 
+     def needs_arglist(self):
+@@ -583,12 +584,14 @@ class PyMethod(PyObject):
+ 
+     def get_signature_prefix(self, sig):
+         # type: (str) -> str
++        prefix = ''
++        if 'async' in self.options:
++            prefix += 'async '
+         if 'staticmethod' in self.options:
+-            return 'static '
++            prefix += 'static '
+         elif 'classmethod' in self.options:
+-            return 'classmethod '
+-        else:
+-            return ''
++            prefix += 'classmethod '
++        return prefix
+ 
+     def get_index_text(self, modname, name_cls):
+         # type: (str, Tuple[str, str]) -> str
+@@ -607,6 +610,8 @@ class PyMethod(PyObject):
+             return _('%s() (%s static method)') % (methname, clsname)
+         elif 'classmethod' in self.options:
+             return _('%s() (%s class method)') % (methname, clsname)
++        elif 'async' in self.options:
++            return _('%s() (%s async method)') % (methname, clsname)
+         else:
+             return _('%s() (%s method)') % (methname, clsname)
+ 

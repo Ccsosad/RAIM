@@ -1,0 +1,25 @@
+diff --git a/astropy/visualization/wcsaxes/frame.py b/astropy/visualization/wcsaxes/frame.py
+index e6627e8..a9df705 100644
+--- a/astropy/visualization/wcsaxes/frame.py
++++ b/astropy/visualization/wcsaxes/frame.py
+@@ -215,6 +215,20 @@ class RectangularFrame(BaseFrame):
+         self['l'].data = np.array(([xmin, ymax], [xmin, ymin]))
+ 
+ 
++class RectangularFrame1D(BaseFrame):
++    """
++    A frame for 1D plots.
++    """
++
++    spine_names = 'b'
++
++    def update_spines(self):
++        xmin, xmax = self.parent_axes.get_xlim()
++        ymin, _ = self.parent_axes.get_ylim()
++
++        self['b'].data = np.array(([xmin, ymin], [xmax, ymin]))
++
++
+ class EllipticalFrame(BaseFrame):
+     """
+     An elliptical frame.

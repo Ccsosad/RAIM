@@ -1,0 +1,15 @@
+diff --git a/astropy/units/core.py b/astropy/units/core.py
+index 2b12b30..ba2da91 100644
+--- a/astropy/units/core.py
++++ b/astropy/units/core.py
+@@ -2435,7 +2435,9 @@ def _add_prefixes(u, excludes=[], namespace=None, prefixes=False):
+ 
+         for prefix in full:
+             if prefix in excludes:
+-                continue
++                # Check if the unit is Angstrom and the prefix is 'milli'
++                if not (('Angstrom' in u.short_names or 'angstrom' in u.long_names) and prefix == 'milli'):
++                    continue
+ 
+             for alias in u.long_names:
+                 names.append(prefix + alias)

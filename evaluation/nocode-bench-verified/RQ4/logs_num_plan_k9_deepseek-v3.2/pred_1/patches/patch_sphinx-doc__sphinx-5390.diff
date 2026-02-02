@@ -1,0 +1,78 @@
+diff --git a/sphinx/builders/htmlhelp.py b/sphinx/builders/htmlhelp.py
+index 4273245..b0eb57f 100644
+--- a/sphinx/builders/htmlhelp.py
++++ b/sphinx/builders/htmlhelp.py
+@@ -169,7 +169,9 @@ chm_locales = {
+ }
+ 
+ 
+-class HTMLHelpBuilder(StandaloneHTMLBuilder):
++from sphinx.builders.help_suffix_mixin import HelpSuffixMixin
++
++class HTMLHelpBuilder(HelpSuffixMixin, StandaloneHTMLBuilder):
+     """
+     Builder that also outputs Windows HTML help project, contents and
+     index files.  Adapted from the original Doc/tools/prechm.py.
+@@ -196,9 +198,8 @@ class HTMLHelpBuilder(StandaloneHTMLBuilder):
+     def init(self):
+         # type: () -> None
+         StandaloneHTMLBuilder.init(self)
+-        # the output files for HTML help must be .html only
+-        self.out_suffix = '.html'
+-        self.link_suffix = '.html'
++        # initialize the help suffixes from config
++        self.init_help_suffixes()
+         # determine the correct locale setting
+         locale = chm_locales.get(self.config.language)
+         if locale is not None:
+@@ -341,9 +342,11 @@ def setup(app):
+     app.add_builder(HTMLHelpBuilder)
+ 
+     app.add_config_value('htmlhelp_basename', lambda self: make_filename(self.project), None)
++    # add config values for file and link suffixes
++    HelpSuffixMixin.add_help_suffix_config(app)
+ 
+     return {
+         'version': 'builtin',
+         'parallel_read_safe': True,
+         'parallel_write_safe': True,
+-    }
++    }
+diff --git a/sphinx/builders/help_suffix_mixin.py b/sphinx/builders/help_suffix_mixin.py
+new file mode 100644
+index 0000000..9dec7c9
+--- /dev/null
++++ b/sphinx/builders/help_suffix_mixin.py
+@@ -0,0 +1,32 @@
++# -*- coding: utf-8 -*-
++"""
++    sphinx.builders.help_suffix_mixin
++    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++
++    Mixin for help builders that support configurable file and link suffixes.
++
++    :copyright: Copyright 2007-2025 by the Sphinx team, see AUTHORS.
++    :license: BSD, see LICENSE for details.
++"""
++
++from typing import TYPE_CHECKING
++
++if TYPE_CHECKING:
++    from sphinx.application import Sphinx
++
++
++class HelpSuffixMixin:
++    """Mixin for help builders to handle configurable file and link suffixes."""
++
++    def init_help_suffixes(self) -> None:
++        """Initialize the out_suffix and link_suffix from config."""
++        # out_suffix is the suffix for generated HTML files
++        self.out_suffix = self.config.htmlhelp_file_suffix
++        # link_suffix is the suffix for links to HTML files
++        self.link_suffix = self.config.htmlhelp_link_suffix
++
++    @staticmethod
++    def add_help_suffix_config(app: "Sphinx") -> None:
++        """Add configuration values for help suffixes."""
++        app.add_config_value('htmlhelp_file_suffix', '.html', 'html')
++        app.add_config_value('htmlhelp_link_suffix', '.html', 'html')

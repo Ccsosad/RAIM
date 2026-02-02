@@ -1,0 +1,14 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..0d9273b 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -47,7 +47,8 @@ from collections import deque
+ 
+ 
+ __all__ = ['Model', 'FittableModel', 'Fittable1DModel', 'Fittable2DModel',
+-           'CompoundModel', 'custom_model', 'ModelDefinitionError']
++           'CompoundModel', 'custom_model', 'ModelDefinitionError',
++           'fix_inputs']
+ 
+ 
+ def _model_oper(oper, **kwargs):

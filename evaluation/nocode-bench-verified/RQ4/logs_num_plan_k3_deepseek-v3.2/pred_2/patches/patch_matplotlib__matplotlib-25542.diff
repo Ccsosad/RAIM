@@ -1,0 +1,27 @@
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index b79bffd..dad65e6 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -1835,13 +1835,17 @@ class MultipleLocator(Locator):
+     interval.
+     """
+ 
+-    def __init__(self, base=1.0):
+-        self._edge = _Edge_integer(base, 0)
++    def __init__(self, base=1.0, offset=0.0):
++        self._edge = _Edge_integer(base, offset)
+ 
+-    def set_params(self, base):
++    def set_params(self, base=None, offset=None):
+         """Set parameters within this locator."""
+-        if base is not None:
+-            self._edge = _Edge_integer(base, 0)
++        if base is not None or offset is not None:
++            if base is None:
++                base = self._edge.step
++            if offset is None:
++                offset = self._edge._offset
++            self._edge = _Edge_integer(base, offset)
+ 
+     def __call__(self):
+         """Return the locations of the ticks."""

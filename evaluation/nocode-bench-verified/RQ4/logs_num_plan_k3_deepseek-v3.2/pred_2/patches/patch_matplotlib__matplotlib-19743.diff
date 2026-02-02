@@ -1,0 +1,97 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..26bd8fc 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -418,6 +418,92 @@ def make_layout_margins(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0,
+         # pass the new margins down to the layout grid for the solution...
+         layoutgrids[gs].edit_outer_margin_mins(margin, ss)
+ 
++    # Now handle figure legends that are outside
++    # First, legends attached to axes
++    for ax in fig._localaxes:
++        legend = ax.get_legend()
++        if legend is not None and hasattr(legend, '_loc') and legend._loc is not None and legend._loc.startswith('outside'):
++            # This is an outside legend
++            loc = legend._loc
++            parts = loc.split()
++            if len(parts) >= 2:
++                if parts[1] in ['left', 'right']:
++                    side = parts[1]
++                elif parts[1] in ['upper', 'lower']:
++                    side = 'top' if parts[1] == 'upper' else 'bottom'
++                else:
++                    continue
++                # Get the legend's bbox in figure coordinates
++                legend_bbox = legend.get_window_extent(renderer)
++                legend_bbox_fig = fig.transFigure.inverted().transform_bbox(legend_bbox)
++                # Add to the figure's margin
++                figlb = layoutgrids.get(fig)
++                if figlb is not None:
++                    if side in ['left', 'right']:
++                        figlb.edit_outer_margin_min(side, legend_bbox_fig.width)
++                    else:
++                        figlb.edit_outer_margin_min(side, legend_bbox_fig.height)
++    # Second, figure-level legends
++    for legend in fig.legends:
++        if hasattr(legend, '_loc') and legend._loc is not None and legend._loc.startswith('outside'):
++            loc = legend._loc
++            parts = loc.split()
++            if len(parts) >= 2:
++                if parts[1] in ['left', 'right']:
++                    side = parts[1]
++                elif parts[1] in ['upper', 'lower']:
++                    side = 'top' if parts[1] == 'upper' else 'bottom'
++                else:
++                    continue
++                legend_bbox = legend.get_window_extent(renderer)
++                legend_bbox_fig = fig.transFigure.inverted().transform_bbox(legend_bbox)
++                figlb = layoutgrids.get(fig)
++                if figlb is not None:
++                    if side in ['left', 'right']:
++                        figlb.edit_outer_margin_min(side, legend_bbox_fig.width)
++                    else:
++                        figlb.edit_outer_margin_min(side, legend_bbox_fig.height)
++
++    # Now handle figure legends that are outside
++    # First, legends attached to axes
++    for ax in fig._localaxes:
++        legend = ax.get_legend()
++        if legend is not None and hasattr(legend, '_loc') and legend._loc is not None and legend._loc.startswith('outside'):
++            # This is an outside legend
++            loc = legend._loc
++            parts = loc.split()
++            if len(parts) >= 2:
++                if parts[1] in ['left', 'right']:
++                    side = parts[1]
++                elif parts[1] in ['upper', 'lower']:
++                    side = 'top' if parts[1] == 'upper' else 'bottom'
++                else:
++                    continue
++                # Get the legend's bbox in figure coordinates
++                legend_bbox = legend.get_window_extent(renderer)
++                legend_bbox_fig = fig.transFigure.inverted().transform_bbox(legend_bbox)
++                # Add to the figure's margin
++                figlb = layoutgrids.get(fig)
++                if figlb is not None:
++                    figlb.edit_margin_min(side, legend_bbox_fig.width if side in ['left', 'right'] else legend_bbox_fig.height)
++    # Second, figure-level legends
++    for legend in fig.legends:
++        if hasattr(legend, '_loc') and legend._loc is not None and legend._loc.startswith('outside'):
++            loc = legend._loc
++            parts = loc.split()
++            if len(parts) >= 2:
++                if parts[1] in ['left', 'right']:
++                    side = parts[1]
++                elif parts[1] in ['upper', 'lower']:
++                    side = 'top' if parts[1] == 'upper' else 'bottom'
++                else:
++                    continue
++                legend_bbox = legend.get_window_extent(renderer)
++                legend_bbox_fig = fig.transFigure.inverted().transform_bbox(legend_bbox)
++                figlb = layoutgrids.get(fig)
++                if figlb is not None:
++                    figlb.edit_margin_min(side, legend_bbox_fig.width if side in ['left', 'right'] else legend_bbox_fig.height)
++
+ 
+ def make_margin_suptitles(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
+     # Figure out how large the suptitle is and make the

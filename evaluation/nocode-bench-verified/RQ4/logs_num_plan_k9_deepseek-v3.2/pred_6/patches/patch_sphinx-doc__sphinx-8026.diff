@@ -1,0 +1,26 @@
+diff --git a/sphinx/transforms/image_tokens.py b/sphinx/transforms/image_tokens.py
+new file mode 100644
+index 0000000..2bce6ab
+--- /dev/null
++++ b/sphinx/transforms/image_tokens.py
+@@ -0,0 +1,20 @@
++from os import path
++from docutils import nodes
++from sphinx.transforms import SphinxTransform
++
++class ImageTokens(SphinxTransform):
++    default_priority = 500
++
++    def apply(self):
++        for node in self.document.traverse(nodes.image):
++            self.replace_tokens(node)
++
++    def replace_tokens(self, node):
++        uri = node['uri']
++        if '{docpath}' in uri:
++            docname = self.env.docname
++            docdir = path.dirname(docname)
++            if docdir:
++                docdir += '/'
++            uri = uri.replace('{docpath}', docdir)
++            node['uri'] = uri

@@ -1,0 +1,21 @@
+diff --git a/lib/matplotlib/contour.py b/lib/matplotlib/contour.py
+index 4305dde..689808a 100644
+--- a/lib/matplotlib/contour.py
++++ b/lib/matplotlib/contour.py
+@@ -1486,6 +1486,16 @@ class QuadContourSet(ContourSet):
+     %(contour_set_attributes)s
+     """
+ 
++    def __init__(self, ax, *args, clip_path=None, **kwargs):
++        # store clip_path if passed
++        self._user_clip_path = clip_path
++        # call parent constructor
++        super().__init__(ax, *args, **kwargs)
++        # after creation, set clip path on all artists if provided
++        if self._user_clip_path is not None:
++            for coll in getattr(self, 'collections', []):
++                coll.set_clip_path(self._user_clip_path)
++
+     def _process_args(self, *args, corner_mask=None, algorithm=None, **kwargs):
+         """
+         Process args and kwargs.

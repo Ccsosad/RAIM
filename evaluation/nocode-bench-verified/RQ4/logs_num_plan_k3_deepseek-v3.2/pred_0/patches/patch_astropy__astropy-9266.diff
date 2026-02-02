@@ -1,0 +1,69 @@
+diff --git a/astropy/visualization/wcsaxes/core.py b/astropy/visualization/wcsaxes/core.py
+index 573033c..4d385f4 100644
+--- a/astropy/visualization/wcsaxes/core.py
++++ b/astropy/visualization/wcsaxes/core.py
+@@ -635,9 +635,11 @@ class WCSAxes(Axes):
+         if axis == 'both':
+             self.coords.grid(draw_grid=b, **kwargs)
+         elif axis == 'x':
+-            self.coords[0].grid(draw_grid=b, **kwargs)
++            if len(self.coords) > 0:
++                self.coords[0].grid(draw_grid=b, **kwargs)
+         elif axis == 'y':
+-            self.coords[1].grid(draw_grid=b, **kwargs)
++            if len(self.coords) > 1:
++                self.coords[1].grid(draw_grid=b, **kwargs)
+         else:
+             raise ValueError('axis should be one of x/y/both')
+ 
+diff --git a/astropy/visualization/wcsaxes/wcsapi.py b/astropy/visualization/wcsaxes/wcsapi.py
+index 18817a1..c8f0e45 100644
+--- a/astropy/visualization/wcsaxes/wcsapi.py
++++ b/astropy/visualization/wcsaxes/wcsapi.py
+@@ -33,8 +33,8 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+             raise ValueError("'slices' should have as many elements as WCS "
+                              "has pixel dimensions (should be {})"
+                              .format(wcs.pixel_n_dim))
+-    elif wcs.pixel_n_dim < 2:
+-        raise ValueError("WCS should have at least 2 pixel dimensions")
++    elif wcs.pixel_n_dim < 1:
++        raise ValueError("WCS should have at least 1 pixel dimension")
+     elif slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
+         raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
+ 
+@@ -124,10 +124,13 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+     invert_xy = False
+     if slices is not None:
+         wcs_slice = list(slices)
+-        wcs_slice[wcs_slice.index("x")] = slice(None)
+-        wcs_slice[wcs_slice.index("y")] = slice(None)
++        if 'x' in slices:
++            wcs_slice[wcs_slice.index("x")] = slice(None)
++        if 'y' in slices:
++            wcs_slice[wcs_slice.index("y")] = slice(None)
+         wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
+-        invert_xy = slices.index('x') > slices.index('y')
++        if 'x' in slices and 'y' in slices:
++            invert_xy = slices.index('x') > slices.index('y')
+         world_keep = wcs._world_keep
+     else:
+         world_keep = list(range(wcs.world_n_dim))
+@@ -141,7 +144,17 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+     if invert_xy:
+         m = m[:, ::-1]
+ 
+-    if frame_class is RectangularFrame:
++    if frame_class is RectangularFrame1D:
++
++        # For 1D rectangular frame, we only have one spine (bottom)
++        for i in range(len(coord_meta['type'])):
++            if i in world_keep:
++                index = world_keep[i]
++                coord_meta['default_axislabel_position'][index] = 'b'
++                coord_meta['default_ticklabel_position'][index] = 'b'
++                coord_meta['default_ticks_position'][index] = 'b'
++
++    elif frame_class is RectangularFrame:
+ 
+         for i, spine_name in enumerate('bltr'):
+             pos = np.nonzero(m[:, i % 2])[0]

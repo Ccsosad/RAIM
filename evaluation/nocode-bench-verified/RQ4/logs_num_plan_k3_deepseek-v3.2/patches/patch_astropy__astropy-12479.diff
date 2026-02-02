@@ -1,0 +1,94 @@
+diff --git a/astropy/cosmology/_clone_mixin.py b/astropy/cosmology/_clone_mixin.py
+new file mode 100644
+index 0000000..8865c6a
+--- /dev/null
++++ b/astropy/cosmology/_clone_mixin.py
+@@ -0,0 +1,30 @@
++"""A mixin class to provide cloning functionality."""
++
++__all__ = []
++
++
++class _CloneMixin:
++    """Mixin class to provide a clone method.
++
++    This mixin is intended to be used with classes that have a __slots__
++    structure similar to `~astropy.cosmology.Parameter`.
++    """
++
++    def clone(self, **kwargs):
++        """Return a copy of this object with the given changes.
++
++        Parameters
++        ----------
++        **kwargs
++            Attributes to change in the new object.
++
++        Returns
++        -------
++        new : same type as self
++            A copy of this object with the given changes.
++        """
++        import copy
++        new = copy.deepcopy(self)
++        for key, value in kwargs.items():
++            setattr(new, key, value)
++        return new
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+new file mode 100644
+index 0000000..46b24e5
+--- /dev/null
++++ b/astropy/cosmology/parameter.py
+@@ -0,0 +1,52 @@
++class Parameter:
++    """A cosmological parameter.
++
++    Parameters
++    ----------
++    *args
++        Not used. This is to make the arguments keyword-only.
++    **kwargs
++        The parameter attributes.
++    """
++
++    __slots__ = ()
++
++    def __init__(self, *args, **kwargs):
++        if args:
++            raise TypeError("Parameter arguments are keyword-only.")
++        for key, value in kwargs.items():
++            setattr(self, key, value)
++
++    def clone(self, **kwargs):
++        """Return a copy of this parameter with the given changes.
++
++        Parameters
++        ----------
++        **kwargs
++            Attributes to change in the new parameter.
++
++        Returns
++        -------
++        new : Parameter
++            A copy of this parameter with the given changes.
++        """
++        import copy
++        new = copy.deepcopy(self)
++        for key, value in kwargs.items():
++            setattr(new, key, value)
++        return new
++
++    def __eq__(self, other):
++        if not isinstance(other, Parameter):
++            return NotImplemented
++        for slot in self.__slots__:
++            if getattr(self, slot) != getattr(other, slot):
++                return False
++        return True
++
++    def __repr__(self):
++        attrs = []
++        for slot in self.__slots__:
++            val = getattr(self, slot)
++            attrs.append(f"{slot}={val!r}")
++        return f"{self.__class__.__name__}({', '.join(attrs)})"

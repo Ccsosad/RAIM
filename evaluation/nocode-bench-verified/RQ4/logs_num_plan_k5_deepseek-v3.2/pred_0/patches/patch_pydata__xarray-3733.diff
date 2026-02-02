@@ -1,0 +1,103 @@
+diff --git a/xarray/__init__.py b/xarray/__init__.py
+index b35ae4c..f13c48e 100644
+--- a/xarray/__init__.py
++++ b/xarray/__init__.py
+@@ -17,7 +17,7 @@ from .conventions import SerializationWarning, decode_cf
+ from .core.alignment import align, broadcast
+ from .core.combine import auto_combine, combine_by_coords, combine_nested
+ from .core.common import ALL_DIMS, full_like, ones_like, zeros_like
+-from .core.computation import apply_ufunc, dot, where
++from .core.computation import apply_ufunc, dot, polyval, where
+ from .core.concat import concat
+ from .core.dataarray import DataArray
+ from .core.dataset import Dataset
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..90f3fdf 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3202,6 +3202,34 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().integrate(dim, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        **kwargs,
++    ) -> "Dataset":
++        """Least squares polynomial fit for the DataArray.
++
++        Parameters
++        ----------
++        dim : str
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the polynomial.
++        full : bool, optional
++            If True, return additional information about the fit.
++        **kwargs : dict
++            Additional keyword arguments passed to numpy.polyfit.
++
++        Returns
++        -------
++        polyfit_coefficients : Dataset
++            A dataset containing the coefficients and optionally other fit information.
++        """
++        ds = self._to_temp_dataset().polyfit(dim=dim, deg=deg, full=full, **kwargs)
++        return self._from_temp_dataset(ds)
++
+     def unify_chunks(self) -> "DataArray":
+         """ Unify chunk size along all chunked dimensions of this DataArray.
+ 
+@@ -3449,4 +3477,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 16f0e97..d4c0f57 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5483,6 +5483,34 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             result = result._integrate_one(c, datetime_unit=datetime_unit)
+         return result
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        **kwargs,
++    ) -> "Dataset":
++        """Least squares polynomial fit for the Dataset.
++
++        Parameters
++        ----------
++        dim : str
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the polynomial.
++        full : bool, optional
++            If True, return additional information about the fit.
++        **kwargs : dict
++            Additional keyword arguments passed to numpy.polyfit.
++
++        Returns
++        -------
++        polyfit_coefficients : Dataset
++            A dataset containing the coefficients and optionally other fit information.
++        """
++        from .polyfit import polyfit
++        return polyfit(self, dim=dim, deg=deg, full=full, **kwargs)
++
+     def _integrate_one(self, coord, datetime_unit=None):
+         from .variable import Variable
+ 
+@@ -5915,4 +5943,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self._replace_vars_and_dims(variables)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

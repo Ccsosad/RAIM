@@ -1,0 +1,66 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 4def383..011c7f7 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -59,6 +59,43 @@ def discover_package_path(modulepath: str, source_roots: Sequence[str]) -> str:
+             return os.getcwd()
+ 
+ 
++def _expand_globs(patterns: Sequence[str]) -> list[str]:
++    """Expand glob patterns in a list of strings."""
++    import glob
++    expanded = []
++    for pattern in patterns:
++        # Check if pattern contains any glob character
++        if any(char in pattern for char in '*?[]'):
++            # Try to expand the glob
++            matches = glob.glob(pattern, recursive=True)
++            if matches:
++                expanded.extend(matches)
++            else:
++                # If no matches, keep the pattern as is (might be a module)
++                expanded.append(pattern)
++        else:
++            expanded.append(pattern)
++    return expanded
++
++
++def _expand_globs(patterns: Sequence[str]) -> list[str]:
++    """Expand glob patterns in a list of strings."""
++    expanded = []
++    for pattern in patterns:
++        # Check if pattern contains any glob character
++        if any(char in pattern for char in '*?[]'):
++            # Try to expand the glob
++            matches = glob.glob(pattern, recursive=True)
++            if matches:
++                expanded.extend(matches)
++            else:
++                # If no matches, keep the pattern as is (might be a module)
++                expanded.append(pattern)
++        else:
++            expanded.append(pattern)
++    return expanded
++
++
+ def _is_in_ignore_list_re(element: str, ignore_list_re: list[Pattern[str]]) -> bool:
+     """Determines if the element is matched in a regex ignore-list."""
+     return any(file_pattern.match(element) for file_pattern in ignore_list_re)
+@@ -94,7 +131,10 @@ def expand_modules(
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
+ 
+-    for something in files_or_modules:
++    # Expand any glob patterns in the input
++    expanded_files_or_modules = _expand_globs(files_or_modules)
++
++    for something in expanded_files_or_modules:
+         basename = os.path.basename(something)
+         if _is_ignored_file(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+@@ -179,4 +219,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors

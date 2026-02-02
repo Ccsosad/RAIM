@@ -1,0 +1,51 @@
+diff --git a/sphinx/transforms/i18n.py b/sphinx/transforms/i18n.py
+index 06e4d1b..449c68a 100644
+--- a/sphinx/transforms/i18n.py
++++ b/sphinx/transforms/i18n.py
+@@ -463,6 +463,14 @@ class Locale(SphinxTransform):
+                 node['raw_entries'] = entries
+                 node['entries'] = new_entries
+ 
++        # Translate alt text for images by default
++        for node in self.document.traverse(nodes.image):
++            if node.get('alt'):
++                msg = node['alt']
++                msgstr = catalog.gettext(msg)
++                if msgstr and msgstr != msg:
++                    node['alt'] = msgstr
++
+         # remove translated attribute that is used for avoiding double translation.
+         for translated in self.document.traverse(NodeMatcher(translated=Any)):  # type: Element  # NOQA
+             translated.delattr('translated')
+diff --git a/sphinx/util/nodes.py b/sphinx/util/nodes.py
+index da00971..55be5d1 100644
+--- a/sphinx/util/nodes.py
++++ b/sphinx/util/nodes.py
+@@ -260,6 +260,7 @@ def extract_messages(doctree: Element) -> Iterable[Tuple[Element, str]]:
+             if not msg:
+                 msg = node.astext()
+         elif isinstance(node, IMAGE_TYPE_NODES):
++            # Always extract alt text for translation
+             msg = '.. image:: %s' % node['uri']
+             if node.get('alt'):
+                 msg += '\n   :alt: %s' % node['alt']
+@@ -273,6 +274,19 @@ def extract_messages(doctree: Element) -> Iterable[Tuple[Element, str]]:
+         # XXX nodes rendering empty are likely a bug in sphinx.addnodes
+         if msg:
+             yield node, msg
++    # Also extract messages from image nodes even if they are not translatable
++    # to ensure alt text is translated by default.
++    for node in doctree.traverse(nodes.image):
++        if not is_translatable(node):
++            if node.get('alt'):
++                msg = '.. image:: %s\n   :alt: %s' % (node['uri'], node['alt'])
++                yield node, msg
++    # Additionally, extract alt text from all image nodes to ensure it is translated by default.
++    for node in doctree.traverse(nodes.image):
++        # Skip if already yielded above
++        if not node.get('translatable', False) and node.get('alt'):
++            msg = '.. image:: %s\n   :alt: %s' % (node['uri'], node['alt'])
++            yield node, msg
+ 
+ 
+ def get_node_source(node: Element) -> str:

@@ -1,0 +1,31 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..ab34eaf 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -96,7 +96,7 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         self : returns an instance of self.
+             Fitted label encoder.
+         """
+-        y = column_or_1d(y, warn=True)
++        y = column_or_1d(y, warn=True, dtype=object)
+         self.classes_ = _unique(y)
+         return self
+ 
+@@ -113,7 +113,7 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         y : array-like of shape (n_samples,)
+             Encoded labels.
+         """
+-        y = column_or_1d(y, warn=True)
++        y = column_or_1d(y, warn=True, dtype=object)
+         self.classes_, y = _unique(y, return_inverse=True)
+         return y
+ 
+@@ -131,7 +131,7 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+             Labels as normalized encodings.
+         """
+         check_is_fitted(self)
+-        y = column_or_1d(y, warn=True)
++        y = column_or_1d(y, warn=True, dtype=object)
+         # transform of empty array is empty array
+         if _num_samples(y) == 0:
+             return np.array([])

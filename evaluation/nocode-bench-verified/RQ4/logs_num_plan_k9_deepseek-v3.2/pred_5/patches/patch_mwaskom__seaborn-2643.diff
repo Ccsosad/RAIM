@@ -1,0 +1,150 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index c1f490d..baef5d1 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -248,6 +248,70 @@ class Grid(_BaseGrid):
+             return None
+ 
+ 
++def move_legend(obj, loc, **kwargs):
++    """
++    Recreate a legend on an existing plot at a new location.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.Grid
++        The object with the legend to move.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid locations.
++    **kwargs
++        Additional keyword arguments are passed to the underlying legend method.
++
++    Returns
++    -------
++    None
++
++    """
++    import matplotlib.pyplot as plt
++
++    # Check if the object is a Grid (like FacetGrid) or an Axes
++    if hasattr(obj, '_legend_out'):
++        # It's a Grid instance
++        grid = obj
++        fig = grid.figure
++        legend = grid.legend
++        if legend is None:
++            raise ValueError("No legend found for the Grid object.")
++        # Get the existing handles and labels from the legend
++        handles = legend.legendHandles
++        labels = [t.get_text() for t in legend.texts]
++        # Get the old title
++        old_title = legend.get_title().get_text()
++        # Remove the old legend
++        legend.remove()
++        # Set the title in kwargs if not provided
++        if 'title' not in kwargs:
++            kwargs['title'] = old_title
++        # Create a new legend on the figure
++        new_legend = fig.legend(handles, labels, loc=loc, **kwargs)
++        # Update the Grid's legend reference
++        grid._legend = new_legend
++        # If the legend was outside, we might need to adjust the layout
++        # We'll leave it to the user to adjust the figure size.
++    else:
++        # Assume it's an Axes-like object
++        ax = obj
++        if ax.legend_ is None:
++            raise ValueError("No legend found for the Axes object.")
++        # Get the existing handles and labels
++        handles, labels = ax.get_legend_handles_labels()
++        # Get the old title
++        old_legend = ax.legend_
++        old_title = old_legend.get_title().get_text()
++        # Remove the old legend
++        old_legend.remove()
++        # Set the title in kwargs if not provided
++        if 'title' not in kwargs:
++            kwargs['title'] = old_title
++        # Create a new legend on the axes
++        ax.legend(handles, labels, loc=loc, **kwargs)
++
++
+ _facet_docs = dict(
+ 
+     data=dedent("""\
+diff --git a/seaborn/utils.py b/seaborn/utils.py
+index c64edd8..cdd546d 100644
+--- a/seaborn/utils.py
++++ b/seaborn/utils.py
+@@ -716,6 +716,70 @@ def adjust_legend_subtitles(legend):
+                     text.set_size(font_size)
+ 
+ 
++def move_legend(obj, loc, **kwargs):
++    """
++    Recreate a legend on an existing plot at a new location.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.Grid
++        The object with the legend to move.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid locations.
++    **kwargs
++        Additional keyword arguments are passed to the underlying legend method.
++
++    Returns
++    -------
++    None
++
++    """
++    import matplotlib.pyplot as plt
++    from .axisgrid import Grid
++
++    # Check if the object is a Grid (like FacetGrid) or an Axes
++    if isinstance(obj, Grid):
++        # For a Grid, we need to get the figure legend
++        fig = obj.figure
++        legend = obj.legend
++        if legend is None:
++            raise ValueError("No legend found for the Grid object.")
++        # Get the existing handles and labels from the legend
++        handles = legend.legendHandles
++        labels = [t.get_text() for t in legend.texts]
++        # Get the old title
++        old_title = legend.get_title().get_text()
++        # Remove the old legend
++        legend.remove()
++        # Set the title in kwargs if not provided
++        if 'title' not in kwargs:
++            kwargs['title'] = old_title
++        # Create a new legend on the figure
++        new_legend = fig.legend(handles, labels, loc=loc, **kwargs)
++        # Update the Grid's legend reference
++        obj._legend = new_legend
++        # If the legend was outside, we might need to adjust the layout
++        # We'll leave it to the user to adjust the figure size.
++    else:
++        # Assume it's an Axes-like object
++        ax = obj
++        if ax.legend_ is None:
++            raise ValueError("No legend found for the Axes object.")
++        # Get the existing handles and labels
++        handles, labels = ax.get_legend_handles_labels()
++        # Get the old title
++        old_legend = ax.legend_
++        old_title = old_legend.get_title().get_text()
++        # Remove the old legend
++        old_legend.remove()
++        # Set the title in kwargs if not provided
++        if 'title' not in kwargs:
++            kwargs['title'] = old_title
++        # Create a new legend on the axes
++        ax.legend(handles, labels, loc=loc, **kwargs)
++
++
+ def _deprecate_ci(errorbar, ci):
+     """
+     Warn on usage of ci= and convert to appropriate errorbar= arg.

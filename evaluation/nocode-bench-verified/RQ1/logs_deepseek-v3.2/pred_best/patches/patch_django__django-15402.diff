@@ -1,0 +1,41 @@
+diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py
+index eb43231..b506536 100644
+--- a/django/urls/resolvers.py
++++ b/django/urls/resolvers.py
+@@ -41,6 +41,8 @@ class ResolverMatch:
+         namespaces=None,
+         route=None,
+         tried=None,
++        captured_kwargs=None,
++        extra_kwargs=None,
+     ):
+         self.func = func
+         self.args = args
+@@ -48,6 +50,8 @@ class ResolverMatch:
+         self.url_name = url_name
+         self.route = route
+         self.tried = tried
++        self.captured_kwargs = captured_kwargs if captured_kwargs is not None else {}
++        self.extra_kwargs = extra_kwargs if extra_kwargs is not None else {}
+ 
+         # If a URLRegexResolver doesn't have a namespace or app_name, it passes
+         # in an empty value.
+@@ -669,6 +673,9 @@ class URLResolver:
+                             else str(pattern.pattern)
+                         )
+                         self._extend_tried(tried, pattern, sub_match.tried)
++                        # Build captured_kwargs and extra_kwargs
++                        captured_kwargs = {**kwargs, **sub_match.captured_kwargs}
++                        extra_kwargs = {**self.default_kwargs, **sub_match.extra_kwargs}
+                         return ResolverMatch(
+                             sub_match.func,
+                             sub_match_args,
+@@ -678,6 +685,8 @@ class URLResolver:
+                             [self.namespace] + sub_match.namespaces,
+                             self._join_route(current_route, sub_match.route),
+                             tried,
++                            captured_kwargs=captured_kwargs,
++                            extra_kwargs=extra_kwargs,
+                         )
+                     tried.append([pattern])
+             raise Resolver404({"tried": tried, "path": new_path})

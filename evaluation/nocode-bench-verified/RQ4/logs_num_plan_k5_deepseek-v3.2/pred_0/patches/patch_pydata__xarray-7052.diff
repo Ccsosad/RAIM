@@ -1,0 +1,36 @@
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..c5d762d 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -421,6 +421,9 @@ class FacetGrid:
+         func_kwargs["add_colorbar"] = False
+         func_kwargs["add_legend"] = False
+         func_kwargs["add_title"] = False
++        # Pass z if it exists
++        if "z" in kwargs:
++            func_kwargs["z"] = kwargs["z"]
+ 
+         add_labels_ = np.zeros(self.axes.shape + (3,), dtype=bool)
+         if kwargs.get("z") is not None:
+@@ -457,6 +460,9 @@ class FacetGrid:
+             # None is the sentinel value
+             if d is not None:
+                 subset = self.data.isel(d)
++                # Pass z if it exists
++                if "z" in kwargs:
++                    func_kwargs["z"] = kwargs["z"]
+                 mappable = func(
+                     subset,
+                     x=x,
+@@ -476,8 +482,9 @@ class FacetGrid:
+             sizeplt_norm,
+             kwargs.get("add_colorbar", None),
+             kwargs.get("add_legend", None),
+-            # kwargs.get("add_guide", None),
+-            # kwargs.get("hue_style", None),
++            kwargs.get("add_guide", None),
++            kwargs.get("hue_style", None),
++            plotfunc_name=func.__name__,
+         )
+ 
+         if add_legend:

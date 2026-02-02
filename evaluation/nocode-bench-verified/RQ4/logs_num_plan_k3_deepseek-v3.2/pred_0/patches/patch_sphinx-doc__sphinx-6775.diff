@@ -1,0 +1,14 @@
+diff --git a/sphinx/writers/latex.py b/sphinx/writers/latex.py
+index f98a54a..38d9b7f 100644
+--- a/sphinx/writers/latex.py
++++ b/sphinx/writers/latex.py
+@@ -501,6 +501,9 @@ class LaTeXTranslator(SphinxTranslator):
+ 
+         # sort out some elements
+         self.elements = self.builder.context.copy()
++        # set default for extrapackages if not present
++        if 'extrapackages' not in self.elements:
++            self.elements['extrapackages'] = ''
+ 
+         # but some have other interface in config file
+         self.elements['wrapperclass'] = self.format_docclass(self.settings.docclass)

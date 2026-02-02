@@ -1,0 +1,58 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..1237e1f 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -1049,8 +1049,21 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             be multiplied with, divided by).
+         """
+ 
+-        self._raise_if_has_differentials(op.__name__)
+-
++        # If there are differentials and this is not a CartesianRepresentation,
++        # we transform to cartesian, scale, and transform back.
++        if self.differentials and not isinstance(self, CartesianRepresentation):
++            # Convert to cartesian with differentials.
++            crep = self.represent_as(CartesianRepresentation,
++                                     differential_class={k: CartesianDifferential
++                                                         for k in self.differentials.keys()})
++            # Scale the cartesian representation (which will handle differentials).
++            scaled_crep = crep._scale_operation(op, *args)
++            # Convert back to the original representation.
++            diffs_cls = {k: diff.__class__ for k, diff in self.differentials.items()}
++            return scaled_crep.represent_as(self.__class__, diffs_cls)
++
++        # Otherwise, use the old method (for non-cartesian without differentials,
++        # and for cartesian with or without differentials).
+         results = []
+         for component, cls in self.attr_classes.items():
+             value = getattr(self, component)
+@@ -1063,10 +1076,28 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+         # as operations that returned NotImplemented or a representation
+         # instead of a quantity (as would happen for, e.g., rep * rep).
+         try:
+-            return self.__class__(*results)
++            new_rep = self.__class__(*results)
+         except Exception:
+             return NotImplemented
+ 
++        # If there are differentials (and we are in CartesianRepresentation),
++        # we need to scale them as well.
++        if self.differentials:
++            new_rep._differentials = {}
++            for key, diff in self.differentials.items():
++                # Scale the differential components.
++                diff_results = []
++                for diff_component, diff_cls in diff.attr_classes.items():
++                    diff_value = getattr(diff, diff_component)
++                    if issubclass(diff_cls, Angle):
++                        diff_results.append(diff_value)
++                    else:
++                        diff_results.append(op(diff_value, *args))
++                new_diff = diff.__class__(*diff_results, copy=False)
++                new_rep._differentials[key] = new_diff
++
++        return new_rep
++
+     def _combine_operation(self, op, other, reverse=False):
+         """Combine two representation.
+ 

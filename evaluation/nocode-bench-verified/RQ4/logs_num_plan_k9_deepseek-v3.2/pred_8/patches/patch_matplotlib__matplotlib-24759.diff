@@ -1,0 +1,35 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index c85af9f..777ab89 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -8291,4 +8291,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index 7d25be3..66dcd3b 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -346,7 +346,8 @@ class Legend(Artist):
+         alignment="center",       # control the alignment within the legend box
+         *,
+         ncol=1,  # synonym for ncols (backward compatibility)
+-        draggable=False  # whether the legend can be dragged with the mouse
++        draggable=False,  # whether the legend can be dragged with the mouse
++        reverse=False     # reverse the order of legend entries
+     ):
+         """
+         Parameters
+@@ -438,6 +439,10 @@ class Legend(Artist):
+         labels, handles = _lab, _hand
+ 
+         handles = list(handles)
++        labels = list(labels)
++        if reverse:
++            handles = handles[::-1]
++            labels = labels[::-1]
+         if len(handles) < 2:
+             ncols = 1
+         self._ncols = ncols if ncols != 1 else ncol

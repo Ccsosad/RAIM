@@ -1,0 +1,68 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..b518066 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1862,6 +1863,11 @@ class DataArray(AbstractArray, DataWithCoords):
+         numpy.transpose
+         Dataset.transpose
+         """
++        # Expand the ellipsis if present
++        if ... in dims:
++            from .utils import infix_dims
++            dims = infix_dims(dims, self.dims)
++
+         if dims:
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+@@ -3122,4 +3128,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..55ac0bc 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5449,4 +5449,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/utils.py b/xarray/core/utils.py
+index 383949f..51bb4a4 100644
+--- a/xarray/core/utils.py
++++ b/xarray/core/utils.py
+@@ -675,4 +675,20 @@ def get_temp_dimname(dims: Container[Hashable], new_dim: Hashable) -> Hashable:
+     """
+     while new_dim in dims:
+         new_dim = "_" + str(new_dim)
+-    return new_dim
++    return new_dim
++
++
++def infix_dims(dims, all_dims):
++    """
++    Replace ... in dims with the appropriate dimensions from all_dims.
++    """
++    if ... in dims:
++        if dims.count(...) > 1:
++            raise ValueError("Only one ellipsis may be used.")
++        # Find the index of the ellipsis
++        ellipsis_index = dims.index(...)
++        # Dimensions that are not in dims (excluding the ellipsis)
++        other_dims = [d for d in all_dims if d not in dims]
++        # Insert the other dimensions in place of the ellipsis
++        dims = dims[:ellipsis_index] + tuple(other_dims) + dims[ellipsis_index+1:]
++    return dims

@@ -1,0 +1,112 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..f1dffce 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1863,11 +1864,20 @@ class DataArray(AbstractArray, DataWithCoords):
+         Dataset.transpose
+         """
+         if dims:
+-            if set(dims) ^ set(self.dims):
++            # Resolve ellipsis if present
++            dims_list = list(dims)
++            if ... in dims_list:
++                from .variable import infix_dims
++                dims_list = infix_dims(dims_list, list(self.dims))
++            else:
++                dims_list = list(dims)
++
++            if set(dims_list) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+                     "permuted array dimensions (%s)" % (dims, tuple(self.dims))
+                 )
++            dims = dims_list
+ 
+         variable = self.variable.transpose(*dims)
+         if transpose_coords:
+@@ -3122,4 +3132,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..55ac0bc 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5449,4 +5449,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 873be99..2e1a6d4 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -1936,6 +1936,55 @@ class Variable(
+         return type(self)(self.dims, numeric_array, self._attrs)
+ 
+ 
++def infix_dims(dims_supplied, dims_all):
++    """
++    Resolve a list of dimensions (possibly containing an ellipsis) to a full
++    list of dimensions. The ellipsis is expanded to the remaining dimensions.
++
++    Parameters
++    ----------
++    dims_supplied : list of str or ...
++        The dimensions supplied by the user.
++    dims_all : list of str
++        All dimensions of the object.
++
++    Returns
++    -------
++    list of str
++        The full list of dimensions.
++
++    Examples
++    --------
++    >>> infix_dims(['x', ...], ['x', 'y', 'z'])
++    ['x', 'y', 'z']
++    >>> infix_dims([..., 'x'], ['x', 'y', 'z'])
++    ['y', 'z', 'x']
++    """
++    if ... not in dims_supplied:
++        return list(dims_supplied)
++
++    if dims_supplied.count(...) > 1:
++        raise ValueError("can only specify one ellipsis in a dimension list")
++
++    # Split the list at the ellipsis
++    ellipsis_index = dims_supplied.index(...)
++    before = dims_supplied[:ellipsis_index]
++    after = dims_supplied[ellipsis_index + 1:]
++
++    # The remaining dimensions are those not in before or after
++    remaining = [d for d in dims_all if d not in before and d not in after]
++
++    # Check that the total number of dimensions matches
++    n_expected = len(before) + len(after) + len(remaining)
++    if n_expected != len(dims_all):
++        raise ValueError(
++            "total number of dimensions does not match: "
++            f"expected {len(dims_all)}, got {n_expected}"
++        )
++
++    return before + remaining + after
++
++
+ ops.inject_all_ops_and_reduce_methods(Variable)
+ 
+ 

@@ -1,0 +1,22 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..dc446c7 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -137,8 +137,16 @@ def _solve_sparse_cg(
+     return coefs
+ 
+ 
+-def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
++def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3, fit_intercept=False):
+     n_samples, n_features = X.shape
++    if fit_intercept:
++        # Augment X with a column of ones for the intercept
++        if sparse.issparse(X):
++            X = sparse.hstack([X, np.ones((X.shape[0], 1))], format='csr')
++        else:
++            X = np.hstack([X, np.ones((X.shape[0], 1))])
++        n_features += 1
++
+     coefs = np.empty((y.shape[1], n_features), dtype=X.dtype)
+     n_iter = np.empty(y.shape[1], dtype=np.int32)
+ 

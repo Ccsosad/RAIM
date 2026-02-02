@@ -1,0 +1,59 @@
+diff --git a/lib/matplotlib/cbook/__init__.py b/lib/matplotlib/cbook/__init__.py
+index 5c3e852..cc7334e 100644
+--- a/lib/matplotlib/cbook/__init__.py
++++ b/lib/matplotlib/cbook/__init__.py
+@@ -124,6 +124,20 @@ class CallbackRegistry:
+     """
+     Handle registering and disconnecting for a set of signals and callbacks:
+ 
++    Examples
++    --------
++    Block all callbacks temporarily::
++
++        with callbacks.blocked():
++            # Callbacks won't be processed here
++            pass
++
++    Block a specific signal::
++
++        with callbacks.blocked(signal='specific_signal'):
++            # Only 'specific_signal' callbacks won't be processed
++            pass
++
+         >>> def oneat(x):
+         ...    print('eat', x)
+         >>> def ondrink(x):
+@@ -175,6 +189,24 @@ class CallbackRegistry:
+         self._func_cid_map = {}
+         # A hidden variable that marks cids that need to be pickled.
+         self._pickled_cids = set()
++        self._blocked = None
++
++    @contextlib.contextmanager
++    def blocked(self, *, signal=None):
++        """Context manager to temporarily block callbacks.
++        
++        Parameters
++        ----------
++        signal : str, optional
++            If provided, only block callbacks for this specific signal.
++            If None (default), block all signals.
++        """
++        old_blocked = self._blocked
++        self._blocked = signal if signal is not None else True
++        try:
++            yield
++        finally:
++            self._blocked = old_blocked
+ 
+     def __getstate__(self):
+         return {
+@@ -267,6 +299,8 @@ class CallbackRegistry:
+         All of the functions registered to receive callbacks on *s* will be
+         called with ``*args`` and ``**kwargs``.
+         """
++        if hasattr(self, '_blocked') and (self._blocked is True or self._blocked == s):
++            return
+         for cid, ref in list(self.callbacks.get(s, {}).items()):
+             func = ref()
+             if func is not None:

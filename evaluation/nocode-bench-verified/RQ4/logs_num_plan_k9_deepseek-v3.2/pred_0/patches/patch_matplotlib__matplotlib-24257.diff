@@ -1,0 +1,77 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..8501a24 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -200,6 +200,19 @@ def update_user_library(library):
+     return library
+ 
+ 
++def update_package_library(library):
++    """Update style library with styles from installed packages."""
++    try:
++        from importlib import resources
++    except ImportError:
++        import importlib_resources as resources
++
++    # We need to iterate over all installed packages? This is not efficient.
++    # Instead, we will load styles on-demand.
++    # For now, we do nothing. The styles will be loaded when requested.
++    pass
++
++
+ def read_style_directory(style_dir):
+     """Return dictionary of styles defined in *style_dir*."""
+     styles = dict()
+@@ -212,6 +225,52 @@ def read_style_directory(style_dir):
+     return styles
+ 
+ 
++def _rc_params_from_package(package_name, style_name):
++    """
++    Return rc parameters from the style file *style_name* in the package *package_name*.
++
++    The style file is expected to be located in the package as a resource
++    with the extension .mplstyle.
++    """
++    try:
++        from importlib import resources
++    except ImportError:
++        import importlib_resources as resources
++
++    # We don't want to import the package, so we use resources.files
++    package = resources.files(package_name)
++    # The style file is expected to be in the package root.
++    resource_name = f"{style_name}.mplstyle"
++    if not (package / resource_name).is_file():
++        raise FileNotFoundError(
++            f"No style file {resource_name} found in package {package_name}")
++    with (package / resource_name).open('r', encoding='utf-8') as f:
++        return rc_params_from_file(f, use_default_template=False)
++
++
++def rc_params_from_package(package_name, style_name):
++    """
++    Return rc parameters from the style file *style_name* in the package *package_name*.
++
++    The style file is expected to be located in the package as a resource
++    with the extension .mplstyle.
++    """
++    try:
++        from importlib import resources
++    except ImportError:
++        import importlib_resources as resources
++
++    # We don't want to import the package, so we use resources.files
++    package = resources.files(package_name)
++    # The style file is expected to be in the package root.
++    resource_name = f"{style_name}.mplstyle"
++    if not (package / resource_name).is_file():
++        raise FileNotFoundError(
++            f"No style file {resource_name} found in package {package_name}")
++    with (package / resource_name).open('r', encoding='utf-8') as f:
++        return rc_params_from_file(f, use_default_template=False)
++
++
+ def update_nested_dict(main_dict, new_dict):
+     """
+     Update nested dict (only level of nesting) with new values.

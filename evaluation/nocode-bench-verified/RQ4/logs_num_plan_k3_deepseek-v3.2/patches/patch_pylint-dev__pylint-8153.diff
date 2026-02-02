@@ -1,0 +1,70 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..6e2ff6b 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -67,13 +67,16 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+     """
+     result: dict[str, ModuleDescriptionDict] = {}
+     errors: list[ErrorDescriptionDict] = []
+-    path = sys.path.copy()
++    # Augment sys.path with source roots
++    from pylint.lint.path_resolver import augmented_sys_path
++    path = augmented_sys_path(source_roots)
+ 
+     for something in files_or_modules:
+         basename = os.path.basename(something)
+@@ -160,4 +163,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 21f6e51..64ea671 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -891,6 +891,7 @@ class PyLinter(
+             self.config.ignore,
+             self.config.ignore_patterns,
+             self._ignore_paths,
++            self.config.source_roots,
+         )
+         for error in errors:
+             message = modname = error["mod"]
+@@ -1367,4 +1368,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)
+diff --git a/pylint/lint/path_resolver.py b/pylint/lint/path_resolver.py
+new file mode 100644
+index 0000000..e894334
+--- /dev/null
++++ b/pylint/lint/path_resolver.py
+@@ -0,0 +1,18 @@
++"""Path resolution utilities for pylint."""
++import os
++import sys
++from typing import Sequence
++
++
++def augmented_sys_path(source_roots: Sequence[str]) -> list[str]:
++    """Return a copy of sys.path augmented with the given source roots.
++
++    The source roots are added at the beginning of the path, in the order they are given.
++    """
++    new_path = list(sys.path)
++    for root in reversed(source_roots):
++        # Convert to absolute path
++        abs_root = os.path.abspath(root)
++        if abs_root not in new_path:
++            new_path.insert(0, abs_root)
++    return new_path

@@ -1,0 +1,16 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 0981994..7a7eaec 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -132,9 +132,10 @@ class TextReporter(BaseReporter):
+         self._template = template
+ 
+         # Check to see if all parameters in the template are attributes of the Message
++        valid_fields = MESSAGE_FIELDS.union({'end_line', 'end_column'})
+         arguments = re.findall(r"\{(\w+?)(:.*)?\}", template)
+         for argument in arguments:
+-            if argument[0] not in MESSAGE_FIELDS:
++            if argument[0] not in valid_fields:
+                 warnings.warn(
+                     f"Don't recognize the argument '{argument[0]}' in the --msg-template. "
+                     "Are you sure it is supported on the current version of pylint?",

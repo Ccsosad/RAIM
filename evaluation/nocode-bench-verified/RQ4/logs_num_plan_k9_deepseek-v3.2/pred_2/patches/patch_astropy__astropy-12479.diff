@@ -1,0 +1,32 @@
+diff --git a/astropy/cosmology/_clone_mixin.py b/astropy/cosmology/_clone_mixin.py
+new file mode 100644
+index 0000000..0f3899f
+--- /dev/null
++++ b/astropy/cosmology/_clone_mixin.py
+@@ -0,0 +1,26 @@
++"""Mixin class to provide cloning functionality."""
++
++class _CloneMixin:
++    """Mixin class to provide a clone method for deep copying with changes."""
++    
++    def clone(self, **changes):
++        """Create a copy of the instance, optionally with changes.
++        
++        Parameters
++        ----------
++        **changes
++            Keyword arguments to change in the new instance.
++            
++        Returns
++        -------
++        new : instance of same class
++            A new instance with the changes applied.
++        """
++        import copy
++        
++        # Deep copy the instance's __dict__
++        d = copy.deepcopy(self.__dict__)
++        # Update with any changes
++        d.update(changes)
++        # Create a new instance
++        return self.__class__(**d)

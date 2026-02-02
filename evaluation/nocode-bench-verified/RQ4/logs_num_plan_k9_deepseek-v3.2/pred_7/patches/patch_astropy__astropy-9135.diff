@@ -1,0 +1,115 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..234973e 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -4020,4 +4020,109 @@ def hide_inverse(model):
+     the model or restore the inverse later.
+     """
+     del model.inverse
+-    return model
++    return model
++
++
++class _FixedInputsModel(Model):
++    """
++    A model that wraps another model and fixes some of its inputs to constant values.
++    """
++    def __init__(self, model, fixed):
++        self._model = model
++        self._fixed = fixed
++        # Determine the new inputs: those that are not fixed
++        self._remaining_inputs = [i for i in range(model.n_inputs) if i not in fixed]
++        # Build the input names for the new model
++        input_names = [model.inputs[i] for i in self._remaining_inputs]
++        # Build the output names from the original model
++        output_names = list(model.outputs)
++        # Initialize the base Model with the new input and output names
++        super().__init__(inputs=input_names, outputs=output_names)
++        # Copy the parameter constraints from the original model
++        self._constraints = model._constraints
++        # Copy the bounding box if it exists
++        if hasattr(model, 'bounding_box') and model.bounding_box is not None:
++            # Remove the dimensions for the fixed inputs
++            bbox = model.bounding_box
++            if isinstance(bbox, tuple):
++                # Convert to list for mutability
++                bbox = list(bbox)
++                # Remove the entries for the fixed inputs
++                # Note: bounding_box is stored in reverse order
++                # The bounding_box is a tuple of (x_high, x_low) for 1D,
++                # or ((y_high, y_low), (x_high, x_low)) for 2D, etc.
++                # So we need to remove in reverse order.
++                for idx in sorted(fixed.keys(), reverse=True):
++                    # The bounding_box is in reverse order of inputs
++                    # So the first element corresponds to the last input.
++                    bbox_idx = model.n_inputs - 1 - idx
++                    del bbox[bbox_idx]
++                self.bounding_box = tuple(bbox)
++            else:
++                # If it's a callable, we cannot easily modify it, so we set to None
++                self.bounding_box = None
++
++    def evaluate(self, *args):
++        # Build the full input list for the original model
++        full_args = [None] * self._model.n_inputs
++        # Set the fixed inputs
++        for idx, val in self._fixed.items():
++            full_args[idx] = val
++        # Set the remaining inputs
++        for i, arg in zip(self._remaining_inputs, args):
++            full_args[i] = arg
++        # Call the original model
++        return self._model(*full_args)
++
++
++def fix_inputs(model, fixed_inputs):
++    """
++    Fix one or more inputs of a model to constant values.
++
++    Parameters
++    ----------
++    model : `~astropy.modeling.Model`
++        The model for which one or more inputs are to be fixed.
++    fixed_inputs : dict
++        A dictionary mapping input names or indices to constant values.
++        The keys can be strings (input names) or integers (input indices).
++        The values are the constants to which those inputs should be fixed.
++
++    Returns
++    -------
++    fixed_model : `~astropy.modeling.Model`
++        A new model with the specified inputs fixed. The new model will have
++        fewer inputs than the original model.
++
++    Examples
++    --------
++    >>> from astropy.modeling.models import Polynomial2D
++    >>> poly = Polynomial2D(degree=2)
++    >>> fixed_poly = fix_inputs(poly, {'x': 0})
++    >>> fixed_poly.n_inputs
++    1
++    >>> fixed_poly(1)  # evaluates poly at x=0, y=1
++    ...
++    """
++    # Convert fixed_inputs to a dictionary with integer keys (input indices)
++    fixed = {}
++    for key, value in fixed_inputs.items():
++        if isinstance(key, int):
++            if key < 0 or key >= model.n_inputs:
++                raise ValueError(f"Input index {key} is out of range for model with {model.n_inputs} inputs.")
++            fixed[key] = value
++        elif isinstance(key, str):
++            try:
++                idx = model.inputs.index(key)
++            except ValueError:
++                raise ValueError(f"Model does not have an input named {key!r}.")
++            fixed[idx] = value
++        else:
++            raise TypeError("Keys in fixed_inputs must be strings (input names) or integers (input indices).")
++
++    # Check that we are not fixing all inputs
++    if len(fixed) == model.n_inputs:
++        raise ValueError("Cannot fix all inputs of a model.")
++
++    # Create an instance of the fixed inputs model
++    return _FixedInputsModel(model, fixed)

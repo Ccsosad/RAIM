@@ -1,0 +1,83 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..82d2410 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,78 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array-like, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A table with the same column names and length as self, with boolean
++            values indicating element-wise equality.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table and the column names do not match.
++        """
++        # Case 1: other is a Table
++        if isinstance(other, Table):
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # Create an empty table with the same structure
++            out_cols = []
++            for name in self.colnames:
++                col_self = self[name]
++                col_other = other[name]
++                # For masked columns, we need to consider the mask
++                if hasattr(col_self, 'mask') or hasattr(col_other, 'mask'):
++                    # Use np.ma.array to handle masks
++                    arr_self = np.ma.array(col_self, copy=False)
++                    arr_other = np.ma.array(col_other, copy=False)
++                    eq = (arr_self == arr_other)
++                else:
++                    eq = (col_self == col_other)
++                # Create a column for the result
++                out_col = Column(eq, name=name)
++                out_cols.append(out_col)
++            return Table(out_cols, copy=False)
++
++        # Case 2: other is an array-like (list, tuple, np.ndarray) but not a Table
++        elif np.ndim(other) > 0:
++            # Broadcast other to each column
++            out_cols = []
++            for name in self.colnames:
++                col_self = self[name]
++                # Compare column with the array
++                if hasattr(col_self, 'mask'):
++                    arr_self = np.ma.array(col_self, copy=False)
++                    eq = (arr_self == other)
++                else:
++                    eq = (col_self == other)
++                out_col = Column(eq, name=name)
++                out_cols.append(out_col)
++            return Table(out_cols, copy=False)
++
++        # Case 3: other is a scalar
++        else:
++            out_cols = []
++            for name in self.colnames:
++                col_self = self[name]
++                if hasattr(col_self, 'mask'):
++                    arr_self = np.ma.array(col_self, copy=False)
++                    eq = (arr_self == other)
++                else:
++                    eq = (col_self == other)
++                out_col = Column(eq, name=name)
++                out_cols.append(out_col)
++            return Table(out_cols, copy=False)
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

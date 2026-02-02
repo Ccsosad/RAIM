@@ -1,0 +1,31 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..34ed250 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -418,6 +418,26 @@ def make_layout_margins(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0,
+         # pass the new margins down to the layout grid for the solution...
+         layoutgrids[gs].edit_outer_margin_mins(margin, ss)
+ 
++    # Process outside legends for this figure
++    for leg in fig.legends:
++        if hasattr(leg, '_loc') and isinstance(leg._loc, str) and leg._loc.startswith('outside'):
++            bbox = leg.get_window_extent(renderer)
++            bbox = bbox.transformed(fig.transFigure.inverted())
++            loc = leg._loc
++            parts = loc.split()
++            if len(parts) >= 3:
++                side = parts[1]
++                if side in ['upper', 'lower']:
++                    if side == 'upper':
++                        layoutgrids[fig].edit_margin_min('top', bbox.height)
++                    else:
++                        layoutgrids[fig].edit_margin_min('bottom', bbox.height)
++                elif side in ['left', 'right']:
++                    if side == 'left':
++                        layoutgrids[fig].edit_margin_min('left', bbox.width)
++                    else:
++                        layoutgrids[fig].edit_margin_min('right', bbox.width)
++
+ 
+ def make_margin_suptitles(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
+     # Figure out how large the suptitle is and make the

@@ -1,0 +1,62 @@
+diff --git a/sklearn/cluster/_kmeans.py b/sklearn/cluster/_kmeans.py
+index 89ad263..a077a61 100644
+--- a/sklearn/cluster/_kmeans.py
++++ b/sklearn/cluster/_kmeans.py
+@@ -1308,6 +1308,28 @@ class KMeans(_BaseKMeans):
+         self.algorithm = algorithm
+ 
+     def _check_params_vs_input(self, X):
++        # Handle n_init='auto' and deprecation
++        if self.n_init == 10:
++            warnings.warn(
++                "The default value of `n_init` will change from "
++                "10 to 'auto' in 1.4. Set `n_init='auto'` to suppress "
++                "this warning.",
++                FutureWarning,
++                stacklevel=2,
++            )
++        if self.n_init == 'auto':
++            if self.init == 'k-means++':
++                self._n_init = 1
++            else:
++                # For other init methods, we keep the current behavior?
++                self._n_init = 10
++        elif isinstance(self.n_init, int) and self.n_init > 0:
++            self._n_init = self.n_init
++        else:
++            raise ValueError(
++                f"n_init should be a positive integer or 'auto', got {self.n_init} instead."
++            )
++
+         super()._check_params_vs_input(X)
+ 
+         self._algorithm = self.algorithm
+@@ -1800,6 +1822,28 @@ class MiniBatchKMeans(_BaseKMeans):
+         self.reassignment_ratio = reassignment_ratio
+ 
+     def _check_params_vs_input(self, X):
++        # Handle n_init='auto' and deprecation for MiniBatchKMeans
++        if self.n_init == 3:
++            warnings.warn(
++                "The default value of `n_init` will change from "
++                "3 to 'auto' in 1.4. Set `n_init='auto'` to suppress "
++                "this warning.",
++                FutureWarning,
++                stacklevel=2,
++            )
++        if self.n_init == 'auto':
++            if self.init == 'k-means++':
++                self._n_init = 1
++            else:
++                # For other init methods, we keep the current behavior?
++                self._n_init = 3
++        elif isinstance(self.n_init, int) and self.n_init > 0:
++            self._n_init = self.n_init
++        else:
++            raise ValueError(
++                f"n_init should be a positive integer or 'auto', got {self.n_init} instead."
++            )
++
+         super()._check_params_vs_input(X)
+ 
+         self._batch_size = min(self.batch_size, X.shape[0])

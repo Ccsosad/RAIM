@@ -1,0 +1,331 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..239095f 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -82,8 +82,165 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def __init__(self, *args, **kwargs):
++        self.common_bins = kwargs.pop("common_bins", True)
++        self.common_norm = kwargs.pop("common_norm", True)
++        self.binrange = kwargs.pop("binrange", None)
++        self.binwidth = kwargs.pop("binwidth", None)
++        self.discrete = kwargs.pop("discrete", False)
++        self.cumulative = kwargs.pop("cumulative", False)
++        self.log_scale = kwargs.pop("log_scale", False)
++        self.stat = kwargs.pop("stat", "count")
++        self.element = kwargs.pop("element", "bars")
++        self.fill = kwargs.pop("fill", True)
++        self.kde = kwargs.pop("kde", False)
++        self.kde_kws = kwargs.pop("kde_kws", {})
++        self.line_kws = kwargs.pop("line_kws", {})
++        self.linewidth = kwargs.pop("linewidth", None)
++        super().__init__(*args, **kwargs)
++
++    def define_bin_edges(self, data_variable, all_data):
++        """Compute bin edges from data or specified parameters."""
++        if self.binwidth is not None or self.bins is not None:
++            bin_edges = self._define_bin_edges(data_variable, all_data)
++        else:
++            bin_edges = None
++        return bin_edges
++
++    def _define_bin_edges(self, data_variable, all_data):
++        """Core logic for bin edge calculation."""
++        if self.discrete:
++            # For discrete data, bins are centered at unique values
++            values = np.unique(all_data)
++            if len(values) == 0:
++                return np.array([])
++            step = 1 if self.binwidth is None else self.binwidth
++            left = values - step / 2
++            right = values + step / 2
++            bin_edges = np.sort(np.concatenate([left, right]))
++        else:
++            # For continuous data, use standard bin edge calculation
++            if self.binrange is None:
++                start, stop = all_data.min(), all_data.max()
++            else:
++                start, stop = self.binrange
++            if self.binwidth is not None:
++                step = self.binwidth
++                bin_edges = np.arange(start, stop + step, step)
++            elif self.bins is not None:
++                bin_edges = np.linspace(start, stop, self.bins + 1)
++            else:
++                # Fall back to Freedman-Diaconis rule
++                bins = _freedman_diaconis_bins(all_data)
++                bin_edges = np.linspace(start, stop, bins + 1)
++        return bin_edges
++
++    def plot_univariate(self, multiple, ax):
++        """Draw a univariate histogram on the specified axes."""
++        # Preprocess data and parameters
++        data_variable = {"x", "y"}.intersection(self.variables).pop()
++        all_data = remove_na(self.plot_data[data_variable])
++        bin_edges = self.define_bin_edges(data_variable, all_data)
++
++        # Initialize storage for histogram heights
++        heights = {}
++        densities = {}
++
++        # Compute histograms for each subset
++        for sub_vars, sub_data in self._semantic_subsets("hue"):
++            observations = remove_na(sub_data[data_variable])
++            if len(observations) == 0:
++                continue
++
++            # Compute histogram
++            hist, edges = np.histogram(observations, bins=bin_edges)
++            if self.stat == "density":
++                hist = hist.astype(float) / (hist.sum() * np.diff(edges))
++            elif self.stat == "probability":
++                hist = hist.astype(float) / hist.sum()
++
++            key = tuple(sub_vars.items())
++            heights[key] = hist
++            densities[key] = (hist, edges)
++
++        # Handle multiple distributions
++        if multiple == "stack":
++            # Stack histograms
++            stacked = np.stack(list(heights.values()))
++            cumulative = np.cumsum(stacked, axis=0)
++            baselines = np.vstack([np.zeros_like(cumulative[0]), cumulative[:-1]])
++        else:
++            baselines = {k: np.zeros_like(v) for k, v in heights.items()}
++
++        # Draw histogram elements
++        for sub_vars, _ in self._semantic_subsets("hue"):
++            key = tuple(sub_vars.items())
++            if key not in heights:
++                continue
++            hist, edges = densities[key]
++            baseline = baselines[key] if multiple != "stack" else baselines[key]
++
++            # Get color from semantic mapping
++            color = self._hue_map(sub_vars["hue"]) if "hue" in sub_vars else None
++
++            # Draw bars or lines
++            if self.element == "bars":
++                ax.bar(
++                    edges[:-1], hist, width=np.diff(edges),
++                    bottom=baseline, align="edge", color=color,
++                    edgecolor="white", linewidth=self.linewidth or 1,
++                    alpha=0.7 if multiple == "layer" else 1,
++                    label=str(sub_vars.get("hue", ""))
++                )
++            elif self.element in ["step", "poly"]:
++                # Draw step or polygon outline
++                x = np.repeat(edges, 2)[1:-1]
++                y = np.repeat(np.hstack([baseline, baseline[-1] + hist]), 2)[:-2]
++                if self.element == "poly":
++                    x = np.concatenate([[edges[0]], x, [edges[-1]]])
++                    y = np.concatenate([[0], y, [0]])
++                ax.plot(x, y, color=color, linewidth=self.linewidth or 2)
++
++        # Add KDE if requested
++        if self.kde:
++            kde_kws = self.kde_kws.copy()
++            kde_kws.setdefault("color", color)
++            kdeplot(
++                x=all_data, ax=ax, fill=self.fill,
++                **kde_kws
++            )
+ 
++        # Finalize plot
++        self._add_axis_labels(ax)
++        if "hue" in self.variables:
++            self._add_legend(ax)
++
++    def plot_bivariate(self, ax, cbar_ax):
++        """Draw a bivariate histogram on the specified axes."""
++        # Compute 2D histogram
++        x_data = remove_na(self.plot_data["x"])
++        y_data = remove_na(self.plot_data["y"])
++        x_edges = self.define_bin_edges("x", x_data)
++        y_edges = self.define_bin_edges("y", y_data)
++        hist, x_edges, y_edges = np.histogram2d(x_data, y_data, bins=(x_edges, y_edges))
++
++        # Normalize histogram
++        if self.stat == "density":
++            hist = hist / hist.sum()
++        elif self.stat == "probability":
++            hist = hist / hist.sum()
++
++        # Plot as heatmap
++        mesh = ax.pcolormesh(x_edges, y_edges, hist.T, shading="flat")
++        
++        # Add colorbar
++        if cbar_ax is not None:
++            plt.colorbar(mesh, cax=cbar_ax)
++
++        # Finalize plot
++        self._add_axis_labels(ax)
+ 
+ class _KDEPlotter(_DistributionPlotter):
+ 
+@@ -493,6 +650,159 @@ class _KDEPlotter(_DistributionPlotter):
+         return levels
+ 
+ 
++@_deprecate_positional_args
++def histplot(
++    *,
++    x=None,
++    y=None,
++    data=None,
++    bins=None,
++    binwidth=None,
++    binrange=None,
++    discrete=False,
++    cumulative=False,
++    stat="count",
++    element="bars",
++    fill=True,
++    kde=False,
++    kde_kws=None,
++    line_kws=None,
++    linewidth=None,
++    color=None,
++    log_scale=False,
++    common_bins=True,
++    common_norm=True,
++    multiple="layer",
++    hue=None,
++    palette=None,
++    hue_order=None,
++    hue_norm=None,
++    ax=None,
++    **kwargs,
++):
++    """Plot univariate or bivariate histograms.
++
++    Parameters
++    ----------
++    x, y : vectors or keys in data
++        Variables to plot on x and y axes.
++    data : DataFrame, optional
++        Input data structure.
++    bins : int, list, or str, optional
++        Generic bin parameter that can be the name of a reference rule,
++        the number of bins, or the breaks of the bins.
++    binwidth : float, optional
++        Width of each bin, overrides bins but can be used with binrange.
++    binrange : (low, high), optional
++        Lowest and highest value of bins.
++    discrete : bool, optional
++        If True, use discrete bins for categorical data.
++    cumulative : bool, optional
++        If True, plot the cumulative counts as bins increase.
++    stat : "count", "frequency", "density", "probability", optional
++        Aggregate statistic to compute in each bin.
++    element : "bars", "step", "poly", optional
++        Visual representation of the histogram statistic.
++    fill : bool, optional
++        If True, fill in the space under the histogram.
++    kde : bool, optional
++        If True, add a kernel density estimate to smooth the histogram.
++    kde_kws : dict, optional
++        Keyword arguments for kdeplot().
++    line_kws : dict, optional
++        Keyword arguments for line properties.
++    linewidth : float, optional
++        Width of the bar edges or line contours.
++    color : matplotlib color, optional
++        Single color specification for when hue mapping is not used.
++    log_scale : bool or number, or pair of bools or numbers, optional
++        Set axis scale(s) to log.
++    common_bins : bool, optional
++        If True, use same bins for all hue groups.
++    common_norm : bool, optional
++        If True, normalize each hue group by total observations.
++    multiple : "layer", "stack", "fill", "dodge", optional
++        Approach to resolving multiple elements when semantic mapping creates subsets.
++    hue : vector or key in data
++        Semantic variable that is mapped to determine the color of plot elements.
++    palette : string, list, dict, or matplotlib colormap
++        Colors to use for the different levels of the hue variable.
++    hue_order : list of strings
++        Order for the levels of the hue variable in the palette.
++    hue_norm : tuple or Normalize object
++        Normalization in data units for colormap.
++    ax : matplotlib Axes, optional
++        Axes object to draw the plot onto.
++    kwargs : key, value pairings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    ax : matplotlib Axes
++        Returns the Axes object with the plot drawn onto it.
++
++    Examples
++    --------
++    Plot a basic univariate histogram:
++
++    .. plot::
++        :context: close-figs
++
++        >>> import seaborn as sns; sns.set_theme()
++        >>> penguins = sns.load_dataset("penguins")
++        >>> sns.histplot(data=penguins, x="flipper_length_mm")
++
++    """
++    # Handle deprecation of positional arguments
++    if x is None and y is None:
++        raise ValueError("Must pass `x` or `y`")
++
++    # Initialize the plotter object
++    plotter = _HistPlotter(
++        x=x,
++        y=y,
++        hue=hue,
++        data=data,
++        bins=bins,
++        binwidth=binwidth,
++        binrange=binrange,
++        discrete=discrete,
++        cumulative=cumulative,
++        stat=stat,
++        element=element,
++        fill=fill,
++        kde=kde,
++        kde_kws=kde_kws or {},
++        line_kws=line_kws or {},
++        linewidth=linewidth,
++        color=color,
++        log_scale=log_scale,
++        common_bins=common_bins,
++        common_norm=common_norm,
++        multiple=multiple,
++        palette=palette,
++        hue_order=hue_order,
++        hue_norm=hue_norm,
++        **kwargs,
++    )
++
++    # Get the current Axes if none provided
++    if ax is None:
++        ax = plt.gca()
++
++    # Decide which plot method to use
++    if plotter.hue is not None and multiple == "dodge":
++        plotter.plot_dodged_univariate(ax)
++    elif plotter.y is None and plotter.x is not None:
++        plotter.plot_univariate(multiple, ax)
++    elif plotter.x is not None and plotter.y is not None:
++        plotter.plot_bivariate(ax, None)  # TODO: Handle cbar_ax
++    else:
++        raise ValueError("Invalid combination of x and y")
++
++    return ax
++
++
+ @_deprecate_positional_args
+ def kdeplot(
+     x=None,  # Allow positional x, because behavior will not change with reorg

@@ -1,0 +1,35 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..af5749f 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -415,6 +415,30 @@ def make_layout_margins(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0,
+                 if (cbp_rspan.start == ss.rowspan.start and
+                         cbbbox.y1 > bbox.y1):
+                     margin['top'] += cbbbox.y1 - bbox.y1
++        # make margin for legends.  These margins go in the
++        # padding margin, similar to colorbars.
++        leg = ax.get_legend()
++        if leg is not None and hasattr(leg, '_loc') and isinstance(leg._loc, str) and leg._loc.startswith('outside'):
++            # get the legend's bounding box
++            legbbox = leg.get_window_extent(renderer)
++            # transform to figure coordinates
++            legbbox_fig = legbbox.transformed(fig.transFigure.inverted())
++            # parse the location string to determine the side
++            loc = leg._loc
++            parts = loc.split()
++            if len(parts) >= 2:
++                # The second part indicates the side
++                side = parts[1]
++                if side == 'upper':
++                    margin['topcb'] += legbbox_fig.height
++                elif side == 'lower':
++                    margin['bottomcb'] += legbbox_fig.height
++                elif side == 'left':
++                    margin['leftcb'] += legbbox_fig.width
++                elif side == 'right':
++                    margin['rightcb'] += legbbox_fig.width
++                # Note: we don't handle the case where the legend is outside but not on a side.
++                # This should not happen with the defined outside codes.
+         # pass the new margins down to the layout grid for the solution...
+         layoutgrids[gs].edit_outer_margin_mins(margin, ss)
+ 

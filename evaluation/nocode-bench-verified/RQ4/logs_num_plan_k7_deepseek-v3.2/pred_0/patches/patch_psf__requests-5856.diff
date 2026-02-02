@@ -1,0 +1,38 @@
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..147befa 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -882,12 +882,8 @@ class Response(object):
+         r"""Returns the json-encoded content of a response, if any.
+ 
+         :param \*\*kwargs: Optional arguments that ``json.loads`` takes.
+-        :raises simplejson.JSONDecodeError: If the response body does not
+-            contain valid json and simplejson is installed.
+-        :raises json.JSONDecodeError: If the response body does not contain
+-            valid json and simplejson is not installed on Python 3.
+-        :raises ValueError: If the response body does not contain valid
+-            json and simplejson is not installed on Python 2.        
++        :raises requests.exceptions.JSONDecodeError: If the response body does not
++            contain valid json.
+         """
+ 
+         if not self.encoding and self.content and len(self.content) > 3:
+@@ -907,7 +903,17 @@ class Response(object):
+                     # and the server didn't bother to tell us what codec *was*
+                     # used.
+                     pass
+-        return complexjson.loads(self.text, **kwargs)
++                except (ValueError, complexjson.JSONDecodeError) as e:
++                    from requests.exceptions import JSONDecodeError
++                    raise JSONDecodeError(e)
++        try:
++            return complexjson.loads(self.text, **kwargs)
++        except (ValueError, complexjson.JSONDecodeError) as e:
++            # Catch JSON decoding errors and wrap them in requests.exceptions.JSONDecodeError
++            # Note: complexjson.JSONDecodeError may not exist in all cases (Python 2 json),
++            # but ValueError will be raised instead.
++            from requests.exceptions import JSONDecodeError
++            raise JSONDecodeError(e)
+ 
+     @property
+     def links(self):

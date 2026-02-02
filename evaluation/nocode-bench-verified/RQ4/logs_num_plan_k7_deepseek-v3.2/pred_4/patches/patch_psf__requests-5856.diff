@@ -1,0 +1,60 @@
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..1d66d52 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -591,6 +591,11 @@ class PreparedRequest(RequestEncodingMixin, RequestHooksMixin):
+             self.register_hook(event, hooks[event])
+ 
+ 
++class JSONDecodeError(ValueError):
++    """Wrapper for JSON decode errors that may come from different libraries."""
++    pass
++
++
+ class Response(object):
+     """The :class:`Response <Response>` object, which contains a
+     server's response to an HTTP request.
+@@ -882,12 +887,7 @@ class Response(object):
+         r"""Returns the json-encoded content of a response, if any.
+ 
+         :param \*\*kwargs: Optional arguments that ``json.loads`` takes.
+-        :raises simplejson.JSONDecodeError: If the response body does not
+-            contain valid json and simplejson is installed.
+-        :raises json.JSONDecodeError: If the response body does not contain
+-            valid json and simplejson is not installed on Python 3.
+-        :raises ValueError: If the response body does not contain valid
+-            json and simplejson is not installed on Python 2.        
++        :raises JSONDecodeError: If the response body does not contain valid json.
+         """
+ 
+         if not self.encoding and self.content and len(self.content) > 3:
+@@ -907,7 +907,11 @@ class Response(object):
+                     # and the server didn't bother to tell us what codec *was*
+                     # used.
+                     pass
+-        return complexjson.loads(self.text, **kwargs)
++        try:
++            return complexjson.loads(self.text, **kwargs)
++        except (ValueError, TypeError) as e:
++            # Catch JSON decode errors and wrap them in JSONDecodeError
++            raise JSONDecodeError(e)
+ 
+     @property
+     def links(self):
+@@ -963,4 +967,4 @@ class Response(object):
+ 
+         release_conn = getattr(self.raw, 'release_conn', None)
+         if release_conn is not None:
+-            release_conn()
++            release_conn()
+diff --git a/requests/exceptions.py b/requests/exceptions.py
+new file mode 100644
+index 0000000..8e25f82
+--- /dev/null
++++ b/requests/exceptions.py
+@@ -0,0 +1,5 @@
++class HTTPError(RequestException):
++    """An HTTP error occurred."""
++
++class JSONDecodeError(ValueError):
++    """Wrapper for JSON decode errors that may come from different libraries."""

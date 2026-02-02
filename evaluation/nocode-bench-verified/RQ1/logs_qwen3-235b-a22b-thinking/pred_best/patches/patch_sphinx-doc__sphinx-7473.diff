@@ -1,0 +1,22 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 70ce9cd..47601c3 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -571,12 +571,15 @@ class Documenter:
+             has_doc = bool(doc)
+ 
+             metadata = extract_metadata(doc)
+-            if 'private' in metadata:
++            if 'public' in metadata:
++                # consider a member public if docstring has "public" metadata
++                isprivate = False
++            elif 'private' in metadata:
+                 # consider a member private if docstring has "private" metadata
+                 isprivate = True
+             else:
+                 isprivate = membername.startswith('_')
+-
++            
+             keep = False
+             if want_all and membername.startswith('__') and \
+                     membername.endswith('__') and len(membername) > 4:

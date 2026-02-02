@@ -1,0 +1,37 @@
+diff --git a/astropy/cosmology/flrw.py b/astropy/cosmology/flrw.py
+index ecb617a..a2a2831 100644
+--- a/astropy/cosmology/flrw.py
++++ b/astropy/cosmology/flrw.py
+@@ -522,6 +522,32 @@ class FLRW(Cosmology):
+             kinetic energy.
+             Returns `float` if the input is scalar.
+         """
++
++    def Otot(self, z):
++        """Return the total density parameter at redshift ``z``.
++
++        Parameters
++        ----------
++        z : Quantity-like ['redshift'], array-like, or `~numbers.Number`
++            Input redshift.
++
++        Returns
++        -------
++        Otot : ndarray or float
++            The total energy density relative to the critical density at each redshift.
++            Returns `float` if the input is scalar.
++        """
++        return self.Om(z) + self.Ode(z) + self.Ok(z) + self.Ogamma(z) + self.Onu(z)
++
++    def Otot0(self):
++        """Return the total density parameter at redshift 0.
++
++        Returns
++        -------
++        Otot0 : float
++            The total energy density relative to the critical density at z=0.
++        """
++        return self._Om0 + self._Ode0 + self._Ok0 + self._Ogamma0 + self._Onu0
+         z = aszarr(z)
+         if self._Onu0 == 0:  # Common enough to be worth checking explicitly
+             return np.zeros(z.shape) if hasattr(z, "shape") else 0.0

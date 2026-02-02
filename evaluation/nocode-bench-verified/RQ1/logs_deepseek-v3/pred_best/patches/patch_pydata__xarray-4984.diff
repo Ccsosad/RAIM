@@ -1,0 +1,102 @@
+diff --git a/xarray/core/computation.py b/xarray/core/computation.py
+index 3fdd571..2f57280 100644
+--- a/xarray/core/computation.py
++++ b/xarray/core/computation.py
+@@ -42,6 +42,27 @@ _DEFAULT_NAME = utils.ReprObject("<default-name>")
+ _JOINS_WITHOUT_FILL_VALUES = frozenset({"inner", "exact"})
+ 
+ 
++def expr_to_dataset(expr, ds, engine=None, **kwargs):
++    """Convert query expression to dataset of boolean masks."""
++    if engine is None:
++        try:
++            import numexpr
++            engine = "numexpr"
++        except ImportError:
++            engine = "python"
++
++    variables = {}
++    for name, var in ds.data_vars.items():
++        try:
++            mask = eval(expr, {name: var}, kwargs)
++            if isinstance(mask, DataArray):
++                mask = mask.data
++            variables[name] = Variable(var.dims, mask)
++        except Exception:
++            continue
++
++    return Dataset(variables)
++
+ def _first_of_type(args, kind):
+     """ Return either first object of type 'kind' or raise if not found. """
+     for arg in args:
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..760b389 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3151,6 +3151,28 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         )
+         return self._replace(variables, coord_names, dims=dims, indexes=indexes)
+ 
++    def query(self, expr: str, engine: str = None, **kwargs) -> "Dataset":
++        """Filter variables by evaluating query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate against data variables.
++        engine : {"python", "numexpr"}, optional
++            Engine to use for evaluation. Defaults to numexpr if installed.
++        **kwargs : dict
++            Additional arguments passed to evaluation engine.
++
++        Returns
++        -------
++        Dataset
++            New dataset with filtered variables.
++        """
++        from .computation import expr_to_dataset
++        
++        ds = expr_to_dataset(expr, self, engine=engine, **kwargs)
++        return self.sel(ds.coords)
++
+     def swap_dims(
+         self, dims_dict: Mapping[Hashable, Hashable] = None, **dims_kwargs
+     ) -> "Dataset":
+@@ -7002,4 +7024,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+new file mode 100644
+index 0000000..d16662e
+--- /dev/null
++++ b/xarray/core/dataarray.py
+@@ -0,0 +1,25 @@
++    def query(self, expr: str, engine: str = None, **kwargs) -> "DataArray":
++        """Filter array by evaluating query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate against array.
++        engine : {"python", "numexpr"}, optional
++            Engine to use for evaluation. Defaults to numexpr if installed.
++        **kwargs : dict
++            Additional arguments passed to evaluation engine.
++
++        Returns
++        -------
++        DataArray
++            New array filtered by query.
++        """
++        from .computation import expr_to_dataset
++        
++        ds = expr_to_dataset(expr, self.to_dataset(), engine=engine, **kwargs)
++        return self.sel(ds.coords)
++
++    def swap_dims(
++        self, dims_dict: Mapping[Hashable, Hashable] = None, **dims_kwargs
++    ) -> "DataArray":

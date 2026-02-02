@@ -1,0 +1,52 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..7edd5b8 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -996,6 +996,11 @@ class FacetGrid(Grid):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+         return self._fig
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._fig
++
+     @property
+     def axes(self):
+         """An array of the :class:`matplotlib.axes.Axes` objects in the grid."""
+@@ -1237,6 +1242,11 @@ class PairGrid(Grid):
+         self.axes = axes
+         self.data = data
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+         # Save what we are going to do with the diagonal
+         self.diag_sharey = diag_sharey
+         self.diag_vars = None
+@@ -1301,6 +1311,11 @@ class PairGrid(Grid):
+             utils.despine(fig=fig)
+         self.tight_layout(pad=layout_pad)
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+     def map(self, func, **kwargs):
+         """Plot with the same function in every subplot.
+ 
+@@ -1913,6 +1928,11 @@ class JointGrid(object):
+         self.ax_joint.set_ylabel(ylabel, **kwargs)
+         return self
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+     def savefig(self, *args, **kwargs):
+         """Save the figure using a "tight" bounding box by default.
+ 

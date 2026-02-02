@@ -1,0 +1,90 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..de58b61 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -41,6 +41,8 @@ class Grid:
+         # don't add proxy artists onto the Axes. We need an overall cleaner approach.
+         self._extract_legend_handles = False
+ 
++        self._figure = None
++
+     def set(self, **kwargs):
+         """Set attributes on each subplot Axes."""
+         for ax in self.axes.flat:
+@@ -52,7 +54,7 @@ class Grid:
+         """Save the figure."""
+         kwargs = kwargs.copy()
+         kwargs.setdefault("bbox_inches", "tight")
+-        self.fig.savefig(*args, **kwargs)
++        self.figure.savefig(*args, **kwargs)
+ 
+     def tight_layout(self, *args, **kwargs):
+         """Call fig.tight_layout within rect that exclude the legend."""
+@@ -60,7 +62,7 @@ class Grid:
+         kwargs.setdefault("rect", self._tight_layout_rect)
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+-        self.fig.tight_layout(*args, **kwargs)
++        self.figure.tight_layout(*args, **kwargs)
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -122,7 +124,7 @@ class Grid:
+             kwargs.setdefault("loc", "center right")
+ 
+             # Draw a full-figure legend outside the grid
+-            figlegend = self.fig.legend(handles, labels, **kwargs)
++            figlegend = self.figure.legend(handles, labels, **kwargs)
+ 
+             self._legend = figlegend
+             figlegend.set_title(title, prop={"size": title_size})
+@@ -131,25 +133,25 @@ class Grid:
+                 adjust_legend_subtitles(figlegend)
+ 
+             # Draw the plot to set the bounding boxes correctly
+-            _draw_figure(self.fig)
++            _draw_figure(self.figure)
+ 
+             # Calculate and set the new width of the figure so the legend fits
+-            legend_width = figlegend.get_window_extent().width / self.fig.dpi
+-            fig_width, fig_height = self.fig.get_size_inches()
+-            self.fig.set_size_inches(fig_width + legend_width, fig_height)
++            legend_width = figlegend.get_window_extent().width / self.figure.dpi
++            fig_width, fig_height = self.figure.get_size_inches()
++            self.figure.set_size_inches(fig_width + legend_width, fig_height)
+ 
+             # Draw the plot again to get the new transformations
+-            _draw_figure(self.fig)
++            _draw_figure(self.figure)
+ 
+             # Now calculate how much space we need on the right side
+-            legend_width = figlegend.get_window_extent().width / self.fig.dpi
++            legend_width = figlegend.get_window_extent().width / self.figure.dpi
+             space_needed = legend_width / (fig_width + legend_width)
+             margin = .04 if self._margin_titles else .01
+             self._space_needed = margin + space_needed
+             right = 1 - self._space_needed
+ 
+             # Place the subplot axes to give space for the legend
+-            self.fig.subplots_adjust(right=right)
++            self.figure.subplots_adjust(right=right)
+             self._tight_layout_rect[2] = right
+ 
+         else:
+@@ -215,6 +217,16 @@ class Grid:
+ 
+         return palette
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` instance."""
++        return self._figure
++
++    @property
++    def fig(self):
++        """The :class:`matplotlib.figure.Figure` instance (deprecated)."""
++        return self._figure
++
+     @property
+     def legend(self):
+         """The :class:`matplotlib.legend.Legend` object, if present."""

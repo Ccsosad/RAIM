@@ -1,0 +1,13 @@
+diff --git a/seaborn/_core/moves.py b/seaborn/_core/moves.py
+index 0a4056b..01bd4b3 100644
+--- a/seaborn/_core/moves.py
++++ b/seaborn/_core/moves.py
+@@ -26,7 +26,7 @@ class Jitter(Move):
+     """
+     Random displacement of marks along either or both axes to reduce overplotting.
+     """
+-    width: float = 0
++    width: float = 0.1
+     x: float = 0
+     y: float = 0
+ 

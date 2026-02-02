@@ -1,0 +1,24 @@
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index d43c130..4beba77 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -94,6 +94,9 @@ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
+                               imported_members=False, app=None):
+     # type: (List[str], str, str, Callable, Callable, str, Builder, str, bool, Any) -> None
+ 
++    if app is not None:
++        imported_members = app.config.autosummary_imported_members
++
+     showed_sources = list(sorted(sources))
+     if len(showed_sources) > 20:
+         showed_sources = showed_sources[:10] + ['...'] + showed_sources[-10:]
+@@ -230,7 +233,8 @@ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
+         generate_autosummary_docs(new_files, output_dir=output_dir,
+                                   suffix=suffix, warn=warn, info=info,
+                                   base_path=base_path, builder=builder,
+-                                  template_dir=template_dir, app=app)
++                                  template_dir=template_dir,
++                                  imported_members=imported_members, app=app)
+ 
+ 
+ # -- Finding documented entries in files ---------------------------------------

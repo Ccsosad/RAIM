@@ -1,0 +1,79 @@
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..76f786d
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,73 @@
++# Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
++# For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
++
++"""Private import checker for pylint."""
++
++from typing import TYPE_CHECKING, List
++
++import astroid
++from pylint import checkers, interfaces
++from pylint.checkers import utils
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++
++class PrivateImportChecker(checkers.BaseChecker):
++    """Check for imports of private objects (prefixed with '_') from external modules."""
++
++    name = "private-import"
++    msgs = {
++        "W5501": (
++            "Import of private %s %r",
++            "import-private-name",
++            "Used when a private object (prefixed with '_') is imported from an external module.",
++        )
++    }
++
++    options = ()
++
++    def __init__(self, linter: "PyLinter") -> None:
++        super().__init__(linter)
++        self._imported_modules: List[str] = []
++
++    @utils.only_required_for_messages("import-private-name")
++    def visit_importfrom(self, node: astroid.ImportFrom) -> None:
++        """Check imports from external modules for private names."""
++        # Skip relative imports
++        if node.level:
++            return
++
++        module = node.modname
++        # Check if the module is external (not in stdlib?).
++        # For simplicity, we assume all modules are external.
++        # In a more complete implementation, we might want to skip stdlib modules.
++        for name, _ in node.names:
++            if name.startswith("_"):
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=("object", name),
++                    confidence=interfaces.HIGH,
++                )
++
++    @utils.only_required_for_messages("import-private-name")
++    def visit_import(self, node: astroid.Import) -> None:
++        """Check imports of private modules."""
++        for name, _ in node.names:
++            parts = name.split(".")
++            # Check if any part of the module name starts with '_'
++            for part in parts:
++                if part.startswith("_"):
++                    self.add_message(
++                        "import-private-name",
++                        node=node,
++                        args=("module", name),
++                        confidence=interfaces.HIGH,
++                    )
++                    break
++
++
++def register(linter: "PyLinter") -> None:
++    """Required method to auto-register this checker."""
++    linter.register_checker(PrivateImportChecker(linter))

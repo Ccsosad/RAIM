@@ -1,0 +1,305 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 17fe6af..1f82b48 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4424,4 +4424,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 0127e99..5b80c18 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6334,6 +6334,71 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+ 
+         return map_blocks(func, self, args, kwargs, template)
+ 
++    def curvefit(
++        self,
++        coords,
++        func,
++        reduce_dims=None,
++        param_names=None,
++        **kwargs,
++    ):
++        """
++        Fit a curve to the data variables using `scipy.optimize.curve_fit`.
++
++        Parameters
++        ----------
++        coords : str, DataArray, or list of DataArray
++            The independent variable(s) for the curve fitting. If a string, it is
++            interpreted as a coordinate name in the dataset. If a list, each element
++            should be a DataArray or a string.
++        func : callable
++            The model function, f(x, ...). It must take the independent variable
++            as the first argument and the parameters to fit as separate remaining arguments.
++        reduce_dims : str or list of str, optional
++            Dimensions to reduce. If not provided, all dimensions are reduced.
++        param_names : list of str, optional
++            Names for the parameters. If not provided, they are generated as 'p0', 'p1', ...
++        **kwargs : dict
++            Additional keyword arguments passed to `scipy.optimize.curve_fit`.
++
++        Returns
++        -------
++        result : Dataset
++            A dataset with the fitted parameters for each data variable. The dataset has
++            one data variable per original data variable and per parameter, with dimensions
++            corresponding to the non-reduced dimensions.
++
++        See Also
++        --------
++        scipy.optimize.curve_fit
++        DataArray.curvefit
++        """
++        from .curvefit_helpers import _curvefit_array
++
++        # Convert coords to DataArray if it's a string
++        if isinstance(coords, str):
++            coords = self.coords[coords]
++        elif isinstance(coords, list):
++            coords = [self.coords[c] if isinstance(c, str) else c for c in coords]
++
++        results = {}
++        for name, da in self.data_vars.items():
++            # Fit for each data variable
++            result_ds = _curvefit_array(
++                da,
++                coords,
++                func,
++                reduce_dims=reduce_dims,
++                param_names=param_names,
++                **kwargs,
++            )
++            # Rename the variables to include the original name
++            for var_name in result_ds.data_vars:
++                new_name = f"{name}_{var_name}"
++                results[new_name] = result_ds[var_name]
++
++        return Dataset(results, attrs=self.attrs.copy())
++
+     def polyfit(
+         self,
+         dim: Hashable,
+@@ -6420,7 +6485,7 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             w = np.asarray(w)
+             if w.ndim != 1:
+                 raise TypeError("Expected a 1-d array for weights.")
+-            if w.shape[0] != lhs.shape[0]:
++            if w.shape[0] != lhs.shape[0):
+                 raise TypeError("Expected w and {} to have the same length".format(dim))
+             lhs *= w[:, np.newaxis]
+ 
+@@ -7075,4 +7140,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self.isel(indexers, missing_dims=missing_dims)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/curvefit_helpers.py b/xarray/core/curvefit_helpers.py
+new file mode 100644
+index 0000000..eef347a
+--- /dev/null
++++ b/xarray/core/curvefit_helpers.py
+@@ -0,0 +1,198 @@
++"""
++Helper functions for curve fitting.
++"""
++import numpy as np
++import pandas as pd
++from scipy.optimize import curve_fit
++
++from . import duck_array_ops
++from .common import _contains_datetime_like_objects
++from .computation import get_clean_interp_index
++from .utils import is_duck_dask_array
++
++
++def _get_func_args(func, coords, data, param_names=None, **kwargs):
++    """
++    Helper to prepare arguments for curve_fit.
++
++    Parameters
++    ----------
++    func : callable
++        The model function, f(x, ...). It must take the independent variable
++        as the first argument and the parameters to fit as separate remaining arguments.
++    coords : DataArray or list of DataArray
++        The independent variable(s) for the curve fitting.
++    data : DataArray
++        The dependent data.
++    param_names : list of str, optional
++        Names for the parameters. If not provided, they are generated as 'p0', 'p1', ...
++    **kwargs : dict
++        Additional keyword arguments passed to `curve_fit`.
++
++    Returns
++    -------
++    popt : ndarray
++        Optimal values for the parameters.
++    pcov : ndarray
++        The estimated covariance of popt.
++    """
++    # Flatten the data for curve_fit
++    data_flat = data.values.ravel()
++    # Prepare independent variables
++    if isinstance(coords, (list, tuple)):
++        # Multiple independent variables
++        coords_flat = [c.values.ravel() for c in coords]
++        args = (coords_flat, data_flat)
++    else:
++        # Single independent variable
++        coords_flat = coords.values.ravel()
++        args = (coords_flat, data_flat)
++
++    # Determine initial guess p0
++    p0 = kwargs.pop('p0', None)
++    if p0 is None:
++        # Generate a default initial guess of ones
++        # We need to know the number of parameters
++        # We can try to call func with a dummy to see how many parameters are expected
++        try:
++            # Use a dummy call to get the number of parameters
++            if isinstance(coords, (list, tuple)):
++                dummy_coords = [np.zeros(2) for _ in coords]
++                dummy_result = func(dummy_coords, *([1] * 10))
++            else:
++                dummy_coords = np.zeros(2)
++                dummy_result = func(dummy_coords, *([1] * 10))
++            # If we get here, we have at most 10 parameters. Actually, we need a better way.
++            # Instead, we use the param_names if provided.
++            if param_names is not None:
++                n_params = len(param_names)
++            else:
++                # Try to infer from the function signature? For simplicity, assume 1.
++                n_params = 1
++        except (TypeError, IndexError):
++            n_params = 1
++        p0 = np.ones(n_params)
++
++    # Handle bounds
++    bounds = kwargs.pop('bounds', (-np.inf, np.inf))
++    if isinstance(bounds, dict):
++        # Convert dict to lower and upper bounds arrays
++        if param_names is None:
++            param_names = [f'p{i}' for i in range(len(p0))]
++        lower = [bounds.get(name, (-np.inf, np.inf))[0] for name in param_names]
++        upper = [bounds.get(name, (-np.inf, np.inf))[1] for name in param_names]
++        bounds = (lower, upper)
++
++    # Call curve_fit
++    popt, pcov = curve_fit(func, *args, p0=p0, bounds=bounds, **kwargs)
++    return popt, pcov
++
++
++def _curvefit_array(
++    data,
++    coords,
++    func,
++    reduce_dims=None,
++    param_names=None,
++    **kwargs,
++):
++    """
++    Perform curve fitting on a DataArray.
++
++    Parameters
++    ----------
++    data : DataArray
++        The dependent data.
++    coords : DataArray or list of DataArray
++        The independent variable(s).
++    func : callable
++        The model function.
++    reduce_dims : str or list of str, optional
++        Dimensions to reduce. If not provided, all dimensions are reduced.
++    param_names : list of str, optional
++        Names for the parameters.
++    **kwargs : dict
++        Additional keyword arguments passed to `curve_fit`.
++
++    Returns
++    -------
++    result : Dataset
++        A dataset with the fitted parameters and their covariance.
++    """
++    from .dataset import Dataset
++
++    if reduce_dims is None:
++        reduce_dims = list(data.dims)
++    elif isinstance(reduce_dims, str):
++        reduce_dims = [reduce_dims]
++
++    # We need to iterate over the non-reduced dimensions.
++    # For each combination of the non-reduced dimensions, we fit the curve.
++    non_reduce_dims = [dim for dim in data.dims if dim not in reduce_dims]
++
++    # If there are no non-reduce dimensions, we fit the entire array at once.
++    if not non_reduce_dims:
++        popt, pcov = _get_func_args(func, coords, data, param_names=param_names, **kwargs)
++        # Create a dataset with the parameters
++        if param_names is None:
++            param_names = [f'p{i}' for i in range(len(popt))]
++        result_vars = {}
++        for i, name in enumerate(param_names):
++            result_vars[name] = ((), popt[i])
++        # Also add the covariance matrix?
++        # For now, we skip the covariance.
++        return Dataset(result_vars)
++
++    # Otherwise, we need to loop over the non-reduce dimensions.
++    # We'll use apply_ufunc? But for simplicity, we loop.
++    # This is not efficient for large arrays, but it's a start.
++    # We'll create a template for the result.
++    # We'll use numpy's apply_along_axis? Actually, we can use dask's map_blocks if needed.
++
++    # For now, we assume the data is small and we can loop.
++    # We'll create a list of indices for the non-reduce dimensions.
++    # We'll use itertools.product to generate all combinations.
++
++    import itertools
++    # Get the coordinates for the non-reduce dimensions
++    non_reduce_coords = {dim: data.coords[dim] for dim in non_reduce_dims}
++    # Create a multi-index for the non-reduce dimensions
++    # We'll create a new dimension for the stacked non-reduce dimensions?
++    # Alternatively, we can create a dataset with the same non-reduce dimensions.
++
++    # We'll create a dataset with the parameters for each non-reduce combination.
++    # We'll initialize arrays for each parameter.
++    param_arrays = {}
++    if param_names is None:
++        # We don't know the number of parameters until we fit one.
++        # So we fit one to get the number of parameters.
++        # Take the first element along the non-reduce dimensions.
++        # We need to get a slice that has the reduce dimensions.
++        # We'll create a slice that takes the first element for each non-reduce dimension.
++        slice_dict = {dim: 0 for dim in non_reduce_dims}
++        data_slice = data.isel(slice_dict)
++        coords_slice = coords.isel(slice_dict) if hasattr(coords, 'isel') else coords
++        popt, _ = _get_func_args(func, coords_slice, data_slice, param_names=param_names, **kwargs)
++        n_params = len(popt)
++        param_names = [f'p{i}' for i in range(n_params)]
++    else:
++        n_params = len(param_names)
++
++    for name in param_names:
++        param_arrays[name] = np.zeros([len(data.coords[dim]) for dim in non_reduce_dims])
++
++    # Now loop over all combinations
++    for indices in itertools.product(*[range(len(data.coords[dim])) for dim in non_reduce_dims]):
++        slice_dict = {dim: idx for dim, idx in zip(non_reduce_dims, indices)}
++        data_slice = data.isel(slice_dict)
++        coords_slice = coords.isel(slice_dict) if hasattr(coords, 'isel') else coords
++        popt, _ = _get_func_args(func, coords_slice, data_slice, param_names=param_names, **kwargs)
++        for i, name in enumerate(param_names):
++            param_arrays[name][indices] = popt[i]
++
++    # Create the result dataset
++    result_vars = {}
++    for name in param_names:
++        result_vars[name] = (non_reduce_dims, param_arrays[name])
++
++    return Dataset(result_vars, coords=non_reduce_coords)

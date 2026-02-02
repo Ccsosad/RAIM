@@ -1,0 +1,38 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..fa8bbd7 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -722,6 +722,33 @@ class Legend(Artist):
+ 
+     _loc = property(_get_loc, _set_loc)
+ 
++    def set_loc(self, loc):
++        """
++        Set the location of the legend after initialization.
++
++        Parameters
++        ----------
++        loc : str, tuple, or int
++            Location code or coordinates.
++        """
++        self._set_loc(loc)
++
++    def set(self, **kwargs):
++        """
++        Set multiple legend properties at once.
++
++        Parameters
++        ----------
++        **kwargs : properties to set (e.g., loc='upper left', ncols=2)
++        """
++        for key, value in kwargs.items():
++            if key == "loc":
++                self.set_loc(value)
++            elif hasattr(self, f"set_{key}"):
++                getattr(self, f"set_{key}")(value)
++            else:
++                raise AttributeError(f"Unknown property: {key}")
++
+     def _findoffset(self, width, height, xdescent, ydescent, renderer):
+         """Helper function to locate the legend."""
+ 

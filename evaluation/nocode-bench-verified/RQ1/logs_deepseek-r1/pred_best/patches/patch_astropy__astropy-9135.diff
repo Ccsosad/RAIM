@@ -1,0 +1,57 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..44ca1f5 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -2503,6 +2503,19 @@ class CompoundModel(Model):
+                 return self.right(*leftval, **kw)
+             else:
+                 return self.right(leftval, **kw)
++        elif op == 'fix_inputs':
++            # Prepare the full set of inputs by combining the provided args with the fixed inputs
++            full_args = []
++            arg_index = 0
++            for inp_name in self.left.inputs:
++                if inp_name in self.fixed_inputs:
++                    # Use the fixed value
++                    full_args.append(self.fixed_inputs[inp_name])
++                else:
++                    # Take the next argument
++                    full_args.append(args[arg_index])
++                    arg_index += 1
++            return self.left(*full_args, **kw)
+         elif op in SPECIAL_OPERATORS:
+             return binary_operation(SPECIAL_OPERATORS[op], leftval, rightval)
+         else:
+@@ -3358,6 +3371,32 @@ class CompoundModel(Model):
+         return out
+ 
+ 
++def fix_inputs(model, fixed):
++    """
++    Fix one or more inputs of a model, creating a new model with fewer inputs.
++
++    Parameters
++    ----------
++    model : `~astropy.modeling.Model`
++        The model to fix inputs of.
++    fixed : dict
++        A dictionary mapping input names to fixed values.
++
++    Returns
++    -------
++    `~astropy.modeling.CompoundModel`
++        The new compound model with fixed inputs.
++
++    Examples
++    --------
++    >>> from astropy.modeling.models import Polynomial1D
++    >>> poly = Polynomial1D(3, c0=1, c1=2, c2=3, c3=4)
++    >>> fixed_poly = fix_inputs(poly, {'x': 2})
++    >>> fixed_poly(0)  # evaluates poly at x=2
++    1 + 2*2 + 3*2^2 + 4*2^3
++    """
++    return CompoundModel('fix_inputs', model, fixed)
++
+ def binary_operation(binoperator, left, right):
+     '''
+     Perform binary operation. Operands may be matching tuples of operands.

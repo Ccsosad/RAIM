@@ -1,0 +1,149 @@
+diff --git a/seaborn/categorical.py b/seaborn/categorical.py
+index 27d5801..72b13c3 100644
+--- a/seaborn/categorical.py
++++ b/seaborn/categorical.py
+@@ -1491,6 +1491,9 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+ 
+     def swarm_points(self, ax, points, center, width, s, **kws):
+         """Find new positions on the categorical axis for each point."""
++        # Store the original positions (in data coordinates) for later recomputation
++        orig_xy = points.get_offsets().copy()
++        
+         # Convert from point size (area) to diameter
+         default_lw = mpl.rcParams["patch.linewidth"]
+         lw = kws.get("linewidth", kws.get("lw", default_lw))
+@@ -1500,19 +1503,19 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+         # Transform the data coordinates to point coordinates.
+         # We'll figure out the swarm positions in the latter
+         # and then convert back to data coordinates and replot
+-        orig_xy = ax.transData.transform(points.get_offsets())
++        orig_xy_pt = ax.transData.transform(orig_xy)
+ 
+         # Order the variables so that x is the categorical axis
+         if self.orient == "h":
+-            orig_xy = orig_xy[:, [1, 0]]
++            orig_xy_pt = orig_xy_pt[:, [1, 0]]
+ 
+         # Do the beeswarm in point coordinates
+-        new_xy = self.beeswarm(orig_xy, d)
++        new_xy_pt = self.beeswarm(orig_xy_pt, d)
+ 
+         # Transform the point coordinates back to data coordinates
+         if self.orient == "h":
+-            new_xy = new_xy[:, [1, 0]]
+-        new_x, new_y = ax.transData.inverted().transform(new_xy).T
++            new_xy_pt = new_xy_pt[:, [1, 0]]
++        new_x, new_y = ax.transData.inverted().transform(new_xy_pt).T
+ 
+         # Add gutters
+         if self.orient == "v":
+@@ -1523,6 +1526,17 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+         # Reposition the points so they do not overlap
+         points.set_offsets(np.c_[new_x, new_y])
+ 
++        # Create a Beeswarm instance for draw-time updates
++        beeswarm = Beeswarm(ax, points, orig_xy, center, width, s, kws, self)
++        if not hasattr(ax, '_beeswarms'):
++            ax._beeswarms = []
++        ax._beeswarms.append(beeswarm)
++
++        # Attach a draw callback if not already attached
++        if not hasattr(ax, '_beeswarm_cid'):
++            ax._beeswarm_cid = ax.figure.canvas.mpl_connect('draw_event', 
++                                                            lambda e: self._redraw_swarms(e))
++
+     def draw_swarmplot(self, ax, kws):
+         """Plot the data."""
+         s = kws.pop("s")
+@@ -1556,10 +1570,7 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                 swarm_data = np.asarray(group_data[hue_mask])
+                 point_colors = np.asarray(self.point_colors[i][hue_mask])
+ 
+-                # Sort the points for the beeswarm algorithm
+-                sorter = np.argsort(swarm_data)
+-                swarm_data = swarm_data[sorter]
+-                point_colors = point_colors[sorter]
++                # Do not sort the points; keep original order
+ 
+                 # Plot the points in centered positions
+                 cat_pos = np.ones(swarm_data.size) * i
+@@ -1581,10 +1592,7 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                     swarm_data = np.asarray(group_data[hue_mask])
+                     point_colors = np.asarray(self.point_colors[i][hue_mask])
+ 
+-                    # Sort the points for the beeswarm algorithm
+-                    sorter = np.argsort(swarm_data)
+-                    swarm_data = swarm_data[sorter]
+-                    point_colors = point_colors[sorter]
++                    # Do not sort the points; keep original order
+ 
+                     # Plot the points in centered positions
+                     center = i + offsets[j]
+@@ -1607,6 +1615,15 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+             if swarm.get_offsets().size:
+                 self.swarm_points(ax, swarm, center, width, s, **kws)
+ 
++    def _redraw_swarms(self, event):
++        """Redraw all beeswarms on the axes associated with this plotter."""
++        ax = event.canvas.figure.axes[0]  # Assume the first axes? Actually, we need to find the correct axes.
++        # We'll iterate over all axes in the figure and update their beeswarms.
++        for ax in event.canvas.figure.axes:
++            if hasattr(ax, '_beeswarms'):
++                for beeswarm in ax._beeswarms:
++                    beeswarm.recompute()
++
+     def plot(self, ax, kws):
+         """Make the full plot."""
+         self.draw_swarmplot(ax, kws)
+@@ -1616,6 +1633,51 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+             ax.invert_yaxis()
+ 
+ 
++class Beeswarm:
++    """Manage a single swarm of points, recomputing positions on draw."""
++    def __init__(self, ax, points, orig_xy, center, width, s, kws, plotter):
++        self.ax = ax
++        self.points = points
++        self.orig_xy = orig_xy  # in data coordinates, with original order
++        self.center = center
++        self.width = width
++        self.s = s
++        self.kws = kws
++        self.plotter = plotter
++
++    def recompute(self):
++        """Recalculate the swarm positions given current axes transforms."""
++        # Convert from point size (area) to diameter
++        default_lw = mpl.rcParams["patch.linewidth"]
++        lw = self.kws.get("linewidth", self.kws.get("lw", default_lw))
++        dpi = self.ax.figure.dpi
++        d = (np.sqrt(self.s) + lw) * (dpi / 72)
++
++        # Transform the data coordinates to point coordinates.
++        orig_xy_pt = self.ax.transData.transform(self.orig_xy)
++
++        # Order the variables so that x is the categorical axis
++        if self.plotter.orient == "h":
++            orig_xy_pt = orig_xy_pt[:, [1, 0]]
++
++        # Do the beeswarm in point coordinates
++        new_xy_pt = self.plotter.beeswarm(orig_xy_pt, d)
++
++        # Transform the point coordinates back to data coordinates
++        if self.plotter.orient == "h":
++            new_xy_pt = new_xy_pt[:, [1, 0]]
++        new_x, new_y = self.ax.transData.inverted().transform(new_xy_pt).T
++
++        # Add gutters
++        if self.plotter.orient == "v":
++            self.plotter.add_gutters(new_x, self.center, self.width)
++        else:
++            self.plotter.add_gutters(new_y, self.center, self.width)
++
++        # Update the points
++        self.points.set_offsets(np.c_[new_x, new_y])
++
++
+ class _CategoricalStatPlotter(_CategoricalPlotter):
+ 
+     require_numeric = True

@@ -1,0 +1,58 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index 612ff28..4e58eed 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -573,6 +573,7 @@ class PyMethod(PyObject):
+ 
+     option_spec = PyObject.option_spec.copy()
+     option_spec.update({
++        'async': directives.flag,
+         'classmethod': directives.flag,
+         'staticmethod': directives.flag,
+     })
+@@ -583,12 +584,16 @@ class PyMethod(PyObject):
+ 
+     def get_signature_prefix(self, sig):
+         # type: (str) -> str
++        if 'async' in self.options:
++            prefix = 'async '
++        else:
++            prefix = ''
+         if 'staticmethod' in self.options:
+-            return 'static '
++            return prefix + 'static '
+         elif 'classmethod' in self.options:
+-            return 'classmethod '
++            return prefix + 'classmethod '
+         else:
+-            return ''
++            return prefix
+ 
+     def get_index_text(self, modname, name_cls):
+         # type: (str, Tuple[str, str]) -> str
+@@ -603,12 +608,20 @@ class PyMethod(PyObject):
+             else:
+                 return '%s()' % name
+ 
+-        if 'staticmethod' in self.options:
+-            return _('%s() (%s static method)') % (methname, clsname)
+-        elif 'classmethod' in self.options:
+-            return _('%s() (%s class method)') % (methname, clsname)
++        if 'async' in self.options:
++            if 'staticmethod' in self.options:
++                return _('%s() (%s static async method)') % (methname, clsname)
++            elif 'classmethod' in self.options:
++                return _('%s() (%s class async method)') % (methname, clsname)
++            else:
++                return _('%s() (%s async method)') % (methname, clsname)
+         else:
+-            return _('%s() (%s method)') % (methname, clsname)
++            if 'staticmethod' in self.options:
++                return _('%s() (%s static method)') % (methname, clsname)
++            elif 'classmethod' in self.options:
++                return _('%s() (%s class method)') % (methname, clsname)
++            else:
++                return _('%s() (%s method)') % (methname, clsname)
+ 
+ 
+ class PyClassMethod(PyMethod):

@@ -1,0 +1,23 @@
+diff --git a/lib/matplotlib/__init__.py b/lib/matplotlib/__init__.py
+index f649360..6fb651d 100644
+--- a/lib/matplotlib/__init__.py
++++ b/lib/matplotlib/__init__.py
+@@ -225,6 +225,18 @@ def _check_versions():
+             raise ImportError(f"Matplotlib requires {modname}>={minver}; "
+                               f"you have {module.__version__}")
+ 
++    # Require importlib_resources on Python < 3.10
++    import sys
++    if sys.version_info < (3, 10):
++        import importlib
++        modname, minver = "importlib_resources", "2.3.0"
++        module = importlib.import_module(modname)
++        if parse_version(module.__version__) < parse_version(minver):
++            raise ImportError(
++                f"Matplotlib requires {modname}>={minver} on Python<3.10; "
++                f"you have {module.__version__}"
++            )
++
+ 
+ _check_versions()
+ 

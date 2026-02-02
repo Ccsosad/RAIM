@@ -1,0 +1,29 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..2630f7d 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -137,7 +137,7 @@ def _solve_sparse_cg(
+     return coefs
+ 
+ 
+-def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
++def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3, fit_intercept=False, X_mean=None, y_mean=None):
+     n_samples, n_features = X.shape
+     coefs = np.empty((y.shape[1], n_features), dtype=X.dtype)
+     n_iter = np.empty(y.shape[1], dtype=np.int32)
+@@ -145,6 +145,15 @@ def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
+     # According to the lsqr documentation, alpha = damp^2.
+     sqrt_alpha = np.sqrt(alpha)
+ 
++    # If fit_intercept is True, center the data
++    if fit_intercept:
++        # Check if X is sparse
++        if hasattr(X, 'toarray'):
++            # Convert sparse matrix to dense for centering
++            X = X.toarray()
++        X = X - X_mean
++        y = y - y_mean
++
+     for i in range(y.shape[1]):
+         y_column = y[:, i]
+         info = sp_linalg.lsqr(

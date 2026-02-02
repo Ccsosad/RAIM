@@ -1,0 +1,24 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..5a084ce 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -88,9 +88,16 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+             else:
+                 cats = np.array(self.categories[i], dtype=Xi.dtype)
+                 if Xi.dtype != object:
+-                    if not np.all(np.sort(cats) == cats):
+-                        raise ValueError("Unsorted categories are not "
+-                                         "supported for numerical categories")
++                    # Check for unsorted categories, but ignore missing values (NaN)
++                    if np.issubdtype(cats.dtype, np.floating):
++                        non_missing = ~np.isnan(cats)
++                    else:
++                        non_missing = np.ones(len(cats), dtype=bool)
++                    if np.any(non_missing):
++                        sorted_cats = np.sort(cats[non_missing])
++                        if not np.array_equal(sorted_cats, cats[non_missing]):
++                            raise ValueError("Unsorted categories are not "
++                                             "supported for numerical categories")
+                 if handle_unknown == 'error':
+                     diff = _check_unknown(Xi, cats)
+                     if diff:

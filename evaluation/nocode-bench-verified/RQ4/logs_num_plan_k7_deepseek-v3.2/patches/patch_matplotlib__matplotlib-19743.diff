@@ -1,0 +1,77 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..6f93ffe 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -120,6 +120,8 @@ def do_constrained_layout(fig, h_pad, w_pad,
+                             w_pad=w_pad, hspace=hspace, wspace=wspace)
+         make_margin_suptitles(layoutgrids, fig, renderer, h_pad=h_pad,
+                               w_pad=w_pad)
++        make_margin_legends(layoutgrids, fig, renderer, h_pad=h_pad,
++                            w_pad=w_pad)
+ 
+         # if a layout is such that a columns (or rows) margin has no
+         # constraints, we need to make all such instances in the grid
+@@ -458,6 +460,63 @@ def make_margin_suptitles(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
+             layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
+ 
+ 
++def make_margin_legends(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
++    """
++    Make room for legends that are placed outside the axes.
++    """
++    # recursively process subfigures
++    for sfig in fig.subfigs:
++        make_margin_legends(layoutgrids, sfig, renderer,
++                            w_pad=w_pad, h_pad=h_pad)
++
++    inv_trans_fig = fig.transFigure.inverted().transform_bbox
++    for ax in fig.axes:
++        legend = ax.get_legend()
++        if legend is None or not legend.get_in_layout():
++            continue
++        # Check if the legend is placed outside
++        loc = legend.get_loc()
++        if isinstance(loc, str) and loc.startswith('outside'):
++            # Get the legend's bounding box in figure coordinates
++            bbox = inv_trans_fig(legend.get_tightbbox(renderer))
++            # Determine which margin to adjust based on the loc string
++            if loc == 'outside upper left':
++                layoutgrids[fig].edit_margin_min('top', bbox.height + 2 * h_pad)
++                layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
++            elif loc == 'outside upper right':
++                layoutgrids[fig].edit_margin_min('top', bbox.height + 2 * h_pad)
++                layoutgrids[fig].edit_margin_min('right', bbox.width + 2 * w_pad)
++            elif loc == 'outside lower left':
++                layoutgrids[fig].edit_margin_min('bottom', bbox.height + 2 * h_pad)
++                layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
++            elif loc == 'outside lower right':
++                layoutgrids[fig].edit_margin_min('bottom', bbox.height + 2 * h_pad)
++                layoutgrids[fig].edit_margin_min('right', bbox.width + 2 * w_pad)
++            elif loc == 'outside left upper':
++                layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
++                layoutgrids[fig].edit_margin_min('top', bbox.height + 2 * h_pad)
++            elif loc == 'outside left lower':
++                layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
++                layoutgrids[fig].edit_margin_min('bottom', bbox.height + 2 * h_pad)
++            elif loc == 'outside right upper':
++                layoutgrids[fig].edit_margin_min('right', bbox.width + 2 * w_pad)
++                layoutgrids[fig].edit_margin_min('top', bbox.height + 2 * h_pad)
++            elif loc == 'outside right lower':
++                layoutgrids[fig].edit_margin_min('right', bbox.width + 2 * w_pad)
++                layoutgrids[fig].edit_margin_min('bottom', bbox.height + 2 * h_pad)
++            elif loc == 'outside upper':
++                layoutgrids[fig].edit_margin_min('top', bbox.height + 2 * h_pad)
++            elif loc == 'outside lower':
++                layoutgrids[fig].edit_margin_min('bottom', bbox.height + 2 * h_pad)
++            elif loc == 'outside left':
++                layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
++            elif loc == 'outside right':
++                layoutgrids[fig].edit_margin_min('right', bbox.width + 2 * w_pad)
++            else:
++                # If the loc is not recognized, default to top
++                layoutgrids[fig].edit_margin_min('top', bbox.height + 2 * h_pad)
++
++
+ def match_submerged_margins(layoutgrids, fig):
+     """
+     Make the margins that are submerged inside an Axes the same size.

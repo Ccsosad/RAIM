@@ -1,0 +1,24 @@
+diff --git a/pylint/reporters/no_header.py b/pylint/reporters/no_header.py
+new file mode 100644
+index 0000000..df0ba5a
+--- /dev/null
++++ b/pylint/reporters/no_header.py
+@@ -0,0 +1,18 @@
++"""Reporter that does not include the module name in the output."""
++
++from pylint.reporters.text import TextReporter
++
++class NoHeaderReporter(TextReporter):
++    """Reporter that does not include the module name in the output."""
++    
++    name = "no-header"
++    description = "Output without module name header"
++    
++    def on_set_current_module(self, module, filepath):
++        # Don't print the module header but maintain internal state
++        self.current_module = module
++        self.current_filepath = filepath
++
++def register(linter):
++    """Register the reporter with the linter."""
++    linter.register_reporter(NoHeaderReporter)

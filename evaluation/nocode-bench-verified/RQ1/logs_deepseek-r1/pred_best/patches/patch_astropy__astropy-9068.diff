@@ -1,0 +1,116 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..8ceb34f 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,111 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, list, array, or scalar
++            The object to compare with the table.
++
++        Returns
++        -------
++        result : Table
++            A table of booleans with the same structure as the original table.
++
++        Raises
++        ------
++        ValueError
++            If comparing to another table with different column names.
++
++        Examples
++        --------
++        Compare two tables element-wise::
++
++            >>> t1 = Table([[1, 2], [4, 5]], names=('a', 'b'))
++            >>> t2 = Table([[1, 2], [5, 5]], names=('a', 'b'))
++            >>> t1.values_equal(t2)
++            <Table length=2>
++             a     b
++            bool  bool
++            ---- -----
++            True False
++            True  True
++
++        Compare table to a scalar::
++
++            >>> t1.values_equal(2)
++            <Table length=2>
++              a     b
++            bool  bool
++            ----- -----
++            False  True
++            True  False
++
++        Compare table to an array column-wise::
++
++            >>> t1.values_equal([2, 5])
++            <Table length=2>
++              a     b
++            bool  bool
++            ----- -----
++            False False
++            True  True
++        """
++        from astropy.table import Table, Column, MaskedColumn
++
++        result_table = Table()
++
++        if isinstance(other, Table):
++            # Compare to another table
++            if self.colnames != other.colnames:
++                raise ValueError("cannot compare tables with different column names")
++            for name in self.colnames:
++                self_col = self[name]
++                other_col = other[name]
++                # Handle masked columns
++                if isinstance(self_col, MaskedColumn) or isinstance(other_col, MaskedColumn):
++                    # Get data and masks
++                    self_data = self_col.data if hasattr(self_col, 'data') else self_col
++                    other_data = other_col.data if hasattr(other_col, 'data') else other_col
++                    self_mask = self_col.mask if hasattr(self_col, 'mask') else np.zeros(len(self_col), dtype=bool)
++                    other_mask = other_col.mask if hasattr(other_col, 'mask') else np.zeros(len(other_col), dtype=bool)
++                    # Equal if data equal and masks equal
++                    equal = (self_data == other_data) & (self_mask == other_mask)
++                else:
++                    equal = (self_col == other_col)
++                result_table[name] = Column(equal, name=name)
++        elif np.isscalar(other):
++            # Compare each element to scalar
++            for name in self.colnames:
++                col = self[name]
++                if isinstance(col, MaskedColumn):
++                    # For masked columns, only compare unmasked elements
++                    equal = np.zeros(len(col), dtype=bool)
++                    valid = ~col.mask
++                    equal[valid] = (col.data[valid] == other)
++                else:
++                    equal = (col == other)
++                result_table[name] = Column(equal, name=name)
++        else:
++            # Assume other is array-like with length matching number of columns
++            if len(other) != len(self.colnames):
++                raise ValueError("Length of comparison array must match number of columns")
++            for name, val in zip(self.colnames, other):
++                col = self[name]
++                if isinstance(col, MaskedColumn):
++                    # For masked columns, only compare unmasked elements
++                    equal = np.zeros(len(col), dtype=bool)
++                    valid = ~col.mask
++                    equal[valid] = (col.data[valid] == val)
++                else:
++                    equal = (col == val)
++                result_table[name] = Column(equal, name=name)
++
++        return result_table
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

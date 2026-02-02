@@ -1,0 +1,15 @@
+diff --git a/sphinx/builders/latex/__init__.py b/sphinx/builders/latex/__init__.py
+index 1c44ce3..467f7dc 100644
+--- a/sphinx/builders/latex/__init__.py
++++ b/sphinx/builders/latex/__init__.py
+@@ -410,6 +410,10 @@ def validate_config_values(app: Sphinx, config: Config) -> None:
+             msg = __("Unknown configure key: latex_elements[%r]. ignored.")
+             logger.warning(msg % (key,))
+             config.latex_elements.pop(key)
++    
++    # Ensure extrapackages has a default value if not set
++    if 'extrapackages' not in config.latex_elements:
++        config.latex_elements['extrapackages'] = ''
+ 
+ 
+ def default_latex_engine(config: Config) -> str:

@@ -1,0 +1,70 @@
+diff --git a/sklearn/decomposition/_kernel_pca.py b/sklearn/decomposition/_kernel_pca.py
+index 6f0266a..75b1f6e 100644
+--- a/sklearn/decomposition/_kernel_pca.py
++++ b/sklearn/decomposition/_kernel_pca.py
+@@ -8,7 +8,7 @@ from scipy import linalg
+ from scipy.sparse.linalg import eigsh
+ 
+ from ..utils._arpack import _init_arpack_v0
+-from ..utils.extmath import svd_flip
++from ..utils.extmath import svd_flip, randomized_svd
+ from ..utils.validation import check_is_fitted, _check_psd_eigenvalues
+ from ..utils.deprecation import deprecated
+ from ..exceptions import NotFittedError
+@@ -59,10 +59,10 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+         Learn the inverse transform for non-precomputed kernels.
+         (i.e. learn to find the pre-image of a point)
+ 
+-    eigen_solver : {'auto', 'dense', 'arpack'}, default='auto'
++    eigen_solver : {'auto', 'dense', 'arpack', 'randomized'}, default='auto'
+         Select eigensolver to use. If n_components is much less than
+-        the number of training samples, arpack may be more efficient
+-        than the dense eigensolver.
++        the number of training samples, arpack or randomized may be more
++        efficient than the dense eigensolver.
+ 
+     tol : float, default=0
+         Convergence tolerance for arpack.
+@@ -80,8 +80,8 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+         with zero eigenvalues are removed regardless.
+ 
+     random_state : int, RandomState instance or None, default=None
+-        Used when ``eigen_solver`` == 'arpack'. Pass an int for reproducible
+-        results across multiple function calls.
++        Used when ``eigen_solver`` == 'arpack' or 'randomized'. Pass an int
++        for reproducible results across multiple function calls.
+         See :term:`Glossary <random_state>`.
+ 
+         .. versionadded:: 0.18
+@@ -200,6 +200,8 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+         if self.eigen_solver == 'auto':
+             if K.shape[0] > 200 and n_components < 10:
+                 eigen_solver = 'arpack'
++            elif K.shape[0] > 500 and n_components <= 100:
++                eigen_solver = 'randomized'
+             else:
+                 eigen_solver = 'dense'
+         else:
+@@ -215,6 +217,16 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+                                                 tol=self.tol,
+                                                 maxiter=self.max_iter,
+                                                 v0=v0)
++        elif eigen_solver == 'randomized':
++            # Center the kernel matrix K is already centered by KernelCenterer
++            # Perform randomized SVD
++            # Note: randomized_svd returns U, s, Vt.
++            # For symmetric matrix, we use U as eigenvectors and s as eigenvalues.
++            U, s, _ = randomized_svd(K, n_components=n_components,
++                                     n_iter='auto',
++                                     random_state=self.random_state)
++            self.lambdas_ = s
++            self.alphas_ = U
+ 
+         # make sure that the eigenvalues are ok and fix numerical issues
+         self.lambdas_ = _check_psd_eigenvalues(self.lambdas_,
+@@ -388,4 +400,4 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+ 
+     def _more_tags(self):
+         return {'preserves_dtype': [np.float64, np.float32],
+-                'pairwise': self.kernel == 'precomputed'}
++                'pairwise': self.kernel == 'precomputed'}

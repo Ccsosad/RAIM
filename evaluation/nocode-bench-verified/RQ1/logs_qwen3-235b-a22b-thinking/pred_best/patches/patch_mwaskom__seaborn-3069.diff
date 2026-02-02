@@ -1,0 +1,42 @@
+diff --git a/plot/axes.py b/plot/axes.py
+new file mode 100644
+index 0000000..75f8c0a
+--- /dev/null
++++ b/plot/axes.py
+@@ -0,0 +1,27 @@
++from .scales import Nominal
++
++class Axis:
++    def __init__(self, scale, orientation='x'):
++        self.scale = scale
++        self.orientation = orientation
++
++    def setup(self, data):
++        if isinstance(self.scale, Nominal):
++            self.grid(False)
++            if data:
++                min_val = min(data)
++                max_val = max(data)
++                self.set_limits(min_val - 0.5, max_val + 0.5)
++            else:
++                self.set_limits(-0.5, 0.5)
++            if self.orientation == 'y':
++                self.invert()
++
++    def grid(self, visible):
++        pass
++
++    def set_limits(self, min, max):
++        pass
++
++    def invert(self):
++        pass
+diff --git a/plot/scales.py b/plot/scales.py
+new file mode 100644
+index 0000000..afe3bf0
+--- /dev/null
++++ b/plot/scales.py
+@@ -0,0 +1,3 @@
++class Nominal:
++    """Scale for nominal (categorical) data."""
++    pass

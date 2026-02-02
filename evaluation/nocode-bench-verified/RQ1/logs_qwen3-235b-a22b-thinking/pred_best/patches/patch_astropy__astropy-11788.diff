@@ -1,0 +1,16 @@
+diff --git a/astropy/units/required_by_vounit.py b/astropy/units/required_by_vounit.py
+index 9033ca5..3673f9e 100644
+--- a/astropy/units/required_by_vounit.py
++++ b/astropy/units/required_by_vounit.py
+@@ -19,10 +19,10 @@ def _initialize_module():
+     from . import cgs
+     from . import astrophys
+     from .core import def_unit, _add_prefixes
+-
+     _add_prefixes(astrophys.solMass, namespace=_ns, prefixes=True)
+     _add_prefixes(astrophys.solRad, namespace=_ns, prefixes=True)
+     _add_prefixes(astrophys.solLum, namespace=_ns, prefixes=True)
++    _add_prefixes(astrophys.Angstrom, namespace=_ns, prefixes=True)
+ 
+ 
+ _initialize_module()

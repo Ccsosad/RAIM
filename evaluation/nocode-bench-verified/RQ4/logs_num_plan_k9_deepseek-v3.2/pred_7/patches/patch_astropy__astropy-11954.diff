@@ -1,0 +1,69 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..5680b05 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,11 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None,
++         keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -384,7 +385,8 @@ def join(left, right, keys=None, join_type='inner',
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+-                join_funcs)
++                join_funcs,
++                keys_left=keys_left, keys_right=keys_right)
+ 
+     # Merge the column and table meta data. Table subclasses might override
+     # these methods for custom merge behavior.
+@@ -1047,7 +1049,8 @@ def _join(left, right, keys=None, join_type='inner',
+           uniq_col_name='{col_name}_{table_name}',
+           table_names=['1', '2'],
+           col_name_map=None, metadata_conflicts='warn',
+-          join_funcs=None):
++          join_funcs=None,
++          keys_left=None, keys_right=None):
+     """
+     Perform a join of the left and right Tables on specified keys.
+ 
+@@ -1112,13 +1115,23 @@ def _join(left, right, keys=None, join_type='inner',
+         right[cartesian_index_name] = np.uint8(0)
+         keys = (cartesian_index_name, )
+ 
+-    # If we have a single key, put it in a tuple
+-    if keys is None:
+-        keys = tuple(name for name in left.colnames if name in right.colnames)
+-        if len(keys) == 0:
+-            raise TableMergeError('No keys in common between left and right tables')
+-    elif isinstance(keys, str):
+-        keys = (keys,)
++    # Handle keys_left and keys_right
++    if keys_left is not None and keys_right is not None:
++        # For now, we assume keys_left and keys_right are column names in the tables.
++        # We will create a temporary common key column for joining.
++        # This is a temporary implementation until we have a better way.
++        temp_key_name = '__temp_join_key__'
++        left[temp_key_name] = left[keys_left]
++        right[temp_key_name] = right[keys_right]
++        keys = (temp_key_name,)
++    else:
++        # If we have a single key, put it in a tuple
++        if keys is None:
++            keys = tuple(name for name in left.colnames if name in right.colnames)
++            if len(keys) == 0:
++                raise TableMergeError('No keys in common between left and right tables')
++        elif isinstance(keys, str):
++            keys = (keys,)
+ 
+     # Check the key columns
+     for arr, arr_label in ((left, 'Left'), (right, 'Right')):

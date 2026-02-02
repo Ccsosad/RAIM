@@ -1,0 +1,17 @@
+diff --git a/cosmology/flrw.py b/cosmology/flrw.py
+new file mode 100644
+index 0000000..5da3167
+--- /dev/null
++++ b/cosmology/flrw.py
+@@ -0,0 +1,11 @@
++    def Otot0(self):
++        """Return the total density parameter (all non-curvature components) at z=0."""
++        return 1.0 - self.Ok
++
++    def Otot(self, z):
++        """Return the total density parameter (all non-curvature components) at redshift z."""
++        h = self.H(z)
++        ok_z = self.Ok * (self.H0 / h) ** 2 * (1 + z)**2
++        return 1.0 - ok_z
++
++    def __repr__(self):

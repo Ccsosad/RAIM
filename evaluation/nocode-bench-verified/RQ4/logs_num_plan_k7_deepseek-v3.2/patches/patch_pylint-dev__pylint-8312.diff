@@ -1,0 +1,44 @@
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 336078d..5e19359 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -895,12 +895,32 @@ class PyLinter(
+             if self.should_analyze_file(name, filepath, is_argument=is_arg):
+                 yield FileItem(name, filepath, descr["basename"])
+ 
++    def _expand_globs(self, patterns: Sequence[str]) -> list[str]:
++        """Expand glob patterns in a list of strings."""
++        import glob
++        expanded = []
++        for pattern in patterns:
++            # Check if the pattern contains any wildcard characters
++            if glob.has_magic(pattern):
++                # Use recursive glob to handle **
++                matches = glob.glob(pattern, recursive=True)
++                if not matches:
++                    # If no matches, keep the pattern as is (might be a module name)
++                    expanded.append(pattern)
++                else:
++                    expanded.extend(matches)
++            else:
++                expanded.append(pattern)
++        return expanded
++
+     def _expand_files(
+         self, files_or_modules: Sequence[str]
+     ) -> dict[str, ModuleDescriptionDict]:
+         """Get modules and errors from a list of modules and handle errors."""
++        # Expand glob patterns in the input list
++        expanded_files_or_modules = self._expand_globs(files_or_modules)
+         result, errors = expand_modules(
+-            files_or_modules,
++            expanded_files_or_modules,
+             self.config.source_roots,
+             self.config.ignore,
+             self.config.ignore_patterns,
+@@ -1381,4 +1401,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)

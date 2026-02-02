@@ -1,0 +1,30 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..280f24b 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -415,6 +415,25 @@ def make_layout_margins(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0,
+                 if (cbp_rspan.start == ss.rowspan.start and
+                         cbbbox.y1 > bbox.y1):
+                     margin['top'] += cbbbox.y1 - bbox.y1
++        # make margin for legends placed outside
++        for leg in ax.legends:
++            loc_str = leg.get_loc()
++            if isinstance(loc_str, str) and loc_str.startswith('outside'):
++                parts = loc_str.split()
++                if len(parts) >= 2:
++                    side = parts[1]
++                    # get the legend bounding box in figure coordinates
++                    leg_bbox = leg.get_window_extent(renderer)
++                    leg_bbox_fig = fig.transFigure.inverted().transform_bbox(leg_bbox)
++                    pad = w_pad if side in ['left', 'right'] else h_pad
++                    if side == 'upper' and ss.rowspan.start == 0:
++                        margin['topcb'] += leg_bbox_fig.height + pad
++                    elif side == 'lower' and ss.rowspan.stop == gs.nrows:
++                        margin['bottomcb'] += leg_bbox_fig.height + pad
++                    elif side == 'left' and ss.colspan.start == 0:
++                        margin['leftcb'] += leg_bbox_fig.width + pad
++                    elif side == 'right' and ss.colspan.stop == gs.ncols:
++                        margin['rightcb'] += leg_bbox_fig.width + pad
+         # pass the new margins down to the layout grid for the solution...
+         layoutgrids[gs].edit_outer_margin_mins(margin, ss)
+ 

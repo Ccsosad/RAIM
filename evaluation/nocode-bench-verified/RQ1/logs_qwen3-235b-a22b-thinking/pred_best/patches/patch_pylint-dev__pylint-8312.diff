@@ -1,0 +1,52 @@
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 336078d..2e68d2b 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -654,9 +654,29 @@ class PyLinter(
+             else:
+                 yield something
+ 
++    def _expand_glob_patterns(self, patterns: Sequence[str]) -> tuple[str, ...]:
++        """Expand glob patterns in the given sequence of strings.
++        
++        For each string in the sequence, if it contains glob patterns, expand them.
++        If a glob pattern doesn't match any files, keep the pattern as is.
++        
++        :param patterns: Sequence of strings, possibly containing glob patterns
++        :return: Tuple of strings with glob patterns expanded
++        """
++        expanded = []
++        for pattern in patterns:
++            if glob.has_magic(pattern):
++                matches = glob.glob(pattern, recursive=True)
++                if matches:
++                    expanded.extend(matches)
++                else:
++                    expanded.append(pattern)
++            else:
++                expanded.append(pattern)
++        return tuple(expanded)
++
+     def check(self, files_or_modules: Sequence[str] | str) -> None:
+         """Main checking entry: check a list of files or modules from their name.
+-
+         files_or_modules is either a string or list of strings presenting modules to check.
+         """
+         # 1) Initialize
+@@ -671,6 +691,10 @@ class PyLinter(
+                 stacklevel=2,
+             )
+             files_or_modules = (files_or_modules,)  # type: ignore[assignment]
++        
++        # Expand glob patterns
++        files_or_modules = self._expand_glob_patterns(files_or_modules)
++        
+         if self.config.recursive:
+             files_or_modules = tuple(self._discover_files(files_or_modules))
+         if self.config.from_stdin:
+@@ -1381,4 +1405,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)

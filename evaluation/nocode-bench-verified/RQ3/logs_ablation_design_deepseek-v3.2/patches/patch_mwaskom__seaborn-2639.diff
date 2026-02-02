@@ -1,0 +1,76 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..a3275b7 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -52,7 +52,7 @@ class Grid:
+         """Save the figure."""
+         kwargs = kwargs.copy()
+         kwargs.setdefault("bbox_inches", "tight")
+-        self.fig.savefig(*args, **kwargs)
++        self.figure.savefig(*args, **kwargs)
+ 
+     def tight_layout(self, *args, **kwargs):
+         """Call fig.tight_layout within rect that exclude the legend."""
+@@ -60,7 +60,7 @@ class Grid:
+         kwargs.setdefault("rect", self._tight_layout_rect)
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+-        self.fig.tight_layout(*args, **kwargs)
++        self.figure.tight_layout(*args, **kwargs)
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -801,7 +801,7 @@ class FacetGrid(Grid):
+ 
+     def despine(self, **kwargs):
+         """Remove axis spines from the facets."""
+-        utils.despine(self.fig, **kwargs)
++        utils.despine(self.figure, **kwargs)
+         return self
+ 
+     def set_axis_labels(self, x_var=None, y_var=None, clear_inner=True, **kwargs):
+@@ -996,6 +996,11 @@ class FacetGrid(Grid):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+         return self._fig
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._fig
++
+     @property
+     def axes(self):
+         """An array of the :class:`matplotlib.axes.Axes` objects in the grid."""
+@@ -1237,6 +1242,11 @@ class PairGrid(Grid):
+         self.axes = axes
+         self.data = data
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+         # Save what we are going to do with the diagonal
+         self.diag_sharey = diag_sharey
+         self.diag_vars = None
+@@ -1655,6 +1665,11 @@ class JointGrid(object):
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+         # Turn off tick visibility for the measure axis on the marginal plots
+         plt.setp(ax_marg_x.get_xticklabels(), visible=False)
+         plt.setp(ax_marg_y.get_yticklabels(), visible=False)
+@@ -1920,7 +1935,7 @@ class JointGrid(object):
+ 
+         """
+         kwargs.setdefault("bbox_inches", "tight")
+-        self.fig.savefig(*args, **kwargs)
++        self.figure.savefig(*args, **kwargs)
+ 
+ 
+ JointGrid.__init__.__doc__ = """\

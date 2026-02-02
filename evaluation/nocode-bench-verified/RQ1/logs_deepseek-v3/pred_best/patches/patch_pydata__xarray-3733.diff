@@ -1,0 +1,115 @@
+diff --git a/xarray/core/computation.py b/xarray/core/computation.py
+index 15b4590..0ddce42 100644
+--- a/xarray/core/computation.py
++++ b/xarray/core/computation.py
+@@ -1069,6 +1069,38 @@ def apply_ufunc(
+         return apply_array_ufunc(func, *args, dask=dask)
+ 
+ 
++def polyval(coord, coeffs):
++    """Evaluate a polynomial at specific values.
++    
++    Replicates numpy.polyval behavior for xarray objects.
++
++    Parameters
++    ----------
++    coord : DataArray or Variable
++        The coordinate values to evaluate the polynomial at.
++    coeffs : DataArray or Variable
++        Polynomial coefficients ordered from highest degree to lowest.
++        Must contain a dimension 'degree' unless it's 1D.
++
++    Returns
++    -------
++    result : DataArray
++        The evaluated polynomial values.
++    """
++    from .dataarray import DataArray
++    from .variable import Variable
++
++    if not isinstance(coord, (Variable, DataArray)):
++        coord = Variable((), coord)
++    if not isinstance(coeffs, (Variable, DataArray)):
++        coeffs = Variable(('degree',) if coeffs.ndim > 1 else (), coeffs)
++
++    # Broadcast coord and coeffs properly
++    result = coeffs * (coord ** len(coeffs))
++    result = result.sum('degree') if 'degree' in coeffs.dims else result
++
++    return result
++
+ def dot(*arrays, dims=None, **kwargs):
+     """Generalized dot product for xarray objects. Like np.einsum, but
+     provides a simpler interface based on array dimensions.
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..245a3ce 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3150,6 +3150,61 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().differentiate(coord, edge_order, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        **kwargs,
++    ) -> "Dataset":
++        """Least squares polynomial fit along a dimension.
++        
++        Parameters
++        ----------
++        dim : hashable
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        full : bool, optional
++            If True, return additional information including residuals and rank.
++        **kwargs : dict
++            Additional keyword arguments passed to numpy.polyfit.
++
++        Returns
++        -------
++        Dataset containing:
++            - polyfit_coefficients: polynomial coefficients
++            - (if full=True) residuals, rank, singular_values, rcond
++        """
++        from .dataset import Dataset
++        from .variable import Variable
++
++        x = self[dim].variable
++        y = self.variable
++
++        # Convert to numpy arrays for computation
++        xvals = x.values
++        yvals = y.values
++
++        if full:
++            coeffs, residuals, rank, singular_values, rcond = np.polyfit(
++                xvals, yvals, deg, full=full, **kwargs
++            )
++            result = Dataset({
++                'polyfit_coefficients': Variable(('degree',), coeffs),
++                'residuals': residuals,
++                'rank': rank,
++                'singular_values': singular_values,
++                'rcond': rcond
++            })
++        else:
++            coeffs = np.polyfit(xvals, yvals, deg, **kwargs)
++            result = Dataset({
++                'polyfit_coefficients': Variable(('degree',), coeffs)
++            })
++
++        return result
++
+     def integrate(
+         self, dim: Union[Hashable, Sequence[Hashable]], datetime_unit: str = None
+     ) -> "DataArray":
+@@ -3449,4 +3504,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)

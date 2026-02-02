@@ -1,0 +1,38 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..7ca5ed6 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -129,6 +129,16 @@ _units_and_physical_types = [
+ _physical_unit_mapping = {}
+ _unit_physical_mapping = {}
+ _name_physical_mapping = {}
++_attrname_physical_mapping = {}
++_attrname_physical_mapping = {}
++
++def _to_attrname(name):
++    """Convert a physical type name to an attribute name."""
++    import re
++    # Remove parentheses and replace spaces with underscores.
++    name = re.sub(r'[()]', '', name)
++    name = name.replace(' ', '_')
++    return name
+ 
+ 
+ def _physical_type_from_str(name):
+@@ -141,8 +151,15 @@ def _physical_type_from_str(name):
+ 
+     if name in _name_physical_mapping:
+         return _name_physical_mapping[name]
++    elif name in _attrname_physical_mapping:
++        return _attrname_physical_mapping[name]
+     else:
+-        raise ValueError(f"{name!r} is not a known physical type.")
++        # Try to convert to an attribute name and look up.
++        attrname = _to_attrname(name)
++        if attrname in _attrname_physical_mapping:
++            return _attrname_physical_mapping[attrname]
++        else:
++            raise ValueError(f"{name!r} is not a known physical type.")
+ 
+ 
+ def _replace_temperatures_with_kelvin(unit):

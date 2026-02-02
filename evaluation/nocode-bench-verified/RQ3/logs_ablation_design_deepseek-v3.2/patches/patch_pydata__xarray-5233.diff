@@ -1,0 +1,65 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index e6fae2b..860af52 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -867,6 +867,54 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+         dataset[self.name] = self.variable
+         return dataset
+ 
++    def convert_calendar(
++        self, calendar: str, use_cftime: bool = None, **kwargs
++    ) -> "DataArray":
++        """Convert the DataArray to another calendar using the given calendar.
++
++        Parameters
++        ----------
++        calendar : str
++            The target calendar name.
++        use_cftime : bool, optional
++            Whether to use cftime for the output datetimes. If None (default),
++            pandas is used when possible (standard calendar and dates within
++            1678 and 2262).
++        **kwargs
++            Additional arguments passed to the calendar conversion function.
++
++        Returns
++        -------
++        DataArray
++            DataArray with converted calendar.
++        """
++        ds = self._to_temp_dataset().convert_calendar(
++            calendar=calendar, use_cftime=use_cftime, **kwargs
++        )
++        return self._from_temp_dataset(ds)
++
++    def interp_calendar(
++        self, target_calendar: str, **kwargs
++    ) -> "DataArray":
++        """Interpolate the DataArray to another calendar.
++
++        Parameters
++        ----------
++        target_calendar : str
++            The target calendar name.
++        **kwargs
++            Additional arguments passed to the interpolation function.
++
++        Returns
++        -------
++        DataArray
++            DataArray interpolated to the target calendar.
++        """
++        ds = self._to_temp_dataset().interp_calendar(
++            target_calendar=target_calendar, **kwargs
++        )
++        return self._from_temp_dataset(ds)
++
+     def __dask_tokenize__(self):
+         from dask.base import normalize_token
+ 
+@@ -4658,4 +4706,4 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)

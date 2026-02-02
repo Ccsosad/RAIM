@@ -1,0 +1,26 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..df99f74 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -192,6 +192,21 @@ class Nominal(Scale):
+             # and (B) allow the values parameter for a Coordinate to set xlim/ylim
+             axis.set_view_interval(0, len(units_seed) - 1)
+ 
++            # Enhancement: adjust defaults for Nominal scale axes to behave like categorical
++            axis.set_data_interval(0, len(units_seed) - 1)
++            # Fixed margins could be represented as small padding around category range
++            axis._view_interval = (-0.5, len(units_seed) - 0.5)
++            # Disable gridlines by default
++            if hasattr(axis, "grid"):
++                axis.grid(False)
++            # Invert y axis for categorical default look if axis orientation is vertical
++            if getattr(prop, "orient", None) == "v":
++                try:
++                    axis.set_view_interval(len(units_seed) - 1, 0)
++                except Exception:
++                    # Fallback for pseudo axis, simply store inverted range
++                    axis._view_interval = (len(units_seed) - 1, 0)
++
+         new._matplotlib_scale = mpl_scale
+ 
+         # TODO array cast necessary to handle float/int mixture, which we need

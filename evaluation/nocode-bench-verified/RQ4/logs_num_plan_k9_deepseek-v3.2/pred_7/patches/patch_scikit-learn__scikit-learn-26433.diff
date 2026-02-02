@@ -1,0 +1,40 @@
+diff --git a/sklearn/datasets/_openml.py b/sklearn/datasets/_openml.py
+index 2578f63..618a2ed 100644
+--- a/sklearn/datasets/_openml.py
++++ b/sklearn/datasets/_openml.py
+@@ -725,6 +725,7 @@ def fetch_openml(
+     n_retries: int = 3,
+     delay: float = 1.0,
+     parser: Optional[str] = "warn",
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Fetch dataset from openml by name or dataset id.
+ 
+@@ -829,6 +830,13 @@ def fetch_openml(
+            warning. Therefore, an `ImportError` will be raised from 1.4 if
+            the dataset is dense and pandas is not installed.
+ 
++    read_csv_kwargs : dict, default=None
++        Additional keyword arguments to pass to `pandas.read_csv` when using the
++        pandas parser. This allows to override the default parameters used to
++        read the ARFF file. For example, to change the quote character, one can
++        pass `read_csv_kwargs={'quotechar': "'"}`. This parameter is only used
++        when `parser="pandas"` or when the pandas parser is chosen automatically.
++
+     Returns
+     -------
+     data : :class:`~sklearn.utils.Bunch`
+@@ -1096,6 +1104,7 @@ def fetch_openml(
+         n_retries=n_retries,
+         delay=delay,
+         parser=parser_,
++        read_csv_kwargs=read_csv_kwargs,
+     )
+ 
+     if return_X_y:
+@@ -1111,4 +1120,4 @@ def fetch_openml(
+         url="https://www.openml.org/d/{}".format(data_id),
+     )
+ 
+-    return bunch
++    return bunch

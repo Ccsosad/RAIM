@@ -1,0 +1,234 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..381a9b0 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -80,9 +80,96 @@ class _DistributionPlotter(VectorPlotter):
+         return kws
+ 
+ 
++class Histogram:
++    """Compute histogram bins and statistics."""
++    def __init__(self, binwidth=None, bins="auto", binrange=None):
++        self.binwidth = binwidth
++        self.bins = bins
++        self.binrange = binrange
++
++    def define_bin_edges(self, data, weights=None):
++        """Compute bin edges for given data."""
++        import numpy as np
++        if self.binrange is None:
++            min_val, max_val = data.min(), data.max()
++        else:
++            min_val, max_val = self.binrange
++        if self.binwidth is not None:
++            bins = np.arange(min_val, max_val + self.binwidth, self.binwidth)
++        else:
++            bins = self.bins
++        return np.histogram_bin_edges(data, bins=bins, range=self.binrange, weights=weights)
++
++
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def plot_univariate(
++        self,
++        binwidth=None,
++        bins="auto",
++        binrange=None,
++        discrete=False,
++        cumulative=False,
++        common_bins=True,
++        common_norm=True,
++        multiple="layer",
++        element="bars",
++        fill=True,
++        shrink=1,
++        kde=False,
++        kde_kws=None,
++        line_kws=None,
++        thresh=0,
++        pthresh=None,
++        pmax=None,
++        cbar=False,
++        cbar_ax=None,
++        cbar_kws=None,
++        estimate_kws=None,
++        legend=True,
++        color=None,
++        log_scale=None,
++        ax=None,
++    ):
++
++        # This is a placeholder for the univariate histogram plot.
++        # We would implement the full logic here.
++        pass
++
++    def plot_bivariate(
++        self,
++        binwidth=None,
++        bins="auto",
++        binrange=None,
++        discrete=False,
++        cumulative=False,
++        common_bins=True,
++        common_norm=True,
++        multiple="layer",
++        element="bars",
++        fill=True,
++        shrink=1,
++        kde=False,
++        kde_kws=None,
++        line_kws=None,
++        thresh=0,
++        pthresh=None,
++        pmax=None,
++        cbar=False,
++        cbar_ax=None,
++        cbar_kws=None,
++        estimate_kws=None,
++        legend=True,
++        color=None,
++        log_scale=None,
++        ax=None,
++    ):
++
++        # This is a placeholder for the bivariate histogram plot.
++        # We would implement the full logic here.
++        pass
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):
+@@ -876,6 +963,131 @@ Examples
+ )
+ 
+ 
++@_deprecate_positional_args
++def histplot(
++    x=None,
++    y=None,
++    hue=None,
++    data=None,
++    weights=None,
++    stat="count",
++    bins="auto",
++    binwidth=None,
++    binrange=None,
++    discrete=False,
++    cumulative=False,
++    common_bins=True,
++    common_norm=True,
++    multiple="layer",
++    element="bars",
++    fill=True,
++    shrink=1,
++    kde=False,
++    kde_kws=None,
++    line_kws=None,
++    thresh=0,
++    pthresh=None,
++    pmax=None,
++    cbar=False,
++    cbar_ax=None,
++    cbar_kws=None,
++    palette=None,
++    hue_order=None,
++    hue_norm=None,
++    color=None,
++    log_scale=None,
++    legend=True,
++    ax=None,
++    **kwargs,
++):
++
++    # Set up the plotter
++    p = _HistPlotter(
++        data=data,
++        variables=_HistPlotter.get_semantics(locals()),
++    )
++
++    p.map_hue(palette=palette, order=hue_order, norm=hue_norm)
++
++    if ax is None:
++        ax = plt.gca()
++
++    # Determine if univariate or bivariate
++    univariate = bool({"x", "y"} - set(p.variables))
++
++    if univariate:
++        p.plot_univariate(
++            binwidth=binwidth,
++            bins=bins,
++            binrange=binrange,
++            discrete=discrete,
++            cumulative=cumulative,
++            common_bins=common_bins,
++            common_norm=common_norm,
++            multiple=multiple,
++            element=element,
++            fill=fill,
++            shrink=shrink,
++            kde=kde,
++            kde_kws=kde_kws,
++            line_kws=line_kws,
++            thresh=thresh,
++            pthresh=pthresh,
++            pmax=pmax,
++            cbar=cbar,
++            cbar_ax=cbar_ax,
++            cbar_kws=cbar_kws,
++            legend=legend,
++            color=color,
++            log_scale=log_scale,
++            ax=ax,
++        )
++    else:
++        p.plot_bivariate(
++            binwidth=binwidth,
++            bins=bins,
++            binrange=binrange,
++            discrete=discrete,
++            cumulative=cumulative,
++            common_bins=common_bins,
++            common_norm=common_norm,
++            multiple=multiple,
++            element=element,
++            fill=fill,
++            shrink=shrink,
++            kde=kde,
++            kde_kws=kde_kws,
++            line_kws=line_kws,
++            thresh=thresh,
++            pthresh=pthresh,
++            pmax=pmax,
++            cbar=cbar,
++            cbar_ax=cbar_ax,
++            cbar_kws=cbar_kws,
++            legend=legend,
++            color=color,
++            log_scale=log_scale,
++            ax=ax,
++        )
++
++    return ax
++
++
++histplot.__doc__ = """\
++Plot univariate or bivariate histograms.
++
++A histogram is a classic visualization tool that represents the distribution
++of one or more variables by counting the number of observations that fall
++within discrete bins.
++
++...
++--------
++
++.. include:: ../docstrings/histplot.rst
++
++"""
++
++
+ class _RugPlotter(_DistributionPlotter):
+ 
+     def __init__(

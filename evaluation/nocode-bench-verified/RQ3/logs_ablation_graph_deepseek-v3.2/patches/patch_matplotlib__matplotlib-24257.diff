@@ -1,0 +1,83 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..18d8625 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -226,13 +226,71 @@ def update_nested_dict(main_dict, new_dict):
+     return main_dict
+ 
+ 
++def _load_style_from_package(dotted_name):
++    """
++    Load a style from a package given a dotted name.
++
++    The dotted name should be in the form "package.subpackage.style_name".
++    The style file should be located at "package/subpackage/style_name.mplstyle"
++    relative to the package's root.
++    """
++    import sys
++    # Split the dotted name into package and style name.
++    parts = dotted_name.split('.')
++    if len(parts) < 2:
++        raise KeyError(f"Invalid dotted style name: {dotted_name}")
++    package_name = '.'.join(parts[:-1])
++    style_name = parts[-1]
++    resource_name = f"{style_name}.{STYLE_EXTENSION}"
++
++    # Try to load the resource using importlib.resources (or its backport).
++    try:
++        # For Python <3.10, we use importlib_resources.
++        if sys.version_info < (3, 10):
++            import importlib_resources as resources
++        else:
++            from importlib import resources
++    except ImportError:
++        raise KeyError(
++            f"Cannot load style {dotted_name!r}: "
++            "importlib_resources is required for Python <3.10"
++        ) from None
++
++    try:
++        ref = resources.files(package_name).joinpath(resource_name)
++    except ModuleNotFoundError:
++        raise KeyError(f"Package {package_name!r} not found.") from None
++
++    if not ref.is_file():
++        raise KeyError(
++            f"Style {style_name!r} not found in package {package_name!r}."
++        )
++
++    with resources.as_file(ref) as path:
++        with warnings.catch_warnings(record=True) as warns:
++            params = rc_params_from_file(
++                path, use_default_template=False)
++        for w in warns:
++            _log.warning('In %s: %s', dotted_name, w.message)
++        return params
++
++
+ class _StyleLibrary(dict):
+     def __getitem__(self, key):
+         if key in _DEPRECATED_SEABORN_STYLES:
+             _api.warn_deprecated("3.6", message=_DEPRECATED_SEABORN_MSG)
+             key = _DEPRECATED_SEABORN_STYLES[key]
+ 
+-        return dict.__getitem__(self, key)
++        try:
++            return dict.__getitem__(self, key)
++        except KeyError:
++            # If the key contains a dot, try to load it from a package.
++            if '.' in key:
++                value = _load_style_from_package(key)
++                self[key] = value
++                return value
++            else:
++                raise
+ 
+ 
+ # Load style library
+@@ -249,4 +307,4 @@ def reload_library():
+     available[:] = sorted(library.keys())
+ 
+ 
+-reload_library()
++reload_library()

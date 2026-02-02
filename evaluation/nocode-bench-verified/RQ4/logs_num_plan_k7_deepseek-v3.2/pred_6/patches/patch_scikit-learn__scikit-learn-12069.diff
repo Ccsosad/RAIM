@@ -1,0 +1,51 @@
+diff --git a/sklearn/decomposition/_kernel_pca.py b/sklearn/decomposition/_kernel_pca.py
+index 6f0266a..fc3a1c7 100644
+--- a/sklearn/decomposition/_kernel_pca.py
++++ b/sklearn/decomposition/_kernel_pca.py
+@@ -8,7 +8,7 @@ from scipy import linalg
+ from scipy.sparse.linalg import eigsh
+ 
+ from ..utils._arpack import _init_arpack_v0
+-from ..utils.extmath import svd_flip
++from ..utils.extmath import svd_flip, randomized_svd
+ from ..utils.validation import check_is_fitted, _check_psd_eigenvalues
+ from ..utils.deprecation import deprecated
+ from ..exceptions import NotFittedError
+@@ -215,6 +215,31 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+                                                 tol=self.tol,
+                                                 maxiter=self.max_iter,
+                                                 v0=v0)
++        elif eigen_solver == 'randomized':
++            # randomized_svd returns U, S, V. For symmetric K, the eigenvectors
++            # are U (or V). We use U.
++            # Note: randomized_svd requires n_components < min(K.shape)
++            if n_components >= K.shape[0]:
++                raise ValueError("n_components must be less than n_samples for "
++                                 "randomized solver. Use eigen_solver='dense'.")
++            U, S, _ = randomized_svd(K, n_components=n_components,
++                                     random_state=self.random_state,
++                                     n_iter=5)  # using 5 iterations as default
++            self.lambdas_ = S
++            self.alphas_ = U
++        elif eigen_solver == 'randomized':
++            # randomized_svd returns U, S, V. For symmetric K, the eigenvectors
++            # are U (or V). We use U.
++            # Note: randomized_svd requires n_components < min(K.shape)
++            if n_components >= K.shape[0]:
++                raise ValueError("n_components must be less than n_samples for "
++                                 "randomized solver. Use eigen_solver='dense'.")
++            U, S, _ = randomized_svd(K, n_components=n_components,
++                                     random_state=self.random_state,
++                                     n_iter='auto',
++                                     flip_sign=False)
++            self.lambdas_ = S
++            self.alphas_ = U
+ 
+         # make sure that the eigenvalues are ok and fix numerical issues
+         self.lambdas_ = _check_psd_eigenvalues(self.lambdas_,
+@@ -388,4 +413,4 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+ 
+     def _more_tags(self):
+         return {'preserves_dtype': [np.float64, np.float32],
+-                'pairwise': self.kernel == 'precomputed'}
++                'pairwise': self.kernel == 'precomputed'}

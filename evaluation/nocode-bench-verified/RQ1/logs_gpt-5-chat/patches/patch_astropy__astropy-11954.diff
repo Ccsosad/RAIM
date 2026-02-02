@@ -1,0 +1,56 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..eca455b 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,7 +336,8 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, /, keys=None, join_type='inner',
++         *, keys_left=None, keys_right=None,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+          join_funcs=None):
+@@ -381,6 +382,41 @@ def join(left, right, keys=None, join_type='inner',
+     if not isinstance(right, Table):
+         right = Table(right)
+ 
++    # Support keys_left / keys_right to allow joining on columns with different names
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Specify either keys or keys_left/keys_right, not both')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both keys_left and keys_right')
++        if isinstance(keys_left, (str, Column)):
++            keys_left = [keys_left]
++        if isinstance(keys_right, (str, Column)):
++            keys_right = [keys_right]
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have same number of elements')
++        # Create temporary tables with renamed columns for join
++        left = left.copy(copy_data=False)
++        right = right.copy(copy_data=False)
++        rename_map_left = {}
++        rename_map_right = {}
++        new_key_names = []
++        for i, (kl, kr) in enumerate(zip(keys_left, keys_right)):
++            new_name = f'__join_temp_key_{i}__'
++            if isinstance(kl, str):
++                rename_map_left[kl] = new_name
++            else:  # column-like
++                left.add_column(Table([kl], names=[new_name])[new_name])
++            if isinstance(kr, str):
++                rename_map_right[kr] = new_name
++            else:
++                right.add_column(Table([kr], names=[new_name])[new_name])
++            new_key_names.append(new_name)
++        if rename_map_left:
++            left.rename_columns(list(rename_map_left.keys()), list(rename_map_left.values()))
++        if rename_map_right:
++            right.rename_columns(list(rename_map_right.keys()), list(rename_map_right.values()))
++        keys = tuple(new_key_names)
++
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,

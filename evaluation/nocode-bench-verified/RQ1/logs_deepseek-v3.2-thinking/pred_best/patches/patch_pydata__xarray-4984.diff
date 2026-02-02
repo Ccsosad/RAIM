@@ -1,0 +1,293 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..feadb70 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -2709,6 +2709,36 @@ class DataArray(AbstractArray, DataWithCoords):
+         index = self.coords.to_index()
+         return pd.Series(self.values.reshape(-1), index=index, name=self.name)
+ 
++    def query(self, expr, engine=None, parser="pandas", **kwargs):
++        """
++        Query the DataArray using a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            Boolean expression to evaluate. The expression can refer to
++            this DataArray by its name or as `x`.
++        engine : {"python", "numexpr"}, default: None
++            The engine used to evaluate the expression. numexpr may be
++            faster for large arrays.
++        parser : {"pandas", "python"}, default: "pandas"
++            The parser to use for constructing the syntax tree from the expression.
++        **kwargs
++            Additional keyword arguments passed to the query engine.
++
++        Returns
++        -------
++        DataArray
++            DataArray containing only the elements that satisfy the query.
++
++        See Also
++        --------
++        Dataset.query
++        """
++        from .query import DataArrayQuery
++        
++        return DataArrayQuery(self).query(expr, engine=engine, parser=parser, **kwargs)
++
+     def to_masked_array(self, copy: bool = True) -> np.ma.MaskedArray:
+         """Convert this array into a numpy.ma.MaskedArray
+ 
+@@ -4360,4 +4390,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..744b620 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6943,6 +6943,36 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+                 "Dataset.argmin() with a sequence or ... for dim"
+             )
+ 
++    def query(self, expr, engine=None, parser="pandas", **kwargs):
++        """
++        Query the Dataset using a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            Boolean expression to evaluate. The expression can refer to
++            data variables in the dataset by name.
++        engine : {"python", "numexpr"}, default: None
++            The engine used to evaluate the expression. numexpr may be
++            faster for large arrays.
++        parser : {"pandas", "python"}, default: "pandas"
++            The parser to use for constructing the syntax tree from the expression.
++        **kwargs
++            Additional keyword arguments passed to the query engine.
++
++        Returns
++        -------
++        Dataset
++            Dataset containing only the elements that satisfy the query.
++
++        See Also
++        --------
++        DataArray.query
++        """
++        from .query import DatasetQuery
++        
++        return DatasetQuery(self).query(expr, engine=engine, parser=parser, **kwargs)
++
+     def argmax(self, dim=None, **kwargs):
+         """Indices of the maxima of the member variables.
+ 
+@@ -7002,4 +7032,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query.py b/xarray/core/query.py
+new file mode 100644
+index 0000000..ee3de85
+--- /dev/null
++++ b/xarray/core/query.py
+@@ -0,0 +1,193 @@
++"""
++Query interface for xarray objects.
++"""
++
++import numpy as np
++from . import utils
++from .common import AbstractArray
++from .dataarray import DataArray
++from .dataset import Dataset
++from .variable import Variable
++
++try:
++    import numexpr
++    HAS_NUMEXPR = True
++except ImportError:
++    HAS_NUMEXPR = False
++
++
++class QueryEngine:
++    """Base class for query engines."""
++    
++    def __init__(self, parser="pandas"):
++        self.parser = parser
++        
++    def evaluate(self, expr, local_dict):
++        """Evaluate expression with variables in local_dict."""
++        raise NotImplementedError
++
++
++class PythonEngine(QueryEngine):
++    """Python engine using eval()."""
++    
++    def evaluate(self, expr, local_dict):
++        """Evaluate expression using Python's eval()."""
++        return eval(expr, {"np": np}, local_dict)
++
++
++class NumExprEngine(QueryEngine):
++    """Engine using numexpr for faster evaluation."""
++    
++    def evaluate(self, expr, local_dict):
++        """Evaluate expression using numexpr."""
++        if not HAS_NUMEXPR:
++            raise ImportError(
++                "numexpr is required for engine='numexpr'. "
++                "Install with `pip install numexpr` or `conda install numexpr`."
++            )
++        # Convert numpy arrays to numexpr compatible format
++        for k, v in local_dict.items():
++            if isinstance(v, np.ndarray):
++                local_dict[k] = v
++        return numexpr.evaluate(expr, local_dict)
++
++
++class BaseQuery:
++    """Base class for querying xarray objects."""
++    
++    def __init__(self, obj):
++        self.obj = obj
++        
++    def query(self, expr, engine=None, parser="pandas", **kwargs):
++        """Evaluate query expression on the object."""
++        # Determine engine
++        if engine is None:
++            engine = "numexpr" if HAS_NUMEXPR else "python"
++            
++        if engine == "python":
++            engine_obj = PythonEngine(parser=parser)
++        elif engine == "numexpr":
++            engine_obj = NumExprEngine(parser=parser)
++        else:
++            raise ValueError(f"Invalid engine: {engine}. Must be 'python' or 'numexpr'.")
++        
++        # Get local dictionary for evaluation
++        local_dict = self._prepare_local_dict()
++        
++        # Evaluate expression
++        mask = engine_obj.evaluate(expr, local_dict)
++        
++        # Apply mask to object
++        return self._apply_mask(mask)
++    
++    def _prepare_local_dict(self):
++        """Prepare local dictionary for expression evaluation."""
++        raise NotImplementedError
++    
++    def _apply_mask(self, mask):
++        """Apply boolean mask to the object."""
++        raise NotImplementedError
++
++
++class DataArrayQuery(BaseQuery):
++    """Query engine for DataArray objects."""
++    
++    def _prepare_local_dict(self):
++        """Prepare local dictionary with DataArray data."""
++        local_dict = {}
++        
++        # Add the DataArray itself
++        if self.obj.name is not None:
++            local_dict[self.obj.name] = self.obj.data
++        # Always add as 'x' for convenience
++        local_dict["x"] = self.obj.data
++        
++        return local_dict
++    
++    def _apply_mask(self, mask):
++        """Apply boolean mask to DataArray."""
++        if not isinstance(mask, np.ndarray):
++            raise TypeError("Query expression must return a boolean array")
++        
++        if mask.shape != self.obj.shape:
++            raise ValueError(
++                f"Query result shape {mask.shape} doesn't match "
++                f"DataArray shape {self.obj.shape}"
++            )
++        
++        # Use where to mask out False values, then drop NaN
++        result = self.obj.where(mask, drop=True)
++        return result
++
++
++class DatasetQuery(BaseQuery):
++    """Query engine for Dataset objects."""
++    
++    def _prepare_local_dict(self):
++        """Prepare local dictionary with Dataset variables."""
++        local_dict = {}
++        
++        # Add all data variables
++        for name, var in self.obj.data_vars.items():
++            local_dict[name] = var.data
++            
++        return local_dict
++    
++    def _apply_mask(self, mask):
++        """Apply boolean mask to Dataset."""
++        if not isinstance(mask, np.ndarray):
++            raise TypeError("Query expression must return a boolean array")
++        
++        # Check mask dimensions
++        # For Dataset queries, we need to determine which dimensions the mask applies to
++        # We'll try to match mask dimensions with data variable dimensions
++        mask_dims = mask.shape
++        
++        # Find data variables that match the mask dimensions
++        matching_vars = []
++        for name, var in self.obj.data_vars.items():
++            if var.shape == mask_dims:
++                matching_vars.append((name, var))
++            elif mask.ndim == 1 and var.ndim >= 1:
++                # Check if 1D mask matches first dimension of variable
++                if var.shape[0] == mask_dims[0]:
++                    matching_vars.append((name, var))
++        
++        if not matching_vars:
++            raise ValueError(
++                f"No data variables found with dimensions matching mask shape {mask_dims}"
++            )
++        
++        # Apply mask to all matching variables
++        result_vars = {}
++        for name, var in self.obj.data_vars.items():
++            if (name, var) in matching_vars:
++                # Broadcast mask if needed
++                if var.shape != mask.shape and mask.ndim == 1:
++                    # Expand mask dimensions to match variable
++                    expanded_mask = mask.reshape((-1,) + (1,) * (var.ndim - 1))
++                    expanded_mask = np.broadcast_to(expanded_mask, var.shape)
++                else:
++                    expanded_mask = mask
++                
++                # Create new variable with mask applied
++                data = np.where(expanded_mask, var.data, np.nan)
++                # Remove NaN slices
++                # For simplicity, we use where() method
++                from .dataarray import DataArray
++                da = DataArray(var.data, dims=var.dims, name=name)
++                result_da = da.where(expanded_mask, drop=True)
++                result_vars[name] = Variable(result_da.dims, result_da.data)
++            else:
++                # Keep variable as-is (it may not have the dimensions being filtered)
++                result_vars[name] = var
++        
++        # Create new Dataset
++        result = Dataset(result_vars, attrs=self.obj.attrs)
++        
++        # Add coordinates that are still valid
++        for name, coord in self.obj.coords.items():
++            if all(dim in result.dims for dim in coord.dims):
++                result.coords[name] = coord
++        
++        return result

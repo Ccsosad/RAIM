@@ -1,0 +1,45 @@
+diff --git a/astropy/units/__init__.py b/astropy/units/__init__.py
+index 0853e7b..eb521d9 100644
+--- a/astropy/units/__init__.py
++++ b/astropy/units/__init__.py
+@@ -43,4 +43,39 @@ del bases
+ # Enable the set of default units.  This notably does *not* include
+ # Imperial units.
+ 
+-set_enabled_units([si, cgs, astrophys, function_units, misc, photometric])
++set_enabled_units([si, cgs, astrophys, function_units, misc, photometric])
++
++# Add milli- prefix to Angstrom
++from . import astrophys
++from .prefixes import milli
++
++# Define mAngstrom and mangstrom as aliases for milli*Angstrom
++mAngstrom = milli * astrophys.Angstrom
++mAngstrom.__doc__ = "milli-angstrom"
++mAngstrom._aliases = ["mAngstrom", "mangstrom"]
++
++# Add the aliases to the namespace
++globals()['mAngstrom'] = mAngstrom
++globals()['mangstrom'] = mAngstrom
++
++# Also add to the astrophys module for completeness
++astrophys.mAngstrom = mAngstrom
++astrophys.mangstrom = mAngstrom
++
++# Add milli- prefix to Angstrom
++from .astrophys import Angstrom
++from .prefixes import milli
++
++# Define mAngstrom and mangstrom as aliases for milli*Angstrom
++mAngstrom = milli * Angstrom
++mAngstrom.__doc__ = "milli-angstrom"
++mAngstrom._aliases = ["mAngstrom", "mangstrom"]
++
++# Add the aliases to the namespace
++globals()['mAngstrom'] = mAngstrom
++globals()['mangstrom'] = mAngstrom
++
++# Also add to the astrophys module for completeness
++from . import astrophys
++astrophys.mAngstrom = mAngstrom
++astrophys.mangstrom = mAngstrom

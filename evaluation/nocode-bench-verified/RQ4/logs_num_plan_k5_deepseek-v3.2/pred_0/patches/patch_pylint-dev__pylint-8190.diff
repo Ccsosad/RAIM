@@ -1,0 +1,39 @@
+diff --git a/pylint/pyreverse/main.py b/pylint/pyreverse/main.py
+index 946d88c..1a0567b 100644
+--- a/pylint/pyreverse/main.py
++++ b/pylint/pyreverse/main.py
+@@ -288,10 +288,27 @@ class Run(_ArgumentsManager, _ArgumentsProvider):
+             {discover_package_path(arg, self.config.source_roots) for arg in args}
+         )
+         with augmented_sys_path(extra_packages_paths):
++            # If show_stdlib is False, add standard library directories to the ignore list
++            ignore_list = list(self.config.ignore_list)
++            if not self.config.show_stdlib:
++                import sysconfig
++                import os
++
++                stdlib_dirs = []
++                # Get the standard library directory
++                stdlib = sysconfig.get_path('stdlib')
++                if stdlib:
++                    stdlib_dirs.append(stdlib)
++                # Get the platform-specific standard library directory
++                platstdlib = sysconfig.get_path('platstdlib')
++                if platstdlib and platstdlib != stdlib:
++                    stdlib_dirs.append(platstdlib)
++                for dir_path in stdlib_dirs:
++                    ignore_list.append(os.path.basename(dir_path))
+             project = project_from_files(
+                 args,
+                 project_name=self.config.project,
+-                black_list=self.config.ignore_list,
++                black_list=tuple(ignore_list),
+             )
+             linker = Linker(project, tag=True)
+             handler = DiadefsHandler(self.config)
+@@ -301,4 +318,4 @@ class Run(_ArgumentsManager, _ArgumentsProvider):
+ 
+ 
+ if __name__ == "__main__":
+-    Run(sys.argv[1:])
++    Run(sys.argv[1:])

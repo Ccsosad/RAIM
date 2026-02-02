@@ -1,0 +1,34 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index eed9d35..02cfec3 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -6483,6 +6483,11 @@ default: :rc:`scatter.edgecolors`
+         Call signature::
+ 
+             contour([X, Y,] Z, [levels], **kwargs)
++
++        The *clip_path* parameter can be used to clip the contours to a
++        patch. All other parameters are as described in the docstring of
++        `~.matplotlib.axes.Axes.contour`.
++
+         %(contour_doc)s
+         """
+         kwargs['filled'] = False
+@@ -6499,6 +6504,11 @@ default: :rc:`scatter.edgecolors`
+         Call signature::
+ 
+             contourf([X, Y,] Z, [levels], **kwargs)
++
++        The *clip_path* parameter can be used to clip the contours to a
++        patch. All other parameters are as described in the docstring of
++        `~.matplotlib.axes.Axes.contour`.
++
+         %(contour_doc)s
+         """
+         kwargs['filled'] = True
+@@ -8423,4 +8433,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

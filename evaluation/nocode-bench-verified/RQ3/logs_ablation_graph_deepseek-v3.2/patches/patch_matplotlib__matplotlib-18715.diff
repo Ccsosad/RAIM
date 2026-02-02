@@ -1,0 +1,61 @@
+diff --git a/matplotlib/__init__.py b/matplotlib/__init__.py
+new file mode 100644
+index 0000000..74b0558
+--- /dev/null
++++ b/matplotlib/__init__.py
+@@ -0,0 +1,4 @@
++    'xtick.minor.visible': False,
++    'xtick.minor.size': 3.5,
++    'xtick.minor.width': 0.6,
++    'xtick.minor.ndivs': 'auto',
+diff --git a/matplotlib/axes/_base.py b/matplotlib/axes/_base.py
+new file mode 100644
+index 0000000..a066954
+--- /dev/null
++++ b/matplotlib/axes/_base.py
+@@ -0,0 +1,2 @@
++        self.xaxis.set_minor_locator(ticker.AutoMinorLocator(axis=0))
++        self.yaxis.set_minor_locator(ticker.AutoMinorLocator(axis=1))
+diff --git a/matplotlib/rcsetup.py b/matplotlib/rcsetup.py
+new file mode 100644
+index 0000000..48a0cad
+--- /dev/null
++++ b/matplotlib/rcsetup.py
+@@ -0,0 +1,4 @@
++    'ytick.minor.visible': _validate_bool,
++    'ytick.minor.size': _validate_float,
++    'ytick.minor.width': _validate_float,
++    'ytick.minor.ndivs': _validate_auto_or_int,
+diff --git a/matplotlib/ticker.py b/matplotlib/ticker.py
+new file mode 100644
+index 0000000..cb5c6b3
+--- /dev/null
++++ b/matplotlib/ticker.py
+@@ -0,0 +1,27 @@
++class AutoMinorLocator(Locator):
++    """
++    Dynamically find minor tick positions based on the positions of
++    major ticks. The scale must be linear with major ticks evenly spaced.
++    """
++    def __init__(self, n=None, axis=None):
++        """
++        Parameters
++        ----------
++        n : int or 'auto' or None
++            Number of subdivisions of the interval between major ticks.
++            If None, will be set from the rcParams.
++            If 'auto', the number of divisions will be chosen by the distance
++            between major ticks.
++        axis : int or None
++            The axis index (0 for x, 1 for y). If provided, used to get the
++            rcParam when n is None.
++        """
++        if n is None and axis is not None:
++            # Get the rcParam for this axis
++            from matplotlib import rcParams
++            if axis == 0:
++                n = rcParams['xtick.minor.ndivs']
++            else:
++                n = rcParams['ytick.minor.ndivs']
++        self.ndivs = n
++        self.axis = axis

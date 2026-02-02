@@ -1,0 +1,400 @@
+diff --git a/_pytest/capture.py b/_pytest/capture.py
+index 2a7dde5..9ad5eac 100644
+--- a/_pytest/capture.py
++++ b/_pytest/capture.py
+@@ -50,6 +50,12 @@ def pytest_load_initial_conftests(early_config, parser, args):
+         if "logging" in sys.modules:
+             sys.modules["logging"].raiseExceptions = False
+     early_config.add_cleanup(silence_logging_at_shutdown)
++    
++    # Initialize logging plugin if not already done
++    if not pluginmanager.hasplugin('logging-plugin'):
++        from _pytest import logging
++        logging_plugin = logging.LoggingPlugin(early_config)
++        pluginmanager.register(logging_plugin, 'logging-plugin')
+ 
+     # finally trigger conftest loading but while capturing (issue93)
+     capman.start_global_capturing()
+diff --git a/_pytest/terminal.py b/_pytest/terminal.py
+index 0ea9d7c..f22ff21 100644
+--- a/_pytest/terminal.py
++++ b/_pytest/terminal.py
+@@ -535,6 +535,16 @@ class TerminalReporter:
+                 if content[-1:] == "\n":
+                     content = content[:-1]
+                 self.writer.line(content)
++    
++    def _handle_log_sections(self, rep):
++        """Handle log sections in test reports."""
++        for secname, content in rep.sections:
++            if secname == 'Captured stdlog call':
++                if self.config.getoption('log_print', True):
++                    self.writer.sep('-', secname)
++                    if content[-1:] == "\n":
++                        content = content[:-1]
++                    self.writer.line(content)
+ 
+     def summary_failures(self):
+         if self.config.option.tbstyle != "no":
+@@ -576,6 +586,9 @@ class TerminalReporter:
+     def _outrep_summary(self, rep):
+         rep.toterminal(self.writer)
+         for secname, content in rep.sections:
++            # Skip log sections if --no-print-logs is set
++            if secname == 'Captured stdlog call' and not self.config.getoption('log_print', True):
++                continue
+             self.writer.sep("-", secname)
+             if content[-1:] == "\n":
+                 content = content[:-1]
+diff --git a/_pytest/config/__init__.py b/_pytest/config/__init__.py
+new file mode 100644
+index 0000000..778d252
+--- /dev/null
++++ b/_pytest/config/__init__.py
+@@ -0,0 +1,57 @@
++"""
++Configuration handling for pytest.
++"""
++import py
++import six
++
++from _pytest.compat import dummy_context_manager
++
++
++class PytestPluginManager(object):
++    """Manages plugin registration and hooks."""
++    
++    def __init__(self):
++        self._plugins = {}
++        self._name2plugin = {}
++    
++    def register(self, plugin, name=None):
++        """Register a plugin."""
++        if name is None:
++            name = plugin.__class__.__name__
++        self._plugins[name] = plugin
++        self._name2plugin[name] = plugin
++    
++    def hasplugin(self, name):
++        """Check if a plugin is registered."""
++        return name in self._plugins
++    
++    def getplugin(self, name):
++        """Get a plugin by name."""
++        return self._plugins.get(name)
++
++
++class Config(object):
++    """Configuration object for pytest."""
++    
++    def __init__(self, pluginmanager, option=None):
++        self.pluginmanager = pluginmanager
++        self.option = option or {}
++        self._cleanup = []
++    
++    def add_cleanup(self, func):
++        """Add a cleanup function to be called at shutdown."""
++        self._cleanup.append(func)
++    
++    def getoption(self, name, default=None):
++        """Get a command line option value."""
++        return getattr(self.option, name, default)
++    
++    def getvalue(self, name, default=None):
++        """Get a configuration value."""
++        return self.getoption(name, default)
++
++
++def pytest_configure(config):
++    """Configure the logging plugin."""
++    # This will be called by the logging plugin
++    pass
+diff --git a/_pytest/logging.py b/_pytest/logging.py
+new file mode 100644
+index 0000000..61d6cbc
+--- /dev/null
++++ b/_pytest/logging.py
+@@ -0,0 +1,283 @@
++"""
++Logging support for pytest.
++"""
++import logging
++import sys
++import warnings
++from contextlib import contextmanager
++
++import py
++import six
++
++import _pytest
++from _pytest import fixtures
++from _pytest.compat import dummy_context_manager
++
++
++class LogCaptureHandler(logging.Handler):
++    """A logging handler that stores log records and the log text."""
++
++    def __init__(self):
++        logging.Handler.__init__(self)
++        self.records = []
++        self.stream = six.StringIO()
++
++    def emit(self, record):
++        self.records.append(record)
++        self.format(record)
++        self.stream.write(self.formatted_record + '\n')
++
++    def reset(self):
++        self.records = []
++        self.stream = six.StringIO()
++
++    @property
++    def formatted_record(self):
++        return self.formatter.format(record) if self.formatter else record.getMessage()
++
++
++class LogCaptureFixture(object):
++    """Provides access and control of log capturing."""
++
++    def __init__(self, item):
++        self._item = item
++        self._initial_handler_level = None
++        self._initial_logger_levels = {}
++
++    @property
++    def handler(self):
++        """Get the logging handler used by the fixture."""
++        plugin = self._item.config.pluginmanager.getplugin('logging-plugin')
++        if plugin:
++            return plugin.handler
++        return None
++
++    @property
++    def records(self):
++        """Get list of log records."""
++        if self.handler:
++            return self.handler.records
++        return []
++
++    @property
++    def text(self):
++        """Get the formatted log text."""
++        if self.handler:
++            return self.handler.stream.getvalue()
++        return ''
++
++    @property
++    def record_tuples(self):
++        """Get list of log records as tuples (logger_name, level, message)."""
++        return [(record.name, record.levelno, record.getMessage()) 
++                for record in self.records]
++
++    def set_level(self, level, logger=None):
++        """Set the threshold level of the handler or a logger."""
++        if logger is None:
++            self.handler.setLevel(level)
++        else:
++            logger_obj = logging.getLogger(logger)
++            self._initial_logger_levels.setdefault(logger, logger_obj.level)
++            logger_obj.setLevel(level)
++
++    @contextmanager
++    def at_level(self, level, logger=None):
++        """Context manager to set the log level temporarily."""
++        if logger is None:
++            handler = self.handler
++            old_level = handler.level
++            handler.setLevel(level)
++            try:
++                yield
++            finally:
++                handler.setLevel(old_level)
++        else:
++            logger_obj = logging.getLogger(logger)
++            old_level = logger_obj.level
++            logger_obj.setLevel(level)
++            try:
++                yield
++            finally:
++                logger_obj.setLevel(old_level)
++
++    def clear(self):
++        """Clear the captured log records and text."""
++        if self.handler:
++            self.handler.reset()
++
++
++def pytest_addoption(parser):
++    """Add logging-related command line options."""
++    group = parser.getgroup('logging')
++    group.addoption(
++        '--log-level',
++        dest='log_level',
++        default=None,
++        help='Set the log level for the handler (e.g., DEBUG, INFO)'
++    )
++    group.addoption(
++        '--log-format',
++        dest='log_format',
++        default='%(levelname)s %(name)s %(message)s',
++        help='Log format used by the logging module'
++    )
++    group.addoption(
++        '--log-date-format',
++        dest='log_date_format',
++        default=None,
++        help='Log date format used by the logging module'
++    )
++    group.addoption(
++        '--log-cli-level',
++        dest='log_cli_level',
++        default=None,
++        help='Set the log level for console logging'
++    )
++    group.addoption(
++        '--log-cli-format',
++        dest='log_cli_format',
++        default=None,
++        help='Log format for console logging'
++    )
++    group.addoption(
++        '--log-cli-date-format',
++        dest='log_cli_date_format',
++        default=None,
++        help='Log date format for console logging'
++    )
++    group.addoption(
++        '--log-file',
++        dest='log_file',
++        default=None,
++        help='Path to log file'
++    )
++    group.addoption(
++        '--log-file-level',
++        dest='log_file_level',
++        default=None,
++        help='Set the log level for file logging'
++    )
++    group.addoption(
++        '--log-file-format',
++        dest='log_file_format',
++        default=None,
++        help='Log format for file logging'
++    )
++    group.addoption(
++        '--log-file-date-format',
++        dest='log_file_date_format',
++        default=None,
++        help='Log date format for file logging'
++    )
++    group.addoption(
++        '--no-print-logs',
++        dest='log_print',
++        action='store_false',
++        default=True,
++        help='Disable printing logs on test failure'
++    )
++
++
++class LoggingPlugin(object):
++    """A plugin to manage logging during test execution."""
++
++    def __init__(self, config):
++        self.config = config
++        self.handler = None
++        self.log_cli_handler = None
++        self.log_file_handler = None
++
++    def pytest_configure(self, config):
++        """Setup logging handlers based on configuration."""
++        # Create the main log capture handler
++        self.handler = LogCaptureHandler()
++        
++        # Configure handler format
++        log_format = config.getoption('log_format')
++        log_date_format = config.getoption('log_date_format')
++        formatter = logging.Formatter(log_format, log_date_format)
++        self.handler.setFormatter(formatter)
++        
++        # Set log level if specified
++        log_level = config.getoption('log_level')
++        if log_level:
++            self.handler.setLevel(getattr(logging, log_level.upper()))
++        else:
++            self.handler.setLevel(logging.NOTSET)
++        
++        # Add handler to root logger
++        root_logger = logging.getLogger()
++        root_logger.addHandler(self.handler)
++        
++        # Setup console logging if requested
++        log_cli_level = config.getoption('log_cli_level')
++        if log_cli_level:
++            self.log_cli_handler = logging.StreamHandler(sys.stdout)
++            cli_format = config.getoption('log_cli_format') or log_format
++            cli_date_format = config.getoption('log_cli_date_format') or log_date_format
++            cli_formatter = logging.Formatter(cli_format, cli_date_format)
++            self.log_cli_handler.setFormatter(cli_formatter)
++            self.log_cli_handler.setLevel(getattr(logging, log_cli_level.upper()))
++            root_logger.addHandler(self.log_cli_handler)
++        
++        # Setup file logging if requested
++        log_file = config.getoption('log_file')
++        if log_file:
++            self.log_file_handler = logging.FileHandler(log_file, mode='w')
++            file_format = config.getoption('log_file_format') or log_format
++            file_date_format = config.getoption('log_file_date_format') or log_date_format
++            file_formatter = logging.Formatter(file_format, file_date_format)
++            self.log_file_handler.setFormatter(file_formatter)
++            file_level = config.getoption('log_file_level')
++            if file_level:
++                self.log_file_handler.setLevel(getattr(logging, file_level.upper()))
++            else:
++                self.log_file_handler.setLevel(logging.NOTSET)
++            root_logger.addHandler(self.log_file_handler)
++
++    def pytest_unconfigure(self, config):
++        """Cleanup logging handlers."""
++        root_logger = logging.getLogger()
++        if self.handler:
++            root_logger.removeHandler(self.handler)
++        if self.log_cli_handler:
++            root_logger.removeHandler(self.log_cli_handler)
++        if self.log_file_handler:
++            root_logger.removeHandler(self.log_file_handler)
++
++    @pytest.hookimpl(hookwrapper=True)
++    def pytest_runtest_setup(self, item):
++        """Reset log capture before each test."""
++        if self.handler:
++            self.handler.reset()
++        yield
++
++    @pytest.hookimpl(hookwrapper=True)
++    def pytest_runtest_teardown(self, item):
++        """Reset log capture after each test."""
++        if self.handler:
++            self.handler.reset()
++        yield
++
++    def pytest_runtest_makereport(self, item, call):
++        """Add log output to test report if test failed."""
++        if call.when == 'call' and call.excinfo is not None:
++            if self.config.getoption('log_print') and self.handler:
++                log_content = self.handler.stream.getvalue()
++                if log_content:
++                    # Add log section to the report
++                    if hasattr(call, 'report'):
++                        call.report.sections.append(('Captured stdlog call', log_content))
++
++
++@pytest.fixture
++def caplog(request):
++    """Fixture to capture log messages."""
++    return LogCaptureFixture(request.node)
++
++
++def pytest_configure(config):
++    """Register the logging plugin."""
++    plugin = LoggingPlugin(config)
++    config.pluginmanager.register(plugin, 'logging-plugin')

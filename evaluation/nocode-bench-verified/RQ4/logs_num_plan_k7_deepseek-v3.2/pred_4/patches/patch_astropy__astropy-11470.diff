@@ -1,0 +1,120 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..cbbec41 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -1040,6 +1040,9 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+     def _scale_operation(self, op, *args):
+         """Scale all non-angular components, leaving angular ones unchanged.
+ 
++        If there are differentials attached, the operation is done by converting
++        to cartesian, applying the operation, and converting back.
++
+         Parameters
+         ----------
+         op : `~operator` callable
+@@ -1049,29 +1052,42 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             be multiplied with, divided by).
+         """
+ 
+-        self._raise_if_has_differentials(op.__name__)
+-
+-        results = []
+-        for component, cls in self.attr_classes.items():
+-            value = getattr(self, component)
+-            if issubclass(cls, Angle):
+-                results.append(value)
+-            else:
+-                results.append(op(value, *args))
++        # If there are no differentials, we can use the original method.
++        if not self.differentials:
++            results = []
++            for component, cls in self.attr_classes.items():
++                value = getattr(self, component)
++                if issubclass(cls, Angle):
++                    results.append(value)
++                else:
++                    results.append(op(value, *args))
+ 
+-        # try/except catches anything that cannot initialize the class, such
+-        # as operations that returned NotImplemented or a representation
+-        # instead of a quantity (as would happen for, e.g., rep * rep).
+-        try:
+-            return self.__class__(*results)
+-        except Exception:
+-            return NotImplemented
++            # try/except catches anything that cannot initialize the class, such
++            # as operations that returned NotImplemented or a representation
++            # instead of a quantity (as would happen for, e.g., rep * rep).
++            try:
++                return self.__class__(*results)
++            except Exception:
++                return NotImplemented
++        else:
++            # Convert to cartesian representation with cartesian differentials.
++            difs_cls = {k: CartesianDifferential for k in self.differentials.keys()}
++            crep = self.represent_as(CartesianRepresentation,
++                                     differential_class=difs_cls)
++            # Scale the cartesian representation and its differentials.
++            scaled_crep = crep._scale_operation(op, *args)
++            # Convert back to the original representation.
++            difs_cls_back = {k: diff.__class__ for k, diff in self.differentials.items()}
++            return scaled_crep.represent_as(self.__class__, difs_cls_back)
+ 
+     def _combine_operation(self, op, other, reverse=False):
+         """Combine two representation.
+ 
+         By default, operate on the cartesian representations of both.
+ 
++        If there are differentials attached, the operation is done by converting
++        to cartesian, applying the operation, and converting back.
++
+         Parameters
+         ----------
+         op : `~operator` callable
+@@ -1082,13 +1098,40 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             Whether the operands should be reversed (e.g., as we got here via
+             ``self.__rsub__`` because ``self`` is a subclass of ``other``).
+         """
+-        self._raise_if_has_differentials(op.__name__)
+-
+-        result = self.to_cartesian()._combine_operation(op, other, reverse)
+-        if result is NotImplemented:
+-            return NotImplemented
++        # If there are no differentials, we can use the original method.
++        if not self.differentials:
++            result = self.to_cartesian()._combine_operation(op, other, reverse)
++            if result is NotImplemented:
++                return NotImplemented
++            else:
++                return self.from_cartesian(result)
+         else:
+-            return self.from_cartesian(result)
++            # Convert self to cartesian representation with cartesian differentials.
++            difs_cls = {k: CartesianDifferential for k in self.differentials.keys()}
++            crep = self.represent_as(CartesianRepresentation,
++                                     differential_class=difs_cls)
++            # Combine with the other representation.
++            # Note: other might not have differentials.
++            if isinstance(other, BaseRepresentation) and other.differentials:
++                # Convert other to cartesian as well.
++                other_difs_cls = {k: CartesianDifferential for k in other.differentials.keys()}
++                other_crep = other.represent_as(CartesianRepresentation,
++                                                differential_class=other_difs_cls)
++            else:
++                other_crep = other
++
++            # Perform the operation in cartesian.
++            if reverse:
++                result = other_crep._combine_operation(op, crep, reverse=False)
++            else:
++                result = crep._combine_operation(op, other_crep, reverse=False)
++
++            if result is NotImplemented:
++                return NotImplemented
++
++            # Convert back to the original representation.
++            difs_cls_back = {k: diff.__class__ for k, diff in self.differentials.items()}
++            return result.represent_as(self.__class__, difs_cls_back)
+ 
+     # We need to override this setter to support differentials
+     @BaseRepresentationOrDifferential.shape.setter

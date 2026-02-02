@@ -1,0 +1,452 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index 5d84827..40e6b8b 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -297,6 +297,96 @@ def vstack(tables, join_type='outer', metadata_conflicts='warn'):
+     return out
+ 
+ 
++def _cstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along columns)
++
++    A ``join_type`` of 'exact' means that the tables must all
++    have exactly the same set of columns.  If ``join_type`` is 'inner' then
++    the intersection of columns will be the output.  A value of 'outer' (default)
++    means the output will have the union of all columns, with table values being
++    masked where no common values are available.
++
++    Parameters
++    ----------
++    arrays : List of tables
++        Tables to stack depth-wise (along columns)
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    col_name_map : dict
++        Dictionary mapping output column names to input names
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++    """
++
++    # Store user-provided col_name_map until the end
++    _col_name_map = col_name_map
++
++    # Input validation
++    if join_type not in ('inner', 'exact', 'outer'):
++        raise ValueError("join_type must be one of 'inner', 'exact', or 'outer'")
++
++    tables = arrays
++    n_tables = len(tables)
++
++    # Check that all tables have the same number of rows
++    n_rows = {len(table) for table in tables}
++    if len(n_rows) > 1:
++        raise ValueError("All input tables must have the same number of rows")
++    n_rows = n_rows.pop()
++
++    # Prepare the set of output columns and the mapping from input to output
++    col_name_map = get_col_name_map(tables, [], '', [], join_type=join_type)
++
++    # Create the output table
++    out = _get_out_class(tables)()
++
++    # Process each output column
++    for out_name, in_names in col_name_map.items():
++        cols = []
++        for name, table in zip(in_names, tables):
++            if name is None:
++                # Column is missing in this table, create masked array
++                if join_type == 'outer':
++                    # For outer join, create masked column with appropriate length
++                    col = MaskedColumn(name=out_name, length=n_rows, dtype=np.float64)
++                    col.mask = True
++                    cols.append(col)
++                else:
++                    # For inner or exact, skip if column is missing (but exact should have all columns)
++                    continue
++            else:
++                # Get the column from the current table
++                cols.append(table[name])
++
++        # Stack the columns depth-wise
++        if cols:
++            # Find common dtype
++            dtype = np.result_type(*[col.dtype for col in cols])
++            # Convert all columns to the common dtype and ensure they are masked if needed
++            converted_cols = []
++            for col in cols:
++                if not isinstance(col, MaskedColumn):
++                    col = MaskedColumn(col, dtype=dtype, copy=False)
++                else:
++                    col = col.astype(dtype)
++                converted_cols.append(col.data)
++
++            # Stack the columns into a 2D array (n_rows, n_tables)
++            stacked_data = np.ma.vstack(converted_cols).T
++            stacked_col = MaskedColumn(stacked_data, name=out_name)
++            out[out_name] = stacked_col
++
++    # If col_name_map supplied as a dict input, then update.
++    if isinstance(_col_name_map, Mapping):
++        _col_name_map.update(col_name_map)
++
++    return out
++
++
+ def hstack(tables, join_type='outer',
+            uniq_col_name='{col_name}_{table_name}', table_names=None,
+            metadata_conflicts='warn'):
+@@ -368,6 +458,158 @@ def hstack(tables, join_type='outer',
+     return out
+ 
+ 
++def _cstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along columns)
++
++    A ``join_type`` of 'exact' means that the tables must all
++    have exactly the same set of columns.  If ``join_type`` is 'inner' then
++    the intersection of columns will be the output.  A value of 'outer' (default)
++    means the output will have the union of all columns, with table values being
++    masked where no common values are available.
++
++    Parameters
++    ----------
++    arrays : List of tables
++        Tables to stack depth-wise (along columns)
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    col_name_map : dict
++        Dictionary mapping output column names to input names
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++    """
++
++    # Store user-provided col_name_map until the end
++    _col_name_map = col_name_map
++
++    # Input validation
++    if join_type not in ('inner', 'exact', 'outer'):
++        raise ValueError("join_type must be one of 'inner', 'exact', or 'outer'")
++
++    tables = arrays
++    n_tables = len(tables)
++
++    # Check that all tables have the same number of rows
++    n_rows = {len(table) for table in tables}
++    if len(n_rows) > 1:
++        raise ValueError("All input tables must have the same number of rows")
++    n_rows = n_rows.pop()
++
++    # Prepare the set of output columns and the mapping from input to output
++    col_name_map = get_col_name_map(tables, [], '', [], join_type=join_type)
++
++    # Create the output table
++    out = _get_out_class(tables)()
++
++    # Process each output column
++    for out_name, in_names in col_name_map.items():
++        cols = []
++        for name, table in zip(in_names, tables):
++            if name is None:
++                # Column is missing in this table, create masked array
++                if join_type == 'outer':
++                    # For outer join, create masked column with appropriate length
++                    col = MaskedColumn(name=out_name, length=n_rows, dtype=np.float64)
++                    col.mask = True
++                    cols.append(col)
++                else:
++                    # For inner or exact, skip if column is missing (but exact should have all columns)
++                    continue
++            else:
++                # Get the column from the current table
++                cols.append(table[name])
++
++        # Stack the columns depth-wise
++        if cols:
++            # Find common dtype
++            dtype = np.result_type(*[col.dtype for col in cols])
++            # Convert all columns to the common dtype and ensure they are masked if needed
++            converted_cols = []
++            for col in cols:
++                if not isinstance(col, MaskedColumn):
++                    col = MaskedColumn(col, dtype=dtype, copy=False)
++                else:
++                    col = col.astype(dtype)
++                converted_cols.append(col.data)
++
++            # Stack the columns into a 2D array (n_rows, n_tables)
++            stacked_data = np.ma.vstack(converted_cols).T
++            stacked_col = MaskedColumn(stacked_data, name=out_name)
++            out[out_name] = stacked_col
++
++    # If col_name_map supplied as a dict input, then update.
++    if isinstance(_col_name_map, Mapping):
++        _col_name_map.update(col_name_map)
++
++    return out
++
++
++def cstack(tables, join_type='outer', metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along columns)
++
++    A ``join_type`` of 'exact' means that the tables must all
++    have exactly the same set of columns.  If ``join_type`` is 'inner' then
++    the intersection of columns will be the output.  A value of 'outer' (default)
++    means the output will have the union of all columns, with table values being
++    masked where no common values are available.
++
++    Parameters
++    ----------
++    tables : List of Table objects
++        Tables to stack depth-wise (along columns) with the current table
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    metadata_conflicts : str
++        How to proceed with metadata conflicts. This should be one of:
++            * ``'silent'``: silently pick the last conflicting meta-data value
++            * ``'warn'``: pick the last conflicting meta-data value, but emit a warning (default)
++            * ``'error'``: raise an exception.
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++
++    Examples
++    --------
++    To stack two tables depth-wise (along columns) do::
++
++      >>> from astropy.table import Table, cstack
++      >>> t1 = Table({'a': [1, 2], 'b': [3, 4]}, names=('a', 'b'))
++      >>> t2 = Table({'a': [5, 6], 'c': [7, 8]}, names=('a', 'c'))
++      >>> print(t1)
++       a   b
++      --- ---
++        1   3
++        2   4
++      >>> print(t2)
++       a   c
++      --- ---
++        5   7
++        6   8
++      >>> print(cstack([t1, t2]))
++       a [2]   b [2]   c [2]
++      ------- ------- -------
++        1 .. 5     3 .. --      -- .. 7
++        2 .. 6     4 .. --      -- .. 8
++    """
++    tables = _get_list_of_tables(tables)  # validates input
++    if len(tables) == 1:
++        return tables[0]  # no point in stacking a single table
++    col_name_map = OrderedDict()
++
++    out = _cstack(tables, join_type, col_name_map, metadata_conflicts)
++
++    _merge_table_meta(out, tables, metadata_conflicts=metadata_conflicts)
++
++    return out
++
++
+ def unique(input_table, keys=None, silent=False, keep='first'):
+     """
+     Returns the unique rows of a table.
+@@ -879,6 +1121,96 @@ def _vstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='wa
+     return out
+ 
+ 
++def _cstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along columns)
++
++    A ``join_type`` of 'exact' means that the tables must all
++    have exactly the same set of columns.  If ``join_type`` is 'inner' then
++    the intersection of columns will be the output.  A value of 'outer' (default)
++    means the output will have the union of all columns, with table values being
++    masked where no common values are available.
++
++    Parameters
++    ----------
++    arrays : List of tables
++        Tables to stack depth-wise (along columns)
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    col_name_map : dict
++        Dictionary mapping output column names to input names
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++    """
++
++    # Store user-provided col_name_map until the end
++    _col_name_map = col_name_map
++
++    # Input validation
++    if join_type not in ('inner', 'exact', 'outer'):
++        raise ValueError("join_type must be one of 'inner', 'exact', or 'outer'")
++
++    tables = arrays
++    n_tables = len(tables)
++
++    # Check that all tables have the same number of rows
++    n_rows = {len(table) for table in tables}
++    if len(n_rows) > 1:
++        raise ValueError("All input tables must have the same number of rows")
++    n_rows = n_rows.pop()
++
++    # Prepare the set of output columns and the mapping from input to output
++    col_name_map = get_col_name_map(tables, [], '', [], join_type=join_type)
++
++    # Create the output table
++    out = _get_out_class(tables)()
++
++    # Process each output column
++    for out_name, in_names in col_name_map.items():
++        cols = []
++        for name, table in zip(in_names, tables):
++            if name is None:
++                # Column is missing in this table, create masked array
++                if join_type == 'outer':
++                    # For outer join, create masked column with appropriate length
++                    col = MaskedColumn(name=out_name, length=n_rows, dtype=np.float64)
++                    col.mask = True
++                    cols.append(col)
++                else:
++                    # For inner or exact, skip if column is missing (but exact should have all columns)
++                    continue
++            else:
++                # Get the column from the current table
++                cols.append(table[name])
++
++        # Stack the columns depth-wise
++        if cols:
++            # Find common dtype
++            dtype = np.result_type(*[col.dtype for col in cols])
++            # Convert all columns to the common dtype and ensure they are masked if needed
++            converted_cols = []
++            for col in cols:
++                if not isinstance(col, MaskedColumn):
++                    col = MaskedColumn(col, dtype=dtype, copy=False)
++                else:
++                    col = col.astype(dtype)
++                converted_cols.append(col.data)
++
++            # Stack the columns into a 2D array (n_rows, n_tables)
++            stacked_data = np.ma.vstack(converted_cols).T
++            stacked_col = MaskedColumn(stacked_data, name=out_name)
++            out[out_name] = stacked_col
++
++    # If col_name_map supplied as a dict input, then update.
++    if isinstance(_col_name_map, Mapping):
++        _col_name_map.update(col_name_map)
++
++    return out
++
++
+ def _hstack(arrays, join_type='outer', uniq_col_name='{col_name}_{table_name}',
+            table_names=None, col_name_map=None):
+     """
+@@ -981,4 +1313,94 @@ def _hstack(arrays, join_type='outer', uniq_col_name='{col_name}_{table_name}',
+     if isinstance(_col_name_map, Mapping):
+         _col_name_map.update(col_name_map)
+ 
++    return out
++
++
++def _cstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along columns)
++
++    A ``join_type`` of 'exact' means that the tables must all
++    have exactly the same set of columns.  If ``join_type`` is 'inner' then
++    the intersection of columns will be the output.  A value of 'outer' (default)
++    means the output will have the union of all columns, with table values being
++    masked where no common values are available.
++
++    Parameters
++    ----------
++    arrays : List of tables
++        Tables to stack depth-wise (along columns)
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    col_name_map : dict
++        Dictionary mapping output column names to input names
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++    """
++
++    # Store user-provided col_name_map until the end
++    _col_name_map = col_name_map
++
++    # Input validation
++    if join_type not in ('inner', 'exact', 'outer'):
++        raise ValueError("join_type must be one of 'inner', 'exact', or 'outer'")
++
++    tables = arrays
++    n_tables = len(tables)
++
++    # Check that all tables have the same number of rows
++    n_rows = {len(table) for table in tables}
++    if len(n_rows) > 1:
++        raise ValueError("All input tables must have the same number of rows")
++    n_rows = n_rows.pop()
++
++    # Prepare the set of output columns and the mapping from input to output
++    col_name_map = get_col_name_map(tables, [], '', [], join_type=join_type)
++
++    # Create the output table
++    out = _get_out_class(tables)()
++
++    # Process each output column
++    for out_name, in_names in col_name_map.items():
++        cols = []
++        for name, table in zip(in_names, tables):
++            if name is None:
++                # Column is missing in this table, create masked array
++                if join_type == 'outer':
++                    # For outer join, create masked column with appropriate length
++                    col = MaskedColumn(name=out_name, length=n_rows, dtype=np.float64)
++                    col.mask = True
++                    cols.append(col)
++                else:
++                    # For inner or exact, skip if column is missing (but exact should have all columns)
++                    continue
++            else:
++                # Get the column from the current table
++                cols.append(table[name])
++
++        # Stack the columns depth-wise
++        if cols:
++            # Find common dtype
++            dtype = np.result_type(*[col.dtype for col in cols])
++            # Convert all columns to the common dtype and ensure they are masked if needed
++            converted_cols = []
++            for col in cols:
++                if not isinstance(col, MaskedColumn):
++                    col = MaskedColumn(col, dtype=dtype, copy=False)
++                else:
++                    col = col.astype(dtype)
++                converted_cols.append(col.data)
++
++            # Stack the columns into a 2D array (n_rows, n_tables)
++            stacked_data = np.ma.vstack(converted_cols).T
++            stacked_col = MaskedColumn(stacked_data, name=out_name)
++            out[out_name] = stacked_col
++
++    # If col_name_map supplied as a dict input, then update.
++    if isinstance(_col_name_map, Mapping):
++        _col_name_map.update(col_name_map)
++
+     return out

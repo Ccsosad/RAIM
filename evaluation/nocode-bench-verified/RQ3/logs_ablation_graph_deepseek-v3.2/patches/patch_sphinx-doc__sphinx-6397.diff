@@ -1,0 +1,27 @@
+diff --git a/sphinx/config.py b/sphinx/config.py
+index bd9365a..6fbdb7a 100644
+--- a/sphinx/config.py
++++ b/sphinx/config.py
+@@ -153,6 +153,7 @@ class Config:
+         'smartquotes_excludes': ({'languages': ['ja'],
+                                   'builders': ['man', 'text']},
+                                  'env', []),
++        'autodoc_typehints': ('signature', 'env', []),
+     }  # type: Dict[str, Tuple]
+ 
+     def __init__(self, *args):
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..934ea03 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -416,6 +416,10 @@ class Documenter:
+         if result:
+             args, retann = result
+ 
++        # If autodoc_typehints is set to 'none', return an empty signature.
++        if self.env.config.autodoc_typehints == 'none':
++            return ''
++
+         if args is not None:
+             return args + (retann and (' -> %s' % retann) or '')
+         else:

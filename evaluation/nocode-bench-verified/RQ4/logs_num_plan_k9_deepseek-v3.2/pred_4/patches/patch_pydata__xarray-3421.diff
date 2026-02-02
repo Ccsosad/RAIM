@@ -1,0 +1,93 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..9c4ab57 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1863,13 +1864,16 @@ class DataArray(AbstractArray, DataWithCoords):
+         Dataset.transpose
+         """
+         if dims:
+-            if set(dims) ^ set(self.dims):
++            from .variable import infix_dims
++            resolved_dims = infix_dims(dims, self.dims)
++            if set(resolved_dims) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+                     "permuted array dimensions (%s)" % (dims, tuple(self.dims))
+                 )
+-
+-        variable = self.variable.transpose(*dims)
++            variable = self.variable.transpose(*resolved_dims)
++        else:
++            variable = self.variable.transpose()
+         if transpose_coords:
+             coords: Dict[Hashable, Variable] = {}
+             for name, coord in self.coords.items():
+@@ -3122,4 +3126,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..55ac0bc 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5449,4 +5449,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 873be99..4718ac5 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -1926,6 +1926,38 @@ class Variable(
+ 
+         return func
+ 
++def infix_dims(dims, all_dims):
++    """
++    Resolve an ellipsis in a tuple of dimensions to the full list of dimensions.
++
++    Parameters
++    ----------
++    dims : tuple
++        The desired dimensions, which may contain an ellipsis.
++    all_dims : tuple
++        The actual dimensions of the object.
++
++    Returns
++    -------
++    tuple
++        The resolved dimensions, with the ellipsis replaced by the missing dimensions.
++    """
++    if ... not in dims:
++        return dims
++    if dims.count(...) > 1:
++        raise ValueError("cannot have more than one ellipsis in transpose")
++    # Find the position of the ellipsis
++    ellipsis_index = dims.index(...)
++    # The dimensions before the ellipsis
++    before = dims[:ellipsis_index]
++    # The dimensions after the ellipsis
++    after = dims[ellipsis_index+1:]
++    # The dimensions that are not in before or after
++    missing = [d for d in all_dims if d not in before and d not in after]
++    # Insert the missing dimensions in place of the ellipsis
++    return before + tuple(missing) + after
++
++
+     def _to_numeric(self, offset=None, datetime_unit=None, dtype=float):
+         """ A (private) method to convert datetime array to numeric dtype
+         See duck_array_ops.datetime_to_numeric

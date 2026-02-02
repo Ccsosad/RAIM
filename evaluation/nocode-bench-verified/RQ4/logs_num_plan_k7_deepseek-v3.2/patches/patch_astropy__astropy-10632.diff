@@ -1,0 +1,60 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..4f8d0e3 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -56,6 +56,10 @@ class Conf(_config.ConfigNamespace):
+     Configuration parameters for `astropy.utils.data`.
+     """
+ 
++    allow_internet = _config.ConfigItem(
++        True,
++        'If False, prevent any attempt to download files from the internet.'
++    )
+     dataurl = _config.ConfigItem(
+         'http://data.astropy.org/',
+         'Primary URL for astropy remote data site.')
+@@ -1000,6 +1004,11 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+             f"URL {remote_url} was supposed to be downloaded but timeout was set to 0; "
+             f"if this is unexpected check the astropy config file for the option "
+             f"remote_timeout")
++    if not conf.allow_internet:
++        raise urllib.error.URLError(
++            f"URL {remote_url} was supposed to be downloaded but allow_internet is set to False; "
++            f"if this is unexpected check the astropy config file for the option "
++            f"allow_internet")
+ 
+     if remote_url is None:
+         remote_url = source_url
+@@ -1176,6 +1185,32 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+ 
+     url_key = remote_url
+ 
++    # Check if we are allowed to access the internet
++    if not conf.allow_internet and sources:
++        # If there are sources, we would need to download
++        # But if the file is in cache, we can still use it
++        if cache:
++            try:
++                dldir = _get_download_cache_loc(pkgname)
++            except OSError:
++                # Can't access cache, so we can't proceed
++                raise urllib.error.URLError(
++                    f"URL {remote_url} is not in cache and allow_internet is set to False; "
++                    f"cannot download.")
++            else:
++                filename = os.path.join(dldir, _url_to_dirname(url_key), "contents")
++                if os.path.exists(filename):
++                    return os.path.abspath(filename)
++                else:
++                    raise urllib.error.URLError(
++                        f"URL {remote_url} is not in cache and allow_internet is set to False; "
++                        f"cannot download.")
++        else:
++            raise urllib.error.URLError(
++                f"URL {remote_url} would require downloading but allow_internet is set to False; "
++                f"if this is unexpected check the astropy config file for the option "
++                f"allow_internet")
++
+     if cache:
+         try:
+             dldir = _get_download_cache_loc(pkgname)

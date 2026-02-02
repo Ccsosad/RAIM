@@ -1,0 +1,35 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 15487c2..1bef59e 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -677,6 +677,24 @@ class Dataset(
+         """
+         return self.dims
+ 
++    @property
++    def dtypes(self) -> Frozen[Hashable, np.dtype]:
++        """Mapping from variable names to dtypes.
++
++        Cannot be modified directly, but is updated when adding new variables.
++
++        Returns
++        -------
++        dict-like
++            Mapping from variable names (including coordinates) to their dtypes.
++
++        See Also
++        --------
++        Dataset.dims
++        Dataset.sizes
++        """
++        return Frozen({name: var.dtype for name, var in self.variables.items()})
++
+     def load(self: T_Dataset, **kwargs) -> T_Dataset:
+         """Manually trigger loading and/or computation of this dataset's data
+         from disk or a remote source into memory and return this dataset.
+@@ -8516,4 +8534,4 @@ class Dataset(
+         DataArray
+             The source interpolated on the decimal years of target,
+         """
+-        return interp_calendar(self, target, dim=dim)
++        return interp_calendar(self, target, dim=dim)

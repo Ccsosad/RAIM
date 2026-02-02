@@ -1,0 +1,69 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..9515ecc 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -263,6 +263,37 @@ def format_attrs(index, separator=", "):
+     return attrs_str
+ 
+ 
++def parse_iso8601_like(date_type, datetime_str):
++    """Parse a datetime string that may be in ISO8601 or cftime default format.
++
++    Parameters
++    ----------
++    date_type : cftime.datetime class
++        The type of cftime.datetime object to create.
++    datetime_str : str
++        A string representing a datetime. It can be in basic ISO8601 format
++        (YYYYMMDDhhmmss), extended ISO8601 format (YYYY-MM-DDThh:mm:ss), or
++        the default cftime string format (YYYY-MM-DD hh:mm:ss). Partial
++        strings are also allowed.
++
++    Returns
++    -------
++    parsed : cftime.datetime
++        The parsed datetime.
++    resolution : str
++        The resolution of the parsed string (e.g., 'year', 'month', etc.).
++    """
++    try:
++        return _parse_iso8601_with_reso(date_type, datetime_str)
++    except ValueError:
++        # Try replacing the first space with 'T' if there is no 'T' in the string.
++        if ' ' in datetime_str and 'T' not in datetime_str:
++            modified_str = datetime_str.replace(' ', 'T', 1)
++            return _parse_iso8601_with_reso(date_type, modified_str)
++        else:
++            raise
++
++
+ class CFTimeIndex(pd.Index):
+     """Custom Index for working with CF calendars and dates
+ 
+@@ -415,7 +446,7 @@ class CFTimeIndex(pd.Index):
+ 
+     def _get_string_slice(self, key):
+         """Adapted from pandas.tseries.index.DatetimeIndex._get_string_slice"""
+-        parsed, resolution = _parse_iso8601_with_reso(self.date_type, key)
++        parsed, resolution = parse_iso8601_like(self.date_type, key)
+         try:
+             loc = self._partial_date_slice(resolution, parsed)
+         except KeyError:
+@@ -459,7 +490,7 @@ class CFTimeIndex(pd.Index):
+         """Adapted from
+         pandas.tseries.index.DatetimeIndex._maybe_cast_slice_bound"""
+         if isinstance(label, str):
+-            parsed, resolution = _parse_iso8601_with_reso(self.date_type, label)
++            parsed, resolution = parse_iso8601_like(self.date_type, label)
+             start, end = _parsed_string_to_bounds(self.date_type, resolution, parsed)
+             if self.is_monotonic_decreasing and len(self) > 1:
+                 return end if side == "left" else start
+@@ -743,7 +774,7 @@ class CFTimeIndex(pd.Index):
+ 
+ 
+ def _parse_iso8601_without_reso(date_type, datetime_str):
+-    date, _ = _parse_iso8601_with_reso(date_type, datetime_str)
++    date, _ = parse_iso8601_like(date_type, datetime_str)
+     return date
+ 
+ 

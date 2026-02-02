@@ -1,0 +1,23 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..41a0b1d 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -145,7 +145,7 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         return X_int, X_mask
+ 
+     def _more_tags(self):
+-        return {'X_types': ['categorical']}
++        return {'X_types': ['categorical'], 'allow_nan': True}
+ 
+ 
+ class OneHotEncoder(_BaseEncoder):
+@@ -599,6 +599,9 @@ class OneHotEncoder(_BaseEncoder):
+ 
+         return np.array(feature_names, dtype=object)
+ 
++    def _more_tags(self):
++        return {'X_types': ['categorical'], 'allow_nan': True}
++
+ 
+ class OrdinalEncoder(_BaseEncoder):
+     """

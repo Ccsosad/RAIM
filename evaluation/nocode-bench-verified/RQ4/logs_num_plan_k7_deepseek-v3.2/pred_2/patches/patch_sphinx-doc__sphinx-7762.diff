@@ -1,0 +1,81 @@
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index 31d7f5b..abd7c15 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -84,6 +84,14 @@ class CheckExternalLinksBuilder(Builder):
+                                for x in self.app.config.linkcheck_anchors_ignore]
+         self.auth = [(re.compile(pattern), auth_info) for pattern, auth_info
+                      in self.app.config.linkcheck_auth]
++        # process linkcheck_request_headers
++        self.request_headers = []
++        self.wildcard_headers = {}
++        for base, headers in self.app.config.linkcheck_request_headers.items():
++            if base == '*':
++                self.wildcard_headers = headers
++            else:
++                self.request_headers.append((base, headers))
+         self.good = set()       # type: Set[str]
+         self.broken = {}        # type: Dict[str, str]
+         self.redirected = {}    # type: Dict[str, Tuple[str, int]]
+@@ -114,6 +122,14 @@ class CheckExternalLinksBuilder(Builder):
+         if self.app.config.linkcheck_timeout:
+             kwargs['timeout'] = self.app.config.linkcheck_timeout
+ 
++        def get_headers_for_uri(uri: str) -> dict:
++            # First, check for base matches
++            for base, headers in self.request_headers:
++                if uri.startswith(base):
++                    return headers
++            # If no match, return wildcard headers
++            return self.wildcard_headers
++
+         def check_uri() -> Tuple[str, str, int]:
+             # split off anchor
+             if '#' in uri:
+@@ -139,11 +155,21 @@ class CheckExternalLinksBuilder(Builder):
+             else:
+                 auth_info = None
+ 
++            # Get request headers for this URI
++            headers = get_headers_for_uri(uri)
++            if headers:
++                # Merge with default headers, but custom headers take precedence
++                merged_headers = kwargs['headers'].copy()
++                merged_headers.update(headers)
++                local_kwargs = dict(kwargs, headers=merged_headers)
++            else:
++                local_kwargs = kwargs
++
+             try:
+                 if anchor and self.app.config.linkcheck_anchors:
+                     # Read the whole document and see if #anchor exists
+                     response = requests.get(req_url, stream=True, config=self.app.config,
+-                                            auth=auth_info, **kwargs)
++                                            auth=auth_info, **local_kwargs)
+                     found = check_anchor(response, unquote(anchor))
+ 
+                     if not found:
+@@ -153,13 +179,13 @@ class CheckExternalLinksBuilder(Builder):
+                         # try a HEAD request first, which should be easier on
+                         # the server and the network
+                         response = requests.head(req_url, config=self.app.config,
+-                                                 auth=auth_info, **kwargs)
++                                                 auth=auth_info, **local_kwargs)
+                         response.raise_for_status()
+                     except HTTPError:
+                         # retry with GET request if that fails, some servers
+                         # don't like HEAD requests.
+                         response = requests.get(req_url, stream=True, config=self.app.config,
+-                                                auth=auth_info, **kwargs)
++                                                auth=auth_info, **local_kwargs)
+                         response.raise_for_status()
+             except HTTPError as err:
+                 if err.response.status_code == 401:
+@@ -337,6 +363,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+ 
+     app.add_config_value('linkcheck_ignore', [], None)
+     app.add_config_value('linkcheck_auth', [], None)
++    app.add_config_value('linkcheck_request_headers', {}, None)
+     app.add_config_value('linkcheck_retries', 1, None)
+     app.add_config_value('linkcheck_timeout', None, None, [int])
+     app.add_config_value('linkcheck_workers', 5, None)

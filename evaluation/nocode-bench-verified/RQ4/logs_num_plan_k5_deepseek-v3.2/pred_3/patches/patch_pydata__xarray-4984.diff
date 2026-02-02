@@ -1,0 +1,173 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..5f94435 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4360,4 +4360,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..edc8177 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6789,6 +6789,52 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+         )
+ 
++    def query(self, query: str, parser: str = None, engine: str = None) -> "Dataset":
++        """Return a new dataset with data filtered by the query expression.
++
++        Parameters
++        ----------
++        query : str
++            Query string to evaluate. The query string must be a valid
++            expression that can be evaluated by the parser.
++        parser : str, optional
++            The parser to use for parsing the query string. Currently only
++            'pandas' is supported.
++        engine : str, optional
++            The engine to use for evaluating the query. Currently only
++            'numexpr' is supported.
++
++        Returns
++        -------
++        filtered : Dataset
++            A new dataset with the same variables and coordinates, but with
++            data filtered by the query.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset(
++        ...     {"a": ("x", [1, 2, 3, 4]), "b": ("x", [5, 6, 7, 8])},
++        ...     coords={"x": [0, 1, 2, 3]},
++        ... )
++        >>> ds.query("a > 2")
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Coordinates:
++          * x        (x) int64 2 3
++        Data variables:
++            a        (x) int64 3 4
++            b        (x) int64 7 8
++
++        See Also
++        --------
++        DataArray.query
++        """
++        from .query_compiler import QueryCompiler
++        compiler = QueryCompiler(parser=parser, engine=engine)
++        mask = compiler.evaluate(self, query)
++        # Use the mask to index the dataset
++        return self.isel({mask.dims[0]: mask})
++    
+     def idxmax(
+         self,
+         dim: Hashable = None,
+@@ -7002,4 +7048,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query_compiler.py b/xarray/core/query_compiler.py
+new file mode 100644
+index 0000000..ae4a0df
+--- /dev/null
++++ b/xarray/core/query_compiler.py
+@@ -0,0 +1,94 @@
++"""
++Query compiler for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from .utils import is_scalar
++
++class QueryCompiler:
++    """Compile and evaluate query expressions on xarray datasets."""
++
++    def __init__(self, parser=None, engine=None):
++        """
++        Parameters
++        ----------
++        parser : str, optional
++            The parser to use for parsing the query string.
++        engine : str, optional
++            The engine to use for evaluating the query.
++        """
++        self.parser = parser
++        self.engine = engine
++
++    def compile(self, query):
++        """Compile a query string into a callable function.
++
++        Parameters
++        ----------
++        query : str
++            The query string to compile.
++
++        Returns
++        -------
++        callable
++            A function that takes a dataset and returns a boolean mask.
++        """
++        # For now, we use a simple implementation that evaluates the query
++        # using pandas eval. In the future, we can support other parsers/engines.
++        if self.parser is None:
++            self.parser = 'pandas'
++        if self.engine is None:
++            self.engine = 'numexpr'
++
++        def query_function(ds):
++            # Build a dictionary of variables from the dataset
++            local_dict = {}
++            for name, var in ds.variables.items():
++                # Convert to scalar if possible
++                if var.ndim == 0:
++                    local_dict[name] = var.values.item()
++                else:
++                    # For multi-dimensional arrays, we need to broadcast
++                    # For now, we only support 1D arrays in queries
++                    if var.ndim == 1:
++                        local_dict[name] = var.values
++                    else:
++                        raise ValueError(
++                            f"Variable {name} has {var.ndim} dimensions. "
++                            "Only 0D and 1D variables are supported in queries."
++                        )
++            # Use pandas eval to evaluate the query
++            return pd.eval(query, local_dict=local_dict, engine=self.engine)
++
++        return query_function
++
++    def evaluate(self, dataset, query):
++        """Evaluate a query on a dataset.
++
++        Parameters
++        ----------
++        dataset : Dataset
++            The dataset to query.
++        query : str
++            The query string.
++
++        Returns
++        -------
++        mask : DataArray
++            A boolean mask with the same dimensions as the dataset.
++        """
++        func = self.compile(query)
++        result = func(dataset)
++        # Convert the result to a boolean array
++        if is_scalar(result):
++            # If the result is a scalar, broadcast to the dataset
++            from .dataarray import DataArray
++            return DataArray(np.full(dataset.sizes, result, dtype=bool))
++        else:
++            # Otherwise, it should be a 1D array
++            from .dataarray import DataArray
++            # Find the dimension that matches the length
++            for dim, size in dataset.sizes.items():
++                if size == len(result):
++                    return DataArray(result, dims=[dim])
++            raise ValueError("Could not align query result with dataset dimensions.")

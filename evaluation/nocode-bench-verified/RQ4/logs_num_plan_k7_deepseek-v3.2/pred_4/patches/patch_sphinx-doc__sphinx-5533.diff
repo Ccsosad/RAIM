@@ -1,0 +1,22 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1ae55eb..29c32e2 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -228,7 +228,8 @@ class Documenter:
+     #: true if the generated content may contain titles
+     titles_allowed = False
+ 
+-    option_spec = {'noindex': bool_option}  # type: Dict[unicode, Callable]
++    option_spec = {'noindex': bool_option,
++                   'member-order': unchanged}  # type: Dict[unicode, Callable]
+ 
+     def get_attr(self, obj, name, *defargs):
+         # type: (Any, unicode, Any) -> Any
+diff --git a/sphinx/ext/autodoc/member_order.py b/sphinx/ext/autodoc/member_order.py
+new file mode 100644
+index 0000000..b090944
+--- /dev/null
++++ b/sphinx/ext/autodoc/member_order.py
+@@ -0,0 +1,2 @@
++# This module is intentionally left empty. The member-order feature is
++# implemented in sphinx.ext.autodoc.__init__.

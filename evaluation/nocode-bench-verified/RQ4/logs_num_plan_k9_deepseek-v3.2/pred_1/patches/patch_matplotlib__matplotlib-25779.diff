@@ -1,0 +1,67 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..94e997b 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1654,6 +1654,22 @@ class Ellipse(Patch):
+         return self.get_patch_transform().transform(
+             [(-1, -1), (1, -1), (1, 1), (-1, 1)])
+ 
++    def get_vertices(self):
++        """
++        Return the coordinates of the vertices of the ellipse.
++
++        The vertices are the endpoints of the major axis.
++        """
++        return self.get_patch_transform().transform([(1, 0), (-1, 0)])
++
++    def get_co_vertices(self):
++        """
++        Return the coordinates of the co-vertices of the ellipse.
++
++        The co-vertices are the endpoints of the minor axis.
++        """
++        return self.get_patch_transform().transform([(0, 1), (0, -1)])
++
+ 
+ class Annulus(Patch):
+     """
+diff --git a/galleries/examples/shapes_and_collections/ellipse_arrow.py b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+new file mode 100644
+index 0000000..c6e4104
+--- /dev/null
++++ b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+@@ -0,0 +1,34 @@
++"""
++===================
++Ellipse with Arrow
++===================
++
++This example shows how to add an arrow to an ellipse to indicate rotation direction.
++The arrow is placed along the major axis, using the vertices of the ellipse.
++"""
++
++import matplotlib.pyplot as plt
++import matplotlib.patches as mpatches
++
++# Create an ellipse
++ellipse = mpatches.Ellipse(xy=(0.5, 0.5), width=0.4, height=0.2, angle=30,
++                           edgecolor='blue', facecolor='none', linewidth=2)
++
++fig, ax = plt.subplots()
++ax.add_patch(ellipse)
++
++# Get the vertices (endpoints of major axis)
++vertices = ellipse.get_vertices()
++# Choose the first vertex as the start of the arrow
++x, y = vertices[0]
++# The center of the ellipse
++center = ellipse.get_center()
++# Draw an arrow from the center to the vertex
++ax.annotate('', xy=(x, y), xytext=center,
++            arrowprops=dict(arrowstyle='->', lw=2, color='red'))
++
++ax.set_xlim(0, 1)
++ax.set_ylim(0, 1)
++ax.set_aspect('equal')
++plt.title('Ellipse with arrow showing rotation direction')
++plt.show()

@@ -1,0 +1,31 @@
+diff --git a/astropy/units/core.py b/astropy/units/core.py
+index 2b12b30..898a06f 100644
+--- a/astropy/units/core.py
++++ b/astropy/units/core.py
+@@ -2413,6 +2413,9 @@ def _add_prefixes(u, excludes=[], namespace=None, prefixes=False):
+         prefixes = si_prefixes
+     elif prefixes is False:
+         prefixes = []
++    # Special case for Angstrom: add milli-prefix
++    if u.name == 'Angstrom' and 'm' not in excludes:
++        prefixes.append((['m'], ['milli'], 1e-3))
+ 
+     for short, full, factor in prefixes:
+         names = []
+@@ -2446,6 +2449,9 @@ def _add_prefixes(u, excludes=[], namespace=None, prefixes=False):
+                        namespace=namespace, format=format)
+ 
+ 
++# Define milli-Angstrom unit
++mAngstrom = def_unit(['mAngstrom', 'mangstrom'], represents=1e-3*Angstrom, doc="milli-Angstrom")
++
+ def def_unit(s, represents=None, doc=None, format=None, prefixes=False,
+              exclude_prefixes=[], namespace=None):
+     """
+diff --git a/astropy/units/astrophys.py b/astropy/units/astrophys.py
+new file mode 100644
+index 0000000..918433c
+--- /dev/null
++++ b/astropy/units/astrophys.py
+@@ -0,0 +1 @@
++Angstrom = def_unit(['Angstrom', 'angstrom'], doc="Angstrom: 10**-10 m", prefixes=True)

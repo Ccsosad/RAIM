@@ -1,0 +1,58 @@
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..55310d9 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -278,7 +278,12 @@ class FacetGrid:
+         return self.axes[-1, :]
+ 
+     def map_dataarray(
+-        self, func: Callable, x: Hashable | None, y: Hashable | None, **kwargs: Any
++        self,
++        func: Callable,
++        *,
++        x: Hashable | None,
++        y: Hashable | None,
++        **kwargs: Any,
+     ) -> FacetGrid:
+         """
+         Apply a plotting function to a 2d facet's subset of the data.
+@@ -347,7 +352,12 @@ class FacetGrid:
+         return self
+ 
+     def map_plot1d(
+-        self, func: Callable, x: Hashable, y: Hashable, **kwargs: Any
++        self,
++        func: Callable,
++        *,
++        x: Hashable,
++        y: Hashable,
++        **kwargs: Any,
+     ) -> Self:
+         """
+         Apply a plotting function to a 1d facet's subset of the data.
+diff --git a/xarray/plot/dataarray_plot.py b/xarray/plot/dataarray_plot.py
+new file mode 100644
+index 0000000..8393c7f
+--- /dev/null
++++ b/xarray/plot/dataarray_plot.py
+@@ -0,0 +1,20 @@
++from typing import Hashable, Literal, Callable
++
++class DataArrayPlotAccessor:
++    """Implements plot methods for DataArray objects"""
++
++    def __init__(self, da):
++        self._da = da
++
++    def scatter(
++        self,
++        *,
++        x: Hashable,
++        y: Hashable,
++        hue: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        """Scatter plot for DataArrays"""
++        pass
++
++    # Other plot methods...

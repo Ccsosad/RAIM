@@ -1,0 +1,41 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 4db1264..9b171b2 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -212,6 +212,16 @@ class TextReporter(BaseReporter):
+         TextWriter().format(layout, self.out)
+ 
+ 
++class NoHeaderTextReporter(TextReporter):
++    """A reporter that doesn't display module headers in the output."""
++
++    name = "no-header"
++
++    def handle_message(self, msg: Message) -> None:
++        """Manage message of different type and in the context of path."""
++        self.write_message(msg)
++
++
+ class ParseableTextReporter(TextReporter):
+     """A reporter very similar to TextReporter, but display messages in a form
+     recognized by most text editors :
+diff --git a/pylint/reporters/factory.py b/pylint/reporters/factory.py
+new file mode 100644
+index 0000000..6119a10
+--- /dev/null
++++ b/pylint/reporters/factory.py
+@@ -0,0 +1,14 @@
++"""Factory module for reporter classes."""
++from pylint.reporters.text import NoHeaderTextReporter, ParseableTextReporter, TextReporter
++
++
++def register_reporter(reporter_class):
++    """Register a reporter class."""
++    REPORTERS[reporter_class.name] = reporter_class
++
++
++REPORTERS = {}
++
++register_reporter(TextReporter)
++register_reporter(ParseableTextReporter)
++register_reporter(NoHeaderTextReporter)

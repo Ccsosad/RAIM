@@ -1,0 +1,77 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..ab9c667 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,72 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array-like, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        equal : Table
++            A table with the same shape as the original table, with boolean
++            values indicating element-wise equality.
++
++        Raises
++        ------
++        ValueError
++            If comparing to another table with different column names.
++        """
++        from . import Table
++
++        if isinstance(other, Table):
++            # Compare two tables
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # Build a new table with boolean columns
++            out_cols = []
++            for name in self.colnames:
++                col_self = self[name]
++                col_other = other[name]
++                # Use the column's equality comparison
++                equal = col_self == col_other
++                # Ensure we have a Column (or MaskedColumn) of bool
++                if isinstance(equal, (self.Column, self.MaskedColumn)):
++                    equal = equal.copy()
++                    equal.info.name = name
++                else:
++                    # Convert to Column of bool
++                    equal = self.Column(equal, name=name, dtype=bool)
++                out_cols.append(equal)
++            return Table(out_cols, copy=False)
++        else:
++            # Compare to an array or scalar
++            # We need to handle broadcasting per column
++            if np.isscalar(other):
++                # Broadcast scalar to each column
++                other_per_col = [other] * len(self.colnames)
++            else:
++                # Assume it's an array-like with length equal to number of columns
++                if len(other) != len(self.colnames):
++                    raise ValueError('For array-like comparison, length must match number of columns')
++                other_per_col = other
++
++            out_cols = []
++            for name, other_val in zip(self.colnames, other_per_col):
++                col = self[name]
++                equal = col == other_val
++                if isinstance(equal, (self.Column, self.MaskedColumn)):
++                    equal = equal.copy()
++                    equal.info.name = name
++                else:
++                    equal = self.Column(equal, name=name, dtype=bool)
++                out_cols.append(equal)
++            return Table(out_cols, copy=False)
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

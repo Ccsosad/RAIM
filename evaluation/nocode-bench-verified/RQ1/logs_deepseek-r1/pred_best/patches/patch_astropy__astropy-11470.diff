@@ -1,0 +1,78 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..7d9cfe5 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -440,19 +440,69 @@ class BaseRepresentationOrDifferential(ShapedLikeNDArray):
+         raise NotImplementedError()
+ 
+     def __mul__(self, other):
+-        return self._scale_operation(operator.mul, other)
++        if hasattr(self, 'differentials') and self.differentials:
++            cart_rep = self.to_cartesian()
++            cart_diffs = {}
++            for key, diff in self.differentials.items():
++                cart_diffs[key] = diff.to_cartesian(base=self)
++            cart_rep_with_diffs = cart_rep.with_differentials(cart_diffs)
++            scaled_cart = cart_rep_with_diffs * other
++            # Handle UnitSpherical case
++            if self.__class__.__name__ == 'UnitSphericalRepresentation':
++                from .spherical import SphericalRepresentation
++                new_rep_class = SphericalRepresentation
++            else:
++                new_rep_class = self.__class__
++            scaled_rep = scaled_cart.represent_as(new_rep_class)
++            scaled_diffs = {}
++            for key, diff in scaled_cart.differentials.items():
++                scaled_diffs[key] = diff.represent_as(self.differentials[key].__class__, base=scaled_rep)
++            return scaled_rep.with_differentials(scaled_diffs)
++        else:
++            return self._scale_operation(operator.mul, other)
+ 
+     def __rmul__(self, other):
+         return self.__mul__(other)
+ 
+     def __truediv__(self, other):
+-        return self._scale_operation(operator.truediv, other)
++        if hasattr(self, 'differentials') and self.differentials:
++            cart_rep = self.to_cartesian()
++            cart_diffs = {}
++            for key, diff in self.differentials.items():
++                cart_diffs[key] = diff.to_cartesian(base=self)
++            cart_rep_with_diffs = cart_rep.with_differentials(cart_diffs)
++            scaled_cart = cart_rep_with_diffs / other
++            if self.__class__.__name__ == 'UnitSphericalRepresentation':
++                from .spherical import SphericalRepresentation
++                new_rep_class = SphericalRepresentation
++            else:
++                new_rep_class = self.__class__
++            scaled_rep = scaled_cart.represent_as(new_rep_class)
++            scaled_diffs = {}
++            for key, diff in scaled_cart.differentials.items():
++                scaled_diffs[key] = diff.represent_as(self.differentials[key].__class__, base=scaled_rep)
++            return scaled_rep.with_differentials(scaled_diffs)
++        else:
++            return self._scale_operation(operator.truediv, other)
+ 
+     def __div__(self, other):  # pragma: py2
+-        return self._scale_operation(operator.truediv, other)
++        return self.__truediv__(other)
+ 
+     def __neg__(self):
+-        return self._scale_operation(operator.neg)
++        if hasattr(self, 'differentials') and self.differentials:
++            cart_rep = self.to_cartesian()
++            cart_diffs = {}
++            for key, diff in self.differentials.items():
++                cart_diffs[key] = diff.to_cartesian(base=self)
++            cart_rep_with_diffs = cart_rep.with_differentials(cart_diffs)
++            neg_cart = -cart_rep_with_diffs
++            neg_rep = neg_cart.represent_as(self.__class__)
++            neg_diffs = {}
++            for key, diff in neg_cart.differentials.items():
++                neg_diffs[key] = diff.represent_as(self.differentials[key].__class__, base=neg_rep)
++            return neg_rep.with_differentials(neg_diffs)
++        else:
++            return self._scale_operation(operator.neg)
+ 
+     # Follow numpy convention and make an independent copy.
+     def __pos__(self):

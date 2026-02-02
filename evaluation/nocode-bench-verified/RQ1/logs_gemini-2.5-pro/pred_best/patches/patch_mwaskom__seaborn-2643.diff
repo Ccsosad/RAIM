@@ -1,0 +1,87 @@
+diff --git a/seaborn/utils.py b/seaborn/utils.py
+index c64edd8..ea393ae 100644
+--- a/seaborn/utils.py
++++ b/seaborn/utils.py
+@@ -390,6 +390,82 @@ def despine(fig=None, ax=None, top=True, right=True, left=False,
+                 ax_i.set_yticks(newticks)
+ 
+ 
++def move_legend(obj, loc, **kwargs):
++    """Reposition a legend on a matplotlib Axes or seaborn Grid.
++
++    Parameters
++    ----------
++    obj : :class:`matplotlib.axes.Axes` or :class:`~seaborn.axisgrid.Grid`
++        The plot object with the legend to move.
++    loc : str
++        The new location for the legend.
++    **kwargs
++        Other keyword arguments are passed to the underlying legend function
++        (:meth:`matplotlib.axes.Axes.legend` or
++        :meth:`seaborn.axisgrid.FacetGrid.add_legend`).
++
++    """
++    import matplotlib as mpl
++    from .axisgrid import Grid
++
++    if isinstance(obj, Grid):
++        grid = obj
++        if hasattr(grid, "ax_joint"):  # JointGrid
++            # The legend is on an axes, so we'll handle it there
++            obj = grid.ax_joint
++        else:
++            # This is for FacetGrid/PairGrid
++            old_legend = grid.legend
++            if old_legend is None:
++                return
++
++            # Prepare kwargs for add_legend
++            new_kwargs = kwargs.copy()
++            if "title" not in new_kwargs:
++                title = old_legend.get_title().get_text()
++                if title:
++                    new_kwargs["title"] = title
++
++            # Remove the old legend
++            old_legend.remove()
++            grid.legend = None
++
++            # Draw the new legend
++            # `add_legend` wants `title` as a separate arg
++            title = new_kwargs.pop("title", None)
++            grid.add_legend(title=title, loc=loc, **new_kwargs)
++            return
++
++    if isinstance(obj, mpl.axes.Axes):
++        ax = obj
++        old_legend = ax.legend_
++        if old_legend is None:
++            return
++
++        # Get the handles and labels from the old legend
++        handles = old_legend.legendHandles
++        labels = [t.get_text() for t in old_legend.texts]
++
++        # Prepare kwargs for ax.legend
++        new_kwargs = kwargs.copy()
++        if "title" not in new_kwargs:
++            title = old_legend.get_title().get_text()
++            if title:
++                new_kwargs["title"] = title
++
++        # Remove the old legend
++        old_legend.remove()
++
++        # Draw the new legend
++        ax.legend(handles, labels, loc=loc, **new_kwargs)
++        return
++
++    raise TypeError(
++        f"First argument to move_legend must be a matplotlib Axes "
++        f"or a seaborn Grid, not {type(obj).__name__}"
++    )
++
++
+ def _kde_support(data, bw, gridsize, cut, clip):
+     """Establish support for a kernel density estimate."""
+     support_min = max(data.min() - bw * cut, clip[0])

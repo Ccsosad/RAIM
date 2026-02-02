@@ -1,0 +1,42 @@
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index b79bffd..a8e7fc9 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -1832,16 +1832,19 @@ class LinearLocator(Locator):
+ class MultipleLocator(Locator):
+     """
+     Set a tick on each integer multiple of the *base* within the view
+-    interval.
++    interval, shifted by *offset*.
+     """
+ 
+-    def __init__(self, base=1.0):
++    def __init__(self, base=1.0, offset=0.0):
+         self._edge = _Edge_integer(base, 0)
++        self._offset = offset
+ 
+-    def set_params(self, base):
++    def set_params(self, base=None, offset=None):
+         """Set parameters within this locator."""
+         if base is not None:
+             self._edge = _Edge_integer(base, 0)
++        if offset is not None:
++            self._offset = offset
+ 
+     def __call__(self):
+         """Return the locations of the ticks."""
+@@ -1852,9 +1855,11 @@ class MultipleLocator(Locator):
+         if vmax < vmin:
+             vmin, vmax = vmax, vmin
+         step = self._edge.step
+-        vmin = self._edge.ge(vmin) * step
+-        n = (vmax - vmin + 0.001 * step) // step
+-        locs = vmin - step + np.arange(n + 3) * step
++        # Find the first tick at or above vmin after applying the offset
++        k = math.ceil((vmin - self._offset) / step)
++        vmin_adj = step * k + self._offset
++        n = (vmax - vmin_adj + 0.001 * step) // step
++        locs = vmin_adj - step + np.arange(n + 3) * step
+         return self.raise_if_exceeds(locs)
+ 
+     def view_limits(self, dmin, dmax):

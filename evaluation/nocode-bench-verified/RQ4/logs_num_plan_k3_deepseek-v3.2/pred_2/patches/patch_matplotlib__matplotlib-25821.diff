@@ -1,0 +1,138 @@
+diff --git a/lib/mpl_toolkits/mplot3d/axes3d.py b/lib/mpl_toolkits/mplot3d/axes3d.py
+index 7e611ff..bbf0471 100644
+--- a/lib/mpl_toolkits/mplot3d/axes3d.py
++++ b/lib/mpl_toolkits/mplot3d/axes3d.py
+@@ -56,6 +56,7 @@ class Axes3D(Axes):
+ 
+     _axis_names = ("x", "y", "z")
+     Axes._shared_axes["z"] = cbook.Grouper()
++    Axes._shared_axes["view"] = cbook.Grouper()
+ 
+     vvec = _api.deprecate_privatize_attribute("3.7")
+     eye = _api.deprecate_privatize_attribute("3.7")
+@@ -64,7 +65,7 @@ class Axes3D(Axes):
+ 
+     def __init__(
+             self, fig, rect=None, *args,
+-            elev=30, azim=-60, roll=0, sharez=None, proj_type='persp',
++            elev=30, azim=-60, roll=0, sharez=None, shareview=None, proj_type='persp',
+             box_aspect=None, computed_zorder=True, focal_length=None,
+             **kwargs):
+         """
+@@ -135,6 +136,13 @@ class Axes3D(Axes):
+ 
+         # inhibit autoscale_view until the axes are defined
+         # they can't be defined until Axes.__init__ has been called
++        self._shareview = shareview
++        if shareview is not None:
++            self._shared_axes["view"].join(self, shareview)
++            self.initial_elev = shareview.elev
++            self.initial_azim = shareview.azim
++            self.initial_roll = shareview.roll
++
+         self.view_init(self.initial_elev, self.initial_azim, self.initial_roll)
+ 
+         self._sharez = sharez
+@@ -757,6 +765,31 @@ class Axes3D(Axes):
+         """Currently not implemented for 3D axes, and returns *None*."""
+         return None
+ 
++    def _view_init_core(self, elev=None, azim=None, roll=None, vertical_axis="z"):
++        """
++        Core view initialization without updating shared axes.
++        """
++        self._dist = 10  # The camera distance from origin. Behaves like zoom
++
++        if elev is None:
++            self.elev = self.initial_elev
++        else:
++            self.elev = elev
++
++        if azim is None:
++            self.azim = self.initial_azim
++        else:
++            self.azim = azim
++
++        if roll is None:
++            self.roll = self.initial_roll
++        else:
++            self.roll = roll
++
++        self._vertical_axis = _api.check_getitem(
++            dict(x=0, y=1, z=2), vertical_axis=vertical_axis
++        )
++
+     def view_init(self, elev=None, azim=None, roll=None, vertical_axis="z"):
+         """
+         Set the elevation and azimuth of the axes in degrees (not radians).
+@@ -805,27 +838,15 @@ class Axes3D(Axes):
+         vertical_axis : {"z", "x", "y"}, default: "z"
+             The axis to align vertically. *azim* rotates about this axis.
+         """
++        # Set the view for this axis
++        self._view_init_core(elev, azim, roll, vertical_axis)
+ 
+-        self._dist = 10  # The camera distance from origin. Behaves like zoom
+-
+-        if elev is None:
+-            self.elev = self.initial_elev
+-        else:
+-            self.elev = elev
+-
+-        if azim is None:
+-            self.azim = self.initial_azim
+-        else:
+-            self.azim = azim
+-
+-        if roll is None:
+-            self.roll = self.initial_roll
+-        else:
+-            self.roll = roll
+-
+-        self._vertical_axis = _api.check_getitem(
+-            dict(x=0, y=1, z=2), vertical_axis=vertical_axis
+-        )
++        # Update all shared axes
++        if self._shareview is not None:
++            for ax in self._shared_axes["view"].get_siblings(self):
++                if ax is not self:
++                    # Avoid recursion by setting the view directly without updating siblings
++                    ax._view_init_core(elev, azim, roll, vertical_axis)
+ 
+     def set_proj_type(self, proj_type, focal_length=None):
+         """
+@@ -975,6 +996,23 @@ class Axes3D(Axes):
+         self.set_zlim(z0, z1, emit=False, auto=other.get_autoscalez_on())
+         self.zaxis._scale = other.zaxis._scale
+ 
++    def shareview(self, other):
++        """
++        Share the view with *other*.
++
++        This is equivalent to passing ``shareview=other`` when constructing the
++        Axes, and cannot be used if the view is already being shared with
++        another Axes.
++        """
++        _api.check_isinstance(maxes._base._AxesBase, other=other)
++        if self._shareview is not None and other is not self._shareview:
++            raise ValueError("view is already shared")
++        self._shared_axes["view"].join(self, other)
++        self._shareview = other
++        self.elev = other.elev
++        self.azim = other.azim
++        self.roll = other.roll
++
+     def clear(self):
+         # docstring inherited.
+         super().clear()
+@@ -1012,9 +1050,7 @@ class Axes3D(Axes):
+         # docstring inherited
+         props, (elev, azim, roll) = view
+         self.set(**props)
+-        self.elev = elev
+-        self.azim = azim
+-        self.roll = roll
++        self.view_init(elev, azim, roll)
+ 
+     def format_zdata(self, z):
+         """

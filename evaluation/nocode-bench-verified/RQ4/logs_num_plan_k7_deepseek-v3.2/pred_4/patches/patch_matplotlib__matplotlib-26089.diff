@@ -1,0 +1,161 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..c4dd152 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -505,57 +505,8 @@ class Legend(Artist):
+             )
+         self.parent = parent
+ 
+-        loc0 = loc
+         self._loc_used_default = loc is None
+-        if loc is None:
+-            loc = mpl.rcParams["legend.loc"]
+-            if not self.isaxes and loc in [0, 'best']:
+-                loc = 'upper right'
+-
+-        type_err_message = ("loc must be string, coordinate tuple, or"
+-                            f" an integer 0-10, not {loc!r}")
+-
+-        # handle outside legends:
+-        self._outside_loc = None
+-        if isinstance(loc, str):
+-            if loc.split()[0] == 'outside':
+-                # strip outside:
+-                loc = loc.split('outside ')[1]
+-                # strip "center" at the beginning
+-                self._outside_loc = loc.replace('center ', '')
+-                # strip first
+-                self._outside_loc = self._outside_loc.split()[0]
+-                locs = loc.split()
+-                if len(locs) > 1 and locs[0] in ('right', 'left'):
+-                    # locs doesn't accept "left upper", etc, so swap
+-                    if locs[0] != 'center':
+-                        locs = locs[::-1]
+-                    loc = locs[0] + ' ' + locs[1]
+-            # check that loc is in acceptable strings
+-            loc = _api.check_getitem(self.codes, loc=loc)
+-        elif np.iterable(loc):
+-            # coerce iterable into tuple
+-            loc = tuple(loc)
+-            # validate the tuple represents Real coordinates
+-            if len(loc) != 2 or not all(isinstance(e, numbers.Real) for e in loc):
+-                raise ValueError(type_err_message)
+-        elif isinstance(loc, int):
+-            # validate the integer represents a string numeric value
+-            if loc < 0 or loc > 10:
+-                raise ValueError(type_err_message)
+-        else:
+-            # all other cases are invalid values of loc
+-            raise ValueError(type_err_message)
+-
+-        if self.isaxes and self._outside_loc:
+-            raise ValueError(
+-                f"'outside' option for loc='{loc0}' keyword argument only "
+-                "works for figure legends")
+-
+-        if not self.isaxes and loc == 0:
+-            raise ValueError(
+-                "Automatic legend placement (loc='best') not implemented for "
+-                "figure legend")
++        loc, self._outside_loc = self._parse_loc(loc)
+ 
+         self._mode = mode
+         self.set_bbox_to_anchor(bbox_to_anchor, bbox_transform)
+@@ -693,6 +644,75 @@ class Legend(Artist):
+     legendHandles = _api.deprecated('3.7', alternative="legend_handles")(
+         property(lambda self: self.legend_handles))
+ 
++    def _parse_loc(self, loc):
++        """
++        Validate and convert a location code.
++
++        Parameters
++        ----------
++        loc : str, int, tuple or None
++            The location code.
++
++        Returns
++        -------
++        validated_loc : int or tuple
++            The validated location code.
++        outside_loc : str or None
++            The outside location string, if any.
++        """
++        loc0 = loc
++        if loc is None:
++            loc = mpl.rcParams["legend.loc"]
++            if not self.isaxes and loc in [0, 'best']:
++                loc = 'upper right'
++
++        type_err_message = ("loc must be string, coordinate tuple, or"
++                            f" an integer 0-10, not {loc!r}")
++
++        # handle outside legends:
++        outside_loc = None
++        if isinstance(loc, str):
++            if loc.split()[0] == 'outside':
++                # strip outside:
++                loc = loc.split('outside ')[1]
++                # strip "center" at the beginning
++                outside_loc = loc.replace('center ', '')
++                # strip first
++                outside_loc = outside_loc.split()[0]
++                locs = loc.split()
++                if len(locs) > 1 and locs[0] in ('right', 'left'):
++                    # locs doesn't accept "left upper", etc, so swap
++                    if locs[0] != 'center':
++                        locs = locs[::-1]
++                    loc = locs[0] + ' ' + locs[1]
++            # check that loc is in acceptable strings
++            loc = _api.check_getitem(self.codes, loc=loc)
++        elif np.iterable(loc):
++            # coerce iterable into tuple
++            loc = tuple(loc)
++            # validate the tuple represents Real coordinates
++            if len(loc) != 2 or not all(isinstance(e, numbers.Real) for e in loc):
++                raise ValueError(type_err_message)
++        elif isinstance(loc, int):
++            # validate the integer represents a string numeric value
++            if loc < 0 or loc > 10:
++                raise ValueError(type_err_message)
++        else:
++            # all other cases are invalid values of loc
++            raise ValueError(type_err_message)
++
++        if self.isaxes and outside_loc:
++            raise ValueError(
++                f"'outside' option for loc='{loc0}' keyword argument only "
++                "works for figure legends")
++
++        if not self.isaxes and loc == 0:
++            raise ValueError(
++                "Automatic legend placement (loc='best') not implemented for "
++                "figure legend")
++
++        return loc, outside_loc
++
+     def _set_artist_props(self, a):
+         """
+         Set the boilerplate props for artists added to axes.
+@@ -713,6 +733,21 @@ class Legend(Artist):
+         self.stale = True
+         self._legend_box.set_offset(self._findoffset)
+ 
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++
++        Parameters
++        ----------
++        loc : str, int, tuple or None
++            The location code. If None, the location is set to the default.
++        """
++        self._loc_used_default = loc is None
++        loc, outside_loc = self._parse_loc(loc)
++        if outside_loc is not None:
++            self._outside_loc = outside_loc
++        self._set_loc(loc)
++
+     def set_ncols(self, ncols):
+         """Set the number of columns."""
+         self._ncols = ncols

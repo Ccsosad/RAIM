@@ -1,0 +1,89 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 24b047c..4e6229c 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -1,3 +1,4 @@
++
+ import numpy as np
+ 
+ 
+@@ -33,8 +34,41 @@ def _unique(values, *, return_inverse=False):
+ def _unique_python(values, *, return_inverse):
+     # Only used in `_uniques`, see docstring there for details
+     try:
+-        uniques = sorted(set(values))
+-        uniques = np.array(uniques, dtype=values.dtype)
++        # Separate missing values (None and NaN) from the rest
++        missing_mask = np.array([val is None or (isinstance(val, float) and np.isnan(val)) for val in values], dtype=bool)
++        present_values = [val for val, is_missing in zip(values, missing_mask) if not is_missing]
++        missing_values = [val for val, is_missing in zip(values, missing_mask) if is_missing]
++
++        # Get unique present values by using set and sort them
++        uniques_present = sorted(set(present_values))
++
++        # Get unique missing values, but preserve their types
++        # We want to keep the order: None first, then NaN
++        uniques_missing = []
++        has_none = any(val is None for val in missing_values)
++        has_nan = any(isinstance(val, float) and np.isnan(val) for val in missing_values)
++        if has_none:
++            uniques_missing.append(None)
++        if has_nan:
++            uniques_missing.append(np.nan)
++
++        # Combine
++        uniques_list = uniques_present + uniques_missing
++        uniques = np.array(uniques_list, dtype=values.dtype)
++
++        if return_inverse:
++            # Compute the inverse indices
++            inv = np.zeros(len(values), dtype=int)
++            for i, val in enumerate(values):
++                if val is None or (isinstance(val, float) and np.isnan(val)):
++                    # It's a missing value
++                    if val is None:
++                        inv[i] = uniques_list.index(None)
++                    else:  # NaN
++                        inv[i] = uniques_list.index(np.nan)
++                else:
++                    inv[i] = uniques_list.index(val)
++            return uniques, inv
+     except TypeError:
+         types = sorted(t.__qualname__
+                        for t in set(type(v) for v in values))
+@@ -119,13 +153,29 @@ def _check_unknown(values, known_values, return_mask=False):
+ 
+     """
+     if values.dtype == object:
+-        uniques_set = set(known_values)
+-        diff = list(set(values) - uniques_set)
+-        if return_mask:
+-            if diff:
+-                valid_mask = np.array([val in uniques_set for val in values])
++        # For object dtype, we need to handle None and NaN specially because they are not equal to themselves.
++        # Build a list of known values that are not missing
++        known_missing = [val for val in known_values if val is None or (isinstance(val, float) and np.isnan(val))]
++        known_present = [val for val in known_values if val not in known_missing]
++        uniques_set = set(known_present)
++        diff = []
++        for val in values:
++            if val is None or (isinstance(val, float) and np.isnan(val)):
++                if val not in known_missing:
++                    diff.append(val)
+             else:
+-                valid_mask = np.ones(len(values), dtype=bool)
++                if val not in uniques_set:
++                    diff.append(val)
++        diff = list(set(diff))
++        if return_mask:
++            valid_mask = np.ones(len(values), dtype=bool)
++            for i, val in enumerate(values):
++                if val is None or (isinstance(val, float) and np.isnan(val)):
++                    if val not in known_missing:
++                        valid_mask[i] = False
++                else:
++                    if val not in uniques_set:
++                        valid_mask[i] = False
+             return diff, valid_mask
+         else:
+             return diff

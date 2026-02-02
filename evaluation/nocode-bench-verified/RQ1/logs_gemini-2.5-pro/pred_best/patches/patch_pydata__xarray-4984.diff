@@ -1,0 +1,229 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..aebad5c 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1260,6 +1260,110 @@ class DataArray(AbstractArray, DataWithCoords):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def query(
++        self,
++        expr: str,
++        parser: str = "pandas",
++        engine: str = None,
++        **kwargs,
++    ) -> "DataArray":
++        """Filter values by evaluating a query expression.
++
++        Parameters
++        ----------
++        expr : str
++            The query expression to evaluate. You can refer to variables
++            in the data array's coordinates by name. If the data array is
++            named, you can also refer to it by its name.
++        parser : {"pandas", "python"}, default: "pandas"
++            The parser to use to construct the syntax tree from the expression.
++            The default of 'pandas' is backed by the numexpr engine. 'python'
++            is backed by the standard Python engine.
++        engine : {"python", "numexpr"}, default: None
++            The engine to use to evaluate the query. If None, the default engine
++            for the selected parser is used.
++        **kwargs : dict
++            Additional keyword arguments to be passed to `pandas.eval`.
++
++        Returns
++        -------
++        DataArray
++            A new data array with the values filtered.
++
++        Notes
++        -----
++        This method is similar to :meth:`pandas.DataFrame.query`. The main
++        difference is that in xarray, the query is applied to the data array's
++        values and its coordinates.
++
++        For more details on the query syntax, see the :meth:`pandas.DataFrame.query`
++        documentation.
++
++        To query the values of an unnamed DataArray, you must first assign it a
++        name. For example: ``da.name = "my_array"``.
++
++        See Also
++        --------
++        pandas.eval
++        pandas.DataFrame.query
++        Dataset.query
++
++        Examples
++        --------
++        >>> da = xr.DataArray(
++        ...     [1, 2, 3],
++        ...     coords={"x": [0, 1, 2], "y": ("x", [4, 5, 6])},
++        ...     name="a",
++        ... )
++        >>> da
++        <xarray.DataArray 'a' (x: 3)>
++        array([1, 2, 3])
++        Coordinates:
++          * x        (x) int64 0 1 2
++            y        (x) int64 4 5 6
++        >>> da.query("a > 1")
++        <xarray.DataArray 'a' (x: 2)>
++        array([2, 3])
++        Coordinates:
++          * x        (x) int64 1 2
++            y        (x) int64 5 6
++        >>> da.query("x > 0 and y > 4")
++        <xarray.DataArray 'a' (x: 2)>
++        array([2, 3])
++        Coordinates:
++          * x        (x) int64 1 2
++            y        (x) int64 5 6
++        """
++        from pandas import eval as pandas_eval
++        import xarray as xr
++
++        local_dict = dict(self.coords)
++        if self.name is not None:
++            if self.name in local_dict:
++                raise ValueError(
++                    f"DataArray name {self.name!r} conflicts with a coordinate name. "
++                    "Please rename the DataArray or the coordinate."
++                )
++            local_dict[self.name] = self
++
++        mask = pandas_eval(
++            expr, parser=parser, engine=engine, local_dict=local_dict, **kwargs
++        )
++
++        if isinstance(mask, (xr.DataArray, xr.Variable)):
++            if mask.dtype != bool:
++                raise TypeError(
++                    f"Query expression returned a DataArray of dtype {mask.dtype!r}, "
++                    "but a boolean DataArray is required."
++                )
++        elif not isinstance(mask, bool):
++            raise TypeError(
++                f"Query expression returned an object of type {type(mask).__name__!r}, "
++                "but a xarray.DataArray or boolean is required."
++            )
++
++        return self.where(mask, drop=True)
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -4360,4 +4464,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..7535970 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -2244,6 +2244,103 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         result = self.isel(indexers=pos_indexers, drop=drop)
+         return result._overwrite_indexes(new_indexes)
+ 
++    def query(
++        self,
++        expr: str,
++        parser: str = "pandas",
++        engine: str = None,
++        **kwargs,
++    ) -> "Dataset":
++        """Filter data variables by evaluating a query expression.
++
++        Parameters
++        ----------
++        expr : str
++            The query expression to evaluate. You can refer to variables
++            in the dataset by name.
++        parser : {"pandas", "python"}, default: "pandas"
++            The parser to use to construct the syntax tree from the expression.
++            The default of 'pandas' is backed by the numexpr engine. 'python'
++            is backed by the standard Python engine.
++        engine : {"python", "numexpr"}, default: None
++            The engine to use to evaluate the query. If None, the default engine
++            for the selected parser is used.
++        **kwargs : dict
++            Additional keyword arguments to be passed to `pandas.eval`.
++
++        Returns
++        -------
++        Dataset
++            A new dataset with the variables filtered.
++
++        Notes
++        -----
++        This method is similar to :meth:`pandas.DataFrame.query`. The main
++        difference is that in xarray, the query is applied to the dataset's
++        data variables and coordinates.
++
++        For more details on the query syntax, see the :meth:`pandas.DataFrame.query`
++        documentation.
++
++        See Also
++        --------
++        pandas.eval
++        pandas.DataFrame.query
++        DataArray.query
++
++        Examples
++        --------
++        >>> ds = xr.Dataset(
++        ...     {
++        ...         "a": ("x", [1, 2, 3]),
++        ...         "b": ("x", [4, 5, 6]),
++        ...     },
++        ...     coords={"x": [0, 1, 2]},
++        ... )
++        >>> ds
++        <xarray.Dataset>
++        Dimensions:  (x: 3)
++        Coordinates:
++          * x        (x) int64 0 1 2
++        Data variables:
++            a        (x) int64 1 2 3
++            b        (x) int64 4 5 6
++        >>> ds.query("a > 1")
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Coordinates:
++          * x        (x) int64 1 2
++        Data variables:
++            a        (x) int64 2 3
++            b        (x) int64 5 6
++        >>> ds.query("a + b > 6")
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Coordinates:
++          * x        (x) int64 1 2
++        Data variables:
++            a        (x) int64 2 3
++            b        (x) int64 5 6
++        """
++        from pandas import eval as pandas_eval
++        import xarray as xr
++
++        mask = pandas_eval(expr, parser=parser, engine=engine, local_dict=self, **kwargs)
++
++        if isinstance(mask, (xr.DataArray, xr.Variable)):
++            if mask.dtype != bool:
++                raise TypeError(
++                    f"Query expression returned a DataArray of dtype {mask.dtype!r}, "
++                    "but a boolean DataArray is required."
++                )
++        elif not isinstance(mask, bool):
++            raise TypeError(
++                f"Query expression returned an object of type {type(mask).__name__!r}, "
++                "but a xarray.DataArray or boolean is required."
++            )
++
++        return self.where(mask, drop=True)
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,

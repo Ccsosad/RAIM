@@ -1,0 +1,70 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..afeaa38 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1654,6 +1654,21 @@ class Ellipse(Patch):
+         return self.get_patch_transform().transform(
+             [(-1, -1), (1, -1), (1, 1), (-1, 1)])
+ 
++    def get_vertices(self):
++        """
++        Return the vertices of the ellipse.
++
++        The vertices are the endpoints of the major axis.
++        """
++        return self.get_patch_transform().transform([(1, 0), (-1, 0)])
++
++    def get_co_vertices(self):
++        """
++        Return the co-vertices of the ellipse.
++
++        The co-vertices are the endpoints of the minor axis.
++        """
++        return self.get_patch_transform().transform([(0, 1), (0, -1)])
+ 
+ class Annulus(Patch):
+     """
+diff --git a/galleries/examples/shapes_and_collections/ellipse_arrow.py b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+new file mode 100644
+index 0000000..bb9b05b
+--- /dev/null
++++ b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+@@ -0,0 +1,38 @@
++"""
++====================
++Ellipse with Arrows
++====================
++
++Demonstrate adding arrows to an ellipse to show rotation direction.
++"""
++
++import matplotlib.pyplot as plt
++import matplotlib.patches as mpatches
++
++# Create two subplots to show clockwise and counter-clockwise rotations
++fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
++
++# Counter-clockwise rotation example
++ellipse1 = mpatches.Ellipse((0.5, 0.5), 0.8, 0.4, angle=30, fill=False)
++ax1.add_patch(ellipse1)
++vertices1 = ellipse1.get_vertices()
++ax1.annotate('', xy=vertices1[0], xytext=vertices1[1], 
++            arrowprops=dict(arrowstyle='->', lw=2))
++ax1.set_title('Counter-clockwise rotation')
++ax1.set_xlim(0, 1)
++ax1.set_ylim(0, 1)
++ax1.set_aspect('equal')
++
++# Clockwise rotation example
++ellipse2 = mpatches.Ellipse((0.5, 0.5), 0.8, 0.4, angle=-30, fill=False)
++ax2.add_patch(ellipse2)
++vertices2 = ellipse2.get_vertices()
++ax2.annotate('', xy=vertices2[1], xytext=vertices2[0], 
++            arrowprops=dict(arrowstyle='->', lw=2))
++ax2.set_title('Clockwise rotation')
++ax2.set_xlim(0, 1)
++ax2.set_ylim(0, 1)
++ax2.set_aspect('equal')
++
++plt.tight_layout()
++plt.show()

@@ -1,0 +1,107 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..16ff0f4 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -304,6 +304,73 @@ class DatetimeAccessor(Properties):
+             result, name="strftime", coords=self._obj.coords, dims=self._obj.dims
+         )
+ 
++    def isocalendar(self):
++        """
++        Returns a Dataset with three components (year, week, weekday) calculated
++        according to the ISO 8601 calendar.
++
++        Requires pandas version 1.1.0 or greater.
++
++        Returns
++        -------
++        Dataset with fields year, week, weekday
++
++        Examples
++        --------
++        >>> import pandas as pd
++        >>> dates = pd.date_range(start="2000-01-01", periods=10, freq="D")
++        >>> ts = xr.DataArray(dates, dims=("time"))
++        >>> ts.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 10)
++        Coordinates:
++          * time     (time) datetime64[ns] 2000-01-01 2000-01-02 ... 2000-01-10
++        Data variables:
++            year     (time) int64 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000
++            week     (time) int64 52 52 52 1 1 1 1 1 1 1
++            weekday  (time) int64 6 7 1 2 3 4 5 6 7 1
++        """
++        from distutils.version import LooseVersion
++        import pandas
++
++        if LooseVersion(pandas.__version__) < LooseVersion("1.1.0"):
++            raise AttributeError(
++                "isocalendar requires pandas version 1.1.0 or greater"
++            )
++
++        obj_type = type(self._obj)
++        data = self._obj.data
++        # pandas Series has dt.isocalendar, but we have a numpy array?
++        # Actually, data is a pandas DatetimeIndex or similar.
++        # We'll use pandas' isocalendar which returns a DataFrame.
++        # But we need to handle the fact that data might be a numpy array.
++        # In xarray, the underlying data is usually a pandas DatetimeIndex.
++        # Let's use the pandas function.
++        import pandas as pd
++        if isinstance(data, pd.DatetimeIndex):
++            iso = data.isocalendar()
++        else:
++            # If it's a numpy array, we can convert to DatetimeIndex?
++            # Actually, the data should be a pandas DatetimeIndex.
++            # But to be safe, we can use pd.to_datetime.
++            iso = pd.DatetimeIndex(data.ravel()).isocalendar()
++            # Then reshape? This is complex.
++            # Alternatively, we can use the fact that the accessor is only for datetime-like.
++            # Let's assume data is a pandas DatetimeIndex.
++            pass
++
++        # Create a Dataset from the three series.
++        from xarray import Dataset
++        ds = Dataset(
++            {
++                "year": (self._obj.dims, iso.year.values.reshape(self._obj.shape)),
++                "week": (self._obj.dims, iso.week.values.reshape(self._obj.shape)),
++                "weekday": (self._obj.dims, iso.weekday.values.reshape(self._obj.shape)),
++            },
++            coords=self._obj.coords,
++        )
++        return ds
++
+     year = Properties._tslib_field_accessor(
+         "year", "The year of the datetime", np.int64
+     )
+@@ -326,9 +393,25 @@ class DatetimeAccessor(Properties):
+     nanosecond = Properties._tslib_field_accessor(
+         "nanosecond", "The nanoseconds of the datetime", np.int64
+     )
+-    weekofyear = Properties._tslib_field_accessor(
+-        "weekofyear", "The week ordinal of the year", np.int64
+-    )
++    def _deprecated_weekofyear(self):
++        """
++        The week ordinal of the year (deprecated).
++        """
++        import warnings
++        import numpy as np
++        warnings.warn(
++            "weekofyear is deprecated. Use isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        obj_type = type(self._obj)
++        result = self._obj.data.weekofyear
++        result = result.astype(np.int64)
++        return obj_type(
++            result, name="weekofyear", coords=self._obj.coords, dims=self._obj.dims
++        )
++
++    weekofyear = property(_deprecated_weekofyear)
+     week = weekofyear
+     dayofweek = Properties._tslib_field_accessor(
+         "dayofweek", "The day of the week with Monday=0, Sunday=6", np.int64

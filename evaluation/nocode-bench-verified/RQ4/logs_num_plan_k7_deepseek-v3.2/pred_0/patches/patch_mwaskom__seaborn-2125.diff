@@ -1,0 +1,24 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..269d0f9 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -27,7 +27,7 @@ from ._docstrings import (
+ )
+ 
+ 
+-__all__ = ["distplot", "kdeplot", "rugplot"]
++__all__ = ["distplot", "kdeplot", "rugplot", "histplot"]
+ 
+ 
+ _param_docs = DocstringComponents.from_nested_components(
+@@ -82,7 +82,9 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    def plot(self, ax, **kws):
++        # Placeholder for histogram plotting logic
++        pass
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):

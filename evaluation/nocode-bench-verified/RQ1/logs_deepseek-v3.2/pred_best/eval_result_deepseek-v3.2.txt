@@ -1,0 +1,22 @@
+------------------------------------------------------------------------------------------
+Evaluation Results - Unresolved Only Mode (Processed 73 instances this run, Total 114 instances)
+------------------------------------------------------------------------------------------
+Total Instances: 114
+Submitted Instances: 112
+Applied%: 97.37% (111 / 114)
+Success%: 34.21% (39 / 114)
+Regression Test (RT%): 85.96% (98 / 114)
+FV-Micro: 0.1601 (1217 / 7600)
+FV-Macro: 0.4558
+------------------------------------------------------------------------------------------
+Failure Type Analysis
+------------------------------------------------------------------------------------------
+Total Instances: 114
+Successfully Resolved: 39 (34.21%)
+Failed to Resolve: 75 (65.79%)
+
+Failure Type Distribution:
+1. Regression Test Errors: 16 (14.04%)
+2. File Localization Errors: 36 (31.58%)
+3. Patch Functionality Errors: 23 (20.18%)
+------------------------------------------------------------------------------------------

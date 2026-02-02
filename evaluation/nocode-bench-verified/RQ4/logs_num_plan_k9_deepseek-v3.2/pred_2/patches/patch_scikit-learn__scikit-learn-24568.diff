@@ -1,0 +1,26 @@
+diff --git a/sklearn/base.py b/sklearn/base.py
+index 858d304..3e00c37 100644
+--- a/sklearn/base.py
++++ b/sklearn/base.py
+@@ -61,11 +61,21 @@ def clone(estimator, *, safe=True):
+     results. Otherwise, *statistical clone* is returned: the clone might
+     return different results from the original estimator. More details can be
+     found in :ref:`randomness`.
++
++    Estimators can override the default cloning behavior by defining a
++    `__sklearn_clone__` method. This method should return a new instance of
++    the estimator. This is useful for estimators that need to preserve some
++    state when cloned.
+     """
+     estimator_type = type(estimator)
+     # XXX: not handling dictionaries
+     if estimator_type in (list, tuple, set, frozenset):
+         return estimator_type([clone(e, safe=safe) for e in estimator])
++    
++    # If the estimator has a __sklearn_clone__ method, call it
++    if hasattr(estimator, "__sklearn_clone__"):
++        return estimator.__sklearn_clone__()
++    
+     elif not hasattr(estimator, "get_params") or isinstance(estimator, type):
+         if not safe:
+             return copy.deepcopy(estimator)

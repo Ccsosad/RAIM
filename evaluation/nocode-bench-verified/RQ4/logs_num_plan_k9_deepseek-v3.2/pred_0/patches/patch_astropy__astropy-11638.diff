@@ -1,0 +1,33 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index e770a09..db4573b 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -881,6 +881,10 @@ class LeapSeconds(QTable):
+     ``iers.LEAP_SECONDS_LIST_URL``.  Many systems also store a version
+     of ``leap-seconds.list`` for use with ``ntp`` (e.g., on Debian/Ubuntu
+     systems, ``/usr/share/zoneinfo/leap-seconds.list``).
++
++    The leap second table is updated only when a Time transform involving UTC
++    is performed. To prevent querying internet resources, set
++    ``iers.conf.auto_download = False`` before any such transformation.
+     """
+     # Note: Time instances in this class should use scale='tai' to avoid
+     # needing leap seconds in their creation or interpretation.
+@@ -998,6 +1002,11 @@ class LeapSeconds(QTable):
+         # if none of the above worked.
+         if conf.auto_download:
+             trials += [(f, False) for f in files if urlparse(f).netloc]
++        else:
++            # If auto_download is False, remove remote files from trials
++            # even if they are in cache, to avoid using possibly stale data.
++            trials = [(f, allow_cache) for f, allow_cache in trials
++                      if not urlparse(f).netloc]
+ 
+         self = None
+         err_list = []
+@@ -1173,4 +1182,4 @@ class LeapSeconds(QTable):
+             if initialize_erfa == 'only':
+                 return 0
+ 
+-        return erfa.leap_seconds.update(self)
++        return erfa.leap_seconds.update(self)

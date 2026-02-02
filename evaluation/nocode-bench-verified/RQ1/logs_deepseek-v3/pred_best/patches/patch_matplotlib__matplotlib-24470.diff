@@ -1,0 +1,54 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..4903c23 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3075,7 +3075,7 @@ class Axes(_AxesBase):
+             autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
+             startangle=0, radius=1, counterclock=True,
+             wedgeprops=None, textprops=None, center=(0, 0),
+-            frame=False, rotatelabels=False, *, normalize=True):
++            frame=False, rotatelabels=False, *, normalize=True, hatch=None):
+         """
+         Plot a pie chart.
+ 
+@@ -3153,6 +3153,11 @@ class Axes(_AxesBase):
+         rotatelabels : bool, default: False
+             Rotate each label to the angle of the corresponding slice if true.
+ 
++        hatch : str or list, default: None
++            Hatch pattern to use. If a string, the same hatching pattern will be
++            used for all wedges. If a list, a different hatching pattern will be
++            used for each wedge.
++
+         data : indexable object, optional
+             DATA_PARAMETER_PLACEHOLDER
+ 
+@@ -3207,6 +3212,20 @@ class Axes(_AxesBase):
+             def get_next_color():
+                 return next(color_cycle)
+ 
++        if hatch is None:
++            hatch_cycle = None
++        elif isinstance(hatch, str):
++            hatch_cycle = itertools.cycle([hatch])
++        else:
++            hatch_cycle = itertools.cycle(hatch)
++
++        if hatch_cycle is None:
++            def get_next_hatch():
++                return None
++        else:
++            def get_next_hatch():
++                return next(hatch_cycle)
++
+         _api.check_isinstance(Number, radius=radius, startangle=startangle)
+         if radius <= 0:
+             raise ValueError(f'radius must be a positive number, not {radius}')
+@@ -3233,6 +3252,7 @@ class Axes(_AxesBase):
+             w = mpatches.Wedge((x, y), radius, 360. * min(theta1, theta2),
+                                360. * max(theta1, theta2),
+                                facecolor=get_next_color(),
++                               hatch=get_next_hatch(),
+                                clip_on=False,
+                                label=label)
+             w.set(**wedgeprops)

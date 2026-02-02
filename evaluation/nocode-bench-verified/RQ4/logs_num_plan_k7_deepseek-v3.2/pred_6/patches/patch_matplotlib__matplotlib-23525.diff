@@ -1,0 +1,98 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 677b319..453566f 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -1036,7 +1036,9 @@ class Axes(_AxesBase):
+ 
+         linestyles : {'solid', 'dashed', 'dashdot', 'dotted'}, optional
+ 
+-        label : str, default: ''
++        label : str or list of str, default: ''
++            If a list is provided, it must have the same length as the number
++            of bars, and each label will be assigned to the corresponding bar.
+ 
+         Returns
+         -------
+@@ -1116,7 +1118,9 @@ class Axes(_AxesBase):
+ 
+         linestyles : {'solid', 'dashed', 'dashdot', 'dotted'}, optional
+ 
+-        label : str, default: ''
++        label : str or list of str, default: ''
++            If a list is provided, it must have the same length as the number
++            of bars, and each label will be assigned to the corresponding bar.
+ 
+         Returns
+         -------
+@@ -2256,6 +2260,10 @@ class Axes(_AxesBase):
+             The tick labels of the bars.
+             Default: None (Use default numeric labels.)
+ 
++        label : str or list of str, default: ''
++            If a list is provided, it must have the same length as the number
++            of bars, and each label will be assigned to the corresponding bar.
++
+         xerr, yerr : float or array-like of shape(N,) or shape(2, N), optional
+             If not *None*, add horizontal / vertical errorbars to the bar tips.
+             The values are +/- sizes relative to the data:
+@@ -2373,6 +2381,16 @@ class Axes(_AxesBase):
+             # Make args iterable too.
+             np.atleast_1d(x), height, width, y, linewidth, hatch)
+ 
++        n_bars = len(x)
++        if isinstance(label, (list, tuple)):
++            if len(label) != n_bars:
++                raise ValueError('The number of labels must match the number of bars')
++            label_list = list(label)
++            container_label = '_nolegend_'
++        else:
++            label_list = [label] * n_bars
++            container_label = label
++
+         # Now that units have been converted, set the tick locations.
+         if orientation == 'vertical':
+             tick_label_axis = self.xaxis
+@@ -2420,14 +2438,14 @@ class Axes(_AxesBase):
+ 
+         patches = []
+         args = zip(left, bottom, width, height, color, edgecolor, linewidth,
+-                   hatch)
+-        for l, b, w, h, c, e, lw, htch in args:
++                   hatch, label_list)
++        for l, b, w, h, c, e, lw, htch, lbl in args:
+             r = mpatches.Rectangle(
+                 xy=(l, b), width=w, height=h,
+                 facecolor=c,
+                 edgecolor=e,
+                 linewidth=lw,
+-                label='_nolegend_',
++                label=lbl,
+                 hatch=htch,
+                 )
+             r._internal_update(kwargs)
+@@ -2466,7 +2484,7 @@ class Axes(_AxesBase):
+             datavalues = width
+ 
+         bar_container = BarContainer(patches, errorbar, datavalues=datavalues,
+-                                     orientation=orientation, label=label)
++                                     orientation=orientation, label=container_label)
+         self.add_container(bar_container)
+ 
+         if tick_labels is not None:
+@@ -2534,6 +2552,10 @@ class Axes(_AxesBase):
+             The tick labels of the bars.
+             Default: None (Use default numeric labels.)
+ 
++        label : str or list of str, default: ''
++            If a list is provided, it must have the same length as the number
++            of bars, and each label will be assigned to the corresponding bar.
++
+         xerr, yerr : float or array-like of shape(N,) or shape(2, N), optional
+             If not ``None``, add horizontal / vertical errorbars to the
+             bar tips. The values are +/- sizes relative to the data:
+@@ -8162,4 +8184,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

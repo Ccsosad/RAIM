@@ -1,0 +1,51 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index fb4476d..46bf446 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -913,6 +913,22 @@ class FacetGrid(Grid):
+                 ax.set_yticklabels(labels, **kwargs)
+         return self
+ 
++    def tick_params(self, **kwargs):
++        """Customize the appearance of ticks, tick labels, and gridlines.
++
++        This method calls `matplotlib.axes.Axes.tick_params` on each axis
++        in the grid. See that method's documentation for more information.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        for ax in self.axes.flat:
++            ax.tick_params(**kwargs)
++        return self
++
+     def set_titles(self, template=None, row_template=None, col_template=None,
+                    **kwargs):
+         """Draw titles either above each facet or on the grid margins.
+@@ -1635,6 +1651,23 @@ class PairGrid(Grid):
+ 
+         self._update_legend_data(ax)
+ 
++    def tick_params(self, **kwargs):
++        """Customize the appearance of ticks, tick labels, and gridlines.
++
++        This method calls `matplotlib.axes.Axes.tick_params` on each axis
++        in the grid. See that method's documentation for more information.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        for ax in self.axes.flat:
++            if ax is not None:  # Skip removed axes in corner mode
++                ax.tick_params(**kwargs)
++        return self
++
+     def _add_axis_labels(self):
+         """Add labels to the left and bottom Axes."""
+         for ax, label in zip(self.axes[-1, :], self.x_vars):

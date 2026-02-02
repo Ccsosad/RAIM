@@ -1,0 +1,81 @@
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index 577f2c2..79e7e02 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -81,6 +81,8 @@ class CheckExternalLinksBuilder(Builder):
+         self.to_ignore = [re.compile(x) for x in self.app.config.linkcheck_ignore]
+         self.anchors_ignore = [re.compile(x)
+                                for x in self.app.config.linkcheck_anchors_ignore]
++        self.auth = [(re.compile(pattern), auth_info)
++                     for pattern, auth_info in self.app.config.linkcheck_auth]
+         self.good = set()       # type: Set[str]
+         self.broken = {}        # type: Dict[str, str]
+         self.redirected = {}    # type: Dict[str, Tuple[str, int]]
+@@ -109,6 +111,21 @@ class CheckExternalLinksBuilder(Builder):
+         if self.app.config.linkcheck_timeout:
+             kwargs['timeout'] = self.app.config.linkcheck_timeout
+ 
++        # Get authentication for the URI
++        auth = None
++        for pattern, auth_info in self.auth:
++            if pattern.match(uri):
++                auth = auth_info
++                break
++        if auth is not None:
++            kwargs['auth'] = auth
++
++        # Get authentication for the URI
++        from sphinx.util.auth import get_auth_for_uri
++        auth = get_auth_for_uri(uri, self.auth)
++        if auth is not None:
++            kwargs['auth'] = auth
++
+         def check_uri() -> Tuple[str, str, int]:
+             # split off anchor
+             if '#' in uri:
+@@ -309,6 +326,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_config_value('linkcheck_timeout', None, None, [int])
+     app.add_config_value('linkcheck_workers', 5, None)
+     app.add_config_value('linkcheck_anchors', True, None)
++    app.add_config_value('linkcheck_auth', [], None)
+     # Anchors starting with ! are ignored since they are
+     # commonly used for dynamic pages
+     app.add_config_value('linkcheck_anchors_ignore', ["^!"], None)
+diff --git a/sphinx/config.py b/sphinx/config.py
+index 654fbeb..cecf87c 100644
+--- a/sphinx/config.py
++++ b/sphinx/config.py
+@@ -154,6 +154,7 @@ class Config:
+         'smartquotes_excludes': ({'languages': ['ja'],
+                                   'builders': ['man', 'text']},
+                                  'env', []),
++        'linkcheck_auth': ([], 'env', []),
+     }  # type: Dict[str, Tuple]
+ 
+     def __init__(self, *args):
+diff --git a/sphinx/util/auth.py b/sphinx/util/auth.py
+new file mode 100644
+index 0000000..d1b4d15
+--- /dev/null
++++ b/sphinx/util/auth.py
+@@ -0,0 +1,20 @@
++"""
++Authentication helpers for the linkcheck builder.
++"""
++
++import re
++from typing import Any, List, Tuple, Optional
++
++
++def get_auth_for_uri(uri: str, auth_list: List[Tuple[str, Any]]) -> Optional[Any]:
++    """
++    Return the authentication information for a given URI.
++
++    :param uri: The URI to check.
++    :param auth_list: A list of (regex_pattern, auth_info) tuples.
++    :return: The first matching auth_info, or None if no match.
++    """
++    for pattern, auth_info in auth_list:
++        if re.match(pattern, uri):
++            return auth_info
++    return None

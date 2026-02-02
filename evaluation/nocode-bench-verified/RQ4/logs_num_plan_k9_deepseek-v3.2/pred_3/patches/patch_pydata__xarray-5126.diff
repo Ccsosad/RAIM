@@ -1,0 +1,128 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..c626d6e 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -371,13 +371,20 @@ def _calculate_col_width(col_items):
+     return col_width
+ 
+ 
+-def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
++def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None, expand="default"):
+     if col_width is None:
+         col_width = _calculate_col_width(mapping)
+     if max_rows is None:
+         max_rows = OPTIONS["display_max_rows"]
++    # Handle expand option
++    if expand == True:
++        max_rows = len(mapping)  # show all
++    elif expand == False:
++        max_rows = 0  # show none
++    # else: expand == "default", use the existing max_rows
++
+     summary = [f"{title}:"]
+-    if mapping:
++    if mapping and max_rows > 0:
+         len_mapping = len(mapping)
+         if len_mapping > max_rows:
+             summary = [f"{summary[0]} ({max_rows}/{len_mapping})"]
+@@ -390,26 +397,46 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+                 summary += [summarizer(k, v, col_width) for k, v in items[-last_rows:]]
+         else:
+             summary += [summarizer(k, v, col_width) for k, v in mapping.items()]
++    elif mapping and max_rows == 0:
++        # Collapsed: show only the title, with a note?
++        summary = [f"{title}: ..."]
+     else:
+         summary += [EMPTY_REPR]
+     return "\n".join(summary)
+ 
+ 
+-data_vars_repr = functools.partial(
+-    _mapping_repr, title="Data variables", summarizer=summarize_datavar
+-)
++def data_vars_repr(mapping, col_width=None):
++    expand = OPTIONS.get("display_expand_data_vars", "default")
++    return _mapping_repr(
++        mapping,
++        title="Data variables",
++        summarizer=summarize_datavar,
++        col_width=col_width,
++        expand=expand,
++    )
+ 
+ 
+-attrs_repr = functools.partial(
+-    _mapping_repr, title="Attributes", summarizer=summarize_attr
+-)
++def attrs_repr(mapping, col_width=None):
++    expand = OPTIONS.get("display_expand_attrs", "default")
++    return _mapping_repr(
++        mapping,
++        title="Attributes",
++        summarizer=summarize_attr,
++        col_width=col_width,
++        expand=expand,
++    )
+ 
+ 
+ def coords_repr(coords, col_width=None):
+     if col_width is None:
+         col_width = _calculate_col_width(_get_col_items(coords))
++    expand = OPTIONS.get("display_expand_coords", "default")
+     return _mapping_repr(
+-        coords, title="Coordinates", summarizer=summarize_coord, col_width=col_width
++        coords,
++        title="Coordinates",
++        summarizer=summarize_coord,
++        col_width=col_width,
++        expand=expand,
+     )
+ 
+ 
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..60a7bfa 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -78,6 +78,36 @@ def _get_keep_attrs(default):
+         )
+ 
+ 
++# Add new display expand options to OPTIONS and _VALIDATORS
++# These are the new options for controlling expand/collapse in display.
++_new_display_expand_options = {
++    "display_expand_attrs": "default",
++    "display_expand_coords": "default",
++    "display_expand_data": "default",
++    "display_expand_data_vars": "default",
++}
++
++def _validate_expand(value):
++    if value not in (True, False, "default"):
++        raise ValueError(
++            f"display_expand_* options must be one of True, False, or 'default', got {value!r}"
++        )
++    return True
++
++# Update OPTIONS and _VALIDATORS if they exist.
++# This is safe because OPTIONS and _VALIDATORS are module-level variables.
++try:
++    for key, default in _new_display_expand_options.items():
++        if key not in OPTIONS:
++            OPTIONS[key] = default
++        if key not in _VALIDATORS:
++            _VALIDATORS[key] = _validate_expand
++except NameError:
++    # If OPTIONS or _VALIDATORS are not defined, we are in a context where they haven't been imported.
++    # This should not happen in normal use, but we skip to avoid errors.
++    pass
++
++
+ class set_options:
+     """Set options for xarray in a controlled context.
+ 
+@@ -160,4 +190,4 @@ class set_options:
+         return
+ 
+     def __exit__(self, type, value, traceback):
+-        self._apply_update(self.old)
++        self._apply_update(self.old)

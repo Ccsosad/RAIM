@@ -1,0 +1,164 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..97b514b 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -2322,4 +2322,158 @@ def distplot(
+         else:
+             ax.set_xlabel(axlabel)
+ 
+-    return ax
++    return ax
++
++
++@_deprecate_positional_args
++def displot(
++    data=None, *,
++    x=None, y=None, hue=None, row=None, col=None,
++    weights=None, kind="hist", rug=False, rug_kws=None,
++    log_scale=None, legend=True, label=None,
++    palette=None, hue_order=None, hue_norm=None,
++    color=None, col_wrap=None, row_order=None, col_order=None,
++    height=5, aspect=1, facet_kws=None,
++    **kwargs
++):
++    """Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distribution of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    `kind` parameter selects the approach to use:
++
++    - `hist` (default) for histograms
++    - `kde` for kernel density estimates
++    - `ecdf` for empirical cumulative distribution functions
++
++    Additionally, a `rug` plot can be added to any of these kinds of plots to
++    show individual observations.
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure. Either a long-form collection of vectors that can
++        be assigned to named variables or a wide-form dataset that will be
++        internally reshaped.
++    x, y : vectors or keys in `data`
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in `data`
++        Variables that define subsets to plot on different facets.
++    weights : vector or key in `data`
++        Data weights for weighted histograms or density estimates.
++    kind : {"hist", "kde", "ecdf"}
++        The kind of plot to draw. Default is "hist".
++    rug : bool
++        If True, show each observation with marginal ticks (like `rugplot`).
++    rug_kws : dict
++        Keyword arguments for `rugplot`.
++    log_scale : bool or number, or pair of bools or numbers
++        Set axis scale(s) to log. A single value sets the data axis for any
++        numeric axes in the plot. A pair of values sets each axis independently.
++        Numeric values are interpreted as the desired base (default 10).
++    legend : bool
++        If False, suppress the legend for semantic variables.
++    label : string
++        Label for the plotted data (for use in a legend).
++    palette : string, list, dict, or matplotlib colormap
++        Colors to use for the different levels of the `hue` variable.
++    hue_order : list
++        Specified order for the appearance of the hue variable levels.
++    hue_norm : tuple or Normalize object
++        Normalization in data units for colormap applied to the `hue` variable.
++    color : matplotlib color
++        Single color for the elements in the plot.
++    col_wrap : int
++        "Wrap" the column variable at this width, so that the column facets
++        span multiple rows.
++    row_order, col_order : lists
++        Order to organize the rows and/or columns of the grid.
++    height : scalar
++        Height (in inches) of each facet. See also: `aspect`.
++    aspect : scalar
++        Aspect ratio of each facet, so that `aspect * height` gives the width
++        of each facet in inches.
++    facet_kws : dict
++        Additional keyword arguments passed to `FacetGrid`.
++    kwargs : key, value pairings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    g : FacetGrid
++        Returns the `FacetGrid` object with the plot on it for further tweaking.
++
++    See Also
++    --------
++    histplot : Draw a histogram using binning and smoothing.
++    kdeplot : Draw a kernel density estimate using Gaussian kernels.
++    ecdfplot : Draw an empirical cumulative distribution function.
++    rugplot : Draw marginal ticks to show each observation.
++
++    Examples
++    --------
++
++    .. include:: ../docstrings/displot.rst
++
++    """
++    # Initialize the FacetGrid
++    if facet_kws is None:
++        facet_kws = {}
++
++    g = FacetGrid(
++        data=data, row=row, col=col, hue=hue,
++        palette=palette, hue_order=hue_order, hue_norm=hue_norm,
++        height=height, aspect=aspect, col_wrap=col_wrap,
++        row_order=row_order, col_order=col_order,
++        **facet_kws
++    )
++
++    # Define the function that will be mapped
++    def plot_func(x, y, hue, data, **kwargs):
++        # Determine which axes-level function to use
++        if kind == "hist":
++            func = histplot
++        elif kind == "kde":
++            func = kdeplot
++        elif kind == "ecdf":
++            func = ecdfplot
++        else:
++            raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind}")
++
++        # Call the function
++        ax = func(
++            x=x, y=y, hue=hue, data=data,
++            weights=weights, color=color, **kwargs
++        )
++
++        # Add rug plot if requested
++        if rug:
++            rug_kws = rug_kws or {}
++            rugplot(x=x, y=y, hue=hue, data=data, **rug_kws)
++
++        return ax
++
++    # Map the function
++    g.map_dataframe(plot_func, x=x, y=y, **kwargs)
++
++    # Set log scale if requested
++    if log_scale is not None:
++        # Determine which axes to set
++        if isinstance(log_scale, (bool, int, float)):
++            log_scale_x = log_scale
++            log_scale_y = log_scale
++        else:
++            log_scale_x, log_scale_y = log_scale
++        if log_scale_x:
++            g.set(xscale="log")
++        if log_scale_y:
++            g.set(yscale="log")
++
++    # Add legend if needed
++    if legend and hue is not None:
++        g.add_legend()
++
++    return g

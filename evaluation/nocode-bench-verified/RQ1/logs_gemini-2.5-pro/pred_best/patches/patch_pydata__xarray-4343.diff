@@ -1,0 +1,15 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..f6ee96d 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -91,7 +91,9 @@ def build_pattern(date_sep=r"\-", datetime_sep=r"T", time_sep=r"\:"):
+ 
+ _BASIC_PATTERN = build_pattern(date_sep="", time_sep="")
+ _EXTENDED_PATTERN = build_pattern()
+-_PATTERNS = [_BASIC_PATTERN, _EXTENDED_PATTERN]
++# Add a pattern for the default cftime object string representation
++_CFTIME_PATTERN = build_pattern(datetime_sep=" ")
++_PATTERNS = [_BASIC_PATTERN, _EXTENDED_PATTERN, _CFTIME_PATTERN]
+ 
+ 
+ def parse_iso8601(datetime_string):

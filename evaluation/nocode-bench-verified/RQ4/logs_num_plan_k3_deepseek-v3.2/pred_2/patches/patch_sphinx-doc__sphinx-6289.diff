@@ -1,0 +1,19 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..d4551d5 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -517,8 +517,12 @@ class Documenter:
+         elif self.options.inherited_members:
+             return False, sorted((m.name, m.value) for m in members.values())
+         else:
+-            return False, sorted((m.name, m.value) for m in members.values()
+-                                 if m.directly_defined)
++            # if imported_members is True, include members that are not directly defined
++            if self.options.imported_members:
++                return False, sorted((m.name, m.value) for m in members.values())
++            else:
++                return False, sorted((m.name, m.value) for m in members.values()
++                                     if m.directly_defined)
+ 
+     def filter_members(self, members, want_all):
+         # type: (List[Tuple[str, Any]], bool) -> List[Tuple[str, Any, bool]]

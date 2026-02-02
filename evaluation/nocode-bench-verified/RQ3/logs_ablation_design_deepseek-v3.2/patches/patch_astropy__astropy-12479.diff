@@ -1,0 +1,19 @@
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+new file mode 100644
+index 0000000..65c57a1
+--- /dev/null
++++ b/astropy/cosmology/parameter.py
+@@ -0,0 +1,13 @@
++class Parameter:
++    """A descriptor for cosmology parameters."""
++    
++    def __init__(self, *, name=None, unit=None, description=None, derived=False, 
++                 format_spec=None, equivalencies=None, validator=None):
++        self.name = name
++        self.unit = unit
++        self.description = description
++        self.derived = derived
++        self.format_spec = format_spec
++        self.equivalencies = equivalencies
++        self.validator = validator
++        # ... other initialization code ...

@@ -1,0 +1,17 @@
+diff --git a/sphinx/ext/autodoc/directive.py b/sphinx/ext/autodoc/directive.py
+index e7fd9fd..ede7601 100644
+--- a/sphinx/ext/autodoc/directive.py
++++ b/sphinx/ext/autodoc/directive.py
+@@ -73,7 +73,11 @@ def process_documenter_options(documenter, config, options):
+         else:
+             negated = options.pop('no-' + name, True) is None
+             if name in config.autodoc_default_options and not negated:
+-                options[name] = config.autodoc_default_options[name]
++                value = config.autodoc_default_options[name]
++                # If the option is a flag and the value is True, treat it as None
++                if documenter.option_spec.get(name) is None and value is True:
++                    value = None
++                options[name] = value
+ 
+     return Options(assemble_option_dict(options.items(), documenter.option_spec))
+ 

@@ -1,0 +1,64 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..b9c053d 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -1,3 +1,4 @@
++
+ """DatetimeIndex analog for cftime.datetime objects"""
+ # The pandas.Index subclass defined here was copied and adapted for
+ # use with cftime.datetime objects based on the source code defining
+@@ -742,6 +743,54 @@ class CFTimeIndex(pd.Index):
+         return self._round_via_method(freq, _round_to_nearest_half_even)
+ 
+ 
++def parse_iso8601_like(date_type, datetime_str):
++    """Parse a datetime string that may be in ISO8601 or the default cftime format.
++
++    Parameters
++    ----------
++    date_type : type
++        The cftime.datetime class.
++    datetime_str : str
++        The datetime string to parse.
++
++    Returns
++    -------
++    parsed : cftime.datetime
++        The parsed datetime.
++    resolution : str
++        The resolution of the parsed string (e.g., 'year', 'month', 'day', etc.).
++    """
++    # Remove any leading/trailing whitespace
++    datetime_str = datetime_str.strip()
++
++    # Define the possible formats in order of decreasing specificity.
++    # We try from the most specific (with seconds) to the least specific (year only).
++    formats = [
++        ("%Y-%m-%d %H:%M:%S", "second"),   # default cftime format
++        ("%Y%m%d%H%M%S", "second"),        # basic ISO8601 without separators
++        ("%Y-%m-%dT%H:%M:%S", "second"),   # extended ISO8601
++        ("%Y-%m-%d %H:%M", "minute"),      # default cftime without seconds
++        ("%Y%m%d%H%M", "minute"),          # basic without seconds
++        ("%Y-%m-%dT%H:%M", "minute"),      # extended without seconds
++        ("%Y-%m-%d %H", "hour"),           # default cftime without minutes
++        ("%Y%m%d%H", "hour"),              # basic without minutes
++        ("%Y-%m-%dT%H", "hour"),           # extended without hours
++        ("%Y-%m-%d", "day"),               # default cftime date only
++        ("%Y%m%d", "day"),                 # basic date only
++        ("%Y-%m", "month"),                # year-month only
++        ("%Y%m", "month"),                 # basic year-month
++        ("%Y", "year"),                    # year only
++    ]
++
++    for fmt, reso in formats:
++        try:
++            dt = date_type.strptime(datetime_str, fmt)
++            return dt, reso
++        except ValueError:
++            continue
++
++    raise ValueError(f"Unable to parse datetime string: {datetime_str}")
++
+ def _parse_iso8601_without_reso(date_type, datetime_str):
+     date, _ = _parse_iso8601_with_reso(date_type, datetime_str)
+     return date

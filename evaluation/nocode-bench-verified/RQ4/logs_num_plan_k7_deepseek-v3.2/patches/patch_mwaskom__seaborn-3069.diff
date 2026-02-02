@@ -1,0 +1,23 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..43e77b0 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -194,6 +194,18 @@ class Nominal(Scale):
+ 
+         new._matplotlib_scale = mpl_scale
+ 
++        # Set axis properties to match seaborn's categorical style
++        if axis is not None:
++            # Fixed margins
++            if hasattr(axis, 'set_margin'):
++                axis.set_margin(0)
++            # No grid
++            if hasattr(axis, 'grid'):
++                axis.grid(False)
++            # Invert y axis for nominal scales on the y-axis
++            if prop.name == 'y' and hasattr(axis, 'invert_yaxis'):
++                axis.invert_yaxis()
++
+         # TODO array cast necessary to handle float/int mixture, which we need
+         # to solve in a more systematic way probably
+         # (i.e. if we have [1, 2.5], do we want [1.0, 2.5]? Unclear)

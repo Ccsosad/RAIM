@@ -1,0 +1,61 @@
+diff --git a/seaborn/utils.py b/seaborn/utils.py
+index c64edd8..88f5fa5 100644
+--- a/seaborn/utils.py
++++ b/seaborn/utils.py
+@@ -390,6 +390,56 @@ def despine(fig=None, ax=None, top=True, right=True, left=False,
+                 ax_i.set_yticks(newticks)
+ 
+ 
++def move_legend(obj, loc, **kwargs):
++    """
++    Recreate a plot's legend in a new location.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.FacetGrid
++        The object with the legend.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid location values.
++    **kwargs
++        Additional keyword arguments are passed to :meth:`matplotlib.axes.Axes.legend`.
++
++    Returns
++    -------
++    None
++
++    Examples
++    --------
++    .. include:: ../docstrings/move_legend.ipynb
++
++    """
++    # Check if the object is a FacetGrid or an Axes
++    from .axisgrid import FacetGrid
++    if isinstance(obj, FacetGrid):
++        # For a FacetGrid, we need to handle the legend that is attached to the figure
++        if obj._legend is None:
++            raise ValueError("No legend found for the FacetGrid.")
++        # Get the existing legend's handles and labels
++        handles = obj._legend.legendHandles
++        labels = [t.get_text() for t in obj._legend.get_texts()]
++        # Remove the old legend
++        obj._legend.remove()
++        # Create a new legend on the figure
++        obj._legend = obj.figure.legend(handles, labels, loc=loc, **kwargs)
++    else:
++        # Assume it's an Axes
++        ax = obj
++        # Get the current handles and labels
++        handles, labels = ax.get_legend_handles_labels()
++        if not handles:
++            raise ValueError("No legend found for the axes.")
++        # Remove the old legend
++        if ax.legend_ is not None:
++            ax.legend_.remove()
++        # Create a new legend
++        ax.legend(handles, labels, loc=loc, **kwargs)
++
++
+ def _kde_support(data, bw, gridsize, cut, clip):
+     """Establish support for a kernel density estimate."""
+     support_min = max(data.min() - bw * cut, clip[0])

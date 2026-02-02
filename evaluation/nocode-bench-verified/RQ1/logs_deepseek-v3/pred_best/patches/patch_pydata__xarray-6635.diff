@@ -1,0 +1,81 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 2fd732e..6b6f7eb 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3067,7 +3067,7 @@ class DataArray(
+             invalid_netcdf=invalid_netcdf,
+         )
+ 
+-    def to_dict(self, data: bool = True) -> dict:
++    def to_dict(self, data: bool = True, encoding: bool = False) -> dict:
+         """
+         Convert this xarray.DataArray into a dictionary following xarray
+         naming conventions.
+@@ -3081,12 +3081,14 @@ class DataArray(
+         data : bool, optional
+             Whether to include the actual data in the dictionary. When set to
+             False, returns just the schema.
++        encoding : bool, optional
++            Whether to include encoding attributes in the dictionary.
+ 
+         See Also
+         --------
+         DataArray.from_dict
+         """
+-        d = self.variable.to_dict(data=data)
++        d = self.variable.to_dict(data=data, encoding=encoding)
+         d.update({"coords": {}, "name": self.name})
+         for k in self.coords:
+             d["coords"][k] = self.coords[k].variable.to_dict(data=data)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index f468716..4e39d51 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5944,7 +5944,7 @@ class Dataset(DataWithCoords, DatasetReductions, DatasetArithmetic, Mapping):
+ 
+         return df
+ 
+-    def to_dict(self, data=True):
++    def to_dict(self, data=True, encoding=False):
+         """
+         Convert this dataset to a dictionary following xarray naming
+         conventions.
+@@ -5958,6 +5958,8 @@ class Dataset(DataWithCoords, DatasetReductions, DatasetArithmetic, Mapping):
+         data : bool, optional
+             Whether to include the actual data in the dictionary. When set to
+             False, returns just the schema.
++        encoding : bool, optional
++            Whether to include encoding attributes in the dictionary.
+ 
+         See Also
+         --------
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index e92d01c..61cb421 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -533,13 +533,23 @@ class Variable(AbstractArray, NdimSizeLenMixin, VariableArithmetic):
+         """Convert this variable to a pandas.Index"""
+         return self.to_index_variable().to_index()
+ 
+-    def to_dict(self, data=True):
+-        """Dictionary representation of variable."""
++    def to_dict(self, data=True, encoding=False):
++        """Dictionary representation of variable.
++        
++        Parameters
++        ----------
++        data : bool, optional
++            Whether to include the actual data in the dictionary.
++        encoding : bool, optional
++            Whether to include encoding attributes in the dictionary.
++        """
+         item = {"dims": self.dims, "attrs": decode_numpy_dict_values(self.attrs)}
+         if data:
+             item["data"] = ensure_us_time_resolution(self.values).tolist()
+         else:
+             item.update({"dtype": str(self.dtype), "shape": self.shape})
++        if encoding and self._encoding:
++            item["encoding"] = decode_numpy_dict_values(self._encoding)
+         return item
+ 
+     @property

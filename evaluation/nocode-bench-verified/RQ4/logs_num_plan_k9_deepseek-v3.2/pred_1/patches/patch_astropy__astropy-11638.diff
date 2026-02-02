@@ -1,0 +1,23 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index e770a09..017082b 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -1173,4 +1173,17 @@ class LeapSeconds(QTable):
+             if initialize_erfa == 'only':
+                 return 0
+ 
+-        return erfa.leap_seconds.update(self)
++        return erfa.leap_seconds.update(self)
++
++    @classmethod
++    def update_erfa_leap_seconds_if_needed(cls):
++        """Update the ERFA leap second table if it is out of date.
++
++        This function should be called when a UTC transformation is performed.
++        It will update the ERFA leap second table with the current leap second
++        table if the latter is newer.
++        """
++        # Get the current leap second table without updating ERFA.
++        leap_seconds = cls.auto_open()
++        # Update the ERFA table if needed.
++        leap_seconds.update_erfa_leap_seconds()

@@ -1,0 +1,44 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d9aca35..78cab37 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -522,6 +522,7 @@ class PyFunction(PyObject):
+     option_spec = PyObject.option_spec.copy()
+     option_spec.update({
+         'async': directives.flag,
++        'canonical': directives.unchanged,
+     })
+ 
+     def get_signature_prefix(self, sig: str) -> str:
+@@ -576,6 +577,7 @@ class PyVariable(PyObject):
+     option_spec.update({
+         'type': directives.unchanged,
+         'value': directives.unchanged,
++        'canonical': directives.unchanged,
+     })
+ 
+     def handle_signature(self, sig: str, signode: desc_signature) -> Tuple[str, str]:
+@@ -607,6 +609,7 @@ class PyClasslike(PyObject):
+     option_spec = PyObject.option_spec.copy()
+     option_spec.update({
+         'final': directives.flag,
++        'canonical': directives.unchanged,
+     })
+ 
+     allow_nesting = True
+@@ -639,6 +642,7 @@ class PyMethod(PyObject):
+         'final': directives.flag,
+         'property': directives.flag,
+         'staticmethod': directives.flag,
++        'canonical': directives.unchanged,
+     })
+ 
+     def needs_arglist(self) -> bool:
+@@ -736,6 +740,7 @@ class PyAttribute(PyObject):
+     option_spec.update({
+         'type': directives.unchanged,
+         'value': directives.unchanged,
++        'canonical': directives.unchanged,
+     })
+ 
+     def handle_signature(self, sig: str, signode: desc_signature) -> Tuple[str, str]:

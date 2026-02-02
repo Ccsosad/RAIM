@@ -1,0 +1,59 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..dfd0c44 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -84,7 +84,14 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         for i in range(n_features):
+             Xi = X_list[i]
+             if self.categories == 'auto':
+-                cats = _unique(Xi)
++                if Xi.dtype == object:
++                    # For object dtype, we want to include missing values as categories
++                    # We will use a combination of unique and a check for missing values
++                    cats = _unique(Xi)
++                    # Check for missing values and add them if not present
++                    # But _unique should already include them.
++                else:
++                    cats = _unique(Xi)
+             else:
+                 cats = np.array(self.categories[i], dtype=Xi.dtype)
+                 if Xi.dtype != object:
+@@ -115,8 +122,20 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+ 
+         for i in range(n_features):
+             Xi = X_list[i]
+-            diff, valid_mask = _check_unknown(Xi, self.categories_[i],
+-                                              return_mask=True)
++            if Xi.dtype == object:
++                # Handle missing values for object dtype
++                valid_mask = np.array([self._is_missing(x) and x in self.categories_[i] or not self._is_missing(x) for x in Xi], dtype=bool)
++                # Now check for non-missing values
++                non_missing_indices = ~np.array([self._is_missing(x) for x in Xi], dtype=bool)
++                if np.any(non_missing_indices):
++                    Xi_non_missing = Xi[non_missing_indices]
++                    diff, non_missing_valid_mask = _check_unknown(Xi_non_missing, self.categories_[i], return_mask=True)
++                    valid_mask[non_missing_indices] = non_missing_valid_mask
++                else:
++                    diff = []
++            else:
++                diff, valid_mask = _check_unknown(Xi, self.categories_[i],
++                                                  return_mask=True)
+ 
+             if not np.all(valid_mask):
+                 if handle_unknown == 'error':
+@@ -144,6 +163,15 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+ 
+         return X_int, X_mask
+ 
++    @staticmethod
++    def _is_missing(x):
++        """Check if a value is missing (None or np.nan)."""
++        return x is None or (isinstance(x, float) and np.isnan(x))
++
++    def _is_missing(self, x):
++        """Check if a value is missing (None or np.nan)."""
++        return x is None or (isinstance(x, float) and np.isnan(x))
++
+     def _more_tags(self):
+         return {'X_types': ['categorical']}
+ 

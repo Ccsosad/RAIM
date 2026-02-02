@@ -1,0 +1,51 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..0dca8e5 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -84,6 +84,46 @@ class Grid(_BaseGrid):
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+         self._figure.tight_layout(*args, **kwargs)
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to each subplot Axes and return self.
++        
++        Parameters
++        ----------
++        func : callable
++            Function to apply to each Axes in the grid. The first argument
++            must be the Axes object.
++        args, kwargs
++            Additional arguments passed to the function.
++            
++        Returns
++        -------
++        self : Grid instance
++            Returns self for easy chaining.
++        """
++        for ax in self.axes.flat:
++            func(ax, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return self.
++        
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid. The first argument must be
++            the grid object.
++        args, kwargs
++            Additional arguments passed to the function.
++            
++        Returns
++        -------
++        self : Grid instance
++            Returns self for easy chaining.
++        """
++        func(self, *args, **kwargs)
++        return self
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):

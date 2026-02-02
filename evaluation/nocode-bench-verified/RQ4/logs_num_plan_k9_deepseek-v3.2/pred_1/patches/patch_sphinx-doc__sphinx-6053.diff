@@ -1,0 +1,20 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ae23792..d9d2227 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -192,10 +192,14 @@ class Options(dict):
+     """A dict/attribute hybrid that returns None on nonexisting keys."""
+     def __getattr__(self, name):
+         # type: (str) -> Any
++        key = name.replace('_', '-')
+         try:
+-            return self[name.replace('_', '-')]
++            value = self[key]
+         except KeyError:
+             return None
++        if value is None:
++            return True
++        return value
+ 
+ 
+ class Documenter:

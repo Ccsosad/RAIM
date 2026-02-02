@@ -1,0 +1,230 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..c266d09 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -82,7 +82,224 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def plot_univariate(
++        self,
++        multiple,
++        element,
++        fill,
++        shrink,
++        common_bins,
++        common_norm,
++        cumulative,
++        stat,
++        binwidth,
++        bins,
++        binrange,
++        discrete,
++        log_scale,
++        color,
++        legend,
++        line_kws,
++        **plot_kws,
++    ):
++
++        # Set up the data for computation
++        if self.variables["x"] is not None:
++            data_variable = "x"
++        else:
++            data_variable = "y"
++
++        # Define bin edges
++        bin_edges = self.define_bin_edges(
++            data_variable, common_bins, binwidth, bins, binrange, discrete, log_scale
++        )
++
++        # Compute histograms per group
++        heights = []
++        for sub_vars, sub_data in self.iter_data("hue", from_comp_data=True):
++            comp_data = sub_data[data_variable]
++            if stat == "density":
++                # Normalize to density
++                hist, _ = np.histogram(comp_data, bins=bin_edges, density=True)
++            elif stat == "probability":
++                # Normalize to probability
++                hist, _ = np.histogram(comp_data, bins=bin_edges, density=False)
++                hist = hist.astype(float) / len(comp_data)
++            else:
++                # Count or frequency
++                hist, _ = np.histogram(comp_data, bins=bin_edges)
++            heights.append(hist)
++
++        # Stack or layer the histograms
++        if multiple == "stack":
++            # Stack the histograms
++            stacked_heights = np.stack(heights, axis=0)
++            cumulative_heights = np.cumsum(stacked_heights, axis=0)
++        else:
++            # Layer (overlay) the histograms
++            cumulative_heights = heights
++
++        # Plot
++        ax = self.ax
++        for i, (sub_vars, sub_data) in enumerate(self.iter_data("hue", from_comp_data=True)):
++            color = self._get_palette_color(sub_vars.get("hue"))
++            if multiple == "stack":
++                bottom = cumulative_heights[i-1] if i > 0 else 0
++                height = cumulative_heights[i] - bottom
++            else:
++                height = cumulative_heights[i]
++                bottom = 0
++
++            if element == "bars":
++                # Draw bars
++                if fill:
++                    ax.bar(bin_edges[:-1], height, width=np.diff(bin_edges),
++                           bottom=bottom, align="edge", color=color, **plot_kws)
++                else:
++                    # Outline only
++                    for left, right, h in zip(bin_edges[:-1], bin_edges[1:], height):
++                        rect = mpl.patches.Rectangle((left, bottom), right-left, h,
++                                                     fill=False, edgecolor=color, **plot_kws)
++                        ax.add_patch(rect)
++            elif element == "step":
++                # Draw step lines
++                steps = np.repeat(bin_edges, 2)[1:-1]
++                h_steps = np.repeat(height, 2)
++                if fill:
++                    ax.fill_between(steps, bottom, bottom + h_steps, color=color, **plot_kws)
++                else:
++                    ax.plot(steps, bottom + h_steps, color=color, **plot_kws)
++            elif element == "poly":
++                # Draw polygon (line through bin centers)
++                centers = (bin_edges[:-1] + bin_edges[1:]) / 2
++                if fill:
++                    ax.fill_between(centers, bottom, bottom + height, color=color, **plot_kws)
++                else:
++                    ax.plot(centers, bottom + height, color=color, **plot_kws)
++
++        # Set labels
++        default_x = "x" if data_variable == "x" else "y"
++        default_y = stat.capitalize()
++        self._add_axis_labels(ax, default_x, default_y)
++
++        if "hue" in self.variables and legend:
++            artist = partial(mpl.patches.Patch)
++            self._add_legend(ax, artist, fill, multiple, plot_kws.get("alpha", 1), plot_kws, {})
++
++    def plot_bivariate(
++        self,
++        common_bins,
++        common_norm,
++        cumulative,
++        stat,
++        binwidth,
++        bins,
++        binrange,
++        discrete,
++        log_scale,
++        thresh,
++        pthresh,
++        pmax,
++        color,
++        legend,
++        cbar,
++        cbar_kws,
++        **plot_kws,
++    ):
++
++        # Define bin edges for x and y
++        x_edges = self.define_bin_edges(
++            "x", common_bins, binwidth, bins, binrange, discrete, log_scale
++        )
++        y_edges = self.define_bin_edges(
++            "y", common_bins, binwidth, bins, binrange, discrete, log_scale
++        )
++
++        # Compute 2D histogram
++        heights = []
++        for sub_vars, sub_data in self.iter_data("hue", from_comp_data=True):
++            comp_data_x = sub_data["x"]
++            comp_data_y = sub_data["y"]
++            hist, _, _ = np.histogram2d(comp_data_x, comp_data_y, bins=[x_edges, y_edges])
++            if stat == "density":
++                hist = hist / (len(comp_data_x) * np.diff(x_edges)[:, None] * np.diff(y_edges))
++            elif stat == "probability":
++                hist = hist / len(comp_data_x)
++            heights.append(hist)
++
++        # Combine across hues if needed
++        if common_norm:
++            total_hist = np.sum(heights, axis=0)
++            heights = [total_hist] * len(heights)
++
++        # Plot as heatmap
++        ax = self.ax
++        for i, (sub_vars, sub_data) in enumerate(self.iter_data("hue", from_comp_data=True)):
++            color = self._get_palette_color(sub_vars.get("hue"))
++            mesh = ax.pcolormesh(x_edges, y_edges, heights[i].T, cmap=self._cmap_from_color(color), **plot_kws)
++
++        # Add colorbar if requested
++        if cbar:
++            cbar = ax.figure.colorbar(mesh, ax=ax, **cbar_kws)
++
++        # Set labels
++        self._add_axis_labels(ax, "x", "y")
++
++    def define_bin_edges(
++        self,
++        variable,
++        common_bins,
++        binwidth,
++        bins,
++        binrange,
++        discrete,
++        log_scale,
++    ):
++        """Compute bin edges for a given variable."""
++        # Get the data for the variable across all groups if common_bins is True
++        if common_bins:
++            data = self.comp_data[variable]
++        else:
++            # For per-group bins, we'll use the current group data
++            # This is handled in the calling method
++            pass
++
++        # If binrange is not provided, use the data range
++        if binrange is None:
++            binrange = (data.min(), data.max())
++
++        # Handle log scale
++        if log_scale:
++            data = np.log10(data)
++            binrange = (np.log10(binrange[0]), np.log10(binrange[1]))
++
++        # Determine bin edges
++        if bins is not None:
++            if isinstance(bins, int):
++                bin_edges = np.linspace(binrange[0], binrange[1], bins + 1)
++            else:
++                bin_edges = np.asarray(bins)
++        elif binwidth is not None:
++            start = binrange[0]
++            stop = binrange[1]
++            bin_edges = np.arange(start, stop + binwidth, binwidth)
++        else:
++            # Use default bins (e.g., Freedman-Diaconis)
++            bin_edges = np.histogram_bin_edges(data, bins="auto", range=binrange)
++
++        # Convert back from log scale if needed
++        if log_scale:
++            bin_edges = 10 ** bin_edges
++
++        return bin_edges
++
++    def _cmap_from_color(self, color):
++        """Create a colormap from a single color."""
++        from matplotlib.colors import LinearSegmentedColormap
++        cmap = LinearSegmentedColormap.from_list("custom", ["white", color])
++        return cmap
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):

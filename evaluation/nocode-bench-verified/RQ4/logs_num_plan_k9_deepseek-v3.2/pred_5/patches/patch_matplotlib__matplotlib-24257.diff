@@ -1,0 +1,110 @@
+diff --git a/lib/matplotlib/style/resources.py b/lib/matplotlib/style/resources.py
+new file mode 100644
+index 0000000..ebcbb3c
+--- /dev/null
++++ b/lib/matplotlib/style/resources.py
+@@ -0,0 +1,104 @@
++"""
++Utilities for loading style files from package resources.
++"""
++
++import importlib.resources as importlib_resources
++import sys
++import warnings
++from pathlib import Path
++
++from matplotlib import _api, rc_params_from_file
++
++
++STYLE_EXTENSION = "mplstyle"
++
++
++def _load_style_from_package(package_name, style_name):
++    """
++    Load a style file from a package resource.
++
++    Parameters
++    ----------
++    package_name : str
++        The name of the package (e.g., "mypackage")
++    style_name : str
++        The name of the style file without extension (e.g., "presentation")
++
++    Returns
++    -------
++    dict
++        The rc parameters from the style file.
++
++    Raises
++    ------
++    ModuleNotFoundError
++        If the package cannot be found.
++    FileNotFoundError
++        If the style file cannot be found in the package.
++    """
++    # Try to access the resource without importing the package
++    resource_path = f"{style_name}.{STYLE_EXTENSION}"
++    
++    # Use importlib.resources to access the file
++    # Note: We use importlib_resources which is either importlib.resources
++    # (Python >= 3.9) or importlib_resources backport
++    try:
++        if sys.version_info >= (3, 9):
++            # For Python 3.9+, we can use files() API
++            ref = importlib_resources.files(package_name) / resource_path
++            with importlib_resources.as_file(ref) as path:
++                return rc_params_from_file(path, use_default_template=False)
++        else:
++            # For older Python, use the legacy API
++            with importlib_resources.path(package_name, resource_path) as path:
++                return rc_params_from_file(path, use_default_template=False)
++    except ImportError as e:
++        # Convert to ModuleNotFoundError for consistency
++        raise ModuleNotFoundError(f"Package '{package_name}' not found") from e
++    except FileNotFoundError as e:
++        raise FileNotFoundError(
++            f"Style file '{style_name}.{STYLE_EXTENSION}' not found in package '{package_name}'"
++        ) from e
++
++
++def is_package_style(style_name):
++    """
++    Check if a style name refers to a package style.
++
++    Parameters
++    ----------
++    style_name : str
++        The style name to check
++
++    Returns
++    -------
++    bool
++        True if the style name contains a dot and thus refers to a package style.
++    """
++    return "." in style_name
++
++
++def load_package_style(style_name):
++    """
++    Load a style from a package.
++
++    Parameters
++    ----------
++    style_name : str
++        The style name in "package.style" format
++
++    Returns
++    -------
++    dict
++        The rc parameters from the style file.
++
++    Raises
++    ------
++    ValueError
++        If the style name is not in the correct format.
++    """
++    if not is_package_style(style_name):
++        raise ValueError(f"Style name '{style_name}' is not a package style")
++    
++    package_name, style_file = style_name.rsplit(".", 1)
++    return _load_style_from_package(package_name, style_file)

@@ -1,0 +1,51 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index 469c69b..a73a752 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -412,6 +412,18 @@ class DatetimeAccessor(Properties):
+         "date", "Date corresponding to datetimes", object
+     )
+ 
++    @property
++    def calendar(self):
++        """The calendar name of the datetime values.
++        
++        Returns
++        -------
++        str
++            Calendar name ('gregorian', 'noleap', etc.)
++        """
++        from ..coding.calendar_ops import get_calendar
++        return get_calendar(self._obj.data)
++
+     is_month_start = Properties._tslib_field_accessor(
+         "is_month_start",
+         "Indicates whether the date is the first day of the month.",
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..2af05a7
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1,22 @@
++"""Calendar-related operations for xarray objects."""
++
++import numpy as np
++import pandas as pd
++from typing import Optional, Union
++
++def get_calendar(arr: Union[np.ndarray, pd.Index]) -> str:
++    """Get the calendar name from datetime array.
++    
++    Parameters
++    ----------
++    arr : np.ndarray or pd.Index
++        Array of datetime values
++        
++    Returns
++    -------
++    str
++        Calendar name ('gregorian', 'noleap', etc.)
++    """
++    if hasattr(arr, 'calendar'):
++        return arr.calendar
++    return 'gregorian'

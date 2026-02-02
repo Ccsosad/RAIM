@@ -1,0 +1,268 @@
+diff --git a/_pytest/logging.py b/_pytest/logging.py
+new file mode 100644
+index 0000000..95b9a6a
+--- /dev/null
++++ b/_pytest/logging.py
+@@ -0,0 +1,262 @@
++"""
++Logging support for pytest.
++"""
++import logging
++import sys
++from contextlib import contextmanager
++
++import py
++import pytest
++
++
++def pytest_addoption(parser):
++    """Add options to control log capturing."""
++    group = parser.getgroup("logging")
++
++    def add_option(option, dest, help, default=None, type=None):
++        group.addoption(
++            option,
++            dest=dest,
++            help=help,
++            default=default,
++            type=type,
++        )
++
++    add_option(
++        "--log-level",
++        dest="log_level",
++        help="Default logging level for loggers",
++        default="WARNING",
++    )
++    add_option(
++        "--log-format",
++        dest="log_format",
++        help="Log format used by the logging module",
++        default="%(levelname)-8s %(name)s %(message)s",
++    )
++    add_option(
++        "--log-date-format",
++        dest="log_date_format",
++        help="Log date format used by the logging module",
++        default=None,
++    )
++    add_option(
++        "--log-cli-level",
++        dest="log_cli_level",
++        help="Log level for the console logging",
++        default=None,
++    )
++    add_option(
++        "--log-cli-format",
++        dest="log_cli_format",
++        help="Log format for the console logging",
++        default=None,
++    )
++    add_option(
++        "--log-cli-date-format",
++        dest="log_cli_date_format",
++        help="Log date format for the console logging",
++        default=None,
++    )
++    add_option(
++        "--log-file",
++        dest="log_file",
++        help="Log file path",
++        default=None,
++    )
++    add_option(
++        "--log-file-level",
++        dest="log_file_level",
++        help="Log level for the log file",
++        default=None,
++    )
++    add_option(
++        "--log-file-format",
++        dest="log_file_format",
++        help="Log format for the log file",
++        default=None,
++    )
++    add_option(
++        "--log-file-date-format",
++        dest="log_file_date_format",
++        help="Log date format for the log file",
++        default=None,
++    )
++    add_option(
++        "--no-print-logs",
++        dest="log_print",
++        action="store_false",
++        default=True,
++        help="Disable printing logs on failed tests",
++    )
++
++
++class LogCaptureHandler(logging.Handler):
++    """A logging handler that stores log records and captures them for later."""
++
++    def __init__(self):
++        super().__init__()
++        self.records = []
++
++    def emit(self, record):
++        self.records.append(record)
++
++    def reset(self):
++        self.records = []
++
++
++class LogCaptureFixture:
++    """Fixture to capture log messages."""
++
++    def __init__(self, handler):
++        self.handler = handler
++        self._initial_levels = {}  # type: dict
++
++    def set_level(self, level, logger=None):
++        """Set the level of a logger or the handler if logger is None."""
++        if logger is None:
++            self.handler.setLevel(level)
++        else:
++            logger_obj = logging.getLogger(logger)
++            self._initial_levels.setdefault(logger, logger_obj.level)
++            logger_obj.setLevel(level)
++
++    @contextmanager
++    def at_level(self, level, logger=None):
++        """Context manager to set level temporarily."""
++        if logger is None:
++            old_level = self.handler.level
++            self.handler.setLevel(level)
++            try:
++                yield
++            finally:
++                self.handler.setLevel(old_level)
++        else:
++            logger_obj = logging.getLogger(logger)
++            old_level = logger_obj.level
++            logger_obj.setLevel(level)
++            try:
++                yield
++            finally:
++                logger_obj.setLevel(old_level)
++
++    @property
++    def text(self):
++        """Return the formatted log text."""
++        return "\n".join(self.handler.format(r) for r in self.records)
++
++    @property
++    def records(self):
++        """Return the captured log records."""
++        return self.handler.records
++
++    @property
++    def record_tuples(self):
++        """Return a list of tuples (logger_name, level, message)."""
++        return [(r.name, r.levelno, r.getMessage()) for r in self.records]
++
++    def clear(self):
++        """Clear the captured log records."""
++        self.handler.reset()
++
++
++@pytest.fixture
++def caplog(request):
++    """Fixture to capture log messages."""
++    # Get the LogCaptureHandler from the request node
++    handler = request.node._logcapture_handler
++    if handler is None:
++        # This should not happen if the plugin is active
++        raise RuntimeError("Log capture fixture is not available")
++    return LogCaptureFixture(handler)
++
++
++class LoggingPlugin:
++    """Capture logs during test execution."""
++
++    def __init__(self, config):
++        self.config = config
++        self.handler = None
++        self.logger = None
++
++    @pytest.hookimpl(tryfirst=True)
++    def pytest_sessionstart(self, session):
++        """Set up logging capture."""
++        root_logger = logging.getLogger()
++        self.handler = LogCaptureHandler()
++        self.handler.setLevel(getattr(logging, self.config.option.log_level))
++        root_logger.addHandler(self.handler)
++        self.logger = root_logger
++
++    @pytest.hookimpl(trylast=True)
++    def pytest_sessionfinish(self, session):
++        """Tear down logging capture."""
++        if self.handler:
++            root_logger = logging.getLogger()
++            root_logger.removeHandler(self.handler)
++            self.handler = None
++
++    @pytest.hookimpl(hookwrapper=True)
++    def pytest_runtest_setup(self, item):
++        """Capture logs during setup."""
++        self._start_capturing(item)
++        yield
++        self._stop_capturing(item, "setup")
++
++    @pytest.hookimpl(hookwrapper=True)
++    def pytest_runtest_call(self, item):
++        """Capture logs during call."""
++        self._start_capturing(item)
++        yield
++        self._stop_capturing(item, "call")
++
++    @pytest.hookimpl(hookwrapper=True)
++    def pytest_runtest_teardown(self, item):
++        """Capture logs during teardown."""
++        self._start_capturing(item)
++        yield
++        self._stop_capturing(item, "teardown")
++
++    @pytest.hookimpl(hookwrapper=True)
++    def pytest_make_collect_report(self, collector):
++        """Capture logs during collection."""
++        if isinstance(collector, pytest.File):
++            self._start_capturing(collector)
++            outcome = yield
++            report = outcome.get_result()
++            self._stop_capturing(collector, "collect", report)
++        else:
++            yield
++
++    def _start_capturing(self, node):
++        """Start capturing logs for a node."""
++        if self.handler:
++            self.handler.reset()
++            node._logcapture_handler = self.handler
++
++    def _stop_capturing(self, node, when, report=None):
++        """Stop capturing logs and add a section to the report."""
++        if not self.handler:
++            return
++        if report is None:
++            report = getattr(node, "_report", None)
++        if report is None:
++            return
++        if self.handler.records and self.config.option.log_print:
++            log_text = "\n".join(
++                self.handler.format(r) for r in self.handler.records
++            )
++            report.sections.append(("Captured stdlog call", log_text))
++
++    @pytest.hookimpl(tryfirst=True)
++    def pytest_runtest_logreport(self, report):
++        """Attach the log capture to the test report."""
++        if report.when == "call" and report.failed:
++            # Store the handler on the report for the fixture?
++            pass
++
++
++def pytest_configure(config):
++    """Register the logging plugin."""
++    if config.option.log_level or config.option.log_format:
++        config.pluginmanager.register(LoggingPlugin(config), "logging")

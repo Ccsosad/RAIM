@@ -1,0 +1,39 @@
+diff --git a/sphinx/builders/html/__init__.py b/sphinx/builders/html/__init__.py
+index c052c27..559b69e 100644
+--- a/sphinx/builders/html/__init__.py
++++ b/sphinx/builders/html/__init__.py
+@@ -505,6 +505,14 @@ class StandaloneHTMLBuilder(Builder):
+                 self.theme.get_options(self.theme_options).items())
+         self.globalcontext.update(self.config.html_context)
+ 
++    def get_docpath(self, docname: str) -> str:
++        """Return the directory path for the given document, with a trailing slash if non-empty."""
++        dirname = path.dirname(docname)
++        if dirname:
++            return dirname + '/'
++        else:
++            return ''
++
+     def get_doc_context(self, docname: str, body: str, metatags: str) -> Dict[str, Any]:
+         """Collect items for the template context of a page."""
+         # find out relations
+@@ -583,6 +591,7 @@ class StandaloneHTMLBuilder(Builder):
+             # only display a TOC if there's more than one item to show
+             'display_toc': (self.env.toc_num_entries[docname] > 1),
+             'page_source_suffix': source_suffix,
++            'docpath': self.get_docpath(docname),
+         }
+ 
+     def write_doc(self, docname: str, doctree: nodes.document) -> None:
+diff --git a/sphinx/builders/singlehtml.py b/sphinx/builders/singlehtml.py
+index 3719068..5d16b30 100644
+--- a/sphinx/builders/singlehtml.py
++++ b/sphinx/builders/singlehtml.py
+@@ -147,6 +147,7 @@ class SingleFileHTMLBuilder(StandaloneHTMLBuilder):
+             'sourcename': '',
+             'toc': toc,
+             'display_toc': display_toc,
++            'docpath': self.get_docpath(docname),
+         }
+ 
+     def write(self, *ignored: Any) -> None:

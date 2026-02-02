@@ -1,0 +1,44 @@
+diff --git a/sklearn/datasets/_kddcup99.py b/sklearn/datasets/_kddcup99.py
+index 5405c9d..685ec68 100644
+--- a/sklearn/datasets/_kddcup99.py
++++ b/sklearn/datasets/_kddcup99.py
+@@ -48,7 +48,8 @@ logger = logging.getLogger(__name__)
+ @_deprecate_positional_args
+ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+                    random_state=None,
+-                   percent10=True, download_if_missing=True, return_X_y=False):
++                   percent10=True, download_if_missing=True, return_X_y=False,
++                   as_frame=False):
+     """Load the kddcup99 dataset (classification).
+ 
+     Download it if necessary.
+@@ -174,7 +175,22 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+     if return_X_y:
+         return data, target
+ 
+-    return Bunch(data=data, target=target, DESCR=fdescr)
++    # Handle as_frame option
++    frame = None
++    if as_frame:
++        import pandas as pd
++        # For conversion, use raw data to DataFrame
++        frame = pd.DataFrame(data)
++        bunch = Bunch(
++            data=frame,
++            target=pd.Series(target),
++            frame=frame,
++            DESCR=fdescr,
++        )
++    else:
++        bunch = Bunch(data=data, target=target, DESCR=fdescr)
++
++    return bunch
+ 
+ 
+ def _fetch_brute_kddcup99(data_home=None,
+@@ -315,4 +331,4 @@ def _mkdirp(d):
+         os.makedirs(d)
+     except OSError as e:
+         if e.errno != errno.EEXIST:
+-            raise
++            raise

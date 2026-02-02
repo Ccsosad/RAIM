@@ -1,0 +1,52 @@
+diff --git a/django/template/defaulttags.py b/django/template/defaulttags.py
+index 8c6c1d4..c42bcff 100644
+--- a/django/template/defaulttags.py
++++ b/django/template/defaulttags.py
+@@ -419,12 +419,17 @@ class LoadNode(Node):
+ 
+ 
+ class NowNode(Node):
+-    def __init__(self, format_string):
++    def __init__(self, format_string, as_var=None):
+         self.format_string = format_string
++        self.as_var = as_var
+ 
+     def render(self, context):
+         tzinfo = timezone.get_current_timezone() if settings.USE_TZ else None
+-        return date(datetime.now(tz=tzinfo), self.format_string)
++        formatted = date(datetime.now(tz=tzinfo), self.format_string)
++        if self.as_var:
++            context[self.as_var] = formatted
++            return ''
++        return formatted
+ 
+ 
+ class SpacelessNode(Node):
+@@ -1198,12 +1203,23 @@ def now(parser, token):
+     Sample usage::
+ 
+         It is {% now "jS F Y H:i" %}
++
++    You can also store the result in a variable::
++
++        {% now "jS F Y H:i" as current_date %}
+     """
+     bits = token.split_contents()
+-    if len(bits) != 2:
+-        raise TemplateSyntaxError("'now' statement takes one argument")
+-    format_string = bits[1][1:-1]
+-    return NowNode(format_string)
++    if len(bits) == 2:
++        # {% now "format" %}
++        format_string = bits[1][1:-1]
++        as_var = None
++    elif len(bits) == 4 and bits[2] == 'as':
++        # {% now "format" as varname %}
++        format_string = bits[1][1:-1]
++        as_var = bits[3]
++    else:
++        raise TemplateSyntaxError("'now' statement takes one argument or has the form: 'now \"format\" as variable'")
++    return NowNode(format_string, as_var)
+ 
+ 
+ @register.tag

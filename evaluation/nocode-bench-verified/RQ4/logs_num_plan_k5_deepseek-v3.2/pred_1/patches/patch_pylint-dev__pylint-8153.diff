@@ -1,0 +1,47 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..84a62b7 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -67,6 +67,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -75,14 +76,32 @@ def expand_modules(
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
+ 
++    source_roots = [os.path.abspath(root) for root in source_roots]
+     for something in files_or_modules:
+         basename = os.path.basename(something)
+         if _is_ignored_file(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+         ):
+             continue
+-        module_path = get_python_path(something)
+-        additional_search_path = [".", module_path] + path
++        if os.path.exists(something):
++            # For existing files, compute the module path using source roots if available
++            if source_roots:
++                # Find the closest source root that contains the file
++                module_path = None
++                abs_path = os.path.abspath(something)
++                for root in source_roots:
++                    root = os.path.normpath(root)
++                    if os.path.commonpath([root, abs_path]) == root:
++                        # The file is under this source root
++                        if module_path is None or len(root) > len(module_path):
++                            module_path = root
++                if module_path is None:
++                    module_path = get_python_path(something)
++            else:
++                module_path = get_python_path(something)
++        else:
++            module_path = get_python_path(something)
++        additional_search_path = [".", module_path] + source_roots + path
+         if os.path.exists(something):
+             # this is a file or a directory
+             try:

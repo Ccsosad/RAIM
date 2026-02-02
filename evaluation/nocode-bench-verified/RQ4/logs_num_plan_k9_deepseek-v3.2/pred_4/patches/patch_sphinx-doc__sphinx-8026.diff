@@ -1,0 +1,30 @@
+diff --git a/sphinx/builders/html/__init__.py b/sphinx/builders/html/__init__.py
+index c052c27..e09e02d 100644
+--- a/sphinx/builders/html/__init__.py
++++ b/sphinx/builders/html/__init__.py
+@@ -594,6 +594,12 @@ class StandaloneHTMLBuilder(Builder):
+         self.imgpath = relative_uri(self.get_target_uri(docname), '_images')
+         self.dlpath = relative_uri(self.get_target_uri(docname), '_downloads')
+         self.current_docname = docname
++        # set docpath in temp_data for image filename pattern
++        import os
++        docpath = os.path.dirname(docname).replace(os.sep, '/')
++        if docpath and not docpath.endswith('/'):
++            docpath += '/'
++        self.env.temp_data['docpath'] = docpath
+         self.docwriter.write(doctree, destination)
+         self.docwriter.assemble_parts()
+         body = self.docwriter.parts['fragment']
+@@ -604,6 +610,12 @@ class StandaloneHTMLBuilder(Builder):
+ 
+     def write_doc_serialized(self, docname: str, doctree: nodes.document) -> None:
+         self.imgpath = relative_uri(self.get_target_uri(docname), self.imagedir)
++        # set docpath in temp_data for image filename pattern
++        import os
++        docpath = os.path.dirname(docname).replace(os.sep, '/')
++        if docpath and not docpath.endswith('/'):
++            docpath += '/'
++        self.env.temp_data['docpath'] = docpath
+         self.post_process_images(doctree)
+         title_node = self.env.longtitles.get(docname)
+         title = self.render_partial(title_node)['title'] if title_node else ''

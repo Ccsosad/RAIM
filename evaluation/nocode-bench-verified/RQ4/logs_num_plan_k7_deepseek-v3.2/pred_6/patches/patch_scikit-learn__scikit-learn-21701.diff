@@ -1,0 +1,136 @@
+diff --git a/sklearn/random_projection.py b/sklearn/random_projection.py
+index d06dfcd..0613736 100644
+--- a/sklearn/random_projection.py
++++ b/sklearn/random_projection.py
+@@ -302,11 +302,18 @@ class BaseRandomProjection(
+ 
+     @abstractmethod
+     def __init__(
+-        self, n_components="auto", *, eps=0.1, dense_output=False, random_state=None
++        self,
++        n_components="auto",
++        *,
++        eps=0.1,
++        dense_output=False,
++        compute_inverse_components=False,
++        random_state=None,
+     ):
+         self.n_components = n_components
+         self.eps = eps
+         self.dense_output = dense_output
++        self.compute_inverse_components = compute_inverse_components
+         self.random_state = random_state
+ 
+     @abstractmethod
+@@ -399,6 +406,24 @@ class BaseRandomProjection(
+             " not the proper shape."
+         )
+ 
++        # Compute inverse components if required
++        if self.compute_inverse_components:
++            # Compute the pseudo-inverse of components_
++            # components_ is (n_components_, n_features)
++            # We want inverse_components_ of shape (n_features, n_components_)
++            # Always store as dense array.
++            if sp.issparse(self.components_):
++                # Convert to dense for pinv? Alternatively, use sparse pinv?
++                # But the requirement says inverse_components_ is always dense.
++                # So we convert to dense.
++                components_dense = self.components_.toarray()
++            else:
++                components_dense = self.components_
++            # Use numpy's pinv
++            self.inverse_components_ = np.linalg.pinv(components_dense, rcond=1e-15)
++        else:
++            self.inverse_components_ = None
++
+         return self
+ 
+     def transform(self, X):
+@@ -429,6 +454,86 @@ class BaseRandomProjection(
+         X_new = safe_sparse_dot(X, self.components_.T, dense_output=self.dense_output)
+         return X_new
+ 
++    def inverse_transform(self, X):
++        """Project data back to its original space.
++
++        Parameters
++        ----------
++        X : {ndarray, sparse matrix} of shape (n_samples, n_components)
++            Data to be projected back.
++
++        Returns
++        ----------
++        X_original : ndarray of shape (n_samples, n_features)
++            Projected data.
++        """
++        check_is_fitted(self)
++        X = check_array(X, dtype=[np.float64, np.float32])
++
++        if X.shape[1] != self.n_components_:
++            raise ValueError(
++                "The number of features in X (n_components) does not match "
++                "the number of components in the transformer."
++            )
++
++        # Get inverse components
++        if hasattr(self, 'inverse_components_') and self.inverse_components_ is not None:
++            inv_comp = self.inverse_components_
++        else:
++            # Compute on the fly
++            if sp.issparse(self.components_):
++                components_dense = self.components_.toarray()
++            else:
++                components_dense = self.components_
++            inv_comp = np.linalg.pinv(components_dense, rcond=1e-15)
++
++        # Project back: X * inv_comp^T
++        # inv_comp is (n_features, n_components)
++        # We want X (n_samples, n_components) * inv_comp^T (n_components, n_features)
++        # Result is (n_samples, n_features)
++        X_original = X @ inv_comp.T
++        return X_original
++
++    def inverse_transform(self, X):
++        """Project data back to its original space.
++
++        Parameters
++        ----------
++        X : {ndarray, sparse matrix} of shape (n_samples, n_components)
++            Data to be projected back.
++
++        Returns
++        -------
++        X_original : ndarray of shape (n_samples, n_features)
++            Projected data.
++        """
++        check_is_fitted(self)
++        X = check_array(X, dtype=[np.float64, np.float32])
++
++        if X.shape[1] != self.n_components_:
++            raise ValueError(
++                "The number of features in X (n_components) does not match "
++                "the number of components in the transformer."
++            )
++
++        # Get inverse components
++        if hasattr(self, 'inverse_components_') and self.inverse_components_ is not None:
++            inv_comp = self.inverse_components_
++        else:
++            # Compute on the fly
++            if sp.issparse(self.components_):
++                components_dense = self.components_.toarray()
++            else:
++                components_dense = self.components_
++            inv_comp = np.linalg.pinv(components_dense, rcond=1e-15)
++
++        # Project back: X * inv_comp^T
++        # inv_comp is (n_features, n_components)
++        # We want X (n_samples, n_components) * inv_comp^T (n_components, n_features)
++        # Result is (n_samples, n_features)
++        X_original = X @ inv_comp.T
++        return X_original
++
+     @property
+     def _n_features_out(self):
+         """Number of transformed output features.

@@ -1,0 +1,100 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..ca2e453 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1654,6 +1654,46 @@ class Ellipse(Patch):
+         return self.get_patch_transform().transform(
+             [(-1, -1), (1, -1), (1, 1), (-1, 1)])
+ 
++    def get_vertices(self):
++        """
++        Return the vertices of the ellipse.
++
++        The vertices are the endpoints of the major axis. The points
++        are returned in data coordinates.
++
++        Returns
++        -------
++        vertices : (2, 2) array
++            The coordinates of the two vertices.
++        """
++        if self._width >= self._height:
++            # Major axis is along x-direction in unit circle
++            points = [(1, 0), (-1, 0)]
++        else:
++            # Major axis is along y-direction in unit circle
++            points = [(0, 1), (0, -1)]
++        return self.get_patch_transform().transform(points)
++
++    def get_co_vertices(self):
++        """
++        Return the co-vertices of the ellipse.
++
++        The co-vertices are the endpoints of the minor axis. The points
++        are returned in data coordinates.
++
++        Returns
++        -------
++        co_vertices : (2, 2) array
++            The coordinates of the two co-vertices.
++        """
++        if self._width >= self._height:
++            # Minor axis is along y-direction in unit circle
++            points = [(0, 1), (0, -1)]
++        else:
++            # Minor axis is along x-direction in unit circle
++            points = [(1, 0), (-1, 0)]
++        return self.get_patch_transform().transform(points)
++
+ 
+ class Annulus(Patch):
+     """
+diff --git a/galleries/examples/shapes_and_collections/ellipse_arrow.py b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+new file mode 100644
+index 0000000..a17ce71
+--- /dev/null
++++ b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+@@ -0,0 +1,43 @@
++"""
++===================================
++Ellipse with arrow indicating rotation
++===================================
++
++This example shows how to add an arrow to an ellipse to indicate the
++direction of rotation (clockwise or counter-clockwise). The arrow is placed
++exactly on the ellipse using the coordinates of the vertices obtained via
++`Ellipse.get_vertices()` and `Ellipse.get_co_vertices()`.
++"""
++
++import matplotlib.pyplot as plt
++import matplotlib.patches as mpatches
++
++# Create an ellipse
++ellipse = mpatches.Ellipse(xy=(0.5, 0.5), width=0.8, height=0.4, angle=30,
++                           edgecolor='blue', facecolor='none', linewidth=2)
++
++fig, ax = plt.subplots()
++ax.add_patch(ellipse)
++
++# Get the vertices and co-vertices
++vertices = ellipse.get_vertices()
++co_vertices = ellipse.get_co_vertices()
++
++# Draw the vertices and co-vertices as points
++ax.plot(vertices[:, 0], vertices[:, 1], 'ro', label='Vertices')
++ax.plot(co_vertices[:, 0], co_vertices[:, 1], 'go', label='Co-vertices')
++
++# Add an arrow from the first vertex to the second vertex to indicate direction
++# This arrow shows the direction of the major axis.
++ax.annotate('', xy=vertices[1], xytext=vertices[0],
++            arrowprops=dict(arrowstyle='->', color='red', lw=2))
++
++# Add an arrow from the first co-vertex to the second co-vertex
++ax.annotate('', xy=co_vertices[1], xytext=co_vertices[0],
++            arrowprops=dict(arrowstyle='->', color='green', lw=2))
++
++ax.set_aspect('equal')
++ax.set_xlim(0, 1)
++ax.set_ylim(0, 1)
++ax.legend()
++plt.show()

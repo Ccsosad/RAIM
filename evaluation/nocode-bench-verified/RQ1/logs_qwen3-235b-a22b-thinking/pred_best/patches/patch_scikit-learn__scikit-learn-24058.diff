@@ -1,0 +1,39 @@
+diff --git a/sklearn/pipeline.py b/sklearn/pipeline.py
+index 37667a3..12eddd5 100644
+--- a/sklearn/pipeline.py
++++ b/sklearn/pipeline.py
+@@ -25,6 +25,7 @@ from .utils import (
+     _print_elapsed_time,
+ )
+ from .utils.deprecation import deprecated
++from .preprocessing import FunctionTransformer
+ from .utils._tags import _safe_tags
+ from .utils.validation import check_memory
+ from .utils.validation import check_is_fitted
+@@ -1094,13 +1095,20 @@ class FeatureUnion(TransformerMixin, _BaseComposition):
+         feature_names = []
+         for name, trans, _ in self._iter():
+             if not hasattr(trans, "get_feature_names_out"):
+-                raise AttributeError(
+-                    "Transformer %s (type %s) does not provide get_feature_names_out."
+-                    % (str(name), type(trans).__name__)
++                # Handle passthrough transformers specially
++                if isinstance(trans, FunctionTransformer) and trans.func is None and trans.inverse_func is None:
++                    if input_features is None:
++                        raise ValueError("input_features is required for passthrough transformer")
++                    feature_names.extend([f"{name}__{f}" for f in input_features])
++                else:
++                    raise AttributeError(
++                        "Transformer %s (type %s) does not provide get_feature_names_out."
++                        % (str(name), type(trans).__name__)
++                    )
++            else:
++                feature_names.extend(
++                    [f"{name}__{f}" for f in trans.get_feature_names_out(input_features)]
+                 )
+-            feature_names.extend(
+-                [f"{name}__{f}" for f in trans.get_feature_names_out(input_features)]
+-            )
+         return np.asarray(feature_names, dtype=object)
+ 
+     def fit(self, X, y=None, **fit_params):

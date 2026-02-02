@@ -1,0 +1,197 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..0201348 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -415,7 +415,7 @@ class CFTimeIndex(pd.Index):
+ 
+     def _get_string_slice(self, key):
+         """Adapted from pandas.tseries.index.DatetimeIndex._get_string_slice"""
+-        parsed, resolution = _parse_iso8601_with_reso(self.date_type, key)
++        parsed, resolution = parse_iso8601_like(self.date_type, key)
+         try:
+             loc = self._partial_date_slice(resolution, parsed)
+         except KeyError:
+@@ -459,7 +459,7 @@ class CFTimeIndex(pd.Index):
+         """Adapted from
+         pandas.tseries.index.DatetimeIndex._maybe_cast_slice_bound"""
+         if isinstance(label, str):
+-            parsed, resolution = _parse_iso8601_with_reso(self.date_type, label)
++            parsed, resolution = parse_iso8601_like(self.date_type, label)
+             start, end = _parsed_string_to_bounds(self.date_type, resolution, parsed)
+             if self.is_monotonic_decreasing and len(self) > 1:
+                 return end if side == "left" else start
+@@ -742,6 +742,174 @@ class CFTimeIndex(pd.Index):
+         return self._round_via_method(freq, _round_to_nearest_half_even)
+ 
+ 
++def parse_iso8601_like(date_type, datetime_str):
++    """Parse a datetime string that may be in ISO 8601 or cftime default format.
++
++    Parameters
++    ----------
++    date_type : cftime.datetime class
++        The type of cftime.datetime object to return.
++    datetime_str : str
++        The string to parse. Can be in basic ISO 8601 (YYYYMMDDhhmmss),
++        extended ISO 8601 (YYYY-MM-DDThh:mm:ss), or the default cftime
++        string format (YYYY-MM-DD hh:mm:ss).
++
++    Returns
++    -------
++    parsed : cftime.datetime
++        The parsed datetime.
++    reso : int
++        The resolution of the string.
++    """
++    # First, try the existing ISO 8601 parsing
++    try:
++        parsed, reso = _parse_iso8601_with_reso(date_type, datetime_str)
++        return parsed, reso
++    except ValueError:
++        pass
++
++    # If that fails, try the cftime default format: YYYY-MM-DD hh:mm:ss
++    # We need to parse this format manually.
++    import re
++    # Match the full format with seconds
++    pattern = r'^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$'
++    match = re.match(pattern, datetime_str)
++    if match:
++        year, month, day, hour, minute, second = map(int, match.groups())
++        parsed = date_type(year, month, day, hour, minute, second)
++        reso = 6  # seconds
++        return parsed, reso
++    # Without seconds
++    pattern = r'^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$'
++    match = re.match(pattern, datetime_str)
++    if match:
++        year, month, day, hour, minute = map(int, match.groups())
++        parsed = date_type(year, month, day, hour, minute, 0)
++        reso = 5  # minutes
++        return parsed, reso
++    # Without minutes
++    pattern = r'^(\d{4})-(\d{2})-(\d{2}) (\d{2})$'
++    match = re.match(pattern, datetime_str)
++    if match:
++        year, month, day, hour = map(int, match.groups())
++        parsed = date_type(year, month, day, hour, 0, 0)
++        reso = 4  # hours
++        return parsed, reso
++    # Without time
++    pattern = r'^(\d{4})-(\d{2})-(\d{2})$'
++    match = re.match(pattern, datetime_str)
++    if match:
++        year, month, day = map(int, match.groups())
++        parsed = date_type(year, month, day, 0, 0, 0)
++        reso = 3  # days
++        return parsed, reso
++    # Without day
++    pattern = r'^(\d{4})-(\d{2})$'
++    match = re.match(pattern, datetime_str)
++    if match:
++        year, month = map(int, match.groups())
++        parsed = date_type(year, month, 1, 0, 0, 0)
++        reso = 2  # months
++        return parsed, reso
++    # Without month
++    pattern = r'^(\d{4})$'
++    match = re.match(pattern, datetime_str)
++    if match:
++        year = int(match.group(1))
++        parsed = date_type(year, 1, 1, 0, 0, 0)
++        reso = 1  # years
++        return parsed, reso
++    raise ValueError(f"Unable to parse datetime string: {datetime_str}")
++
++
++def parse_iso8601_like(date_type, datetime_str):
++    """Parse a datetime string that may be in ISO 8601 or cftime default format.
++
++    Parameters
++    ----------
++    date_type : cftime.datetime class
++        The type of cftime.datetime object to return.
++    datetime_str : str
++        The string to parse. Can be in basic ISO 8601 (YYYYMMDDhhmmss),
++        extended ISO 8601 (YYYY-MM-DDThh:mm:ss), or the default cftime
++        string format (YYYY-MM-DD hh:mm:ss).
++
++    Returns
++    -------
++    parsed : cftime.datetime
++        The parsed datetime.
++    reso : int
++        The resolution of the string.
++    """
++    # First, try the existing ISO 8601 parsing (which may handle basic and extended)
++    try:
++        parsed, reso = _parse_iso8601_with_reso(date_type, datetime_str)
++        return parsed, reso
++    except ValueError:
++        pass
++
++    # If that fails, try the cftime default format: YYYY-MM-DD hh:mm:ss
++    # We need to parse this format manually.
++    # The resolution is determined by the number of components provided.
++    # We'll use a regex to break it down.
++    import re
++    pattern = r'^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$'
++    match = re.match(pattern, datetime_str)
++    if match:
++        year, month, day, hour, minute, second = map(int, match.groups())
++        # Check for valid date
++        parsed = date_type(year, month, day, hour, minute, second)
++        # The resolution is up to seconds
++        reso = 6  # seconds
++        return parsed, reso
++    else:
++        # Try without seconds
++        pattern = r'^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$'
++        match = re.match(pattern, datetime_str)
++        if match:
++            year, month, day, hour, minute = map(int, match.groups())
++            parsed = date_type(year, month, day, hour, minute, 0)
++            reso = 5  # minutes
++            return parsed, reso
++        else:
++            # Try without minutes
++            pattern = r'^(\d{4})-(\d{2})-(\d{2}) (\d{2})$'
++            match = re.match(pattern, datetime_str)
++            if match:
++                year, month, day, hour = map(int, match.groups())
++                parsed = date_type(year, month, day, hour, 0, 0)
++                reso = 4  # hours
++                return parsed, reso
++            else:
++                # Try without time
++                pattern = r'^(\d{4})-(\d{2})-(\d{2})$'
++                match = re.match(pattern, datetime_str)
++                if match:
++                    year, month, day = map(int, match.groups())
++                    parsed = date_type(year, month, day, 0, 0, 0)
++                    reso = 3  # days
++                    return parsed, reso
++                else:
++                    # Try without day
++                    pattern = r'^(\d{4})-(\d{2})$'
++                    match = re.match(pattern, datetime_str)
++                    if match:
++                        year, month = map(int, match.groups())
++                        parsed = date_type(year, month, 1, 0, 0, 0)
++                        reso = 2  # months
++                        return parsed, reso
++                    else:
++                        # Try without month
++                        pattern = r'^(\d{4})$'
++                        match = re.match(pattern, datetime_str)
++                        if match:
++                            year = int(match.group(1))
++                            parsed = date_type(year, 1, 1, 0, 0, 0)
++                            reso = 1  # years
++                            return parsed, reso
++    raise ValueError(f"Unable to parse datetime string: {datetime_str}")
++
++
+ def _parse_iso8601_without_reso(date_type, datetime_str):
+     date, _ = _parse_iso8601_with_reso(date_type, datetime_str)
+     return date

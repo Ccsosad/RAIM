@@ -1,0 +1,21 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d9aca35..ad0e7f2 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -313,6 +313,7 @@ class PyObject(ObjectDescription):
+         'noindex': directives.flag,
+         'module': directives.unchanged,
+         'annotation': directives.unchanged,
++        'canonical': directives.unchanged,
+     }
+ 
+     doc_field_types = [
+@@ -391,6 +392,8 @@ class PyObject(ObjectDescription):
+         signode['module'] = modname
+         signode['class'] = classname
+         signode['fullname'] = fullname
++        if 'canonical' in self.options:
++            signode['canonical'] = self.options['canonical']
+ 
+         sig_prefix = self.get_signature_prefix(sig)
+         if sig_prefix:

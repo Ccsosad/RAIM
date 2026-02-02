@@ -1,0 +1,106 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..1d688df 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -1,3 +1,4 @@
++
+ """String formatting routines for __repr__.
+ """
+ import contextlib
+@@ -371,15 +372,19 @@ def _calculate_col_width(col_items):
+     return col_width
+ 
+ 
+-def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
++def _mapping_repr(mapping, title, summarizer, col_width=None, expand="default"):
+     if col_width is None:
+         col_width = _calculate_col_width(mapping)
+-    if max_rows is None:
++    if expand == "default":
+         max_rows = OPTIONS["display_max_rows"]
++    elif expand is True:
++        max_rows = None
++    else:  # expand is False
++        max_rows = 0
+     summary = [f"{title}:"]
+     if mapping:
+         len_mapping = len(mapping)
+-        if len_mapping > max_rows:
++        if max_rows is not None and len_mapping > max_rows:
+             summary = [f"{summary[0]} ({max_rows}/{len_mapping})"]
+             first_rows = max_rows // 2 + max_rows % 2
+             items = list(mapping.items())
+@@ -388,6 +393,9 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+                 last_rows = max_rows // 2
+                 summary += [pretty_print("    ...", col_width) + " ..."]
+                 summary += [summarizer(k, v, col_width) for k, v in items[-last_rows:]]
++        elif max_rows == 0:
++            # collapsed: do not show any items
++            pass
+         else:
+             summary += [summarizer(k, v, col_width) for k, v in mapping.items()]
+     else:
+@@ -395,21 +403,29 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+     return "\n".join(summary)
+ 
+ 
+-data_vars_repr = functools.partial(
+-    _mapping_repr, title="Data variables", summarizer=summarize_datavar
+-)
++def data_vars_repr(mapping, col_width=None):
++    expand = OPTIONS["display_expand_data_vars"]
++    return _mapping_repr(
++        mapping, title="Data variables", summarizer=summarize_datavar,
++        col_width=col_width, expand=expand
++    )
+ 
+ 
+-attrs_repr = functools.partial(
+-    _mapping_repr, title="Attributes", summarizer=summarize_attr
+-)
++def attrs_repr(mapping, col_width=None):
++    expand = OPTIONS["display_expand_attrs"]
++    return _mapping_repr(
++        mapping, title="Attributes", summarizer=summarize_attr,
++        col_width=col_width, expand=expand
++    )
+ 
+ 
+ def coords_repr(coords, col_width=None):
+     if col_width is None:
+         col_width = _calculate_col_width(_get_col_items(coords))
++    expand = OPTIONS["display_expand_coords"]
+     return _mapping_repr(
+-        coords, title="Coordinates", summarizer=summarize_coord, col_width=col_width
++        coords, title="Coordinates", summarizer=summarize_coord,
++        col_width=col_width, expand=expand
+     )
+ 
+ 
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..edef351 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -108,6 +108,16 @@ class set_options:
+       Default: ``'default'``.
+     - ``display_style``: display style to use in jupyter for xarray objects.
+       Default: ``'text'``. Other options are ``'html'``.
++    - ``display_expand_attrs``: whether to expand the attributes section in the
++      display of Dataset and DataArray. One of ``True`` (always expand),
++      ``False`` (always collapse), or ``'default'`` (expand unless over a
++      pre-defined limit). Default: ``'default'``.
++    - ``display_expand_coords``: similar to ``display_expand_attrs``, but for
++      coordinates. Default: ``'default'``.
++    - ``display_expand_data``: similar to ``display_expand_attrs``, but for the
++      data section of DataArray. Default: ``'default'``.
++    - ``display_expand_data_vars``: similar to ``display_expand_attrs``, but for
++      data variables in Dataset. Default: ``'default'``.
+ 
+ 
+     You can use ``set_options`` either as a context manager:
+@@ -160,4 +170,4 @@ class set_options:
+         return
+ 
+     def __exit__(self, type, value, traceback):
+-        self._apply_update(self.old)
++        self._apply_update(self.old)

@@ -1,0 +1,69 @@
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 38580cf..c183112 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -567,7 +567,16 @@ def _validate_greaterequal0_lessequal1(s):
+     else:
+         raise RuntimeError(f'Value must be >=0 and <=1; got {s}')
+ 
+-
++def validate_auto_or_int(s):
++    """
++    Validate a string as either 'auto' or an integer.
++    """
++    if s == 'auto':
++        return s
++    try:
++        return int(s)
++    except (ValueError, TypeError):
++        raise ValueError(f"Expected 'auto' or an integer, got {s!r}")
+ def validate_hatch(s):
+     r"""
+     Validate a hatch pattern.
+@@ -1223,6 +1232,8 @@ _validators = {
+     "keymap.xscale":     validate_stringlist,
+     "keymap.help":       validate_stringlist,
+     "keymap.copy":       validate_stringlist,
++    "xtick.minor.ndivs": validate_auto_or_int,
++    "ytick.minor.ndivs": validate_auto_or_int,
+ 
+     # Animation settings
+     "animation.html":         ["html5", "jshtml", "none"],
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..620afaf 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2891,16 +2891,20 @@ class AutoMinorLocator(Locator):
+             return []
+ 
+         if self.ndivs is None:
+-
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
++            # Get the rcParam for the axis
++            axis_name = self.axis.name  # 'x' or 'y'
++            rc_key = f'{axis_name}tick.minor.ndivs'
++            ndivs_rc = mpl.rcParams[rc_key]
++            if ndivs_rc == 'auto':
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+             else:
+-                ndivs = 4
++                ndivs = ndivs_rc
+         else:
+             ndivs = self.ndivs
+-
+         minorstep = majorstep / ndivs
+ 
+         vmin, vmax = self.axis.get_view_interval()
+@@ -2916,4 +2920,4 @@ class AutoMinorLocator(Locator):
+ 
+     def tick_values(self, vmin, vmax):
+         raise NotImplementedError('Cannot get tick locations for a '
+-                                  '%s type.' % type(self))
++                                  '%s type.' % type(self))

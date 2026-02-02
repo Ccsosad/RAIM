@@ -1,0 +1,35 @@
+diff --git a/astropy/utils/iers/conf.py b/astropy/utils/iers/conf.py
+new file mode 100644
+index 0000000..4bf9eb9
+--- /dev/null
++++ b/astropy/utils/iers/conf.py
+@@ -0,0 +1,29 @@
++"""
++Configuration parameters for `astropy.utils.iers`.
++"""
++
++from astropy.config import ConfigNamespace, ConfigItem
++
++__all__ = ['conf']
++
++
++class Conf(ConfigNamespace):
++    """
++    Configuration parameters for `astropy.utils.iers`.
++    """
++    auto_download = ConfigItem(
++        True,
++        'Enable auto-downloading of the latest IERS data. If set to False then '
++        'the local IERS-B file will be used by default (even if the full IERS '
++        'file with predictions was already downloaded and cached). This '
++        'parameter also controls whether internet resources will be queried to '
++        'update the leap second table if the installed version is out of date.'
++    )
++    auto_max_age = ConfigItem(
++        30.0,
++        'Maximum age of predictive data before auto-downloading (days).',
++        cfgtype='float'
++    )
++
++
++conf = Conf()

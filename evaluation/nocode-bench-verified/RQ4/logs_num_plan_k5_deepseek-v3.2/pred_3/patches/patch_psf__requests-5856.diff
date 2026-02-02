@@ -1,0 +1,61 @@
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..a42b3ac 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -907,7 +907,28 @@ class Response(object):
+                     # and the server didn't bother to tell us what codec *was*
+                     # used.
+                     pass
+-        return complexjson.loads(self.text, **kwargs)
++                except ValueError as e:
++                    # Python 2's json library raises ValueError for decoding errors.
++                    from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
++                    raise RequestsJSONDecodeError(str(e))
++                except Exception as e:
++                    # Check if this is a JSONDecodeError from the json module.
++                    if e.__class__.__name__ == 'JSONDecodeError':
++                        from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
++                        raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
++                    raise
++        try:
++            return complexjson.loads(self.text, **kwargs)
++        except ValueError as e:
++            # Python 2's json library raises ValueError for decoding errors.
++            from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
++            raise RequestsJSONDecodeError(str(e))
++        except Exception as e:
++            # Check if this is a JSONDecodeError from the json module.
++            if e.__class__.__name__ == 'JSONDecodeError':
++                from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
++                raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
++            raise
+ 
+     @property
+     def links(self):
+@@ -963,4 +984,4 @@ class Response(object):
+ 
+         release_conn = getattr(self.raw, 'release_conn', None)
+         if release_conn is not None:
+-            release_conn()
++            release_conn()
+diff --git a/requests/exceptions.py b/requests/exceptions.py
+new file mode 100644
+index 0000000..9fe87c9
+--- /dev/null
++++ b/requests/exceptions.py
+@@ -0,0 +1,15 @@
++class ChunkedEncodingError(RequestException):
++    """The server declared chunked encoding but sent an invalid chunk."""
++    pass
++
++
++class JSONDecodeError(RequestException, ValueError):
++    """An exception for JSON decoding errors."""
++    def __init__(self, msg, doc, pos):
++        super().__init__(msg)
++        self.msg = msg
++        self.doc = doc
++        self.pos = pos
++
++    def __reduce__(self):
++        return self.__class__, (self.msg, self.doc, self.pos)

@@ -1,0 +1,24 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..5351212 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -476,6 +476,13 @@ def def_physical_type(unit, name):
+ 
+     for ptype_name in physical_type_names:
+         _name_physical_mapping[ptype_name] = physical_type
++        # Also set as an attribute on this module.
++        attrname = _to_attrname(ptype_name)
++        _attrname_physical_mapping[attrname] = physical_type
++        # Set the attribute on the module.
++        import sys
++        module = sys.modules[__name__]
++        setattr(module, attrname, physical_type)
+ 
+ 
+ def get_physical_type(obj):
+@@ -568,4 +575,4 @@ if __doc__ is not None:
+     __doc__ += '\n\n' + '\n'.join(doclines)
+ 
+ 
+-del unit, physical_type
++del unit, physical_type

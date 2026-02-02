@@ -1,0 +1,19 @@
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..75b4eee 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -510,7 +510,7 @@ class FacetGrid:
+         _labels=None,
+         **kwargs: Any,
+     ) -> FacetGrid:
+-        from .plot import _infer_line_data
++        from .dataarray_plot import _infer_line_data
+ 
+         for d, ax in zip(self.name_dicts.flat, self.axes.flat):
+             # None is the sentinel value
+@@ -1001,4 +1001,4 @@ def _easy_facetgrid(
+     if kind == "dataset":
+         return g.map_dataset(plotfunc, x, y, **kwargs)
+ 
+-    raise ValueError(f"kind must be one of `line`, `dataarray`, `dataset`, got {kind}")
++    raise ValueError(f"kind must be one of `line`, `dataarray`, `dataset`, got {kind}")

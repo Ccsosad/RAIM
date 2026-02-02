@@ -1,0 +1,45 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..a9724f4 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3692,7 +3692,8 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         ----------
+         *dims : Hashable, optional
+             By default, reverse the dimensions on each array. Otherwise,
+-            reorder the dimensions to this order.
++            reorder the dimensions to this order. An ellipsis (`...`) can be used
++            to represent all dimensions that are not explicitly listed.
+ 
+         Returns
+         -------
+@@ -3711,6 +3712,24 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         numpy.transpose
+         DataArray.transpose
+         """
++        # Handle ellipsis
++        if ... in dims:
++            if dims.count(...) > 1:
++                raise ValueError("Only one ellipsis is allowed.")
++            # Get the dimensions of the dataset
++            all_dims = self.dims
++            # Dimensions explicitly listed (excluding ellipsis)
++            explicit_dims = [d for d in dims if d is not ...]
++            # Dimensions not explicitly listed
++            other_dims = [d for d in all_dims if d not in explicit_dims]
++            # Replace ellipsis with the other dimensions
++            new_dims = []
++            for d in dims:
++                if d is ...:
++                    new_dims.extend(other_dims)
++                else:
++                    new_dims.append(d)
++            dims = tuple(new_dims)
+         if dims:
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+@@ -5449,4 +5468,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

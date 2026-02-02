@@ -1,0 +1,36 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index c85af9f..777ab89 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -8291,4 +8291,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index 7d25be3..ee22a96 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -346,7 +346,8 @@ class Legend(Artist):
+         alignment="center",       # control the alignment within the legend box
+         *,
+         ncol=1,  # synonym for ncols (backward compatibility)
+-        draggable=False  # whether the legend can be dragged with the mouse
++        draggable=False,  # whether the legend can be dragged with the mouse
++        reverse=False     # reverse the order of legend entries
+     ):
+         """
+         Parameters
+@@ -425,6 +426,11 @@ class Legend(Artist):
+         self.borderaxespad = val_or_rc(borderaxespad, 'legend.borderaxespad')
+         self.columnspacing = val_or_rc(columnspacing, 'legend.columnspacing')
+         self.shadow = val_or_rc(shadow, 'legend.shadow')
++        # reverse the order of legend entries if reverse=True
++        if reverse:
++            handles = list(reversed(handles))
++            labels = list(reversed(labels))
++
+         # trim handles and labels if illegal label...
+         _lab, _hand = [], []
+         for label, handle in zip(labels, handles):

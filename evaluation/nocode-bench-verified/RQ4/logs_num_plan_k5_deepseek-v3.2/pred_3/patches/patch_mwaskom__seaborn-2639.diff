@@ -1,0 +1,25 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..053d75a 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -41,6 +41,8 @@ class Grid:
+         # don't add proxy artists onto the Axes. We need an overall cleaner approach.
+         self._extract_legend_handles = False
+ 
++        self._figure = None
++
+     def set(self, **kwargs):
+         """Set attributes on each subplot Axes."""
+         for ax in self.axes.flat:
+@@ -215,6 +217,11 @@ class Grid:
+ 
+         return palette
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` object containing the grid."""
++        return self._figure
++
+     @property
+     def legend(self):
+         """The :class:`matplotlib.legend.Legend` object, if present."""

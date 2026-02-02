@@ -1,0 +1,100 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..a6d7469 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -139,6 +139,7 @@ def do_constrained_layout(fig, h_pad, w_pad,
+                 layoutgrids = compress_fixed_aspect(layoutgrids, fig)
+                 layoutgrids[fig].update_variables()
+                 if check_no_collapsed_axes(layoutgrids, fig):
++                    _add_legend_outside(layoutgrids, fig, renderer)
+                     reposition_axes(layoutgrids, fig, renderer, h_pad=h_pad,
+                                     w_pad=w_pad, hspace=hspace, wspace=wspace)
+                 else:
+@@ -194,6 +195,87 @@ def make_layoutgrids(fig, layoutgrids, rect=(0, 0, 1, 1)):
+     return layoutgrids
+ 
+ 
++def _add_legend_outside(layoutgrids, fig, renderer):
++    """
++    Adjust the layoutgrids to account for legends placed outside the figure.
++    """
++    from matplotlib.figure import Figure
++    # For each figure in the layoutgrids (including subfigures)
++    for fig in layoutgrids:
++        if not isinstance(fig, Figure):
++            continue
++        fig_layoutgrid = layoutgrids[fig]
++        for legend in fig.legends:
++            loc = legend._loc
++            if isinstance(loc, str) and loc.startswith('outside'):
++                # Parse the loc string to determine the side
++                parts = loc.split()
++                if len(parts) >= 2:
++                    # Determine the side from the parts after 'outside'
++                    side = None
++                    for part in parts[1:]:
++                        if part in {'upper', 'lower', 'left', 'right'}:
++                            side = part
++                            break
++                    if side is None:
++                        side = parts[1]
++                    # Get the legend's extent in inches
++                    bbox = legend.get_window_extent(renderer)
++                    # Convert to inches
++                    from matplotlib.transforms import Bbox
++                    bbox_inch = Bbox.from_bounds(0, 0, bbox.width, bbox.height).transformed(
++                        fig.dpi_scale_trans.inverted())
++                    # Add a margin to the figure's layoutgrid on the appropriate side
++                    if side == 'upper':
++                        fig_layoutgrid.add_margin('top', bbox_inch.height)
++                    elif side == 'lower':
++                        fig_layoutgrid.add_margin('bottom', bbox_inch.height)
++                    elif side == 'left':
++                        fig_layoutgrid.add_margin('left', bbox_inch.width)
++                    elif side == 'right':
++                        fig_layoutgrid.add_margin('right', bbox_inch.width)
++
++
++def _add_legend_outside(layoutgrids, fig, renderer):
++    """
++    Adjust the layoutgrids to account for legends placed outside the figure.
++    """
++    # For each figure in the layoutgrids (including subfigures)
++    for fig in layoutgrids:
++        if not isinstance(fig, Figure):
++            continue
++        fig_layoutgrid = layoutgrids[fig]
++        for legend in fig.legends:
++            loc = legend._loc
++            if isinstance(loc, str) and loc.startswith('outside'):
++                # Parse the loc string to determine the side
++                parts = loc.split()
++                if len(parts) >= 2:
++                    # Determine the side from the parts after 'outside'
++                    side = None
++                    for part in parts[1:]:
++                        if part in {'upper', 'lower', 'left', 'right'}:
++                            side = part
++                            break
++                    if side is None:
++                        side = parts[1]
++                    # Get the legend's extent in inches
++                    bbox = legend.get_window_extent(renderer)
++                    # Convert to inches
++                    from matplotlib.transforms import Bbox
++                    bbox_inch = Bbox.from_bounds(0, 0, bbox.width, bbox.height).transformed(
++                        fig.dpi_scale_trans.inverted())
++                    # Add a margin to the figure's layoutgrid on the appropriate side
++                    if side == 'upper':
++                        fig_layoutgrid.add_margin('top', bbox_inch.height)
++                    elif side == 'lower':
++                        fig_layoutgrid.add_margin('bottom', bbox_inch.height)
++                    elif side == 'left':
++                        fig_layoutgrid.add_margin('left', bbox_inch.width)
++                    elif side == 'right':
++                        fig_layoutgrid.add_margin('right', bbox_inch.width)
++
++
+ def make_layoutgrids_gs(layoutgrids, gs):
+     """
+     Make the layoutgrid for a gridspec (and anything nested in the gridspec)

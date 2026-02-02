@@ -1,0 +1,36 @@
+diff --git a/sklearn/datasets/_kddcup99.py b/sklearn/datasets/_kddcup99.py
+index 5405c9d..8816391 100644
+--- a/sklearn/datasets/_kddcup99.py
++++ b/sklearn/datasets/_kddcup99.py
+@@ -171,10 +171,24 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+     with open(join(module_path, 'descr', 'kddcup99.rst')) as rst_file:
+         fdescr = rst_file.read()
+ 
++    if as_frame:
++        try:
++            import pandas as pd
++        except ImportError as e:
++            raise ImportError(
++                "as_frame=True requires pandas to be installed."
++            ) from e
++        data = pd.DataFrame(data)
++        target = pd.Series(target)
++        frame = pd.DataFrame(data)
++        frame['target'] = target
++    else:
++        frame = None
++
+     if return_X_y:
+         return data, target
+ 
+-    return Bunch(data=data, target=target, DESCR=fdescr)
++    return Bunch(data=data, target=target, frame=frame, DESCR=fdescr)
+ 
+ 
+ def _fetch_brute_kddcup99(data_home=None,
+@@ -315,4 +329,4 @@ def _mkdirp(d):
+         os.makedirs(d)
+     except OSError as e:
+         if e.errno != errno.EEXIST:
+-            raise
++            raise

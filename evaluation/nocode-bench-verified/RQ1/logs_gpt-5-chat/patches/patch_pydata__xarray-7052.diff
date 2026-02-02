@@ -1,0 +1,40 @@
+diff --git a/xarray/plot/dataarray_plot.py b/xarray/plot/dataarray_plot.py
+new file mode 100644
+index 0000000..4610ef6
+--- /dev/null
++++ b/xarray/plot/dataarray_plot.py
+@@ -0,0 +1,34 @@
++"""Minimal DataArray plotting dispatcher with static typing support."""
++
++from __future__ import annotations
++
++from typing import Callable, Literal, Optional, TYPE_CHECKING
++import matplotlib.pyplot as plt
++
++if TYPE_CHECKING:
++    import xarray as xr
++
++Plot1DKind = Literal["line", "step", "scatter"]
++Plot2DKind = Literal["imshow", "pcolormesh", "contour", "contourf", "surface"]
++
++def plot(dataarray: "xr.DataArray", kind: Optional[str] = None, **kwargs):
++    """
++    Dispatcher for DataArray.plot static entry points.
++    This centralizes plot kind routing to avoid shadowing with DataArray.plot method.
++    """
++    if kind is None:
++        # infer from dimensionality
++        if dataarray.ndim == 1:
++            kind = "line"
++        elif dataarray.ndim == 2:
++            kind = "pcolormesh"
++        else:
++            raise ValueError(f"Cannot plot DataArray with {dataarray.ndim} dimensions")
++    elif kind not in {"line", "step", "scatter", "imshow", "pcolormesh", "contour", "contourf", "surface"}:
++        raise ValueError(f"Invalid plot kind: {kind}")
++
++    # Dispatching to existing plot functions (imported lazily to avoid circular imports)
++    from xarray.plot import plot as general_plot
++
++    dispatcher: Callable = getattr(general_plot, kind)
++    return dispatcher(dataarray, **kwargs)

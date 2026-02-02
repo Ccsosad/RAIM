@@ -1,0 +1,41 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..779f5dc 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3075,7 +3075,7 @@ class Axes(_AxesBase):
+             autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
+             startangle=0, radius=1, counterclock=True,
+             wedgeprops=None, textprops=None, center=(0, 0),
+-            frame=False, rotatelabels=False, *, normalize=True):
++            frame=False, rotatelabels=False, *, normalize=True, hatch=None):
+         """
+         Plot a pie chart.
+ 
+@@ -3090,6 +3090,11 @@ class Axes(_AxesBase):
+         x : 1D array-like
+             The wedge sizes.
+ 
++        hatch : str or list of str, optional
++            Hatch pattern to use for wedges. If a list is provided, each wedge will
++            use the corresponding hatch pattern. If a single string is provided,
++            all wedges will use the same hatch pattern.
++
+         explode : array-like, default: None
+             If not *None*, is a ``len(x)`` array which specifies the fraction
+             of the radius with which to offset each wedge.
+@@ -3230,6 +3235,15 @@ class Axes(_AxesBase):
+             x += expl * math.cos(thetam)
+             y += expl * math.sin(thetam)
+ 
++            wedge_props = wedgeprops.copy() if wedgeprops else {}
++            if hatch is not None:
++                if isinstance(hatch, str):
++                    wedge_props['hatch'] = hatch
++                else:
++                    try:
++                        wedge_props['hatch'] = hatch[len(slices)]
++                    except (TypeError, IndexError):
++                        pass
+             w = mpatches.Wedge((x, y), radius, 360. * min(theta1, theta2),
+                                360. * max(theta1, theta2),
+                                facecolor=get_next_color(),

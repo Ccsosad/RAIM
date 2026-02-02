@@ -1,0 +1,55 @@
+diff --git a/pylint/pyreverse/inspector.py b/pylint/pyreverse/inspector.py
+index 9996e5d..3fcefb1 100644
+--- a/pylint/pyreverse/inspector.py
++++ b/pylint/pyreverse/inspector.py
+@@ -343,11 +343,32 @@ def project_from_files(
+     func_wrapper: _WrapperFuncT = _astroid_wrapper,
+     project_name: str = "no name",
+     black_list: tuple[str, ...] = constants.DEFAULT_IGNORE_LIST,
++    show_stdlib: bool = False,
+ ) -> Project:
+     """Return a Project from a list of files or modules."""
+     # build the project representation
+     astroid_manager = astroid.MANAGER
+     project = Project(project_name)
++    if show_stdlib:
++        # Remove standard library paths from the black_list
++        import sysconfig
++        stdlib_path = sysconfig.get_path('stdlib')
++        platstdlib_path = sysconfig.get_path('platstdlib')
++        # Filter out any black_list entries that are in the standard library
++        black_list = tuple(
++            pattern for pattern in black_list
++            if stdlib_path not in pattern and platstdlib_path not in pattern
++        )
++    if show_stdlib:
++        # Remove standard library paths from the black_list
++        import sysconfig
++        stdlib_path = sysconfig.get_path('stdlib')
++        platstdlib_path = sysconfig.get_path('platstdlib')
++        # Filter out any black_list entries that are in the standard library
++        black_list = tuple(
++            pattern for pattern in black_list
++            if stdlib_path not in pattern and platstdlib_path not in pattern
++        )
+     for something in files:
+         if not os.path.exists(something):
+             fpath = astroid.modutils.file_from_modpath(something.split("."))
+diff --git a/pylint/pyreverse/main.py b/pylint/pyreverse/main.py
+index 946d88c..11059de 100644
+--- a/pylint/pyreverse/main.py
++++ b/pylint/pyreverse/main.py
+@@ -292,6 +292,7 @@ class Run(_ArgumentsManager, _ArgumentsProvider):
+                 args,
+                 project_name=self.config.project,
+                 black_list=self.config.ignore_list,
++                show_stdlib=self.config.show_stdlib,
+             )
+             linker = Linker(project, tag=True)
+             handler = DiadefsHandler(self.config)
+@@ -301,4 +302,4 @@ class Run(_ArgumentsManager, _ArgumentsProvider):
+ 
+ 
+ if __name__ == "__main__":
+-    Run(sys.argv[1:])
++    Run(sys.argv[1:])

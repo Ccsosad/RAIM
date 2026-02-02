@@ -1,0 +1,27 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index af22566..943a045 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -227,7 +227,10 @@ class Documenter:
+     #: true if the generated content may contain titles
+     titles_allowed = False
+ 
+-    option_spec = {'noindex': bool_option}  # type: Dict[str, Callable]
++    option_spec = {
++        'noindex': bool_option,
++        'canonical': str,
++    }  # type: Dict[str, Callable]
+ 
+     def get_attr(self, obj: Any, name: str, *defargs: Any) -> Any:
+         """getattr() override for types such as Zope interfaces."""
+@@ -346,6 +349,10 @@ class Documenter:
+         It can differ from the name of the module through which the object was
+         imported.
+         """
++        if self.options.canonical:
++            # Extract the module part from the canonical name
++            # For example, if canonical is "package.module.object", the module part is "package.module"
++            return '.'.join(self.options.canonical.split('.')[:-1])
+         return self.get_attr(self.object, '__module__', None) or self.modname
+ 
+     def check_module(self) -> bool:

@@ -1,0 +1,57 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..697c1fd 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -41,6 +41,16 @@ class Grid:
+         # don't add proxy artists onto the Axes. We need an overall cleaner approach.
+         self._extract_legend_handles = False
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+     def set(self, **kwargs):
+         """Set attributes on each subplot Axes."""
+         for ax in self.axes.flat:
+@@ -996,6 +1006,11 @@ class FacetGrid(Grid):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+         return self._fig
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._fig
++
+     @property
+     def axes(self):
+         """An array of the :class:`matplotlib.axes.Axes` objects in the grid."""
+@@ -1116,6 +1131,11 @@ class PairGrid(Grid):
+     See the :ref:`tutorial <grid_tutorial>` for more information.
+ 
+     """
++
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
+     @_deprecate_positional_args
+     def __init__(
+         self, data, *,
+@@ -1655,6 +1675,11 @@ class JointGrid(object):
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+         # Turn off tick visibility for the measure axis on the marginal plots
+         plt.setp(ax_marg_x.get_xticklabels(), visible=False)
+         plt.setp(ax_marg_y.get_yticklabels(), visible=False)

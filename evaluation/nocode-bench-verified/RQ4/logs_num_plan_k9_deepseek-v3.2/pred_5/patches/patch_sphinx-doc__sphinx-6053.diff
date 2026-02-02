@@ -1,0 +1,24 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ae23792..57b91c2 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -190,6 +190,19 @@ def between(marker, what=None, keepempty=False, exclude=False):
+ # But we define this class here to keep compatibility (see #4538)
+ class Options(dict):
+     """A dict/attribute hybrid that returns None on nonexisting keys."""
++    def __init__(self, *args, **kwargs):
++        super().__init__(*args, **kwargs)
++        # Convert True values to None for compatibility with directive options
++        for key, value in self.items():
++            if value is True:
++                self[key] = None
++
++    def __setitem__(self, key, value):
++        # Convert True to None to treat it as a flag
++        if value is True:
++            value = None
++        super().__setitem__(key, value)
++
+     def __getattr__(self, name):
+         # type: (str) -> Any
+         try:

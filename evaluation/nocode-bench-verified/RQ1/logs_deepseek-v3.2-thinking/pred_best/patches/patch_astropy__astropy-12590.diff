@@ -1,0 +1,55 @@
+diff --git a/astropy/cosmology/flrw.py b/astropy/cosmology/flrw.py
+index ecb617a..66f6c36 100644
+--- a/astropy/cosmology/flrw.py
++++ b/astropy/cosmology/flrw.py
+@@ -337,6 +337,15 @@ class FLRW(Cosmology):
+         """Omega nu; the density/critical density of neutrinos at z=0."""
+         return self._Onu0
+ 
++    @property
++    def Otot0(self):
++        """Total density parameter at z=0.
++        
++        This is the sum of all density parameters at redshift zero:
++        Ω_total,0 = Ω_m,0 + Ω_γ,0 + Ω_ν,0 + Ω_de,0 + Ω_k,0
++        """
++        return self._Om0 + self._Ogamma0 + self._Onu0 + self._Ode0 + self._Ok0
++
+     # ---------------------------------------------------------------
+ 
+     @abstractmethod
+@@ -527,6 +536,34 @@ class FLRW(Cosmology):
+             return np.zeros(z.shape) if hasattr(z, "shape") else 0.0
+         return self.Ogamma(z) * self.nu_relative_density(z)
+ 
++    def Otot(self, z):
++        r"""Total density parameter at redshift ``z``.
++
++        Parameters
++        ----------
++        z : Quantity-like ['redshift'], array-like, or `~numbers.Number`
++            Input redshift.
++
++        Returns
++        -------
++        Otot : ndarray or float
++            The total energy density relative to the critical density at
++            each redshift. This is the sum of all density components:
++            Ω_total(z) = Ω_m(z) + Ω_γ(z) + Ω_ν(z) + Ω_de(z) + Ω_k(z)
++            Returns `float` if the input is scalar.
++
++        Notes
++        -----
++        In FLRW cosmology, the total density parameter should always equal 1,
++        as it represents the sum of all energy components normalized by the
++        critical density. This provides a useful consistency check.
++        """
++        z = aszarr(z)
++        # Sum all components: matter, radiation (photons + neutrinos), 
++        # dark energy, and curvature
++        return (self.Om(z) + self.Ogamma(z) + self.Onu(z) + 
++                self.Ode(z) + self.Ok(z))
++
+     def Tcmb(self, z):
+         """Return the CMB temperature at redshift ``z``.
+ 

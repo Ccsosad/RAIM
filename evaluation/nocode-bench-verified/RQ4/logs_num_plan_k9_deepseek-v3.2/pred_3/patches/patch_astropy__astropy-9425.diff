@@ -1,0 +1,17 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index dbde177..991ab7f 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -821,10 +821,8 @@ class Table:
+         for name in names_from_data:
+             cols[name] = []
+             for i, row in enumerate(data):
+-                try:
+-                    cols[name].append(row[name])
+-                except KeyError:
+-                    raise ValueError(f'Row {i} has no value for column {name}')
++                # Use np.ma.masked for missing keys
++                cols[name].append(row.get(name, np.ma.masked))
+ 
+         if all(name is None for name in names):
+             names = names_from_data

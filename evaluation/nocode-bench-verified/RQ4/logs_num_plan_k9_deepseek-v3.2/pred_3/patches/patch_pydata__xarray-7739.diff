@@ -1,0 +1,342 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 1dd2ee6..562f146 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4174,7 +4174,7 @@ class DataArray(
+             zarr_version=zarr_version,
+         )
+ 
+-    def to_dict(self, data: bool = True, encoding: bool = False) -> dict[str, Any]:
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
+         """
+         Convert this xarray.DataArray into a dictionary following xarray
+         naming conventions.
+@@ -4185,9 +4185,10 @@ class DataArray(
+ 
+         Parameters
+         ----------
+-        data : bool, default: True
++        data : bool or str, default: True
+             Whether to include the actual data in the dictionary. When set to
+-            False, returns just the schema.
++            False, returns just the schema. If 'array', returns the data as the
++            underlying array type. If 'list' or True, returns the data as Python lists.
+         encoding : bool, default: False
+             Whether to include the Dataset's encoding in the dictionary.
+ 
+@@ -4200,10 +4201,15 @@ class DataArray(
+         DataArray.from_dict
+         Dataset.to_dict
+         """
+-        d = self.variable.to_dict(data=data)
++        if data == 'list':
++            data_arg = True
++        else:
++            data_arg = data
++
++        d = self.variable.to_dict(data=data_arg)
+         d.update({"coords": {}, "name": self.name})
+         for k, coord in self.coords.items():
+-            d["coords"][k] = coord.variable.to_dict(data=data)
++            d["coords"][k] = coord.variable.to_dict(data=data_arg)
+         if encoding:
+             d["encoding"] = dict(self.encoding)
+         return d
+@@ -6883,4 +6889,4 @@ class DataArray(
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor["DataArray"])
++    str = utils.UncachedAccessor(StringAccessor["DataArray"])
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c4bcfde..e23c374 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -4007,6 +4007,46 @@ class Dataset(
+             variables, coord_names=coord_names, indexes=indexes
+         )
+ 
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
++        """
++        Convert this xarray.Dataset into a dictionary following xarray
++        naming conventions.
++
++        Converts all variables and attributes to native Python objects.
++        Useful for converting to json. To avoid datetime incompatibility
++        use decode_times=False kwarg in xarray.open_dataset.
++
++        Parameters
++        ----------
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary. When set to
++            False, returns just the schema. If 'array', returns the data as the
++            underlying array type. If 'list' or True, returns the data as Python lists.
++        encoding : bool, default: False
++            Whether to include the Dataset's encoding in the dictionary.
++
++        Returns
++        -------
++        dict: dict
++
++        See Also
++        --------
++        DataArray.to_dict
++        """
++        if data == 'list':
++            data_arg = True
++        else:
++            data_arg = data
++
++        d = {"coords": {}, "data_vars": {}, "attrs": dict(self.attrs)}
++        for k, coord in self.coords.items():
++            d["coords"][k] = coord.variable.to_dict(data=data_arg)
++        for k, var in self.data_vars.items():
++            d["data_vars"][k] = var.variable.to_dict(data=data_arg)
++        if encoding:
++            d["encoding"] = dict(self.encoding)
++        return d
++
+     # change type of self and return to T_Dataset once
+     # https://github.com/python/mypy/issues/12846 is resolved
+     def set_index(
+@@ -4283,6 +4323,46 @@ class Dataset(
+             variables, coord_names=coord_names, indexes=indexes
+         )
+ 
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
++        """
++        Convert this xarray.Dataset into a dictionary following xarray
++        naming conventions.
++
++        Converts all variables and attributes to native Python objects.
++        Useful for converting to json. To avoid datetime incompatibility
++        use decode_times=False kwarg in xarray.open_dataset.
++
++        Parameters
++        ----------
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary. When set to
++            False, returns just the schema. If 'array', returns the data as the
++            underlying array type. If 'list' or True, returns the data as Python lists.
++        encoding : bool, default: False
++            Whether to include the Dataset's encoding in the dictionary.
++
++        Returns
++        -------
++        dict: dict
++
++        See Also
++        --------
++        DataArray.to_dict
++        """
++        if data == 'list':
++            data_arg = True
++        else:
++            data_arg = data
++
++        d = {"coords": {}, "data_vars": {}, "attrs": dict(self.attrs)}
++        for k, coord in self.coords.items():
++            d["coords"][k] = coord.variable.to_dict(data=data_arg)
++        for k, var in self.data_vars.items():
++            d["data_vars"][k] = var.variable.to_dict(data=data_arg)
++        if encoding:
++            d["encoding"] = dict(self.encoding)
++        return d
++
+     def set_xindex(
+         self: T_Dataset,
+         coord_names: str | Sequence[Hashable],
+@@ -4761,6 +4841,46 @@ class Dataset(
+             variables, coord_names=coord_names, indexes=indexes
+         )
+ 
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
++        """
++        Convert this xarray.Dataset into a dictionary following xarray
++        naming conventions.
++
++        Converts all variables and attributes to native Python objects.
++        Useful for converting to json. To avoid datetime incompatibility
++        use decode_times=False kwarg in xarray.open_dataset.
++
++        Parameters
++        ----------
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary. When set to
++            False, returns just the schema. If 'array', returns the data as the
++            underlying array type. If 'list' or True, returns the data as Python lists.
++        encoding : bool, default: False
++            Whether to include the Dataset's encoding in the dictionary.
++
++        Returns
++        -------
++        dict: dict
++
++        See Also
++        --------
++        DataArray.to_dict
++        """
++        if data == 'list':
++            data_arg = True
++        else:
++            data_arg = data
++
++        d = {"coords": {}, "data_vars": {}, "attrs": dict(self.attrs)}
++        for k, coord in self.coords.items():
++            d["coords"][k] = coord.variable.to_dict(data=data_arg)
++        for k, var in self.data_vars.items():
++            d["data_vars"][k] = var.variable.to_dict(data=data_arg)
++        if encoding:
++            d["encoding"] = dict(self.encoding)
++        return d
++
+     def _unstack_full_reindex(
+         self: T_Dataset,
+         dim: Hashable,
+@@ -4812,6 +4932,46 @@ class Dataset(
+             variables, coord_names=coord_names, indexes=indexes
+         )
+ 
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
++        """
++        Convert this xarray.Dataset into a dictionary following xarray
++        naming conventions.
++
++        Converts all variables and attributes to native Python objects.
++        Useful for converting to json. To avoid datetime incompatibility
++        use decode_times=False kwarg in xarray.open_dataset.
++
++        Parameters
++        ----------
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary. When set to
++            False, returns just the schema. If 'array', returns the data as the
++            underlying array type. If 'list' or True, returns the data as Python lists.
++        encoding : bool, default: False
++            Whether to include the Dataset's encoding in the dictionary.
++
++        Returns
++        -------
++        dict: dict
++
++        See Also
++        --------
++        DataArray.to_dict
++        """
++        if data == 'list':
++            data_arg = True
++        else:
++            data_arg = data
++
++        d = {"coords": {}, "data_vars": {}, "attrs": dict(self.attrs)}
++        for k, coord in self.coords.items():
++            d["coords"][k] = coord.variable.to_dict(data=data_arg)
++        for k, var in self.data_vars.items():
++            d["data_vars"][k] = var.variable.to_dict(data=data_arg)
++        if encoding:
++            d["encoding"] = dict(self.encoding)
++        return d
++
+     def unstack(
+         self: T_Dataset,
+         dim: Dims = None,
+@@ -5120,6 +5280,46 @@ class Dataset(
+             variables, coord_names=coord_names, indexes=indexes
+         )
+ 
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
++        """
++        Convert this xarray.Dataset into a dictionary following xarray
++        naming conventions.
++
++        Converts all variables and attributes to native Python objects.
++        Useful for converting to json. To avoid datetime incompatibility
++        use decode_times=False kwarg in xarray.open_dataset.
++
++        Parameters
++        ----------
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary. When set to
++            False, returns just the schema. If 'array', returns the data as the
++            underlying array type. If 'list' or True, returns the data as Python lists.
++        encoding : bool, default: False
++            Whether to include the Dataset's encoding in the dictionary.
++
++        Returns
++        -------
++        dict: dict
++
++        See Also
++        --------
++        DataArray.to_dict
++        """
++        if data == 'list':
++            data_arg = True
++        else:
++            data_arg = data
++
++        d = {"coords": {}, "data_vars": {}, "attrs": dict(self.attrs)}
++        for k, coord in self.coords.items():
++            d["coords"][k] = coord.variable.to_dict(data=data_arg)
++        for k, var in self.data_vars.items():
++            d["data_vars"][k] = var.variable.to_dict(data=data_arg)
++        if encoding:
++            d["encoding"] = dict(self.encoding)
++        return d
++
+     def drop_indexes(
+         self: T_Dataset,
+         coord_names: Hashable | Iterable[Hashable],
+@@ -7429,6 +7629,46 @@ class Dataset(
+             variables, coord_names=coord_names, indexes=indexes
+         )
+ 
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
++        """
++        Convert this xarray.Dataset into a dictionary following xarray
++        naming conventions.
++
++        Converts all variables and attributes to native Python objects.
++        Useful for converting to json. To avoid datetime incompatibility
++        use decode_times=False kwarg in xarray.open_dataset.
++
++        Parameters
++        ----------
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary. When set to
++            False, returns just the schema. If 'array', returns the data as the
++            underlying array type. If 'list' or True, returns the data as Python lists.
++        encoding : bool, default: False
++            Whether to include the Dataset's encoding in the dictionary.
++
++        Returns
++        -------
++        dict: dict
++
++        See Also
++        --------
++        DataArray.to_dict
++        """
++        if data == 'list':
++            data_arg = True
++        else:
++            data_arg = data
++
++        d = {"coords": {}, "data_vars": {}, "attrs": dict(self.attrs)}
++        for k, coord in self.coords.items():
++            d["coords"][k] = coord.variable.to_dict(data=data_arg)
++        for k, var in self.data_vars.items():
++            d["data_vars"][k] = var.variable.to_dict(data=data_arg)
++        if encoding:
++            d["encoding"] = dict(self.encoding)
++        return d
++
+     def cumulative_integrate(
+         self: T_Dataset,
+         coord: Hashable | Sequence[Hashable],
+@@ -9252,4 +9492,4 @@ class Dataset(
+             loffset=loffset,
+             restore_coord_dims=restore_coord_dims,
+             **indexer_kwargs,
+-        )
++        )

@@ -1,0 +1,34 @@
+diff --git a/sklearn/decomposition/_kernel_pca.py b/sklearn/decomposition/_kernel_pca.py
+index 6f0266a..1ee8af6 100644
+--- a/sklearn/decomposition/_kernel_pca.py
++++ b/sklearn/decomposition/_kernel_pca.py
+@@ -215,6 +215,23 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+                                                 tol=self.tol,
+                                                 maxiter=self.max_iter,
+                                                 v0=v0)
++        elif eigen_solver == 'randomized':
++            from ..utils.extmath import randomized_svd
++            U, sigma, _ = randomized_svd(K, n_components=n_components,
++                                         random_state=self.random_state)
++            self.lambdas_ = sigma
++            self.alphas_ = U
++        elif eigen_solver == 'randomized':
++            if n_components is None or n_components == K.shape[0]:
++                raise ValueError(
++                    "randomized solver cannot compute all components. "
++                    "Set n_components to a value less than n_samples."
++                )
++            from ..utils.extmath import randomized_svd
++            U, sigma, _ = randomized_svd(K, n_components=n_components,
++                                         random_state=self.random_state)
++            self.lambdas_ = sigma
++            self.alphas_ = U
+ 
+         # make sure that the eigenvalues are ok and fix numerical issues
+         self.lambdas_ = _check_psd_eigenvalues(self.lambdas_,
+@@ -388,4 +405,4 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+ 
+     def _more_tags(self):
+         return {'preserves_dtype': [np.float64, np.float32],
+-                'pairwise': self.kernel == 'precomputed'}
++                'pairwise': self.kernel == 'precomputed'}

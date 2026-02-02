@@ -1,0 +1,17 @@
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..aa6fb86 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -963,4 +963,4 @@ class Response(object):
+ 
+         release_conn = getattr(self.raw, 'release_conn', None)
+         if release_conn is not None:
+-            release_conn()
++            release_conn()
+diff --git a/requests/exceptions.py b/requests/exceptions.py
+new file mode 100644
+index 0000000..e73120a
+--- /dev/null
++++ b/requests/exceptions.py
+@@ -0,0 +1 @@
++"""Exceptions thrown by the Requests library."""

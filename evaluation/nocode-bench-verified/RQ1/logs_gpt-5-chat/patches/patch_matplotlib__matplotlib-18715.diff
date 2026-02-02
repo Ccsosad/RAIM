@@ -1,0 +1,18 @@
+diff --git a/lib/matplotlib/axis.py b/lib/matplotlib/axis.py
+index fbaa79e..87b4d3b 100644
+--- a/lib/matplotlib/axis.py
++++ b/lib/matplotlib/axis.py
+@@ -774,6 +774,13 @@ class Axis(martist.Artist):
+             self._scale = value
+         self._scale.set_default_locators_and_formatters(self)
+ 
++        # set default minor locator divisions from rcParams if available
++        if isinstance(self.minor.locator, mticker.AutoMinorLocator):
++            ndivs_key = f"{self.axis_name}tick.minor.ndivs"
++            ndivs_rc = mpl.rcParams.get(ndivs_key, "auto")
++            if ndivs_rc != "auto":
++                self.minor.locator.set_params(n=ndivs_rc)
++
+         self.isDefault_majloc = True
+         self.isDefault_minloc = True
+         self.isDefault_majfmt = True

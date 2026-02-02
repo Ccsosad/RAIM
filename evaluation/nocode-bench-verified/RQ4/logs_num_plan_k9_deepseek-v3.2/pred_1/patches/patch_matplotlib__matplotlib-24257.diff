@@ -1,0 +1,75 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..dc316a2 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -212,6 +212,70 @@ def read_style_directory(style_dir):
+     return styles
+ 
+ 
++def _load_style_from_package(style_name):
++    """Load a style sheet from a package.
++
++    Parameters
++    ----------
++    style_name : str
++        The style name in the form "package.subpackage.style_name".
++
++    Returns
++    -------
++    dict
++        The rcParams dictionary.
++
++    Raises
++    ------
++    ValueError
++        If the style cannot be found.
++    ImportError
++        If importlib_resources is not available on Python < 3.10.
++    """
++    import sys
++    # Split the style name into package parts and the style name.
++    parts = style_name.split('.')
++    if len(parts) < 2:
++        raise ValueError("Invalid package style name: must have at least one dot.")
++    resource_name = f"{parts[-1]}.{STYLE_EXTENSION}"
++    package_name = '.'.join(parts[:-1])
++
++    # Use importlib.resources to get the resource.
++    try:
++        if sys.version_info >= (3, 10):
++            from importlib.resources import files
++        else:
++            from importlib_resources import files
++    except ImportError:
++        raise ImportError(
++            "Using styles from packages requires importlib_resources on Python < 3.10. "
++            "Please install importlib_resources>=3.2.0."
++        )
++
++    try:
++        package = files(package_name)
++    except Exception as e:
++        raise ValueError(
++            f"Cannot find package {package_name} for style {style_name}."
++        ) from e
++
++    try:
++        resource = package.joinpath(resource_name)
++    except Exception as e:
++        raise ValueError(
++            f"Cannot form resource path for {style_name}."
++        ) from e
++
++    if not resource.is_file():
++        raise ValueError(
++            f"Cannot find style file {resource_name} in package {package_name}."
++        )
++
++    # Read the style file.
++    with resource.open('r', encoding='utf-8') as f:
++        return rc_params_from_file(f, use_default_template=False)
++
++
+ def update_nested_dict(main_dict, new_dict):
+     """
+     Update nested dict (only level of nesting) with new values.

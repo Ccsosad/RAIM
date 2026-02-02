@@ -1,0 +1,183 @@
+diff --git a/examples/multi_bivariate_plot.py b/examples/multi_bivariate_plot.py
+new file mode 100644
+index 0000000..91fddf0
+--- /dev/null
++++ b/examples/multi_bivariate_plot.py
+@@ -0,0 +1,12 @@
++"""
++Example of a bivariate histogram with multiple hues.
++"""
++import seaborn as sns
++import matplotlib.pyplot as plt
++
++penguins = sns.load_dataset("penguins")
++sns.histplot(
++    data=penguins, x="culmen_depth_mm", y="body_mass_g",
++    hue="species", multiple="stack"
++)
++plt.show()
+diff --git a/examples/stacked_histogram.py b/examples/stacked_histogram.py
+new file mode 100644
+index 0000000..78ef5a3
+--- /dev/null
++++ b/examples/stacked_histogram.py
+@@ -0,0 +1,12 @@
++"""
++Example of a stacked histogram.
++"""
++import seaborn as sns
++import matplotlib.pyplot as plt
++
++penguins = sns.load_dataset("penguins")
++sns.histplot(
++    data=penguins, x="flipper_length_mm",
++    hue="species", multiple="stack"
++)
++plt.show()
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+new file mode 100644
+index 0000000..98e254c
+--- /dev/null
++++ b/seaborn/distributions.py
+@@ -0,0 +1,23 @@
++"""
++Functions for plotting data distributions.
++"""
++
++import numpy as np
++import pandas as pd
++import matplotlib as mpl
++import matplotlib.pyplot as plt
++from scipy import stats
++import warnings
++
++from .utils import _check_argument, remove_na
++from .palettes import color_palette
++from ._base import VectorPlotter, categorical_order
++from ._stats import KDE
++from ._compat import share_axis, get_legend_handles
++from .histogram import histplot
++
++__all__ = ["distplot", "kdeplot", "rugplot", "histplot"]
++
++
++def distplot(...):
++    ...
+diff --git a/seaborn/histogram.py b/seaborn/histogram.py
+new file mode 100644
+index 0000000..a42b80e
+--- /dev/null
++++ b/seaborn/histogram.py
+@@ -0,0 +1,112 @@
++"""
++Functions for plotting histograms.
++"""
++
++import numpy as np
++import pandas as pd
++import matplotlib as mpl
++import matplotlib.pyplot as plt
++from scipy import stats
++
++from .utils import _check_argument, remove_na
++from .palettes import color_palette
++from ._base import VectorPlotter, categorical_order
++from ._stats import Histogram
++from ._compat import share_axis, get_legend_handles
++
++__all__ = ["histplot"]
++
++
++def histplot(
++    data=None, *,
++    x=None, y=None,
++    hue=None, weights=None,
++    stat="count", bins="auto", binwidth=None, binrange=None,
++    discrete=None, cumulative=False, common_bins=True, common_norm=True,
++    multiple="layer", element="bars", fill=True, shrink=1,
++    kde=False, kde_kws=None, line_kws=None,
++    thresh=0, pthresh=None, pmax=None, cbar=False, cbar_kws=None,
++    palette=None, hue_order=None, hue_norm=None,
++    color=None, log_scale=None, legend=True,
++    ax=None, **kwargs
++):
++
++    # Set up the plotter
++    plotter = _HistogramPlotter(
++        data=data, variables=dict(x=x, y=y, hue=hue, weights=weights),
++    )
++
++    # Map the data
++    plotter.map_hue(palette=palette, order=hue_order, norm=hue_norm)
++    plotter.map_log_scale(log_scale)
++
++    # Determine bin parameters
++    plotter.determine_bin_parameters(
++        bins=bins, binwidth=binwidth, binrange=binrange,
++        discrete=discrete, common_bins=common_bins,
++    )
++
++    # Compute the histogram
++    plotter.compute_histogram(stat=stat, cumulative=cumulative, common_norm=common_norm)
++
++    # Normalize for density or probability
++    plotter.normalize_histogram(stat=stat, common_norm=common_norm)
++
++    # Add KDE if requested
++    if kde:
++        plotter.add_kde(kde_kws)
++
++    # Draw the plot
++    plotter.draw(
++        multiple=multiple, element=element, fill=fill, shrink=shrink,
++        thresh=thresh, pthresh=pthresh, pmax=pmax,
++        cbar=cbar, cbar_kws=cbar_kws,
++        color=color, legend=legend, ax=ax, **kwargs
++    )
++
++    return plotter.ax
++
++
++class _HistogramPlotter(VectorPlotter):
++
++    def __init__(self, data=None, variables=None):
++        super().__init__(data=data, variables=variables)
++
++    def map_log_scale(self, log_scale):
++        """Handle log scaling of axes."""
++        if log_scale is not None:
++            if isinstance(log_scale, bool):
++                log_scale = (log_scale, log_scale)
++            self._log_scale_x, self._log_scale_y = log_scale
++        else:
++            self._log_scale_x = self._log_scale_y = False
++
++    def determine_bin_parameters(
++        self, bins, binwidth, binrange, discrete, common_bins
++    ):
++        """Determine bin edges and other parameters."""
++        # This is a placeholder for the actual bin determination logic.
++        # In practice, this would use the Histogram class from _stats.
++        pass
++
++    def compute_histogram(self, stat, cumulative, common_norm):
++        """Compute the histogram using the Histogram class."""
++        # This would call Histogram.compute on each subset of data.
++        pass
++
++    def normalize_histogram(self, stat, common_norm):
++        """Normalize the histogram counts."""
++        pass
++
++    def add_kde(self, kde_kws):
++        """Add a KDE plot to the histogram."""
++        pass
++
++    def draw(
++        self, multiple, element, fill, shrink,
++        thresh, pthresh, pmax, cbar, cbar_kws,
++        color, legend, ax, **kwargs
++    ):
++        """Draw the histogram on the matplotlib axes."""
++        # This would contain the actual plotting logic.
++        pass

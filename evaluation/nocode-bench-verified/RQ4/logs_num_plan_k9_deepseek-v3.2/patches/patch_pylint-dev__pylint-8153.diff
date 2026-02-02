@@ -1,0 +1,54 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..b13f3aa 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -23,12 +23,22 @@ def _modpath_from_file(filename: str, is_namespace: bool, path: list[str]) -> li
+     )
+ 
+ 
+-def get_python_path(filepath: str) -> str:
++def get_python_path(filepath: str, source_roots: Sequence[str] = ()) -> str:
+     """TODO This get the python path with the (bad) assumption that there is always
+     an __init__.py.
+ 
+     This is not true since python 3.3 and is causing problem.
+     """
++    # First, try to find if the file is under a source root.
++    if source_roots:
++        # Convert to absolute paths
++        abs_source_roots = [os.path.abspath(root) for root in source_roots]
++        abs_filepath = os.path.abspath(filepath)
++        # Find the source root that is a prefix of the filepath.
++        for root in abs_source_roots:
++            if os.path.commonpath([root, abs_filepath]) == root:
++                return root
++    # Fall back to the old logic.
+     dirname = os.path.realpath(os.path.expanduser(filepath))
+     if not os.path.isdir(dirname):
+         dirname = os.path.dirname(dirname)
+@@ -67,6 +77,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -74,6 +85,8 @@ def expand_modules(
+     result: dict[str, ModuleDescriptionDict] = {}
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
++    abs_source_roots = [os.path.abspath(root) for root in source_roots]
++    path.extend(abs_source_roots)
+ 
+     for something in files_or_modules:
+         basename = os.path.basename(something)
+@@ -81,7 +94,7 @@ def expand_modules(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+         ):
+             continue
+-        module_path = get_python_path(something)
++        module_path = get_python_path(something, abs_source_roots)
+         additional_search_path = [".", module_path] + path
+         if os.path.exists(something):
+             # this is a file or a directory

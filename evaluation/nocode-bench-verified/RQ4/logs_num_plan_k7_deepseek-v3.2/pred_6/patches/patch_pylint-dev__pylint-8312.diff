@@ -1,0 +1,28 @@
+diff --git a/pylint/lint/run.py b/pylint/lint/run.py
+index d391b76..a6e79c5 100644
+--- a/pylint/lint/run.py
++++ b/pylint/lint/run.py
+@@ -180,6 +180,17 @@ group are mutually exclusive.",
+             return
+ 
+         # Display help messages if there are no files to lint
++        # Expand glob patterns in args
++        import glob
++        expanded_args = []
++        for arg in args:
++            if any(wildcard in arg for wildcard in ('*', '?', '[', ']', '**')):
++                matches = glob.glob(arg, recursive=True)
++                expanded_args.extend(matches)
++            else:
++                expanded_args.append(arg)
++        args = expanded_args
++
+         if not args:
+             print(linter.help())
+             sys.exit(32)
+@@ -248,4 +259,4 @@ class _PylintConfigRun(Run):
+     """Boolean whether or not this is a 'pylint-config' run.
+ 
+     Used by _PylintConfigRun to make the 'pylint-config' command work.
+-    """
++    """

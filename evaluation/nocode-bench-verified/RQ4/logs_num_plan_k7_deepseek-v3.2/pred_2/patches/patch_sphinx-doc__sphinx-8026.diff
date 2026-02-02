@@ -1,0 +1,138 @@
+diff --git a/sphinx/builders/_epub_base.py b/sphinx/builders/_epub_base.py
+index b659b6f..a3a2e43 100644
+--- a/sphinx/builders/_epub_base.py
++++ b/sphinx/builders/_epub_base.py
+@@ -362,8 +362,27 @@ class EpubBuilder(StandaloneHTMLBuilder):
+         """
+         self.fix_ids(doctree)
+         self.add_visible_links(doctree, self.config.epub_show_urls)
++        # Process images with the current docname to replace {docpath}
++        self.process_images_with_docname(docname, doctree)
+         super().write_doc(docname, doctree)
+ 
++    def process_images_with_docname(self, docname: str, doctree: nodes.document) -> None:
++        """Process images in the document to replace {docpath} token."""
++        for node in doctree.traverse(nodes.image):
++            uri = node['uri']
++            if '://' in uri:
++                continue
++            if '{docpath}' in uri:
++                docpath = path.dirname(docname)
++                if docpath:
++                    docpath += '/'
++                else:
++                    docpath = ''
++                new_uri = uri.replace('{docpath}', docpath)
++                if new_uri != uri:
++                    # Update the image URI
++                    node['uri'] = new_uri
++
+     def fix_genindex(self, tree: List[Tuple[str, List[Tuple[str, Any]]]]) -> None:
+         """Fix href attributes for genindex pages."""
+         # XXX: modifies tree inline
+@@ -387,6 +406,18 @@ class EpubBuilder(StandaloneHTMLBuilder):
+         ext = path.splitext(filename)[-1]
+         return ext in VECTOR_GRAPHICS_EXTENSIONS
+ 
++    def get_image_filename(self, uri: str, ext: str, docname: str = None) -> str:
++        """Generate a filename for an image."""
++        # Replace tokens in the uri
++        if docname:
++            docpath = path.dirname(docname)
++            if docpath:
++                docpath += '/'
++            else:
++                docpath = ''
++            uri = uri.replace('{docpath}', docpath)
++        return super().get_image_filename(uri, ext, docname)
++
+     def copy_image_files_pil(self) -> None:
+         """Copy images using Pillow, the Python Imaging Library.
+         The method tries to read and write the files with Pillow, converting
+@@ -731,4 +762,4 @@ class EpubBuilder(StandaloneHTMLBuilder):
+             for filename in ['META-INF/container.xml', 'content.opf', 'toc.ncx']:
+                 epub.write(path.join(outdir, filename), filename, ZIP_DEFLATED)
+             for filename in self.files:
+-                epub.write(path.join(outdir, filename), filename, ZIP_DEFLATED)
++                epub.write(path.join(outdir, filename), filename, ZIP_DEFLATED)
+diff --git a/sphinx/builders/html/__init__.py b/sphinx/builders/html/__init__.py
+index c052c27..93f4e89 100644
+--- a/sphinx/builders/html/__init__.py
++++ b/sphinx/builders/html/__init__.py
+@@ -594,6 +594,8 @@ class StandaloneHTMLBuilder(Builder):
+         self.imgpath = relative_uri(self.get_target_uri(docname), '_images')
+         self.dlpath = relative_uri(self.get_target_uri(docname), '_downloads')
+         self.current_docname = docname
++        # Process images with the current docname to replace {docpath}
++        self.process_images_with_docname(docname, doctree)
+         self.docwriter.write(doctree, destination)
+         self.docwriter.assemble_parts()
+         body = self.docwriter.parts['fragment']
+@@ -602,6 +604,23 @@ class StandaloneHTMLBuilder(Builder):
+         ctx = self.get_doc_context(docname, body, metatags)
+         self.handle_page(docname, ctx, event_arg=doctree)
+ 
++    def process_images_with_docname(self, docname: str, doctree: nodes.document) -> None:
++        """Process images in the document to replace {docpath} token."""
++        for node in doctree.traverse(nodes.image):
++            uri = node['uri']
++            if '://' in uri:
++                continue
++            if '{docpath}' in uri:
++                docpath = path.dirname(docname)
++                if docpath:
++                    docpath += '/'
++                else:
++                    docpath = ''
++                new_uri = uri.replace('{docpath}', docpath)
++                if new_uri != uri:
++                    # Update the image URI
++                    node['uri'] = new_uri
++
+     def write_doc_serialized(self, docname: str, doctree: nodes.document) -> None:
+         self.imgpath = relative_uri(self.get_target_uri(docname), self.imagedir)
+         self.post_process_images(doctree)
+@@ -950,6 +969,18 @@ class StandaloneHTMLBuilder(Builder):
+     def get_target_uri(self, docname: str, typ: str = None) -> str:
+         return quote(docname) + self.link_suffix
+ 
++    def get_image_filename(self, uri: str, ext: str, docname: str = None) -> str:
++        """Generate a filename for an image."""
++        # Replace tokens in the uri
++        if docname:
++            docpath = path.dirname(docname)
++            if docpath:
++                docpath += '/'
++            else:
++                docpath = ''
++            uri = uri.replace('{docpath}', docpath)
++        return super().get_image_filename(uri, ext, docname)
++
+     def handle_page(self, pagename: str, addctx: Dict, templatename: str = 'page.html',
+                     outfilename: str = None, event_arg: Any = None) -> None:
+         ctx = self.globalcontext.copy()
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+new file mode 100644
+index 0000000..d902699
+--- /dev/null
++++ b/sphinx/builders/__init__.py
+@@ -0,0 +1,19 @@
++    def process_images(self, docname: str, doctree: Node) -> None:
++        """Process images in the document."""
++        for node in doctree.traverse(nodes.image):
++            # get the image URI
++            uri = node['uri']
++            if '://' in uri:
++                continue
++
++            # get the image filename
++            filename = self.images.get(uri)
++            if filename:
++                node['uri'] = filename
++                continue
++
++            # generate a new filename
++            ext = path.splitext(uri)[1]
++            filename = self.get_image_filename(uri, ext, docname)
++            self.images[uri] = filename
++            node['uri'] = filename

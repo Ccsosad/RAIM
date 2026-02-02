@@ -1,0 +1,21 @@
+diff --git a/sphinx/environment/collectors/asset.py b/sphinx/environment/collectors/asset.py
+index 8d63344..daf29d3 100644
+--- a/sphinx/environment/collectors/asset.py
++++ b/sphinx/environment/collectors/asset.py
+@@ -68,6 +68,16 @@ class ImageCollector(EnvironmentCollector):
+                                                 i18n_full_imgpath)
+             # set imgpath as default URI
+             node['uri'] = rel_imgpath
++
++            # translate alt text for image by default (new behavior in 4.0)
++            if 'alt' in node and app.config.language:
++                try:
++                    from sphinx.locale import _
++                    node['alt'] = _(node['alt'])
++                except Exception:
++                    # silently ignore translation errors
++                    pass
++
+             if rel_imgpath.endswith(os.extsep + '*'):
+                 if app.config.language:
+                     # Search language-specific figures at first

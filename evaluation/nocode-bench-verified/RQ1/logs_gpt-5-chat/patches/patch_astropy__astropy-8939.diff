@@ -1,0 +1,106 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index 5d84827..597cd70 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -879,6 +879,95 @@ def _vstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='wa
+     return out
+ 
+ 
++def _cstack(arrays, join_type='outer', metadata_conflicts='warn', col_name_map=None):
++    """
++    Stack tables depth-wise (by creating multiple values per row in each column).
++
++    The length of all input tables must be identical. Columns matched by name
++    will be combined into a single column with an extra dimension for the stack depth.
++
++    Parameters
++    ----------
++    arrays : list of Tables
++        Tables to stack depth-wise
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    metadata_conflicts : str
++        How to handle metadata conflicts ('warn' or 'silent' or 'error')
++    col_name_map : empty dict or None
++        If passed as a dict then it will be updated in-place with the mapping
++        of output to input column names.
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing depth-wise stacked data from the input tables.
++    """
++    _col_name_map = col_name_map
++    if join_type not in ('inner', 'exact', 'outer'):
++        raise ValueError("`join_type` arg must be one of 'inner', 'exact' or 'outer'")
++    if len(arrays) == 1:
++        return arrays[0]
++
++    # All input arrays must have same length
++    lens = [len(arr) for arr in arrays]
++    if len(set(lens)) > 1:
++        raise TableMergeError("Inconsistent number of rows in input arrays for cstack")
++
++    names = set(itertools.chain(*[arr.colnames for arr in arrays]))
++    col_name_map = get_col_name_map(arrays, names)
++
++    if join_type == 'exact':
++        for names in col_name_map.values():
++            if any(x is None for x in names):
++                raise TableMergeError('Inconsistent columns in input arrays '
++                                      "(use 'inner' or 'outer' join_type to allow non-matching columns)")
++        join_type = 'outer'
++
++    if join_type == 'inner':
++        col_name_map = OrderedDict((name, in_names) for name, in_names in col_name_map.items()
++                                   if all(x is not None for x in in_names))
++        if len(col_name_map) == 0:
++            raise TableMergeError('Input arrays have no columns in common')
++
++    n_rows = lens[0]
++    n_depth = len(arrays)
++    out = _get_out_class(arrays)()
++
++    for out_name, in_names in col_name_map.items():
++        # match columns from each array, using None where missing
++        cols = [arr[name] if name is not None else None for arr, name in zip(arrays, in_names)]
++        col_cls = _get_out_class([c for c in cols if c is not None])
++        if not hasattr(col_cls.info, 'new_like'):
++            raise NotImplementedError('cstack unavailable for mixin column type(s): {}'
++                                      .format(col_cls.__name__))
++        try:
++            # Create new column with extra dimension
++            col = col_cls.info.new_like([c for c in cols if c is not None],
++                                        (n_rows, n_depth), metadata_conflicts, out_name)
++        except metadata.MergeConflictError as err:
++            raise TableMergeError("The '{}' columns have incompatible types: {}"
++                                  .format(out_name, err._incompat_types))
++
++        for j, (name, array) in enumerate(zip(in_names, arrays)):
++            if name is not None:
++                col[:, j] = array[name]
++            else:
++                if isinstance(col, Column) and not isinstance(col, MaskedColumn):
++                    col = out.MaskedColumn(col, copy=False)
++                try:
++                    col[:, j] = col.info.mask_val
++                except Exception:
++                    raise NotImplementedError(
++                        "cstack requires masking column '{}' but column"
++                        " type {} does not support masking"
++                        .format(out_name, col.__class__.__name__))
++        out[out_name] = col
++
++    if isinstance(_col_name_map, Mapping):
++        _col_name_map.update(col_name_map)
++    return out
++
+ def _hstack(arrays, join_type='outer', uniq_col_name='{col_name}_{table_name}',
+            table_names=None, col_name_map=None):
+     """
+@@ -981,4 +1070,4 @@ def _hstack(arrays, join_type='outer', uniq_col_name='{col_name}_{table_name}',
+     if isinstance(_col_name_map, Mapping):
+         _col_name_map.update(col_name_map)
+ 
+-    return out
++    return out

@@ -1,0 +1,21 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..b902f84 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -225,7 +225,8 @@ class Documenter:
+     #: true if the generated content may contain titles
+     titles_allowed = False
+ 
+-    option_spec = {'noindex': bool_option}  # type: Dict[str, Callable]
++    option_spec = {'noindex': bool_option,
++                   'imported-members': bool_option}  # type: Dict[str, Callable]
+ 
+     def get_attr(self, obj, name, *defargs):
+         # type: (Any, str, Any) -> Any
+diff --git a/sphinx/ext/autodoc/imported.py b/sphinx/ext/autodoc/imported.py
+new file mode 100644
+index 0000000..c8e8096
+--- /dev/null
++++ b/sphinx/ext/autodoc/imported.py
+@@ -0,0 +1 @@
++# This module is reserved for future extensions related to imported members.

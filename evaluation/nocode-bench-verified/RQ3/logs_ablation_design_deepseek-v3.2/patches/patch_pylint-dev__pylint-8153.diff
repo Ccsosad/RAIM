@@ -1,0 +1,93 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..7bef678 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -14,24 +14,55 @@ from astroid import modutils
+ from pylint.typing import ErrorDescriptionDict, ModuleDescriptionDict
+ 
+ 
+-def _modpath_from_file(filename: str, is_namespace: bool, path: list[str]) -> list[str]:
++def _modpath_from_file(
++    filename: str, 
++    is_namespace: bool, 
++    path: list[str], 
++    source_roots: Sequence[str] = ()
++) -> list[str]:
+     def _is_package_cb(inner_path: str, parts: list[str]) -> bool:
+-        return modutils.check_modpath_has_init(inner_path, parts) or is_namespace
++        # Check if it's a traditional package
++        if modutils.check_modpath_has_init(inner_path, parts):
++            return True
++        # Check if it's an implicit namespace package under a source root
++        if is_namespace:
++            return True
++        # Check if the directory is under any source root
++        if source_roots:
++            from pylint.lint.utils import _is_relative_to
++            for root in source_roots:
++                if _is_relative_to(inner_path, root):
++                    return True
++        return False
+ 
+     return modutils.modpath_from_file_with_callback(  # type: ignore[no-any-return]
+         filename, path=path, is_package_cb=_is_package_cb
+     )
+ 
+ 
+-def get_python_path(filepath: str) -> str:
+-    """TODO This get the python path with the (bad) assumption that there is always
+-    an __init__.py.
+-
+-    This is not true since python 3.3 and is causing problem.
++def get_python_path(filepath: str, source_roots: Sequence[str] = ()) -> str:
++    """Get the python path for a file, considering source roots for implicit namespace packages.
++    
++    For traditional packages (with __init__.py), returns the directory containing the package.
++    For implicit namespace packages (PEP 420), returns the nearest source root that contains the file.
+     """
+     dirname = os.path.realpath(os.path.expanduser(filepath))
+     if not os.path.isdir(dirname):
+         dirname = os.path.dirname(dirname)
++    
++    # First check if we're under any source root
++    if source_roots:
++        from pylint.lint.utils import _is_relative_to
++        # Find the deepest source root that contains the directory
++        matching_roots = []
++        for root in source_roots:
++            if _is_relative_to(dirname, root):
++                matching_roots.append(root)
++        if matching_roots:
++            # Return the longest (deepest) matching root
++            return max(matching_roots, key=len)
++    
++    # Fall back to traditional detection for packages with __init__.py
+     while True:
+         if not os.path.exists(os.path.join(dirname, "__init__.py")):
+             return dirname
+@@ -67,6 +98,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -81,7 +113,7 @@ def expand_modules(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+         ):
+             continue
+-        module_path = get_python_path(something)
++        module_path = get_python_path(something, source_roots)
+         additional_search_path = [".", module_path] + path
+         if os.path.exists(something):
+             # this is a file or a directory
+@@ -148,7 +180,7 @@ def expand_modules(
+                     continue
+ 
+                 modpath = _modpath_from_file(
+-                    subfilepath, is_namespace, path=additional_search_path
++                    subfilepath, is_namespace, path=additional_search_path, source_roots=source_roots
+                 )
+                 submodname = ".".join(modpath)
+                 # Preserve arg flag if module is also explicitly given.

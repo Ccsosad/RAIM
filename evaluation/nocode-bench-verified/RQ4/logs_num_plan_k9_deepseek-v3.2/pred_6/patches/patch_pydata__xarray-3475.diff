@@ -1,0 +1,18 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c07f9e0..978242e 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5478,4 +5478,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/dropping.py b/xarray/core/dropping.py
+new file mode 100644
+index 0000000..0847994
+--- /dev/null
++++ b/xarray/core/dropping.py
+@@ -0,0 +1,2 @@
++# This module contains helper functions for dropping variables and labels.
++# Currently, it is empty because the drop methods are implemented directly in Dataset.

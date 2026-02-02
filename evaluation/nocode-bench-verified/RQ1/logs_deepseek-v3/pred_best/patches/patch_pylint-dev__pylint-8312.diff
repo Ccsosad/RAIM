@@ -1,0 +1,20 @@
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 336078d..2683333 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -898,7 +898,14 @@ class PyLinter(
+     def _expand_files(
+         self, files_or_modules: Sequence[str]
+     ) -> dict[str, ModuleDescriptionDict]:
+-        """Get modules and errors from a list of modules and handle errors."""
++        """Get modules and errors from a list of modules and handle errors.
++        
++        Parameters:
++        -----------
++        files_or_modules : Sequence[str]
++            List of module names, file paths, directories, or glob patterns to lint.
++            Globbing patterns (e.g., 'packages/*/src') are supported for file/directory paths.
++        """
+         result, errors = expand_modules(
+             files_or_modules,
+             self.config.source_roots,

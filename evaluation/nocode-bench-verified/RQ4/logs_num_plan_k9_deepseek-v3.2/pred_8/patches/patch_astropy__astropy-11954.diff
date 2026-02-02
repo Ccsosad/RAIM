@@ -1,0 +1,92 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..fc110b6 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,10 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -384,7 +384,7 @@ def join(left, right, keys=None, join_type='inner',
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+-                join_funcs)
++                join_funcs, keys_left, keys_right)
+ 
+     # Merge the column and table meta data. Table subclasses might override
+     # these methods for custom merge behavior.
+@@ -1047,7 +1047,7 @@ def _join(left, right, keys=None, join_type='inner',
+           uniq_col_name='{col_name}_{table_name}',
+           table_names=['1', '2'],
+           col_name_map=None, metadata_conflicts='warn',
+-          join_funcs=None):
++          join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left and right Tables on specified keys.
+ 
+@@ -1091,6 +1091,34 @@ def _join(left, right, keys=None, join_type='inner',
+     # Special column name for cartesian join, should never collide with real column
+     cartesian_index_name = '__table_cartesian_join_temp_index__'
+ 
++    # Handle keys_left and keys_right
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Cannot specify both keys and keys_left/keys_right')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both keys_left and keys_right')
++        # Convert to list if single
++        if isinstance(keys_left, str):
++            keys_left = [keys_left]
++        if isinstance(keys_right, str):
++            keys_right = [keys_right]
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same length')
++        # Create light copies of the tables
++        left = left.copy(copy_data=False)
++        right = right.copy(copy_data=False)
++        temp_key_names = []
++        for i, (kl, kr) in enumerate(zip(keys_left, keys_right)):
++            temp_key = f'__temp_key_{i}__'
++            left[temp_key] = kl
++            right[temp_key] = kr
++            temp_key_names.append(temp_key)
++        keys = tuple(temp_key_names)
++        # We will remove these temporary columns at the end
++        remove_temp_columns = True
++    else:
++        remove_temp_columns = False
++
+     if join_type not in ('inner', 'outer', 'left', 'right', 'cartesian'):
+         raise ValueError("The 'join_type' argument should be in 'inner', "
+                          "'outer', 'left', 'right', or 'cartesian' "
+@@ -1131,6 +1159,8 @@ def _join(left, right, keys=None, join_type='inner',
+                                       .format(arr_label, name))
+ 
+     if join_funcs is not None:
++        if remove_temp_columns:
++            raise ValueError('join_funcs cannot be used with keys_left and keys_right')
+         if not all(key in keys for key in join_funcs):
+             raise ValueError(f'join_funcs keys {join_funcs.keys()} must be a '
+                              f'subset of join keys {keys}')
+@@ -1221,6 +1251,12 @@ def _join(left, right, keys=None, join_type='inner',
+     if isinstance(_col_name_map, Mapping):
+         _col_name_map.update(col_name_map)
+ 
++    # Remove temporary columns if they were added
++    if remove_temp_columns:
++        for key in keys:
++            if key in out.colnames:
++                out.remove_column(key)
++
+     return out
+ 
+ 

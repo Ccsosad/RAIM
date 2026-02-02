@@ -1,0 +1,212 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..48547c1 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -237,6 +237,207 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+         )
+ 
+ 
++class Coordinates:
++    """Container for coordinate variables and their indexes.
++
++    Coordinates objects can be used to pass coordinate variables and indexes
++    to new Dataset / DataArray objects, e.g., via their constructor or
++    via :py:meth:`Dataset.assign_coords`.
++    """
++
++    __slots__ = ("_variables", "_coord_names", "_indexes", "_xindexes")
++
++    def __init__(
++        self,
++        variables: Mapping[Hashable, Variable],
++        coord_names: set[Hashable],
++        indexes: Mapping[Hashable, Index] | None = None,
++        xindexes: Mapping[Hashable, Index] | None = None,
++    ):
++        self._variables = variables
++        self._coord_names = coord_names
++        self._indexes = indexes or {}
++        self._xindexes = xindexes or {}
++
++    @classmethod
++    def from_pandas_multiindex(cls, midx: pd.MultiIndex, dim: Hashable) -> Coordinates:
++        """Create Coordinates from a pandas MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            The multi-index to convert to coordinates.
++        dim : hashable
++            The dimension name for the multi-index.
++
++        Returns
++        -------
++        Coordinates
++            A new Coordinates object containing the multi-index coordinates.
++        """
++        from xarray.core.dataset import Dataset
++
++        ds = Dataset.from_dataframe(midx.to_frame(index=False))
++        return ds.coords
++
++    def get(self, key: Hashable, default: Any = None) -> Any:
++        return self._variables.get(key, default)
++
++    def items(self) -> Iterable[tuple[Hashable, Variable]]:
++        return self._variables.items()
++
++    def keys(self) -> Iterable[Hashable]:
++        return self._variables.keys()
++
++    def values(self) -> Iterable[Variable]:
++        return self._variables.values()
++
++    @property
++    def dims(self) -> Mapping[Hashable, int]:
++        return {name: var.dims for name, var in self._variables.items()}
++
++    @property
++    def dtypes(self) -> Mapping[Hashable, np.dtype]:
++        return {name: var.dtype for name, var in self._variables.items()}
++
++    @property
++    def variables(self) -> Mapping[Hashable, Variable]:
++        return self._variables
++
++    @property
++    def xindexes(self) -> Mapping[Hashable, Index]:
++        return self._xindexes
++
++    @property
++    def indexes(self) -> Mapping[Hashable, pd.Index]:
++        return self._indexes
++
++    def to_dataset(self) -> Dataset:
++        from xarray.core.dataset import Dataset
++        return Dataset._construct_direct(
++            variables=self._variables,
++            coord_names=self._coord_names,
++            indexes=self._indexes,
++            xindexes=self._xindexes,
++        )
++
++    def to_index(self, key: Hashable) -> pd.Index:
++        return self._indexes[key]
++
++    def update(self, other: Coordinates) -> None:
++        self._variables.update(other._variables)
++        self._coord_names.update(other._coord_names)
++        self._indexes.update(other._indexes)
++        self._xindexes.update(other._xindexes)
++
++    def merge(self, other: Coordinates | None) -> Dataset:
++        """Merge two sets of coordinates to create a new Dataset
++
++        The method implements the logic used for joining coordinates in the
++        result of a binary operation performed on xarray objects:
++
++        - If two index coordinates conflict (are not equal), an exception is
++          raised. You must align your data before passing it to this method.
++        - If an index coordinate and a non-index coordinate conflict, the non-
++          index coordinate is dropped.
++        - If two non-index coordinates conflict, both are dropped.
++
++        Parameters
++        ----------
++        other : Coordinates or None
++            The coordinates from another dataset or data array.
++
++        Returns
++        -------
++        merged : Dataset
++            A new Dataset with merged coordinates.
++        """
++        from xarray.core.dataset import Dataset
++
++        if other is None:
++            return self.to_dataset()
++
++        if not isinstance(other, Coordinates):
++            other = Dataset(coords=other).coords
++
++        coords, indexes = merge_coordinates_without_align([self, other])
++        coord_names = set(coords)
++        return Dataset._construct_direct(
++            variables=coords, coord_names=coord_names, indexes=indexes
++        )
++
++    def copy(self, deep: bool = True) -> Coordinates:
++        """Return a copy of the coordinates.
++
++        Parameters
++        ----------
++        deep : bool, default: True
++            Whether to deep copy the underlying variables and indexes.
++
++        Returns
++        -------
++        Coordinates
++            A new Coordinates object.
++        """
++        if deep:
++            variables = {k: v.copy(deep=True) for k, v in self._variables.items()}
++            indexes = {k: v.copy() for k, v in self._indexes.items()}
++            xindexes = {k: v.copy() for k, v in self._xindexes.items()}
++        else:
++            variables = self._variables.copy()
++            indexes = self._indexes.copy()
++            xindexes = self._xindexes.copy()
++        
++        return Coordinates(
++            variables=variables,
++            coord_names=self._coord_names.copy(),
++            indexes=indexes,
++            xindexes=xindexes,
++        )
++
++    def equals(self, other: Coordinates) -> bool:
++        """Return True if this coordinates object is equivalent to another.
++
++        Parameters
++        ----------
++        other : Coordinates
++            Other coordinates to compare against.
++
++        Returns
++        -------
++        bool
++            True if coordinates are equivalent.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        
++        return (self._variables == other._variables and
++                self._coord_names == other._coord_names and
++                self._indexes == other._indexes and
++                self._xindexes == other._xindexes)
++
++    def identical(self, other: Coordinates) -> bool:
++        """Return True if this coordinates object is identical to another.
++
++        Parameters
++        ----------
++        other : Coordinates
++            Other coordinates to compare against.
++
++        Returns
++        -------
++        bool
++            True if coordinates are identical.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        
++        return (self._variables is other._variables and
++                self._coord_names is other._coord_names and
++                self._indexes is other._indexes and
++                self._xindexes is other._xindexes)
++
++
+ class DatasetCoordinates(Coordinates):
+     """Dictionary like container for Dataset coordinates.
+ 

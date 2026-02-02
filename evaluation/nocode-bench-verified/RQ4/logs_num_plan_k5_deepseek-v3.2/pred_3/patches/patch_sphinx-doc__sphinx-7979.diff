@@ -1,0 +1,50 @@
+diff --git a/sphinx/transforms/i18n.py b/sphinx/transforms/i18n.py
+index 06e4d1b..ce46a93 100644
+--- a/sphinx/transforms/i18n.py
++++ b/sphinx/transforms/i18n.py
+@@ -112,7 +112,27 @@ class Locale(SphinxTransform):
+             return
+ 
+         # phase1: replace reference ids with translated names
+-        for node, msg in extract_messages(self.document):
++        for node_msg in extract_messages(self.document):
++            # Handle the new format for image alt messages.
++            if isinstance(node_msg[0], tuple):
++                # This is an alt message.
++                node, part = node_msg[0]
++                msg = node_msg[1]
++                # We need to process the alt message separately.
++                # We'll store it for later.
++                if not hasattr(self, '_alt_messages'):
++                    self._alt_messages = {}
++                self._alt_messages.setdefault(node, {})[part] = msg
++                continue
++            else:
++                node, msg = node_msg
++            # Check if this message is an alt text for an image node.
++            if isinstance(node, nodes.image) and node.get('alt') == msg:
++                # This is an alt message.
++                msgstr = catalog.gettext(msg)
++                if msgstr and msgstr != msg:
++                    node['alt'] = msgstr
++                continue
+             msgstr = catalog.gettext(msg)
+             # XXX add marker to untranslated parts
+             if not msgstr or msgstr == msg or not msgstr.strip():
+diff --git a/sphinx/util/nodes.py b/sphinx/util/nodes.py
+index da00971..8a55fea 100644
+--- a/sphinx/util/nodes.py
++++ b/sphinx/util/nodes.py
+@@ -261,8 +261,11 @@ def extract_messages(doctree: Element) -> Iterable[Tuple[Element, str]]:
+                 msg = node.astext()
+         elif isinstance(node, IMAGE_TYPE_NODES):
+             msg = '.. image:: %s' % node['uri']
++            yield node, msg
++            # Also yield the alt text as a separate message.
+             if node.get('alt'):
+-                msg += '\n   :alt: %s' % node['alt']
++                yield node, node['alt']
++            continue
+         elif isinstance(node, META_TYPE_NODES):
+             msg = node.rawcontent
+         elif isinstance(node, nodes.pending) and is_pending_meta(node):

@@ -1,0 +1,67 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index e6fae2b..d28eb4c 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1804,6 +1804,56 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def convert_calendar(self, calendar, align_on=None, missing=None, use_cftime=None):
++        """Convert the DataArray to another calendar.
++
++        Parameters
++        ----------
++        calendar : str
++            The target calendar name.
++        align_on : {None, 'date', 'year', 'random'}, optional
++            How to align the dates when converting between calendars. 
++            See xarray.coding.calendar_ops.convert_calendar for details.
++        missing : {None, 'nan', 'skip', 'raise'}, optional
++            How to handle dates that do not exist in the target calendar.
++        use_cftime : bool, optional
++            Whether to use cftime objects in the output. If None (default), 
++            cftime is used only when the dates are out of the range of 
++            pandas timestamps.
++
++        Returns
++        -------
++        converted : DataArray
++            DataArray with the same data but with timestamps converted to the
++            target calendar.
++        """
++        from .calendar_ops import convert_calendar
++
++        return convert_calendar(
++            self, calendar, align_on=align_on, missing=missing, use_cftime=use_cftime
++        )
++
++    def interp_calendar(self, target, use_cftime=None):
++        """Interpolate the DataArray to another calendar.
++
++        Parameters
++        ----------
++        target : DataArray or Dataset
++            The target calendar's dates to interpolate to.
++        use_cftime : bool, optional
++            Whether to use cftime objects in the output. If None (default), 
++            cftime is used only when the dates are out of the range of 
++            pandas timestamps.
++
++        Returns
++        -------
++        interpolated : DataArray
++            DataArray with the same data but interpolated to the target calendar's dates.
++        """
++        from .calendar_ops import interp_calendar
++
++        return interp_calendar(self, target, use_cftime=use_cftime)
++
+     def rename(
+         self,
+         new_name_or_name_dict: Union[Hashable, Mapping[Any, Hashable]] = None,
+@@ -4658,4 +4708,4 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)

@@ -1,0 +1,104 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index dbde177..79cb76e 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -804,27 +804,22 @@ class Table:
+                 .format(inp_str))
+ 
+     def _init_from_list_of_dicts(self, data, names, dtype, n_cols, copy):
+-        names_from_data = set()
+-        for row in data:
+-            names_from_data.update(row)
++        from ._row_processing import list_of_dicts_to_masked_arrays
+ 
++        # Convert list of dicts to a dict of MaskedArrays
++        masked_arrays = list_of_dicts_to_masked_arrays(data)
++
++        # The keys from the masked arrays are the union of all keys
++        names_from_data = list(masked_arrays.keys())
++
++        # If the first row is an OrderedDict and its keys match the union of keys,
++        # then preserve the order of the keys from the first row.
+         if (isinstance(data[0], OrderedDict) and
+-                set(data[0].keys()) == names_from_data):
++                list(data[0].keys()) == names_from_data):
+             names_from_data = list(data[0].keys())
+-        else:
+-            names_from_data = sorted(names_from_data)
+ 
+-        # Note: if set(data[0].keys()) != names_from_data, this will give an
+-        # exception later, so NO need to catch here.
+-
+-        cols = {}
+-        for name in names_from_data:
+-            cols[name] = []
+-            for i, row in enumerate(data):
+-                try:
+-                    cols[name].append(row[name])
+-                except KeyError:
+-                    raise ValueError(f'Row {i} has no value for column {name}')
++        # Reorder the masked_arrays according to names_from_data
++        cols = {key: masked_arrays[key] for key in names_from_data}
+ 
+         if all(name is None for name in names):
+             names = names_from_data
+diff --git a/astropy/table/_row_processing.py b/astropy/table/_row_processing.py
+new file mode 100644
+index 0000000..80d0815
+--- /dev/null
++++ b/astropy/table/_row_processing.py
+@@ -0,0 +1,54 @@
++"""
++Helper functions for processing row-oriented data for Table.
++"""
++import numpy as np
++from numpy.ma import MaskedArray
++
++def list_of_dicts_to_masked_arrays(list_of_dicts):
++    """
++    Convert a list of dictionaries to a dictionary of MaskedArrays.
++
++    Parameters
++    ----------
++    list_of_dicts : list of dict
++        Each dictionary represents a row of data.
++
++    Returns
++    -------
++    dict
++        Dictionary with keys being the union of all keys in the input dictionaries.
++        Each value is a MaskedArray with length equal to the number of rows.
++        Missing values are masked.
++    """
++    # Collect all keys from all rows
++    all_keys = set()
++    for row in list_of_dicts:
++        all_keys.update(row.keys())
++    all_keys = sorted(all_keys)  # sort for deterministic order
++
++    # Initialize lists for data and mask for each key
++    data = {key: [] for key in all_keys}
++    mask = {key: [] for key in all_keys}
++
++    # Fill data and mask
++    for row in list_of_dicts:
++        for key in all_keys:
++            if key in row:
++                data[key].append(row[key])
++                mask[key].append(False)  # not masked
++            else:
++                # We need to append a placeholder value, but it will be masked.
++                # We use None as a placeholder, but it will be converted to the appropriate type later.
++                data[key].append(None)
++                mask[key].append(True)   # masked
++
++    # Create MaskedArray for each key
++    masked_arrays = {}
++    for key in all_keys:
++        # Convert data list to array, but we don't know the dtype yet.
++        # We'll let the Table initialization handle the dtype conversion.
++        arr = np.array(data[key], dtype=object)
++        ma = MaskedArray(arr, mask=mask[key])
++        masked_arrays[key] = ma
++
++    return masked_arrays

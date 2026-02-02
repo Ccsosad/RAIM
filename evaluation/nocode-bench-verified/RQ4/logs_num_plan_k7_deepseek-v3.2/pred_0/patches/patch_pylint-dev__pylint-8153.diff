@@ -1,0 +1,85 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..c98bbca 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -23,12 +23,25 @@ def _modpath_from_file(filename: str, is_namespace: bool, path: list[str]) -> li
+     )
+ 
+ 
+-def get_python_path(filepath: str) -> str:
+-    """TODO This get the python path with the (bad) assumption that there is always
+-    an __init__.py.
++def get_python_path(filepath: str, source_roots: Sequence[str] = ()) -> str:
++    """Get the python path for the given filepath.
+ 
+-    This is not true since python 3.3 and is causing problem.
++    If source_roots are provided, use them to determine the root.
++    Otherwise, fall back to the old behavior (looking for __init__.py).
+     """
++    # If there are source roots, find the longest source root that is a prefix of the filepath.
++    if source_roots:
++        # Convert filepath to absolute
++        abs_path = os.path.abspath(filepath)
++        if not os.path.isdir(abs_path):
++            abs_path = os.path.dirname(abs_path)
++        # Check each source root
++        for root in source_roots:
++            root_abs = os.path.abspath(root)
++            if abs_path.startswith(root_abs):
++                # Return the source root as the base path
++                return root_abs
++    # Fallback to the old behavior
+     dirname = os.path.realpath(os.path.expanduser(filepath))
+     if not os.path.isdir(dirname):
+         dirname = os.path.dirname(dirname)
+@@ -67,6 +80,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -81,8 +95,13 @@ def expand_modules(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+         ):
+             continue
+-        module_path = get_python_path(something)
++        module_path = get_python_path(something, source_roots)
+         additional_search_path = [".", module_path] + path
++        # Add source roots to the search path for module resolution
++        for root in source_roots:
++            root_abs = os.path.abspath(root)
++            if root_abs not in additional_search_path:
++                additional_search_path.insert(0, root_abs)
+         if os.path.exists(something):
+             # this is a file or a directory
+             try:
+diff --git a/pylint/lint/utils.py b/pylint/lint/utils.py
+index 05793a0..180e900 100644
+--- a/pylint/lint/utils.py
++++ b/pylint/lint/utils.py
+@@ -72,15 +72,21 @@ def get_fatal_error_message(filepath: str, issue_template_path: Path) -> str:
+     )
+ 
+ 
+-def _patch_sys_path(args: Sequence[str]) -> list[str]:
++def _patch_sys_path(args: Sequence[str], source_roots: Sequence[str] = ()) -> list[str]:
+     original = list(sys.path)
+     changes = []
+     seen = set()
+     for arg in args:
+-        path = get_python_path(arg)
++        path = get_python_path(arg, source_roots)
+         if path not in seen:
+             changes.append(path)
+             seen.add(path)
++    # Also add the source roots to sys.path
++    for root in source_roots:
++        root_abs = os.path.abspath(root)
++        if root_abs not in seen:
++            changes.append(root_abs)
++            seen.add(root_abs)
+ 
+     sys.path[:] = changes + sys.path
+     return original

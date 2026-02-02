@@ -1,0 +1,108 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..9e1e23b 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -1,3 +1,6 @@
++
++import warnings
++
+ import numpy as np
+ import pandas as pd
+ 
+@@ -304,6 +307,65 @@ class DatetimeAccessor(Properties):
+             result, name="strftime", coords=self._obj.coords, dims=self._obj.dims
+         )
+ 
++    def isocalendar(self):
++        """
++        Return a Dataset containing the ISO year, week, and weekday.
++
++        The ISO calendar is a widely used variant of the Gregorian calendar.
++        See https://en.wikipedia.org/wiki/ISO_week_date for details.
++
++        Requires pandas version 1.1.0 or greater.
++
++        Returns
++        -------
++        isocalendar : Dataset
++            A Dataset with three DataArrays: "year", "week", and "weekday".
++        """
++        from distutils.version import LooseVersion
++
++        from .dataset import Dataset
++
++        if LooseVersion(pd.__version__) < "1.1.0":
++            raise NotImplementedError(
++                "isocalendar requires pandas version 1.1.0 or greater."
++            )
++
++        obj = self._obj
++        data = obj.data
++
++        if not _contains_datetime_like_objects(data):
++            raise AttributeError(
++                f"Cannot use .dt accessor on objects of dtype "
++                f"'{data.dtype}', which is not datetime-like."
++            )
++
++        if is_duck_dask_array(data):
++            from dask.dataframe import from_dask_array
++
++            series = from_dask_array(data.flatten())
++            isocal_df = series.dt.isocalendar()
++
++            year = isocal_df["year"].to_dask_array(lengths=True).reshape(data.shape)
++            week = isocal_df["week"].to_dask_array(lengths=True).reshape(data.shape)
++            day = isocal_df["day"].to_dask_array(lengths=True).reshape(data.shape)
++        else:
++            # numpy array
++            values = pd.Series(data.ravel())
++            result = values.dt.isocalendar()
++            year = result["year"].values.reshape(data.shape)
++            week = result["week"].values.reshape(data.shape)
++            day = result["day"].values.reshape(data.shape)
++
++        ds = Dataset(
++            {
++                "year": (obj.dims, year),
++                "week": (obj.dims, week),
++                "weekday": (obj.dims, day),
++            },
++            coords=obj.coords,
++        )
++        return ds.astype(float)
++
+     year = Properties._tslib_field_accessor(
+         "year", "The year of the datetime", np.int64
+     )
+@@ -326,10 +388,26 @@ class DatetimeAccessor(Properties):
+     nanosecond = Properties._tslib_field_accessor(
+         "nanosecond", "The nanoseconds of the datetime", np.int64
+     )
+-    weekofyear = Properties._tslib_field_accessor(
+-        "weekofyear", "The week ordinal of the year", np.int64
+-    )
+-    week = weekofyear
++    @property
++    def weekofyear(self):
++        warnings.warn(
++            "The .dt.weekofyear property is deprecated and will be removed in a future version. "
++            "Please use .dt.isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return self._get_tslib_field("weekofyear", np.int64)
++
++    @property
++    def week(self):
++        warnings.warn(
++            "The .dt.week property is deprecated and will be removed in a future version. "
++            "Please use .dt.isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return self._get_tslib_field("week", np.int64)
++
+     dayofweek = Properties._tslib_field_accessor(
+         "dayofweek", "The day of the week with Monday=0, Sunday=6", np.int64
+     )

@@ -1,0 +1,60 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index fb4476d..aea99dc 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -913,6 +913,26 @@ class FacetGrid(Grid):
+                 ax.set_yticklabels(labels, **kwargs)
+         return self
+ 
++    def tick_params(self, axis='both', **kwargs):
++        """Set the axis tick parameters on each subplot of the grid.
++
++        Parameters
++        ----------
++        axis : {'x', 'y', 'both'}
++            The axis to apply the tick parameters to.
++        kwargs
++            Other keyword arguments are passed to :meth:`matplotlib.axes.Axes.tick_params`.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        for ax in self.axes.flat:
++            ax.tick_params(axis=axis, **kwargs)
++        return self
++
+     def set_titles(self, template=None, row_template=None, col_template=None,
+                    **kwargs):
+         """Draw titles either above each facet or on the grid margins.
+@@ -1650,6 +1670,28 @@ class PairGrid(Grid):
+                 numeric_cols.append(col)
+         return numeric_cols
+ 
++    def tick_params(self, axis='both', **kwargs):
++        """Set the axis tick parameters on each subplot of the grid.
++
++        Parameters
++        ----------
++        axis : {'x', 'y', 'both'}
++            The axis to apply the tick parameters to.
++        kwargs
++            Other keyword arguments are passed to :meth:`matplotlib.axes.Axes.tick_params`.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        for ax in self.axes.flat:
++            if ax is None:
++                continue
++            ax.tick_params(axis=axis, **kwargs)
++        return self
++
+ 
+ class JointGrid(_BaseGrid):
+     """Grid for drawing a bivariate plot with marginal univariate plots.

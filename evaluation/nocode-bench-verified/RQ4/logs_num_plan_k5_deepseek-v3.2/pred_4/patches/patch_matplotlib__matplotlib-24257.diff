@@ -1,0 +1,128 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..a0ad2e3 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -200,6 +200,20 @@ def update_user_library(library):
+     return library
+ 
+ 
++def update_package_library(library):
++    """Update style library with styles from packages."""
++    from .registry import iter_package_styles
++    for package, style_name, style_path in iter_package_styles():
++        if package not in library:
++            library[package] = {}
++        with warnings.catch_warnings(record=True) as warns:
++            library[package][style_name] = rc_params_from_file(
++                style_path, use_default_template=False)
++        for w in warns:
++            _log.warning('In %s: %s', style_path, w.message)
++    return library
++
++
+ def read_style_directory(style_dir):
+     """Return dictionary of styles defined in *style_dir*."""
+     styles = dict()
+@@ -246,6 +260,7 @@ def reload_library():
+     """Reload the style library."""
+     library.clear()
+     library.update(update_user_library(_base_library))
++    update_package_library(library)
+     available[:] = sorted(library.keys())
+ 
+ 
+diff --git a/lib/matplotlib/style/registry.py b/lib/matplotlib/style/registry.py
+new file mode 100644
+index 0000000..d89662c
+--- /dev/null
++++ b/lib/matplotlib/style/registry.py
+@@ -0,0 +1,89 @@
++"""
++Registry for style files distributed in third-party packages.
++"""
++
++import sys
++import warnings
++from importlib import import_module
++from importlib.resources import files
++from pathlib import Path
++
++from matplotlib import _api, style
++
++_log = _api.getLogger(__name__)
++
++
++def find_styles_in_package(package_name):
++    """
++    Return a dict of style names to file paths for styles in *package_name*.
++
++    Parameters
++    ----------
++    package_name : str
++        The dotted package name.
++
++    Returns
++    -------
++    dict
++        Mapping from style name (without extension) to file path.
++    """
++    try:
++        # Use importlib.resources to get the package path
++        package = files(package_name)
++    except (ModuleNotFoundError, TypeError):
++        return {}
++
++    styles = {}
++    # Look for .mplstyle files in the package directory
++    for resource in package.iterdir():
++        if resource.suffix == f".{style.STYLE_EXTENSION}":
++            styles[resource.stem] = str(resource)
++    return styles
++
++
++def iter_package_styles():
++    """
++    Yield (package_name, style_name, style_path) for all styles in packages.
++
++    This function scans all installed packages for style files.
++    """
++    # We need to iterate over all packages, but we don't want to import them
++    # to avoid side effects. Instead, we use pkgutil.iter_modules.
++    import pkgutil
++    for module_info in pkgutil.iter_modules():
++        # Skip modules that are not packages
++        if not module_info.ispkg:
++            continue
++        package_name = module_info.name
++        # Skip matplotlib itself to avoid duplication
++        if package_name.startswith('matplotlib'):
++            continue
++        try:
++            styles = find_styles_in_package(package_name)
++        except Exception as e:
++            _log.debug("Failed to read styles from package %s: %s",
++                       package_name, e)
++            continue
++        for style_name, style_path in styles.items():
++            yield package_name, style_name, style_path
++
++
++def get_style_path(style_name):
++    """
++    Return the path to a style file given a dotted style name.
++
++    Parameters
++    ----------
++    style_name : str
++        The style name, which may be a dotted package style (e.g., "mypackage.presentation").
++
++    Returns
++    -------
++    str or None
++        The path to the style file, or None if not found.
++    """
++    if '.' in style_name:
++        package, style = style_name.rsplit('.', 1)
++        styles = find_styles_in_package(package)
++        return styles.get(style)
++    return None

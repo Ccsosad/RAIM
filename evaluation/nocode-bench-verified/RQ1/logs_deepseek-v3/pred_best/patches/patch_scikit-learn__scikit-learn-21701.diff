@@ -1,0 +1,80 @@
+diff --git a/sklearn/random_projection.py b/sklearn/random_projection.py
+index d06dfcd..f87abbd 100644
+--- a/sklearn/random_projection.py
++++ b/sklearn/random_projection.py
+@@ -302,12 +302,19 @@ class BaseRandomProjection(
+ 
+     @abstractmethod
+     def __init__(
+-        self, n_components="auto", *, eps=0.1, dense_output=False, random_state=None
++        self,
++        n_components="auto",
++        *,
++        eps=0.1,
++        dense_output=False,
++        random_state=None,
++        compute_inverse_components=False,
+     ):
+         self.n_components = n_components
+         self.eps = eps
+         self.dense_output = dense_output
+         self.random_state = random_state
++        self.compute_inverse_components = compute_inverse_components
+ 
+     @abstractmethod
+     def _make_random_matrix(self, n_components, n_features):
+@@ -399,6 +406,11 @@ class BaseRandomProjection(
+             " not the proper shape."
+         )
+ 
++        if self.compute_inverse_components:
++            self.inverse_components_ = np.linalg.pinv(self.components_)
++        else:
++            self.inverse_components_ = None
++
+         return self
+ 
+     def transform(self, X):
+@@ -437,6 +449,36 @@ class BaseRandomProjection(
+         """
+         return self.n_components
+ 
++    def inverse_transform(self, X):
++        """Project data back to its original space.
++
++        Parameters
++        ----------
++        X : {ndarray, sparse matrix} of shape (n_samples, n_components)
++            Data to be transformed back.
++
++        Returns
++        -------
++        X_original : ndarray of shape (n_samples, n_features)
++            Data transformed back to original space.
++        """
++        check_is_fitted(self)
++        X = self._validate_data(X, reset=False)
++
++        if X.shape[1] != self.n_components_:
++            raise ValueError(
++                "Impossible to perform inverse transform:"
++                "X has different number of components than during fit. "
++                "(%s != %s)" % (X.shape[1], self.n_components_)
++            )
++
++        if self.inverse_components_ is None:
++            inv_components = np.linalg.pinv(self.components_)
++        else:
++            inv_components = self.inverse_components_
++
++        return np.ascontiguousarray(safe_sparse_dot(X, inv_components.T))
++
+     def _more_tags(self):
+         return {
+             "preserves_dtype": [np.float64, np.float32],
+@@ -709,4 +751,4 @@ class SparseRandomProjection(BaseRandomProjection):
+         self.density_ = _check_density(self.density, n_features)
+         return _sparse_random_matrix(
+             n_components, n_features, density=self.density_, random_state=random_state
+-        )
++        )

@@ -1,0 +1,48 @@
+diff --git a/django/forms/forms.py b/django/forms/forms.py
+index 3ebacee..cb2b825 100644
+--- a/django/forms/forms.py
++++ b/django/forms/forms.py
+@@ -66,7 +66,15 @@ class BaseForm(RenderableFormMixin):
+     prefix = None
+     use_required_attribute = True
+ 
+-    template_name = "django/forms/default.html"
++    @property
++    def template_name(self):
++        for cls in self.__class__.__mro__:
++            if 'template_name' in cls.__dict__:
++                value = cls.__dict__['template_name']
++                if isinstance(value, str):
++                    return value
++        return self.renderer.form_template_name
++
+     template_name_p = "django/forms/p.html"
+     template_name_table = "django/forms/table.html"
+     template_name_ul = "django/forms/ul.html"
+@@ -536,4 +544,4 @@ class Form(BaseForm, metaclass=DeclarativeFieldsMetaclass):
+     # self.fields is specified. This class (Form) is the one that does the
+     # fancy metaclass stuff purely for the semantic sugar -- it allows one
+     # to define a form using declarative syntax.
+-    # BaseForm itself has no way of designating self.fields.
++    # BaseForm itself has no way of designating self.fields.
+diff --git a/django/forms/formsets.py b/django/forms/formsets.py
+index bf826c8..c391db9 100644
+--- a/django/forms/formsets.py
++++ b/django/forms/formsets.py
+@@ -62,7 +62,15 @@ class BaseFormSet(RenderableFormMixin):
+             "%(field_names)s. You may need to file a bug report if the issue persists."
+         ),
+     }
+-    template_name = "django/forms/formsets/default.html"
++    @property
++    def template_name(self):
++        for cls in self.__class__.__mro__:
++            if 'template_name' in cls.__dict__:
++                value = cls.__dict__['template_name']
++                if isinstance(value, str):
++                    return value
++        return self.renderer.formset_template_name
++
+     template_name_p = "django/forms/formsets/p.html"
+     template_name_table = "django/forms/formsets/table.html"
+     template_name_ul = "django/forms/formsets/ul.html"

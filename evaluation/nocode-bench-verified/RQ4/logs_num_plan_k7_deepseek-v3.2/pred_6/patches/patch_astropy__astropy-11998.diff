@@ -1,0 +1,158 @@
+diff --git a/astropy/cosmology/core.py b/astropy/cosmology/core.py
+index 775db70..0dc1ecb 100644
+--- a/astropy/cosmology/core.py
++++ b/astropy/cosmology/core.py
+@@ -85,6 +85,8 @@ class Cosmology(metaclass=ABCMeta):
+     # Unified I/O read and write methods
+     read = UnifiedReadWriteMethod(CosmologyRead)
+     write = UnifiedReadWriteMethod(CosmologyWrite)
++    to_format = UnifiedReadWriteMethod(CosmologyToFormat)
++    from_format = UnifiedReadWriteMethod(CosmologyFromFormat)
+ 
+     def __init_subclass__(cls):
+         super().__init_subclass__()
+diff --git a/astropy/cosmology/io/__init__.py b/astropy/cosmology/io/__init__.py
+new file mode 100644
+index 0000000..e47af94
+--- /dev/null
++++ b/astropy/cosmology/io/__init__.py
+@@ -0,0 +1,13 @@
++"""
++I/O subpackage for Cosmology.
++"""
++
++from .mapping import *
++
++# Register the mapping format
++from astropy.io import registry
++from astropy.cosmology import Cosmology
++
++registry.register_reader("mapping", Cosmology, from_mapping)
++registry.register_writer("mapping", Cosmology, to_mapping)
++registry.register_identifier("mapping", Cosmology, mapping_identify)
+diff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py
+new file mode 100644
+index 0000000..5be3d81
+--- /dev/null
++++ b/astropy/cosmology/io/mapping.py
+@@ -0,0 +1,120 @@
++"""
++Mapping (dictionary) format for Cosmology.
++"""
++
++import copy
++
++import numpy as np
++
++from astropy.cosmology.core import Cosmology
++from astropy.units import Quantity
++
++__all__ = ["from_mapping", "to_mapping", "mapping_identify"]
++
++
++def from_mapping(mapping, *, move_to_meta=False, cosmology=None):
++    """
++    Load a Cosmology from a mapping (dictionary).
++
++    Parameters
++    ----------
++    mapping : dict
++        A mapping (dictionary) with the cosmology parameters.
++    move_to_meta : bool, optional
++        Whether to move unrecognized parameters to the metadata. Default is False.
++    cosmology : str, class, or None, optional
++        The cosmology class to use. If None, the class is taken from the mapping.
++
++    Returns
++    -------
++    cosmology : Cosmology instance
++    """
++    # Deep copy the mapping to avoid modifying the original
++    mapping = copy.deepcopy(mapping)
++
++    # Get the cosmology class
++    if cosmology is None:
++        cosmology = mapping.pop("cosmology")
++        if isinstance(cosmology, str):
++            # Get the class from the registry
++            from astropy.cosmology.core import _COSMOLOGY_CLASSES
++            cosmology = _COSMOLOGY_CLASSES[cosmology]
++    else:
++        # Remove the cosmology key if present
++        mapping.pop("cosmology", None)
++
++    # Get the name
++    name = mapping.pop("name", None)
++
++    # Get the metadata
++    meta = mapping.pop("meta", {})
++
++    # If move_to_meta is True, move unrecognized parameters to meta
++    if move_to_meta:
++        # Get the valid parameters for the cosmology class
++        valid_params = cosmology._init_signature.parameters.keys()
++        extra = {k: v for k, v in mapping.items() if k not in valid_params}
++        if extra:
++            meta.update(extra)
++            for k in extra:
++                mapping.pop(k)
++
++    # Create the cosmology instance
++    return cosmology(name=name, meta=meta, **mapping)
++
++
++def to_mapping(cosmology, *args):
++    """
++    Convert a Cosmology to a mapping (dictionary).
++
++    Parameters
++    ----------
++    cosmology : Cosmology instance
++        The cosmology to convert.
++    *args : tuple
++        Unused.
++
++    Returns
++    -------
++    mapping : dict
++        A dictionary with the cosmology parameters.
++    """
++    # Start with the initialization arguments
++    mapping = cosmology._init_arguments.copy()
++
++    # Add the cosmology class
++    mapping["cosmology"] = cosmology.__class__
++
++    # Add the name
++    mapping["name"] = cosmology.name
++
++    # Add the metadata
++    mapping["meta"] = copy.deepcopy(cosmology.meta)
++
++    return mapping
++
++
++def mapping_identify(origin, format, *args, **kwargs):
++    """
++    Identify if an object uses the mapping format.
++
++    Parameters
++    ----------
++    origin : str
++        The origin of the data (read or write).
++    format : str or None
++        The format string.
++    *args, **kwargs
++        Additional arguments.
++
++    Returns
++    -------
++    is_mapping : bool
++        True if the object is a mapping.
++    """
++    if origin == "read":
++        # For reading, the first argument is the data
++        return isinstance(args[0], dict) and (format in (None, "mapping"))
++    else:
++        # For writing, we are converting to a mapping
++        return format in (None, "mapping")

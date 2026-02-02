@@ -1,0 +1,124 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..404f4bc 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1862,7 +1863,41 @@ class DataArray(AbstractArray, DataWithCoords):
+         numpy.transpose
+         Dataset.transpose
+         """
++        # Handle ellipsis in dims
+         if dims:
++            # Check for multiple ellipsis
++            if dims.count(...) > 1:
++                raise ValueError("Cannot use more than one ellipsis in transpose.")
++            
++            # If there is an ellipsis, expand it
++            if ... in dims:
++                # Get the list of all dimensions
++                all_dims = list(self.dims)
++                # Remove the explicitly mentioned dimensions (excluding ellipsis)
++                explicit_dims = [d for d in dims if d is not ...]
++                # Check for duplicate dimensions
++                if len(set(explicit_dims)) != len(explicit_dims):
++                    raise ValueError("Duplicate dimensions in transpose.")
++                # Check that all explicit dimensions exist
++                invalid_dims = set(explicit_dims) - set(all_dims)
++                if invalid_dims:
++                    raise ValueError(f"Dimensions {invalid_dims} not found in array.")
++                # Get the remaining dimensions in the original order
++                remaining_dims = [d for d in all_dims if d not in explicit_dims]
++                # Replace ellipsis with remaining dimensions
++                new_dims = []
++                for d in dims:
++                    if d is ...:
++                        new_dims.extend(remaining_dims)
++                    else:
++                        new_dims.append(d)
++                dims = tuple(new_dims)
++            else:
++                # No ellipsis, but check for duplicates
++                if len(set(dims)) != len(dims):
++                    raise ValueError("Duplicate dimensions in transpose.")
++            
++            # Validate that dims is a permutation of self.dims
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+@@ -3122,4 +3157,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 873be99..c71ab45 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -1209,7 +1209,8 @@ class Variable(
+         ----------
+         *dims : str, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+ 
+         Returns
+         -------
+@@ -1226,6 +1227,47 @@ class Variable(
+         --------
+         numpy.transpose
+         """
++        # Handle ellipsis in dims
++        if dims:
++            # Check for multiple ellipsis
++            if dims.count(...) > 1:
++                raise ValueError("Cannot use more than one ellipsis in transpose.")
++            
++            # If there is an ellipsis, expand it
++            if ... in dims:
++                # Get the list of all dimensions
++                all_dims = list(self.dims)
++                # Remove the explicitly mentioned dimensions (excluding ellipsis)
++                explicit_dims = [d for d in dims if d is not ...]
++                # Check for duplicate dimensions
++                if len(set(explicit_dims)) != len(explicit_dims):
++                    raise ValueError("Duplicate dimensions in transpose.")
++                # Check that all explicit dimensions exist
++                invalid_dims = set(explicit_dims) - set(all_dims)
++                if invalid_dims:
++                    raise ValueError(f"Dimensions {invalid_dims} not found in variable.")
++                # Get the remaining dimensions in the original order
++                remaining_dims = [d for d in all_dims if d not in explicit_dims]
++                # Replace ellipsis with remaining dimensions
++                new_dims = []
++                for d in dims:
++                    if d is ...:
++                        new_dims.extend(remaining_dims)
++                    else:
++                        new_dims.append(d)
++                dims = tuple(new_dims)
++            else:
++                # No ellipsis, but check for duplicates
++                if len(set(dims)) != len(dims):
++                    raise ValueError("Duplicate dimensions in transpose.")
++            
++            # Validate that dims is a permutation of self.dims
++            if set(dims) ^ set(self.dims):
++                raise ValueError(
++                    "arguments to transpose (%s) must be "
++                    "permuted array dimensions (%s)" % (dims, tuple(self.dims))
++                )
++        
+         if len(dims) == 0:
+             dims = self.dims[::-1]
+         axes = self.get_axis_num(dims)

@@ -1,0 +1,55 @@
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..ee0e200
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,49 @@
++from importlib import import_module
++from astropy.utils.state import ScienceState
++import sys
++
++
++def _check_imported(modname):
++    """Raise RuntimeError if astropy.constants or astropy.units already imported."""
++    imported = [m for m in sys.modules if m.startswith("astropy.constants") or m.startswith("astropy.units")]
++    if any(imported):
++        raise RuntimeError(f"astropy.units is already imported")
++
++
++class physical_constants(ScienceState):
++    """
++    ScienceState to select version of physical constants.
++    """
++
++    _value = 'codata2018'
++
++    @classmethod
++    def _set(cls, value):
++        _check_imported('physical_constants')
++        # Allow 'astropyconst13' etc. mapping
++        if value == 'astropyconst13':
++            cls._value = 'codata2010'
++        elif value.startswith('codata'):
++            cls._value = value
++        else:
++            raise ValueError(f"Unknown physical constants version: {value}")
++        return cls._value
++
++
++class astronomical_constants(ScienceState):
++    """
++    ScienceState to select version of astronomical constants.
++    """
++
++    _value = 'iau2015'
++
++    @classmethod
++    def _set(cls, value):
++        _check_imported('astronomical_constants')
++        if value == 'astropyconst13':
++            cls._value = 'iau2012'
++        elif value.startswith('iau'):
++            cls._value = value
++        else:
++            raise ValueError(f"Unknown astronomical constants version: {value}")
++        return cls._value

@@ -1,0 +1,37 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d9aca35..af1b9b9 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -313,6 +313,7 @@ class PyObject(ObjectDescription):
+         'noindex': directives.flag,
+         'module': directives.unchanged,
+         'annotation': directives.unchanged,
++        'canonical': directives.unchanged,
+     }
+ 
+     doc_field_types = [
+@@ -439,14 +440,19 @@ class PyObject(ObjectDescription):
+     def add_target_and_index(self, name_cls: Tuple[str, str], sig: str,
+                              signode: desc_signature) -> None:
+         modname = self.options.get('module', self.env.ref_context.get('py:module'))
+-        fullname = (modname + '.' if modname else '') + name_cls[0]
+-        node_id = make_id(self.env, self.state.document, '', fullname)
++        local_fullname = (modname + '.' if modname else '') + name_cls[0]
++        canonical = self.options.get('canonical')
++        if canonical:
++            fullname = canonical
++        else:
++            fullname = local_fullname
++        node_id = make_id(self.env, self.state.document, '', local_fullname)
+         signode['ids'].append(node_id)
+ 
+-        # Assign old styled node_id(fullname) not to break old hyperlinks (if possible)
++        # Assign old styled node_id(local_fullname) not to break old hyperlinks (if possible)
+         # Note: Will removed in Sphinx-5.0  (RemovedInSphinx50Warning)
+-        if node_id != fullname and fullname not in self.state.document.ids:
+-            signode['ids'].append(fullname)
++        if node_id != local_fullname and local_fullname not in self.state.document.ids:
++            signode['ids'].append(local_fullname)
+ 
+         self.state.document.note_explicit_target(signode)
+ 

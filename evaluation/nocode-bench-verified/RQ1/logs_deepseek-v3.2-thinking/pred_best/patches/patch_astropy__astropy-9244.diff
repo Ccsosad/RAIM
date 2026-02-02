@@ -1,0 +1,87 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..8bb6331 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -25,6 +25,7 @@ from astropy.utils.data import get_pkg_data_filename, clear_download_cache
+ from astropy.utils.compat import NUMPY_LT_1_17
+ from astropy import utils
+ from astropy.utils.exceptions import AstropyWarning
++from astropy.utils.state import ScienceState
+ 
+ __all__ = ['Conf', 'conf',
+            'IERS', 'IERS_B', 'IERS_A', 'IERS_Auto',
+@@ -32,7 +33,8 @@ __all__ = ['Conf', 'conf',
+            'TIME_BEFORE_IERS_RANGE', 'TIME_BEYOND_IERS_RANGE',
+            'IERS_A_FILE', 'IERS_A_URL', 'IERS_A_URL_MIRROR', 'IERS_A_README',
+            'IERS_B_FILE', 'IERS_B_URL', 'IERS_B_README',
+-           'IERSRangeError', 'IERSStaleWarning']
++           'IERSRangeError', 'IERSStaleWarning',
++           'earth_orientation_table']
+ 
+ # IERS-A default file name, URL, and ReadMe with content description
+ IERS_A_FILE = 'finals2000A.all'
+@@ -628,6 +630,11 @@ class IERS_Auto(IERS_A):
+         `~astropy.table.QTable` instance with IERS (Earth rotation) data columns
+ 
+         """
++        # First check if a global earth orientation table has been set via ScienceState
++        current_table = earth_orientation_table.get()
++        if current_table is not None:
++            return current_table
++
+         if not conf.auto_download:
+             cls.iers_table = IERS_B.open()
+             return cls.iers_table
+@@ -801,4 +808,51 @@ class IERS_Auto(IERS_A):
+             table['dX_2000A_B'][:n_iers_b] = iers_b['dX_2000A']
+             table['dY_2000A_B'][:n_iers_b] = iers_b['dY_2000A']
+ 
+-        return table
++        return table
++
++
++class EarthOrientationTableScienceState(ScienceState):
++    """
++    ScienceState to set the Earth orientation table (IERS table) used by astropy.
++    
++    This can be used to set a specific IERS table (e.g., IERS_B, IERS_A) for use
++    throughout astropy, overriding the default IERS_Auto behavior.
++    
++    Examples
++    --------
++    >>> from astropy.utils import iers
++    >>> iers_b = iers.IERS_B.open()
++    >>> iers.earth_orientation_table.set(iers_b)
++    <ScienceState earth_orientation_table: <IERS_B length=...>>
++    
++    To reset to the default (IERS_Auto):
++    >>> iers.earth_orientation_table.set(None)
++    <ScienceState earth_orientation_table: <IERS_Auto length=...>>
++    
++    Use as a context manager to temporarily set a table:
++    >>> with iers.earth_orientation_table.set(iers_b):
++    ...     # calculations use iers_b
++    ...     pass
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is not None:
++            # Ensure it's an IERS table instance
++            if not isinstance(value, IERS):
++                raise ValueError("earth_orientation_table must be an IERS "
++                                 "table instance or None")
++        return value
++
++    @classmethod
++    def get(cls):
++        """Get the current Earth orientation table.
++        
++        Returns None if no custom table has been set, in which case the
++        default IERS_Auto table will be used.
++        """
++        return super().get()
++
++
++earth_orientation_table = EarthOrientationTableScienceState()

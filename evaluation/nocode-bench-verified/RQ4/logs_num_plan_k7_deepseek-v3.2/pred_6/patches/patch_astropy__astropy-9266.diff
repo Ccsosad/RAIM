@@ -1,0 +1,106 @@
+diff --git a/astropy/visualization/wcsaxes/frame.py b/astropy/visualization/wcsaxes/frame.py
+index e6627e8..1c23672 100644
+--- a/astropy/visualization/wcsaxes/frame.py
++++ b/astropy/visualization/wcsaxes/frame.py
+@@ -215,6 +215,21 @@ class RectangularFrame(BaseFrame):
+         self['l'].data = np.array(([xmin, ymax], [xmin, ymin]))
+ 
+ 
++class RectangularFrame1D(BaseFrame):
++    """
++    A rectangular frame for 1D plots.
++    """
++
++    spine_names = 'b'
++
++    def update_spines(self):
++
++        xmin, xmax = self.parent_axes.get_xlim()
++        ymin, ymax = self.parent_axes.get_ylim()
++
++        self['b'].data = np.array(([xmin, ymin], [xmax, ymin]))
++
++
+ class EllipticalFrame(BaseFrame):
+     """
+     An elliptical frame.
+diff --git a/astropy/visualization/wcsaxes/wcsapi.py b/astropy/visualization/wcsaxes/wcsapi.py
+index 18817a1..71aeefd 100644
+--- a/astropy/visualization/wcsaxes/wcsapi.py
++++ b/astropy/visualization/wcsaxes/wcsapi.py
+@@ -33,10 +33,9 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+             raise ValueError("'slices' should have as many elements as WCS "
+                              "has pixel dimensions (should be {})"
+                              .format(wcs.pixel_n_dim))
+-    elif wcs.pixel_n_dim < 2:
+-        raise ValueError("WCS should have at least 2 pixel dimensions")
+-    elif slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
+-        raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    elif wcs.pixel_n_dim == 2:
++        if slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
++            raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
+ 
+     is_fits_wcs = isinstance(wcs, WCS)
+ 
+@@ -124,11 +123,18 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+     invert_xy = False
+     if slices is not None:
+         wcs_slice = list(slices)
+-        wcs_slice[wcs_slice.index("x")] = slice(None)
+-        wcs_slice[wcs_slice.index("y")] = slice(None)
+-        wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
+-        invert_xy = slices.index('x') > slices.index('y')
+-        world_keep = wcs._world_keep
++        if 'x' in wcs_slice and 'y' in wcs_slice:
++            wcs_slice[wcs_slice.index("x")] = slice(None)
++            wcs_slice[wcs_slice.index("y")] = slice(None)
++            wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
++            invert_xy = slices.index('x') > slices.index('y')
++            world_keep = wcs._world_keep
++        elif 'x' in wcs_slice:
++            wcs_slice[wcs_slice.index("x")] = slice(None)
++            wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
++            world_keep = wcs._world_keep
++        else:
++            raise ValueError("slices should contain 'x' for 1D plot or 'x' and 'y' for 2D plot")
+     else:
+         world_keep = list(range(wcs.world_n_dim))
+ 
+@@ -159,6 +165,17 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+             for index in world_keep:
+                 coord_meta['default_ticks_position'][index] = 'bltr'
+ 
++    elif frame_class is RectangularFrame1D:
++
++        # For 1D plots, we only have one spine: 'b'
++        for i in range(m.shape[0]):
++            if np.any(m[i, :]):
++                index = world_keep[i]
++                coord_meta['default_axislabel_position'][index] = 'b'
++                coord_meta['default_ticklabel_position'][index] = 'b'
++                coord_meta['default_ticks_position'][index] = 'b'
++                break
++
+     elif frame_class is EllipticalFrame:
+ 
+         if 'longitude' in coord_meta['type']:
+@@ -261,8 +278,8 @@ class WCSPixel2WorldTransform(CurvedTransform):
+ 
+         super().__init__()
+ 
+-        if wcs.pixel_n_dim != 2:
+-            raise ValueError('Only pixel_n_dim==2 is supported')
++        if wcs.pixel_n_dim not in (1, 2):
++            raise ValueError('Only pixel_n_dim==1 or 2 is supported')
+ 
+         self.wcs = wcs
+         self.invert_xy = invert_xy
+@@ -285,7 +302,7 @@ class WCSPixel2WorldTransform(CurvedTransform):
+         if len(pixel) != self.wcs.pixel_n_dim:
+             raise ValueError(f"Expected {self.wcs.pixel_n_dim} world coordinates, got {len(pixel)} ")
+ 
+-        if self.invert_xy:
++        if self.wcs.pixel_n_dim == 2 and self.invert_xy:
+             pixel = pixel[::-1]
+ 
+         if len(pixel[0]) == 0:

@@ -1,0 +1,191 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..5ba32e7 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -371,6 +371,35 @@ def _calculate_col_width(col_items):
+     return col_width
+ 
+ 
++def _get_max_rows_for_section(section):
++    """Get the maximum number of rows to display for a given section.
++
++    Parameters
++    ----------
++    section : str
++        One of 'attrs', 'coords', 'data', 'data_vars'.
++
++    Returns
++    -------
++    max_rows : int or None
++        The maximum number of rows to display. None means no limit.
++    """
++    from xarray.core.options import OPTIONS, DISPLAY_MAX_ROWS
++
++    option_name = f"display_expand_{section}"
++    expand_opt = OPTIONS.get(option_name, "default")
++
++    if expand_opt is True:
++        # Always expand: show all rows
++        return None
++    elif expand_opt is False:
++        # Always collapse: show 0 rows
++        return 0
++    else:  # default
++        # Use the global display_max_rows
++        return OPTIONS[DISPLAY_MAX_ROWS]
++
++
+ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+     if col_width is None:
+         col_width = _calculate_col_width(mapping)
+@@ -395,14 +424,28 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+     return "\n".join(summary)
+ 
+ 
+-data_vars_repr = functools.partial(
+-    _mapping_repr, title="Data variables", summarizer=summarize_datavar
+-)
++def attrs_repr(mapping, col_width=None):
++    """Return a repr for attributes mapping."""
++    max_rows = _get_max_rows_for_section("attrs")
++    return _mapping_repr(
++        mapping,
++        title="Attributes",
++        summarizer=summarize_attr,
++        col_width=col_width,
++        max_rows=max_rows,
++    )
+ 
+ 
+-attrs_repr = functools.partial(
+-    _mapping_repr, title="Attributes", summarizer=summarize_attr
+-)
++def data_vars_repr(mapping, col_width=None):
++    """Return a repr for data variables mapping."""
++    max_rows = _get_max_rows_for_section("data_vars")
++    return _mapping_repr(
++        mapping,
++        title="Data variables",
++        summarizer=summarize_datavar,
++        col_width=col_width,
++        max_rows=max_rows,
++    )
+ 
+ 
+ def coords_repr(coords, col_width=None):
+@@ -509,9 +552,35 @@ def array_repr(arr):
+     if arr.attrs:
+         summary.append(attrs_repr(arr.attrs))
+ 
++    # Add data section
++    data_section = data_repr(arr)
++    if data_section:
++        summary.append(data_section)
++
+     return "\n".join(summary)
+ 
+ 
++def data_repr(arr):
++    """Return a repr for the data section of a DataArray."""
++    from xarray.core.options import OPTIONS, DISPLAY_MAX_ROWS
++
++    expand_opt = OPTIONS.get("display_expand_data", "default")
++    if expand_opt is False:
++        # Collapsed: show only the title
++        return "Data: ..."
++
++    # Otherwise, show the data
++    data_str = array_repr(arr.data)
++    if expand_opt is True:
++        # Always expand: show all data
++        return f"Data:\n{data_str}"
++    else:  # default
++        # Use the global display_max_rows to limit the data?
++        # But the data is not a mapping. We cannot limit rows easily.
++        # For now, just show the data.
++        return f"Data:\n{data_str}"
++
++
+ def dataset_repr(ds):
+     summary = ["<xarray.{}>".format(type(ds).__name__)]
+ 
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..7c6b63d 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -78,6 +78,14 @@ def _get_keep_attrs(default):
+         )
+ 
+ 
++def _validate_expand_option(value):
++    if value not in (True, False, "default"):
++        raise ValueError(
++            f"display_expand_* options must be one of True, False, or 'default', got {value!r}"
++        )
++    return True
++
++
+ class set_options:
+     """Set options for xarray in a controlled context.
+ 
+@@ -108,6 +116,18 @@ class set_options:
+       Default: ``'default'``.
+     - ``display_style``: display style to use in jupyter for xarray objects.
+       Default: ``'text'``. Other options are ``'html'``.
++    - ``display_expand_attrs``: control expansion of attributes section. One of
++      True (always expand), False (always collapse), or 'default' (expand unless
++      over the display_max_rows limit). Default: 'default'.
++    - ``display_expand_coords``: control expansion of coordinates section. One of
++      True (always expand), False (always collapse), or 'default' (expand unless
++      over the display_max_rows limit). Default: 'default'.
++    - ``display_expand_data``: control expansion of data section in DataArray.
++      One of True (always expand), False (always collapse), or 'default' (expand
++      unless over the display_max_rows limit). Default: 'default'.
++    - ``display_expand_data_vars``: control expansion of data variables section
++      in Dataset. One of True (always expand), False (always collapse), or
++      'default' (expand unless over the display_max_rows limit). Default: 'default'.
+ 
+ 
+     You can use ``set_options`` either as a context manager:
+@@ -160,4 +180,4 @@ class set_options:
+         return
+ 
+     def __exit__(self, type, value, traceback):
+-        self._apply_update(self.old)
++        self._apply_update(self.old)
+diff --git a/xarray/core/formatting_expansion.py b/xarray/core/formatting_expansion.py
+new file mode 100644
+index 0000000..ca05ad3
+--- /dev/null
++++ b/xarray/core/formatting_expansion.py
+@@ -0,0 +1,30 @@
++"""Helper functions for controlling expansion in xarray's display."""
++
++from xarray.core.options import OPTIONS, DISPLAY_MAX_ROWS
++
++
++def get_max_rows_for_section(section):
++    """Get the maximum number of rows to display for a given section.
++
++    Parameters
++    ----------
++    section : str
++        One of 'attrs', 'coords', 'data', 'data_vars'.
++
++    Returns
++    -------
++    max_rows : int or None
++        The maximum number of rows to display. None means no limit.
++    """
++    option_name = f"display_expand_{section}"
++    expand_opt = OPTIONS.get(option_name, "default")
++
++    if expand_opt is True:
++        # Always expand: show all rows
++        return None
++    elif expand_opt is False:
++        # Always collapse: show 0 rows
++        return 0
++    else:  # default
++        # Use the global display_max_rows
++        return OPTIONS[DISPLAY_MAX_ROWS]

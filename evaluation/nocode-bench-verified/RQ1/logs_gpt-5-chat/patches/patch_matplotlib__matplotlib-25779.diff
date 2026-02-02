@@ -1,0 +1,31 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..471b77d 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1654,6 +1654,26 @@ class Ellipse(Patch):
+         return self.get_patch_transform().transform(
+             [(-1, -1), (1, -1), (1, 1), (-1, 1)])
+ 
++    def get_vertices(self):
++        """
++        Return the coordinates of the ellipse vertices along the major axis.
++
++        These correspond to the endpoints of the major axis, after rotation.
++        """
++        # In unit circle coordinates, major axis points lie on x-axis: (±1, 0)
++        vertices = np.array([(-1, 0), (1, 0)])
++        return self.get_patch_transform().transform(vertices)
++
++    def get_co_vertices(self):
++        """
++        Return the coordinates of the ellipse co-vertices along the minor axis.
++
++        These correspond to the endpoints of the minor axis, after rotation.
++        """
++        # In unit circle coordinates, minor axis points lie on y-axis: (0, ±1)
++        co_vertices = np.array([(0, -1), (0, 1)])
++        return self.get_patch_transform().transform(co_vertices)
++
+ 
+ class Annulus(Patch):
+     """

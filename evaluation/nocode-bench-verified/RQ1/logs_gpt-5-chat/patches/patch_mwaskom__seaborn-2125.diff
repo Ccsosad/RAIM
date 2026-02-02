@@ -1,0 +1,101 @@
+diff --git a/seaborn/histogram.py b/seaborn/histogram.py
+new file mode 100644
+index 0000000..8b95b26
+--- /dev/null
++++ b/seaborn/histogram.py
+@@ -0,0 +1,95 @@
++from matplotlib import pyplot as plt
++import numpy as np
++from ._decorators import _deprecate_positional_args
++from .distributions import _DistributionPlotter
++
++
++@_deprecate_positional_args
++def histplot(
++    data=None,
++    *,
++    x=None, y=None, hue=None,
++    weights=None,
++    stat="count", bins="auto", binwidth=None, binrange=None,
++    discrete=False, cumulative=False, common_bins=True, common_norm=True,
++    multiple="layer", element="bars", fill=True, shrink=1,
++    kde=False, kde_kws=None,
++    log_scale=None,
++    color=None, palette=None, hue_order=None, hue_norm=None,
++    ax=None, **kwargs
++):
++    """
++    Plot univariate or bivariate histograms with optional normalization or KDE.
++    """
++    p = _DistributionPlotter(
++        data=data,
++        variables=_DistributionPlotter.get_semantics(locals())
++    )
++    p.map_hue(palette=palette, order=hue_order, norm=hue_norm)
++
++    if ax is None:
++        ax = plt.gca()
++
++    any_data = bool({"x", "y"} & set(p.variables))
++    if not any_data:
++        return ax
++
++    univariate = bool({"x", "y"} - set(p.variables))
++
++    if univariate:
++        data_variable = (set(p.variables) & {"x", "y"}).pop()
++        data_var_type = p.var_types[data_variable]
++        if log_scale is not None:
++            set_scale = getattr(ax, f"set_{data_variable}scale")
++            if log_scale is True:
++                set_scale("log")
++            else:
++                set_scale("log", **{f"base{data_variable}": log_scale})
++
++        p.plot_univariate_histogram(
++            multiple=multiple,
++            common_norm=common_norm,
++            common_bins=common_bins,
++            stat=stat,
++            bins=bins,
++            binwidth=binwidth,
++            binrange=binrange,
++            discrete=discrete,
++            cumulative=cumulative,
++            element=element,
++            fill=fill,
++            shrink=shrink,
++            kde=kde,
++            kde_kws=kde_kws,
++            color=color,
++            ax=ax,
++            **kwargs
++        )
++    else:
++        if log_scale is not None:
++            try:
++                scalex, scaley = log_scale
++            except TypeError:
++                scalex = scaley = log_scale
++            for axis, scale in zip("xy", (scalex, scaley)):
++                if scale:
++                    set_scale = getattr(ax, f"set_{axis}scale")
++                    if scale is True:
++                        set_scale("log")
++                    else:
++                        set_scale("log", **{f"base{axis}": scale})
++        p.plot_bivariate_histogram(
++            common_norm=common_norm,
++            common_bins=common_bins,
++            stat=stat,
++            bins=bins,
++            binwidth=binwidth,
++            binrange=binrange,
++            discrete=discrete,
++            cumulative=cumulative,
++            fill=fill,
++            color=color,
++            ax=ax,
++            **kwargs
++        )
++    return ax

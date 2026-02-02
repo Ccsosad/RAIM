@@ -1,0 +1,145 @@
+diff --git a/astropy/visualization/wcsaxes/core.py b/astropy/visualization/wcsaxes/core.py
+index 573033c..5822d02 100644
+--- a/astropy/visualization/wcsaxes/core.py
++++ b/astropy/visualization/wcsaxes/core.py
+@@ -94,13 +94,47 @@ class WCSAxes(Axes):
+     """
+ 
+     def __init__(self, fig, rect, wcs=None, transform=None, coord_meta=None,
+-                 transData=None, slices=None, frame_class=RectangularFrame,
++                 transData=None, slices=None, frame_class=None,
+                  **kwargs):
+ 
+         super().__init__(fig, rect, **kwargs)
+         self._bboxes = []
+ 
+-        self.frame_class = frame_class
++        if frame_class is None:
++            # Determine if we are making a 1D or 2D plot
++            if slices is not None:
++                # Convert to list if it's a tuple
++                if isinstance(slices, tuple):
++                    slices_list = list(slices)
++                else:
++                    slices_list = slices
++                # Count the number of 'x' and 'y' in slices
++                n_x = slices_list.count('x')
++                n_y = slices_list.count('y')
++                if n_x + n_y == 1:
++                    from .frame import RectangularFrame1D
++                    frame_class = RectangularFrame1D
++                else:
++                    frame_class = RectangularFrame
++            else:
++                frame_class = RectangularFrame
++        # Determine if we are making a 1D or 2D plot
++        if slices is not None:
++            # Convert to list if it's a tuple
++            if isinstance(slices, tuple):
++                slices_list = list(slices)
++            else:
++                slices_list = slices
++            # Count the number of 'x' and 'y' in slices
++            n_x = slices_list.count('x')
++            n_y = slices_list.count('y')
++            if n_x + n_y == 1:
++                from .frame import RectangularFrame1D
++                self.frame_class = RectangularFrame1D
++            else:
++                self.frame_class = frame_class
++        else:
++            self.frame_class = frame_class
+ 
+         if not (transData is None):
+             # User wants to override the transform for the final
+diff --git a/astropy/visualization/wcsaxes/frame.py b/astropy/visualization/wcsaxes/frame.py
+index e6627e8..1eae8e2 100644
+--- a/astropy/visualization/wcsaxes/frame.py
++++ b/astropy/visualization/wcsaxes/frame.py
+@@ -197,6 +197,22 @@ class BaseFrame(OrderedDict, metaclass=abc.ABCMeta):
+         raise NotImplementedError("")
+ 
+ 
++class RectangularFrame1D(BaseFrame):
++    """
++    A rectangular frame for 1D plots.
++    """
++
++    spine_names = 'b'
++
++    def update_spines(self):
++
++        xmin, xmax = self.parent_axes.get_xlim()
++        ymin, ymax = self.parent_axes.get_ylim()
++
++        # For a 1D plot, we only have a bottom spine
++        self['b'].data = np.array(([xmin, ymin], [xmax, ymin]))
++
++
+ class RectangularFrame(BaseFrame):
+     """
+     A classic rectangular frame.
+diff --git a/astropy/visualization/wcsaxes/wcsapi.py b/astropy/visualization/wcsaxes/wcsapi.py
+index 18817a1..11879f0 100644
+--- a/astropy/visualization/wcsaxes/wcsapi.py
++++ b/astropy/visualization/wcsaxes/wcsapi.py
+@@ -33,10 +33,10 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+             raise ValueError("'slices' should have as many elements as WCS "
+                              "has pixel dimensions (should be {})"
+                              .format(wcs.pixel_n_dim))
+-    elif wcs.pixel_n_dim < 2:
+-        raise ValueError("WCS should have at least 2 pixel dimensions")
+-    elif slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
+-        raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    elif wcs.pixel_n_dim == 2:
++        if slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
++            raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    # else: wcs.pixel_n_dim == 1 is allowed for 1D plots
+ 
+     is_fits_wcs = isinstance(wcs, WCS)
+ 
+@@ -143,21 +143,29 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+ 
+     if frame_class is RectangularFrame:
+ 
+-        for i, spine_name in enumerate('bltr'):
+-            pos = np.nonzero(m[:, i % 2])[0]
+-            if len(pos) > 0:
+-                index = world_keep[pos[0]]
+-                coord_meta['default_axislabel_position'][index] = spine_name
+-                coord_meta['default_ticklabel_position'][index] = spine_name
+-                coord_meta['default_ticks_position'][index] = spine_name
+-                m[pos[0], :] = 0
+-
+-        # In the special and common case where the frame is rectangular and
+-        # we are dealing with 2-d WCS (after slicing), we show all ticks on
+-        # all axes for backward-compatibility.
+-        if len(world_keep) == 2:
+-            for index in world_keep:
+-                coord_meta['default_ticks_position'][index] = 'bltr'
++        if len(world_keep) == 1:
++            # 1D plot
++            index = world_keep[0]
++            coord_meta['default_axislabel_position'][index] = 'b'
++            coord_meta['default_ticklabel_position'][index] = 'b'
++            coord_meta['default_ticks_position'][index] = 'b'
++        else:
++            # 2D plot
++            for i, spine_name in enumerate('bltr'):
++                pos = np.nonzero(m[:, i % 2])[0]
++                if len(pos) > 0:
++                    index = world_keep[pos[0]]
++                    coord_meta['default_axislabel_position'][index] = spine_name
++                    coord_meta['default_ticklabel_position'][index] = spine_name
++                    coord_meta['default_ticks_position'][index] = spine_name
++                    m[pos[0], :] = 0
++
++            # In the special and common case where the frame is rectangular and
++            # we are dealing with 2-d WCS (after slicing), we show all ticks on
++            # all axes for backward-compatibility.
++            if len(world_keep) == 2:
++                for index in world_keep:
++                    coord_meta['default_ticks_position'][index] = 'bltr'
+ 
+     elif frame_class is EllipticalFrame:
+ 

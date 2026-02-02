@@ -1,0 +1,89 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..9ebfd86 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -3560,6 +3560,84 @@ def _custom_model_wrapper(func, fit_deriv=None):
+     return type(model_name, (FittableModel,), members)
+ 
+ 
++def fix_inputs(model, fixed_inputs):
++    """
++    Return a new Model with one or more input coordinates of ``model``
++    fixed to a constant value, reducing its number of inputs.
++
++    Parameters
++    ----------
++    model : Model
++        The input model.
++    fixed_inputs : dict
++        Mapping of input index or name to the constant value to use.
++
++    Returns
++    -------
++    new_model : Model
++        The resulting model with specified inputs fixed to constants.
++    """
++    from copy import deepcopy
++    from astropy.modeling.models import Const1D
++
++    # Make a deep copy so we don't mutate original
++    base = deepcopy(model)
++
++    # Convert label keys to indices
++    mapping = {name: i for i, name in enumerate(base.inputs)}
++    idx_map = {}
++    for key, val in fixed_inputs.items():
++        if isinstance(key, int):
++            idx_map[key] = val
++        elif key in mapping:
++            idx_map[mapping[key]] = val
++        else:
++            raise KeyError(f"Invalid input key {key}")
++
++    total_inputs = base.n_inputs
++    constant_models = []
++    remaining_inputs = []
++    for i in range(total_inputs):
++        if i in idx_map:
++            const = Const1D(idx_map[i])
++            constant_models.append((i, const))
++        else:
++            remaining_inputs.append(i)
++
++    # Build constant model chain for fixed inputs inserted with '&'
++    const_chain = None
++    for _, const in sorted(constant_models):
++        if const_chain is None:
++            const_chain = const
++        else:
++            const_chain = const_chain & const
++
++    # The original model accepts remaining + fixed inputs,
++    # we compute composition
++    if const_chain is None:
++        new_model = base
++    else:
++        # bring together free inputs first
++        # Build parallel of free identity shapes (use Identity)
++        from astropy.modeling.models import Identity
++        if remaining_inputs:
++            ident = Identity(len(remaining_inputs))
++            combo = ident & const_chain
++        else:
++            combo = const_chain
++        new_model = combo | base
++
++    # Adjust number of inputs/outputs and inputs names
++    new_model.n_inputs = len(remaining_inputs)
++    new_model.inputs = tuple(base.inputs[i] for i in remaining_inputs)
++    new_model.n_outputs = base.n_outputs
++    new_model.outputs = base.outputs
++    # Remove bounding box along removed axis
++    new_model._bounding_box = None
++    new_model._user_bounding_box = None
++    return new_model
++
++
+ def render_model(model, arr=None, coords=None):
+     """
+     Evaluates a model on an input array. Evaluation is limited to

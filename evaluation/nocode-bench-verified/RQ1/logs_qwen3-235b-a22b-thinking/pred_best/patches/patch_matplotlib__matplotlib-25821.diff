@@ -1,0 +1,61 @@
+diff --git a/lib/mpl_toolkits/mplot3d/axes3d.py b/lib/mpl_toolkits/mplot3d/axes3d.py
+index 7e611ff..aec5bd0 100644
+--- a/lib/mpl_toolkits/mplot3d/axes3d.py
++++ b/lib/mpl_toolkits/mplot3d/axes3d.py
+@@ -1,3 +1,4 @@
++
+ """
+ axes3d.py, original mplot3d version by John Porter
+ Created: 23 Sep 2005
+@@ -56,6 +57,7 @@ class Axes3D(Axes):
+ 
+     _axis_names = ("x", "y", "z")
+     Axes._shared_axes["z"] = cbook.Grouper()
++    Axes._shared_axes["view"] = cbook.Grouper()
+ 
+     vvec = _api.deprecate_privatize_attribute("3.7")
+     eye = _api.deprecate_privatize_attribute("3.7")
+@@ -64,7 +66,7 @@ class Axes3D(Axes):
+ 
+     def __init__(
+             self, fig, rect=None, *args,
+-            elev=30, azim=-60, roll=0, sharez=None, proj_type='persp',
++            elev=30, azim=-60, roll=0, sharez=None, shareview=None, proj_type='persp',
+             box_aspect=None, computed_zorder=True, focal_length=None,
+             **kwargs):
+         """
+@@ -126,6 +128,7 @@ class Axes3D(Axes):
+         self.initial_roll = roll
+         self.set_proj_type(proj_type, focal_length)
+         self.computed_zorder = computed_zorder
++        self._shareview = shareview
+ 
+         self.xy_viewLim = Bbox.unit()
+         self.zz_viewLim = Bbox.unit()
+@@ -138,6 +141,8 @@ class Axes3D(Axes):
+         self.view_init(self.initial_elev, self.initial_azim, self.initial_roll)
+ 
+         self._sharez = sharez
++        if shareview is not None:
++            self._shared_axes["view"].join(self, shareview)
+         if sharez is not None:
+             self._shared_axes["z"].join(self, sharez)
+             self._adjustable = 'datalim'
+@@ -1109,6 +1114,17 @@ class Axes3D(Axes):
+             dazim = -(dy/h)*180*np.sin(roll) - (dx/w)*180*np.cos(roll)
+             self.elev = self.elev + delev
+             self.azim = self.azim + dazim
++            
++            # Update all linked axes
++            if "view" in self._shared_axes and self in self._shared_axes["view"]:
++                for ax in self._shared_axes["view"].get_siblings(self):
++                    if ax is not self:  # Avoid infinite recursion
++                        ax.elev = self.elev
++                        ax.azim = self.azim
++                        ax.roll = self.roll
++                        ax.M = None  # Force recalculation of the projection matrix
++                        ax.stale = True
++            
+             self.stale = True
+ 
+         elif self.button_pressed in self._pan_btn:

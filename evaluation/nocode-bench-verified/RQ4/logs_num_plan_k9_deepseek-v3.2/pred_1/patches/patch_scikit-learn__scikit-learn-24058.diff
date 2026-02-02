@@ -1,0 +1,24 @@
+diff --git a/sklearn/pipeline.py b/sklearn/pipeline.py
+index 37667a3..3cb6633 100644
+--- a/sklearn/pipeline.py
++++ b/sklearn/pipeline.py
+@@ -1053,7 +1053,7 @@ class FeatureUnion(TransformerMixin, _BaseComposition):
+             if trans == "drop":
+                 continue
+             if trans == "passthrough":
+-                trans = FunctionTransformer()
++                trans = FunctionTransformer(feature_names_out='one-to-one')
+             yield (name, trans, get_weight(name))
+ 
+     @deprecated(
+@@ -1234,7 +1234,9 @@ class FeatureUnion(TransformerMixin, _BaseComposition):
+ 
+     def __sklearn_is_fitted__(self):
+         # Delegate whether feature union was fitted
+-        for _, transformer, _ in self._iter():
++        for name, transformer in self.transformer_list:
++            if transformer in ('drop', 'passthrough'):
++                continue
+             check_is_fitted(transformer)
+         return True
+ 

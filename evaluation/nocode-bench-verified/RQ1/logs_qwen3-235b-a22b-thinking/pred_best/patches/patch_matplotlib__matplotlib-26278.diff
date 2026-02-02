@@ -1,0 +1,14 @@
+diff --git a/lib/matplotlib/contour.py b/lib/matplotlib/contour.py
+index 4305dde..48d353d 100644
+--- a/lib/matplotlib/contour.py
++++ b/lib/matplotlib/contour.py
+@@ -917,6 +917,9 @@ class ContourSet(ContourLabeler, mcoll.Collection):
+                 label="_nolegend_",
+             )
+ 
++        if 'clip_path' in kwargs:
++            self.set_clip_path(kwargs.pop('clip_path'))
++
+         self.axes.add_collection(self, autolim=False)
+         self.sticky_edges.x[:] = [self._mins[0], self._maxs[0]]
+         self.sticky_edges.y[:] = [self._mins[1], self._maxs[1]]

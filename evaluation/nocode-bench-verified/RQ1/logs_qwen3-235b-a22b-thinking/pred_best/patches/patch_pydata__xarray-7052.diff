@@ -1,0 +1,36 @@
+diff --git a/xarray/plot/plot.py b/xarray/plot/plot.py
+index b16caf5..de96e84 100644
+--- a/xarray/plot/plot.py
++++ b/xarray/plot/plot.py
+@@ -552,16 +552,26 @@ class _PlotMethods:
+     __call__.__annotations__ = plot.__annotations__
+ 
+     @functools.wraps(hist)
+-    def hist(self, ax=None, **kwargs):
++    def hist(self, ax: plt.Axes | None = None, **kwargs: Any) -> Any:
+         return hist(self._da, ax=ax, **kwargs)
+ 
+     @functools.wraps(line)
+-    def line(self, *args, **kwargs):
+-        return line(self._da, *args, **kwargs)
++    def line(
++        self, x: Hashable | None = None, y: Hashable | None = None, **kwargs: Any
++    ) -> Any:
++        return line(self._da, x=x, y=y, **kwargs)
+ 
+     @functools.wraps(step)
+-    def step(self, *args, **kwargs):
+-        return step(self._da, *args, **kwargs)
++    def step(
++        self, x: Hashable | None = None, y: Hashable | None = None, **kwargs: Any
++    ) -> Any:
++        return step(self._da, x=x, y=y, **kwargs)
++
++    @functools.wraps(scatter)
++    def scatter(
++        self, x: Hashable | None = None, y: Hashable | None = None, **kwargs: Any
++    ) -> Any:
++        return scatter(self._da, x=x, y=y, **kwargs)
+ 
+ 
+ def override_signature(f):

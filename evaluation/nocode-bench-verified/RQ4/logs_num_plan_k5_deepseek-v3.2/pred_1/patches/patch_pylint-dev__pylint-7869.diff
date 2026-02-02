@@ -1,0 +1,34 @@
+diff --git a/pylint/lint/base_options.py b/pylint/lint/base_options.py
+index 055eb4f..ce6799c 100644
+--- a/pylint/lint/base_options.py
++++ b/pylint/lint/base_options.py
+@@ -103,7 +103,7 @@ def _make_linter_options(linter: PyLinter) -> Options:
+                 "short": "f",
+                 "group": "Reports",
+                 "help": "Set the output format. Available formats are text,"
+-                " parseable, colorized, json and msvs (visual studio)."
++                " parseable, colorized, json, msvs (visual studio) and no-header."
+                 " You can also give a reporter class, e.g. mypackage.mymodule."
+                 "MyReporterClass.",
+                 "kwargs": {"linter": linter},
+diff --git a/pylint/reporters/no_header_reporter.py b/pylint/reporters/no_header_reporter.py
+new file mode 100644
+index 0000000..5060098
+--- /dev/null
++++ b/pylint/reporters/no_header_reporter.py
+@@ -0,0 +1,15 @@
++"""No header reporter for pylint."""
++from pylint.reporters.text import TextReporter
++
++
++class NoHeaderReporter(TextReporter):
++    """A reporter that does not print the module header."""
++
++    def _display(self, layout):
++        # Skip the header (which is a Section with the module name)
++        # The header is a Section with a child that is a Text with value like '************* Module mymodule'
++        if hasattr(layout, 'children') and layout.children:
++            first_child = layout.children[0]
++            if hasattr(first_child, 'value') and first_child.value.startswith('************* Module'):
++                return
++        super()._display(layout)

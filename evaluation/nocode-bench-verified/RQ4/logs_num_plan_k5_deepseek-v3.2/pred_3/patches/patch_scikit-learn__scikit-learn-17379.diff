@@ -1,0 +1,63 @@
+diff --git a/sklearn/isotonic.py b/sklearn/isotonic.py
+index 6d02e92..b899903 100644
+--- a/sklearn/isotonic.py
++++ b/sklearn/isotonic.py
+@@ -224,8 +224,11 @@ class IsotonicRegression(RegressorMixin, TransformerMixin, BaseEstimator):
+         self.out_of_bounds = out_of_bounds
+ 
+     def _check_fit_data(self, X, y, sample_weight=None):
+-        if len(X.shape) != 1:
+-            raise ValueError("X should be a 1d array")
++        if X.ndim == 2 and X.shape[1] == 1:
++            X = X.ravel()
++        elif X.ndim != 1:
++            raise ValueError("X should be a 1d array or a 2d array with 1 feature")
++        return X
+ 
+     def _build_f(self, X, y):
+         """Build the f_ interp1d function."""
+@@ -246,7 +249,7 @@ class IsotonicRegression(RegressorMixin, TransformerMixin, BaseEstimator):
+ 
+     def _build_y(self, X, y, sample_weight, trim_duplicates=True):
+         """Build the y_ IsotonicRegression."""
+-        self._check_fit_data(X, y, sample_weight)
++        X = self._check_fit_data(X, y, sample_weight)
+ 
+         # Determine increasing if auto-determination requested
+         if self.increasing == 'auto':
+@@ -315,11 +318,17 @@ class IsotonicRegression(RegressorMixin, TransformerMixin, BaseEstimator):
+         X is stored for future use, as :meth:`transform` needs X to interpolate
+         new input data.
+         """
+-        check_params = dict(accept_sparse=False, ensure_2d=False)
++        check_params = dict(accept_sparse=False, ensure_2d=True)
+         X = check_array(X, dtype=[np.float64, np.float32], **check_params)
+         y = check_array(y, dtype=X.dtype, **check_params)
+         check_consistent_length(X, y, sample_weight)
+ 
++        # If X is 2d with 1 feature, flatten it.
++        if X.ndim == 2 and X.shape[1] == 1:
++            X = X.ravel()
++        elif X.ndim > 2:
++            raise ValueError("X should be a 1d array or a 2d array with 1 feature")
++
+         # Transform y by running the isotonic regression algorithm and
+         # transform X accordingly.
+         X, y = self._build_y(X, y, sample_weight)
+@@ -353,10 +362,13 @@ class IsotonicRegression(RegressorMixin, TransformerMixin, BaseEstimator):
+         else:
+             dtype = np.float64
+ 
+-        T = check_array(T, dtype=dtype, ensure_2d=False)
++        T = check_array(T, dtype=dtype, ensure_2d=True)
+ 
+-        if len(T.shape) != 1:
+-            raise ValueError("Isotonic regression input should be a 1d array")
++        # If T is 2d with 1 feature, flatten it.
++        if T.ndim == 2 and T.shape[1] == 1:
++            T = T.ravel()
++        elif T.ndim > 2:
++            raise ValueError("T should be a 1d array or a 2d array with 1 feature")
+ 
+         # Handle the out_of_bounds argument by clipping if needed
+         if self.out_of_bounds not in ["raise", "nan", "clip"]:

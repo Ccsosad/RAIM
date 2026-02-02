@@ -1,0 +1,37 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 0981994..b00d9d6 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -97,6 +97,9 @@ MESSAGE_FIELDS = {i.name for i in fields(Message)}
+ """All fields of the Message class."""
+ 
+ 
++from pylint.reporters.template_processor import MESSAGE_FIELDS
++from pylint.reporters.template_processor import MESSAGE_FIELDS
++
+ def colorize_ansi(msg: str, msg_style: MessageStyle) -> str:
+     """Colorize message by wrapping it with ANSI escape codes."""
+     return msg_style._colorize_ansi(msg)
+diff --git a/pylint/reporters/template_processor.py b/pylint/reporters/template_processor.py
+new file mode 100644
+index 0000000..b2766a6
+--- /dev/null
++++ b/pylint/reporters/template_processor.py
+@@ -0,0 +1,17 @@
++"""Template processor for message formatting."""
++from typing import Final
++
++# All fields that can be used in a message template
++MESSAGE_FIELDS: Final = (
++    "abspath",
++    "column",
++    "end_column",
++    "end_line",
++    "line",
++    "module",
++    "msg",
++    "msg_id",
++    "obj",
++    "path",
++    "symbol",
++)

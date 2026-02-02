@@ -1,0 +1,62 @@
+diff --git a/table.py b/table.py
+new file mode 100644
+index 0000000..7779c28
+--- /dev/null
++++ b/table.py
+@@ -0,0 +1,56 @@
++class Table:
++    def __init__(self, rows=None):
++        if rows is None:
++            self.columns = []
++            self.data = {}
++            return
++
++        # Collect all keys in order of appearance
++        all_keys = []
++        seen = set()
++        for row in rows:
++            for key in row:
++                if key not in seen:
++                    seen.add(key)
++                    all_keys.append(key)
++
++        # Initialize data for each column with None for missing values
++        data = {key: [] for key in all_keys}
++        for row in rows:
++            for key in all_keys:
++                data[key].append(row.get(key, None))
++
++        self.columns = all_keys
++        self.data = data
++
++    def __str__(self):
++        if not self.columns:
++            return ""
++
++        # Convert headers and data to strings, replacing None with '--'
++        headers = [str(col) for col in self.columns]
++        rows = []
++        for i in range(len(self.data[self.columns[0]])):
++            row = []
++            for col in self.columns:
++                val = self.data[col][i]
++                row.append('--' if val is None else str(val))
++            rows.append(row)
++
++        # Calculate column widths with minimum width of 3
++        col_widths = []
++        for i in range(len(headers)):
++            width = max(len(headers[i]), 3)
++            for j in range(len(rows)):
++                width = max(width, len(rows[j][i]))
++            col_widths.append(width)
++
++        # Format headers and data with right alignment
++        formatted_headers = [headers[i].rjust(col_widths[i]) for i in range(len(headers))]
++        separator = " ".join(['-' * w for w in col_widths])
++        formatted_data = []
++        for row in rows:
++            formatted_row = [row[i].rjust(col_widths[i]) for i in range(len(row))]
++            formatted_data.append(" ".join(formatted_row))
++
++        return "\n".join([" ".join(formatted_headers), separator] + formatted_data)

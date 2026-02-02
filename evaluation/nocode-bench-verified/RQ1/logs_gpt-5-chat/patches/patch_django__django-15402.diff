@@ -1,0 +1,39 @@
+diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py
+index eb43231..61a057a 100644
+--- a/django/urls/resolvers.py
++++ b/django/urls/resolvers.py
+@@ -41,10 +41,14 @@ class ResolverMatch:
+         namespaces=None,
+         route=None,
+         tried=None,
++        captured_kwargs=None,
++        extra_kwargs=None,
+     ):
+         self.func = func
+         self.args = args
+         self.kwargs = kwargs
++        self.captured_kwargs = captured_kwargs or {}
++        self.extra_kwargs = extra_kwargs or {}
+         self.url_name = url_name
+         self.route = route
+         self.tried = tried
+@@ -419,8 +423,18 @@ class URLPattern:
+             new_path, args, kwargs = match
+             # Pass any extra_kwargs as **kwargs.
+             kwargs.update(self.default_args)
++            # Split kwargs into captured and extra kwargs for ResolverMatch.
++            captured_kwargs = dict(match[2])
++            extra_kwargs = dict(self.default_args)
++            all_kwargs = {**captured_kwargs, **extra_kwargs}
+             return ResolverMatch(
+-                self.callback, args, kwargs, self.pattern.name, route=str(self.pattern)
++                self.callback,
++                args,
++                all_kwargs,
++                self.pattern.name,
++                route=str(self.pattern),
++                captured_kwargs=captured_kwargs,
++                extra_kwargs=extra_kwargs,
+             )
+ 
+     @cached_property

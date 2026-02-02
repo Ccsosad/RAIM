@@ -1,0 +1,171 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..5c507f2 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -34,23 +34,31 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     _data: DataWithCoords
+     __slots__ = ("_data",)
+ 
++    def __init__(self, variables: Mapping[Hashable, Variable], indexes: Mapping[Hashable, Index] | None = None):
++        from xarray.core.dataset import Dataset
++        # Create a Dataset to use as the internal data
++        dataset = Dataset._construct_direct(variables=variables, coord_names=set(variables), indexes=indexes)
++        self._data = dataset
++
+     def __getitem__(self, key: Hashable) -> T_DataArray:
+-        raise NotImplementedError()
++        from xarray.core.dataarray import DataArray
++        variable = self.variables[key]
++        return DataArray(variable, coords=self)
+ 
+     def __setitem__(self, key: Hashable, value: Any) -> None:
+         self.update({key: value})
+ 
+     @property
+     def _names(self) -> set[Hashable]:
+-        raise NotImplementedError()
++        return set(self.variables)
+ 
+     @property
+     def dims(self) -> Mapping[Hashable, int] | tuple[Hashable, ...]:
+-        raise NotImplementedError()
++        return self._data.dims
+ 
+     @property
+     def dtypes(self) -> Frozen[Hashable, np.dtype]:
+-        raise NotImplementedError()
++        return self._data.dtypes
+ 
+     @property
+     def indexes(self) -> Indexes[pd.Index]:
+@@ -62,13 +70,17 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+ 
+     @property
+     def variables(self):
+-        raise NotImplementedError()
++        return self._data.variables
+ 
+     def _update_coords(self, coords, indexes):
+-        raise NotImplementedError()
++        self._data._coord_names.update(coords)
++        self._data._variables.update(coords)
++        self._data._indexes.update(indexes)
+ 
+     def _maybe_drop_multiindex_coords(self, coords):
+-        raise NotImplementedError()
++        # For now, we don't have any multi-index coordinates to drop.
++        # This method is overridden in subclasses.
++        pass
+ 
+     def __iter__(self) -> Iterator[Hashable]:
+         # needs to be in the same order as the dataset variables
+@@ -85,8 +97,48 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     def __repr__(self) -> str:
+         return formatting.coords_repr(self)
+ 
++    @classmethod
++    def from_pandas_multiindex(cls, midx: pd.MultiIndex, dim: Hashable | None = None) -> "Coordinates":
++        """Create Coordinates from a pandas MultiIndex.
++
++        Parameters
++        ----------
++        midx : pd.MultiIndex
++            The multi-index to convert.
++        dim : hashable, optional
++            The dimension name for the multi-index. If not provided, the first
++            level name is used.
++
++        Returns
++        -------
++        Coordinates
++            A Coordinates object with the multi-index converted to coordinates.
++        """
++        from xarray.core.variable import Variable
++        from xarray.core.indexes import PandasMultiIndex
++
++        if dim is None:
++            dim = midx.names[0]
++
++        # Create variables for each level
++        variables = {}
++        for i, (level, name) in enumerate(zip(midx.levels, midx.names)):
++            var = Variable(dim, level[midx.codes[i]])
++            variables[name] = var
++
++        # Create the index
++        index = PandasMultiIndex(midx, dim)
++
++        # Create the indexes mapping
++        indexes = {dim: index}
++
++        return cls(variables, indexes)
++
+     def to_dataset(self) -> Dataset:
+-        raise NotImplementedError()
++        from xarray.core.dataset import Dataset
++        return Dataset._construct_direct(
++            variables=self.variables, coord_names=set(self.variables), indexes=self.xindexes
++        )
+ 
+     def to_index(self, ordered_dims: Sequence[Hashable] | None = None) -> pd.Index:
+         """Convert all index coordinates into a :py:class:`pandas.Index`.
+@@ -200,6 +252,59 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+             yield
+             self._update_coords(variables, indexes)
+ 
++    def copy(self, deep: bool = True) -> "Coordinates":
++        """Return a copy of the coordinates.
++
++        Parameters
++        ----------
++        deep : bool, default: True
++            Whether to make a deep copy.
++
++        Returns
++        -------
++        Coordinates
++            Copied coordinates.
++        """
++        variables = {k: v.copy(deep=deep) for k, v in self.variables.items()}
++        indexes = {k: v.copy(deep=deep) for k, v in self.xindexes.items()}
++        return self.__class__(variables, indexes)
++
++    def equals(self, other: "Coordinates") -> bool:
++        """Two Coordinates objects are equal if they have the same variables
++        and indexes.
++
++        Parameters
++        ----------
++        other : Coordinates
++            The other coordinates to compare.
++
++        Returns
++        -------
++        bool
++            True if the two coordinates are equal.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        return self.variables.equals(other.variables) and self.xindexes.equals(other.xindexes)
++
++    def identical(self, other: "Coordinates") -> bool:
++        """Two Coordinates objects are identical if they have the same variables
++        and indexes, and the variables and indexes are the same objects.
++
++        Parameters
++        ----------
++        other : Coordinates
++            The other coordinates to compare.
++
++        Returns
++        -------
++        bool
++            True if the two coordinates are identical.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        return (self.variables is other.variables) and (self.xindexes is other.xindexes)
++
+     def merge(self, other: Coordinates | None) -> Dataset:
+         """Merge two sets of coordinates to create a new Dataset
+ 

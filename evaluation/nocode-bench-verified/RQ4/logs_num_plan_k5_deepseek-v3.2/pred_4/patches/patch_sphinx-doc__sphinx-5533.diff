@@ -1,0 +1,121 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1ae55eb..5e626d2 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -829,12 +829,14 @@ class ModuleDocumenter(Documenter):
+ 
+     def get_object_members(self, want_all):
+         # type: (bool) -> Tuple[bool, List[Tuple[unicode, object]]]
++        from sphinx.ext.autodoc.member_order import sort_members
++
+         if want_all:
+             if (self.options.ignore_module_all or not
+                     hasattr(self.object, '__all__')):
+                 # for implicit module members, check __module__ to avoid
+                 # documenting imported objects
+-                return True, safe_getmembers(self.object)
++                members = safe_getmembers(self.object)
+             else:
+                 memberlist = self.object.__all__
+                 # Sometimes __all__ is broken...
+@@ -847,21 +849,40 @@ class ModuleDocumenter(Documenter):
+                         type='autodoc'
+                     )
+                     # fall back to all members
+-                    return True, safe_getmembers(self.object)
++                    members = safe_getmembers(self.object)
++                else:
++                    members = []
++                    for mname in memberlist:
++                        try:
++                            members.append((mname, safe_getattr(self.object, mname)))
++                        except AttributeError:
++                            logger.warning(
++                                __('missing attribute mentioned in :members: or __all__: '
++                                   'module %s, attribute %s') %
++                                (safe_getattr(self.object, '__name__', '???'), mname),
++                                type='autodoc'
++                            )
+         else:
+             memberlist = self.options.members or []
+-        ret = []
+-        for mname in memberlist:
+-            try:
+-                ret.append((mname, safe_getattr(self.object, mname)))
+-            except AttributeError:
+-                logger.warning(
+-                    __('missing attribute mentioned in :members: or __all__: '
+-                       'module %s, attribute %s') %
+-                    (safe_getattr(self.object, '__name__', '???'), mname),
+-                    type='autodoc'
+-                )
+-        return False, ret
++            members = []
++            for mname in memberlist:
++                try:
++                    members.append((mname, safe_getattr(self.object, mname)))
++                except AttributeError:
++                    logger.warning(
++                        __('missing attribute mentioned in :members: or __all__: '
++                           'module %s, attribute %s') %
++                        (safe_getattr(self.object, '__name__', '???'), mname),
++                        type='autodoc'
++                    )
++
++        # Sort the members
++        if hasattr(self.options, 'member_order'):
++            members = sort_members(members, self.options.member_order)
++        else:
++            members = sort_members(members, 'alphabetical')
++
++        return want_all, members
+ 
+ 
+ class ModuleLevelDocumenter(Documenter):
+@@ -1187,6 +1208,20 @@ class ClassDocumenter(DocstringSignatureMixin, ModuleLevelDocumenter):  # type:
+             return
+         ModuleLevelDocumenter.document_members(self, all_members)
+ 
++    def get_object_members(self, want_all):
++        # type: (bool) -> Tuple[bool, List[Tuple[unicode, object]]]
++        from sphinx.ext.autodoc.member_order import sort_members
++
++        members = super(ClassDocumenter, self).get_object_members(want_all)[1]
++
++        # Sort the members
++        if hasattr(self.options, 'member_order'):
++            members = sort_members(members, self.options.member_order)
++        else:
++            members = sort_members(members, 'alphabetical')
++
++        return want_all, members
++
+     def generate(self, more_content=None, real_modname=None,
+                  check_module=False, all_members=False):
+         # type: (Any, str, bool, bool) -> None
+diff --git a/sphinx/ext/autodoc/member_order.py b/sphinx/ext/autodoc/member_order.py
+new file mode 100644
+index 0000000..10f69f7
+--- /dev/null
++++ b/sphinx/ext/autodoc/member_order.py
+@@ -0,0 +1,20 @@
++"""
++Member ordering utilities for autodoc.
++"""
++
++def sort_members(members, order):
++    """Sort a list of (name, value) pairs of members.
++
++    :param members: list of (name, value) pairs
++    :param order: string specifying the order ('alphabetical', 'bysource', etc.)
++    :return: sorted list of (name, value) pairs
++    """
++    if order == 'alphabetical':
++        return sorted(members, key=lambda x: x[0].lower())
++    elif order == 'bysource':
++        # We cannot sort by source line here because we don't have the source info.
++        # So we leave it as is, assuming it's already in source order.
++        return members
++    else:
++        # For any other value, default to alphabetical
++        return sorted(members, key=lambda x: x[0].lower())

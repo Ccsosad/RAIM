@@ -1,0 +1,194 @@
+diff --git a/xarray/plot/plot.py b/xarray/plot/plot.py
+index b16caf5..91594a4 100644
+--- a/xarray/plot/plot.py
++++ b/xarray/plot/plot.py
+@@ -643,7 +643,7 @@ def _plot1d(plotfunc):
+     # and variable names. newplotfunc also explicitly lists most kwargs, so we
+     # need to shorten it
+     def signature(
+-        darray: T_DataArray, *args, x: Hashable, **kwargs
++        darray: T_DataArray, *args, x: Hashable = None, **kwargs
+     ) -> Collection | FacetGrid:
+         pass
+ 
+@@ -652,6 +652,7 @@ def _plot1d(plotfunc):
+     def newplotfunc(
+         darray: T_DataArray,
+         *args,
++        *,
+         x: Hashable = None,
+         y: Hashable = None,
+         z: Hashable = None,
+@@ -834,6 +835,7 @@ def _plot1d(plotfunc):
+     def plotmethod(
+         _PlotMethods_obj,
+         *args,
++        *,
+         x: Hashable = None,
+         y: Hashable = None,
+         z: Hashable = None,
+diff --git a/xarray/plot/accessor.py b/xarray/plot/accessor.py
+new file mode 100644
+index 0000000..19ac6e4
+--- /dev/null
++++ b/xarray/plot/accessor.py
+@@ -0,0 +1,159 @@
++"""
++Plot accessors with static typing.
++"""
++from __future__ import annotations
++
++from typing import TYPE_CHECKING, Any, Callable, Hashable, Literal
++
++if TYPE_CHECKING:
++    import numpy as np
++    from matplotlib.axes import Axes
++    from matplotlib.collections import Collection
++    from matplotlib.figure import Figure
++
++    from xarray import DataArray, Dataset
++    from xarray.plot.facetgrid import FacetGrid
++
++
++class DataArrayPlotAccessor:
++    """Namespace for plotting methods attached to DataArray objects."""
++
++    def __init__(self, da: DataArray) -> None:
++        self._da = da
++
++    def __call__(self, **kwargs: Any) -> Any:
++        return self.line(**kwargs)
++
++    def line(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def scatter(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def step(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def hist(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def imshow(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def pcolormesh(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def contour(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def contourf(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def surface(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def quiver(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def streamplot(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++
++class DatasetPlotAccessor:
++    """Namespace for plotting methods attached to Dataset objects."""
++
++    def __init__(self, ds: Dataset) -> None:
++        self._ds = ds
++
++    def __call__(self, **kwargs: Any) -> Any:
++        return self.scatter(**kwargs)
++
++    def scatter(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def quiver(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...
++
++    def streamplot(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Collection | FacetGrid:
++        ...

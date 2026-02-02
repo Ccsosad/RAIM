@@ -1,0 +1,50 @@
+diff --git a/sphinx/builders/gettext.py b/sphinx/builders/gettext.py
+index ac0abe0..d0e845f 100644
+--- a/sphinx/builders/gettext.py
++++ b/sphinx/builders/gettext.py
+@@ -156,6 +156,11 @@ class I18nBuilder(Builder):
+         for node, msg in extract_messages(doctree):
+             catalog.add(msg, node)
+ 
++        # Extract alt text from images for translation
++        for node in doctree.traverse(nodes.image):
++            if node.get('alt'):
++                catalog.add(node['alt'], node)
++
+         if 'index' in self.env.config.gettext_additional_targets:
+             # Extract translatable messages from index entries.
+             for node, entries in traverse_translatable_index(doctree):
+diff --git a/sphinx/transforms/i18n.py b/sphinx/transforms/i18n.py
+index 06e4d1b..623cc2c 100644
+--- a/sphinx/transforms/i18n.py
++++ b/sphinx/transforms/i18n.py
+@@ -445,6 +445,14 @@ class Locale(SphinxTransform):
+ 
+             node['translated'] = True  # to avoid double translation
+ 
++        # phase3: translate alt text of images
++        for node in self.document.traverse(nodes.image):
++            if node.get('alt'):
++                msg = node['alt']
++                msgstr = catalog.gettext(msg)
++                if msgstr and msgstr != msg:
++                    node['alt'] = msgstr
++
+         if 'index' in self.config.gettext_additional_targets:
+             # Extract and translate messages for index entries.
+             for node, entries in traverse_translatable_index(self.document):
+diff --git a/sphinx/util/nodes.py b/sphinx/util/nodes.py
+index da00971..77d325b 100644
+--- a/sphinx/util/nodes.py
++++ b/sphinx/util/nodes.py
+@@ -261,8 +261,8 @@ def extract_messages(doctree: Element) -> Iterable[Tuple[Element, str]]:
+                 msg = node.astext()
+         elif isinstance(node, IMAGE_TYPE_NODES):
+             msg = '.. image:: %s' % node['uri']
+-            if node.get('alt'):
+-                msg += '\n   :alt: %s' % node['alt']
++            # The alt text is translated by default, so it is not included here.
++            # It will be translated separately in the Locale transform.
+         elif isinstance(node, META_TYPE_NODES):
+             msg = node.rawcontent
+         elif isinstance(node, nodes.pending) and is_pending_meta(node):

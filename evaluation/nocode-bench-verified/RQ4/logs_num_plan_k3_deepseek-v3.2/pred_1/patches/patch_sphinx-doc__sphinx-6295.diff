@@ -1,0 +1,54 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index 612ff28..af2c1ad 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -573,6 +573,7 @@ class PyMethod(PyObject):
+ 
+     option_spec = PyObject.option_spec.copy()
+     option_spec.update({
++        'async': directives.flag,
+         'classmethod': directives.flag,
+         'staticmethod': directives.flag,
+     })
+@@ -583,10 +584,15 @@ class PyMethod(PyObject):
+ 
+     def get_signature_prefix(self, sig):
+         # type: (str) -> str
++        prefix = []
++        if 'async' in self.options:
++            prefix.append('async')
+         if 'staticmethod' in self.options:
+-            return 'static '
++            prefix.append('static')
+         elif 'classmethod' in self.options:
+-            return 'classmethod '
++            prefix.append('classmethod')
++        if prefix:
++            return ' '.join(prefix) + ' '
+         else:
+             return ''
+ 
+@@ -604,11 +610,20 @@ class PyMethod(PyObject):
+                 return '%s()' % name
+ 
+         if 'staticmethod' in self.options:
+-            return _('%s() (%s static method)') % (methname, clsname)
++            if 'async' in self.options:
++                return _('%s() (%s async static method)') % (methname, clsname)
++            else:
++                return _('%s() (%s static method)') % (methname, clsname)
+         elif 'classmethod' in self.options:
+-            return _('%s() (%s class method)') % (methname, clsname)
++            if 'async' in self.options:
++                return _('%s() (%s async class method)') % (methname, clsname)
++            else:
++                return _('%s() (%s class method)') % (methname, clsname)
+         else:
+-            return _('%s() (%s method)') % (methname, clsname)
++            if 'async' in self.options:
++                return _('%s() (%s async method)') % (methname, clsname)
++            else:
++                return _('%s() (%s method)') % (methname, clsname)
+ 
+ 
+ class PyClassMethod(PyMethod):

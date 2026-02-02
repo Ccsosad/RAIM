@@ -1,0 +1,73 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..478a566 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,10 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -368,6 +368,14 @@ def join(left, right, keys=None, join_type='inner',
+     join_funcs : dict, None
+         Dict of functions to use for matching the corresponding key column(s).
+         See `~astropy.table.join_skycoord` for an example and details.
++    keys_left : str, list of str, or column-like object, optional
++        Key column(s) for the left table. If provided, `keys_right` must also be provided.
++        This can be a column name, a list of column names, or a column-like object (e.g., a list or array).
++        If column-like, it will be added as a temporary column to the left table.
++    keys_right : str, list of str, or column-like object, optional
++        Key column(s) for the right table. If provided, `keys_left` must also be provided.
++        This can be a column name, a list of column names, or a column-like object (e.g., a list or array).
++        If column-like, it will be added as a temporary column to the right table.
+ 
+     Returns
+     -------
+@@ -381,11 +389,40 @@ def join(left, right, keys=None, join_type='inner',
+     if not isinstance(right, Table):
+         right = Table(right)
+ 
++    # If keys_left and keys_right are provided, create temporary columns with the same names in both tables
++    temp_keys = []
++    if keys_left is not None and keys_right is not None:
++        # Make light copies to avoid modifying the original tables
++        left = left.copy(copy_data=False)
++        right = right.copy(copy_data=False)
++        # Convert to list of keys
++        if isinstance(keys_left, str):
++            keys_left = [keys_left]
++        if isinstance(keys_right, str):
++            keys_right = [keys_right]
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same number of key columns')
++        temp_keys = []
++        for i in range(len(keys_left)):
++            temp_key = f'__keys_temp_{i}__'
++            while temp_key in left.colnames or temp_key in right.colnames:
++                temp_key = '_' + temp_key
++            left[temp_key] = keys_left[i]
++            right[temp_key] = keys_right[i]
++            temp_keys.append(temp_key)
++        keys = tuple(temp_keys)
++    elif keys_left is not None or keys_right is not None:
++        raise ValueError('keys_left and keys_right must both be provided or both be None')
++
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+                 join_funcs)
+ 
++    # Remove temporary columns if they exist
++    if temp_keys:
++        out.remove_columns(temp_keys)
++
+     # Merge the column and table meta data. Table subclasses might override
+     # these methods for custom merge behavior.
+     _merge_table_meta(out, [left, right], metadata_conflicts=metadata_conflicts)

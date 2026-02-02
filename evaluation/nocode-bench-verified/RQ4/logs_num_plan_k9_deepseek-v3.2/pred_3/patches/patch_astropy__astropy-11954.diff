@@ -1,0 +1,113 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..4ea8ec7 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,10 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -349,9 +349,10 @@ def join(left, right, keys=None, join_type='inner',
+         Left side table in the join. If not a Table, will call ``Table(left)``
+     right : `~astropy.table.Table`-like object
+         Right side table in the join. If not a Table, will call ``Table(right)``
+-    keys : str or list of str
++    keys : str or list of str, optional
+         Name(s) of column(s) used to match rows of left and right tables.
+         Default is to use all columns which are common to both tables.
++        Cannot be used together with ``keys_left`` and ``keys_right``.
+     join_type : str
+         Join type ('inner' | 'outer' | 'left' | 'right' | 'cartesian'), default is 'inner'
+     uniq_col_name : str or None
+@@ -368,6 +369,16 @@ def join(left, right, keys=None, join_type='inner',
+     join_funcs : dict, None
+         Dict of functions to use for matching the corresponding key column(s).
+         See `~astropy.table.join_skycoord` for an example and details.
++    keys_left : str, list of str, or column-like, optional
++        Key column(s) for the left table. If provided, must be accompanied by
++        ``keys_right``. Can be a column name, a list of column names, or a
++        column-like object (e.g., a `~astropy.table.Column` or array). If a list,
++        then ``keys_right`` must be a list of the same length.
++    keys_right : str, list of str, or column-like, optional
++        Key column(s) for the right table. If provided, must be accompanied by
++        ``keys_left``. Can be a column name, a list of column names, or a
++        column-like object (e.g., a `~astropy.table.Column` or array). If a list,
++        then ``keys_left`` must be a list of the same length.
+ 
+     Returns
+     -------
+@@ -381,11 +392,44 @@ def join(left, right, keys=None, join_type='inner',
+     if not isinstance(right, Table):
+         right = Table(right)
+ 
++    # Handle keys_left and keys_right
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Cannot specify both keys and keys_left/keys_right')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both keys_left and keys_right')
++        # Convert to list if necessary
++        if isinstance(keys_left, str):
++            keys_left = [keys_left]
++        if isinstance(keys_right, str):
++            keys_right = [keys_right]
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same length')
++        # Create temporary tables to avoid modifying originals
++        left = left.copy(copy_data=False)
++        right = right.copy(copy_data=False)
++        temp_key_names = []
++        for i, (key_left, key_right) in enumerate(zip(keys_left, keys_right)):
++            temp_name = f'__temp_join_key_{i}__'
++            left[temp_name] = key_left
++            right[temp_name] = key_right
++            temp_key_names.append(temp_name)
++        keys = temp_key_names
++        # We will remove the temporary columns after the join
++        remove_temp_cols = True
++    else:
++        remove_temp_cols = False
++
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+                 join_funcs)
+ 
++    # Remove temporary columns if they were added
++    if remove_temp_cols:
++        for temp_name in temp_key_names:
++            del out[temp_name]
++
+     # Merge the column and table meta data. Table subclasses might override
+     # these methods for custom merge behavior.
+     _merge_table_meta(out, [left, right], metadata_conflicts=metadata_conflicts)
+@@ -1057,9 +1101,20 @@ def _join(left, right, keys=None, join_type='inner',
+         Left side table in the join
+     right : Table
+         Right side table in the join
+-    keys : str or list of str
++    keys : str or list of str, optional
+         Name(s) of column(s) used to match rows of left and right tables.
+         Default is to use all columns which are common to both tables.
++        Cannot be used together with ``keys_left`` and ``keys_right``.
++    keys_left : str, list of str, or column-like, optional
++        Key column(s) for the left table. If provided, must be accompanied by
++        ``keys_right``. Can be a column name, a list of column names, or a
++        column-like object (e.g., a `~astropy.table.Column` or array). If a list,
++        then ``keys_right`` must be a list of the same length.
++    keys_right : str, list of str, or column-like, optional
++        Key column(s) for the right table. If provided, must be accompanied by
++        ``keys_left``. Can be a column name, a list of column names, or a
++        column-like object (e.g., a `~astropy.table.Column` or array). If a list,
++        then ``keys_left`` must be a list of the same length.
+     join_type : str
+         Join type ('inner' | 'outer' | 'left' | 'right' | 'cartesian'), default is 'inner'
+     uniq_col_name : str or None

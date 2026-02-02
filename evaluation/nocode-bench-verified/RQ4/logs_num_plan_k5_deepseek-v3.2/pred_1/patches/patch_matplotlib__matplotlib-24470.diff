@@ -1,0 +1,48 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..36a46c4 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3070,10 +3070,10 @@ class Axes(_AxesBase):
+         self.add_container(stem_container)
+         return stem_container
+ 
+-    @_preprocess_data(replace_names=["x", "explode", "labels", "colors"])
++    @_preprocess_data(replace_names=["x", "explode", "labels", "colors", "hatch"])
+     def pie(self, x, explode=None, labels=None, colors=None,
+-            autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
+-            startangle=0, radius=1, counterclock=True,
++            hatch=None, autopct=None, pctdistance=0.6, shadow=False,
++            labeldistance=1.1, startangle=0, radius=1, counterclock=True,
+             wedgeprops=None, textprops=None, center=(0, 0),
+             frame=False, rotatelabels=False, *, normalize=True):
+         """
+@@ -3207,6 +3207,13 @@ class Axes(_AxesBase):
+             def get_next_color():
+                 return next(color_cycle)
+ 
++        if hatch is None:
++            hatch_cycle = itertools.cycle([None])
++        else:
++            if isinstance(hatch, str):
++                hatch = [hatch]
++            hatch_cycle = itertools.cycle(hatch)
++
+         _api.check_isinstance(Number, radius=radius, startangle=startangle)
+         if radius <= 0:
+             raise ValueError(f'radius must be a positive number, not {radius}')
+@@ -3234,7 +3241,8 @@ class Axes(_AxesBase):
+                                360. * max(theta1, theta2),
+                                facecolor=get_next_color(),
+                                clip_on=False,
+-                               label=label)
++                               label=label,
++                               hatch=next(hatch_cycle))
+             w.set(**wedgeprops)
+             slices.append(w)
+             self.add_patch(w)
+@@ -8280,4 +8288,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

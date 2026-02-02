@@ -1,0 +1,65 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..0566e75 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -136,7 +136,59 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         if _num_samples(y) == 0:
+             return np.array([])
+ 
+-        return _encode(y, uniques=self.classes_)
++        # Convert to array for NaN checking
++        y_array = np.asarray(y)
++        
++        # Check for NaN values - handle both float and object dtypes
++        if y_array.dtype.kind in 'fc':  # float or complex
++            nan_mask = np.isnan(y_array)
++        elif y_array.dtype == object:
++            # For object arrays, check if elements are float('nan')
++            nan_mask = np.array([isinstance(val, float) and np.isnan(val) for val in y_array])
++        else:
++            # For non-float types, no NaN values
++            nan_mask = np.zeros(len(y_array), dtype=bool)
++        
++        # If there are no NaN values, use the existing _encode function
++        if not np.any(nan_mask):
++            return _encode(y, uniques=self.classes_)
++        
++        # Handle NaN values
++        # First, check if NaN was seen during fit
++        # Check self.classes_ for NaN
++        if self.classes_.dtype.kind in 'fc':
++            nan_in_classes = np.any(np.isnan(self.classes_))
++        elif self.classes_.dtype == object:
++            nan_in_classes = any(isinstance(val, float) and np.isnan(val) for val in self.classes_)
++        else:
++            nan_in_classes = False
++        
++        # Encode all values
++        result = np.empty(len(y_array), dtype=int)
++        
++        # Encode non-NaN values
++        if np.any(~nan_mask):
++            non_nan_result = _encode(y_array[~nan_mask], uniques=self.classes_)
++            result[~nan_mask] = non_nan_result
++        
++        # Encode NaN values
++        if nan_in_classes:
++            # Find the index of NaN in classes_
++            if self.classes_.dtype.kind in 'fc':
++                nan_indices = np.where(np.isnan(self.classes_))[0]
++            else:  # object dtype
++                nan_indices = np.where([isinstance(val, float) and np.isnan(val) for val in self.classes_])[0]
++            
++            if len(nan_indices) > 0:
++                result[nan_mask] = nan_indices[0]
++            else:
++                # This shouldn't happen if nan_in_classes is True
++                result[nan_mask] = -1
++        else:
++            # NaN was not seen during fit, encode as -1
++            result[nan_mask] = -1
++        
++        return result
+ 
+     def inverse_transform(self, y):
+         """Transform labels back to original encoding.

@@ -1,0 +1,85 @@
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+new file mode 100644
+index 0000000..efd6f73
+--- /dev/null
++++ b/astropy/cosmology/parameter.py
+@@ -0,0 +1,79 @@
++class Parameter:
++    """A cosmological parameter.
++
++    Parameters
++    ----------
++    name : str
++        The name of the parameter.
++    unit : unit-like or None
++        The unit of the parameter.
++    derived : bool, optional
++        Whether the parameter is derived (i.e., not a free parameter).
++    equivalencies : list of tuple, optional
++        Unit equivalencies for the parameter.
++    fvalidate : callable, optional
++        A function to validate the parameter value.
++    doc : str, optional
++        Documentation for the parameter.
++    """
++    def __init__(self, *, name, unit=None, derived=False, equivalencies=None,
++                 fvalidate=None, doc=None):
++        self.name = name
++        self.unit = unit
++        self.derived = derived
++        self.equivalencies = equivalencies
++        self.fvalidate = fvalidate
++        self.doc = doc
++
++    def clone(self, **kwargs):
++        """Return a copy of this Parameter with updated attributes.
++
++        Parameters
++        ----------
++        **kwargs
++            Attributes to update in the new Parameter.
++
++        Returns
++        -------
++        Parameter
++            A new Parameter instance.
++        """
++        # Get current attributes
++        attrs = {
++            'name': self.name,
++            'unit': self.unit,
++            'derived': self.derived,
++            'equivalencies': self.equivalencies,
++            'fvalidate': self.fvalidate,
++            'doc': self.doc
++        }
++        # Update with provided keyword arguments
++        attrs.update(kwargs)
++        return self.__class__(**attrs)
++
++    def __eq__(self, other):
++        if not isinstance(other, Parameter):
++            return NotImplemented
++        return (self.name == other.name and
++                self.unit == other.unit and
++                self.derived == other.derived and
++                self.equivalencies == other.equivalencies and
++                self.fvalidate == other.fvalidate and
++                self.doc == other.doc)
++
++    def __repr__(self):
++        # Build a repr that can be eval'ed to recreate the Parameter.
++        # We use keyword-only arguments.
++        parts = []
++        parts.append(f"name={self.name!r}")
++        if self.unit is not None:
++            parts.append(f"unit={self.unit!r}")
++        if self.derived:
++            parts.append(f"derived={self.derived!r}")
++        if self.equivalencies is not None:
++            parts.append(f"equivalencies={self.equivalencies!r}")
++        if self.fvalidate is not None:
++            parts.append(f"fvalidate={self.fvalidate!r}")
++        if self.doc is not None:
++            parts.append(f"doc={self.doc!r}")
++        return f"{self.__class__.__name__}({', '.join(parts)})"

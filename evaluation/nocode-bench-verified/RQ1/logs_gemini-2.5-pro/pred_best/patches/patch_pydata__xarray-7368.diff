@@ -1,0 +1,38 @@
+diff --git a/xarray/core/merge.py b/xarray/core/merge.py
+index aaecee5..1772799 100644
+--- a/xarray/core/merge.py
++++ b/xarray/core/merge.py
+@@ -322,6 +322,7 @@ def collect_variables_and_indexes(
+     with a matching key/name.
+ 
+     """
++    from xarray.core.coordinates import Coordinates
+     from xarray.core.dataarray import DataArray
+     from xarray.core.dataset import Dataset
+ 
+@@ -338,7 +339,7 @@ def collect_variables_and_indexes(
+             append(name, variable, indexes.get(name))
+ 
+     for mapping in list_of_mappings:
+-        if isinstance(mapping, Dataset):
++        if isinstance(mapping, (Dataset, Coordinates)):
+             append_all(mapping.variables, mapping._indexes)
+             continue
+ 
+@@ -431,6 +432,7 @@ def determine_coords(
+         All variable found in the input should appear in either the set of
+         coordinate or non-coordinate names.
+     """
++    from xarray.core.coordinates import Coordinates
+     from xarray.core.dataarray import DataArray
+     from xarray.core.dataset import Dataset
+ 
+@@ -441,6 +443,8 @@ def determine_coords(
+         if isinstance(mapping, Dataset):
+             coord_names.update(mapping.coords)
+             noncoord_names.update(mapping.data_vars)
++        elif isinstance(mapping, Coordinates):
++            coord_names.update(mapping)
+         else:
+             for name, var in mapping.items():
+                 if isinstance(var, DataArray):

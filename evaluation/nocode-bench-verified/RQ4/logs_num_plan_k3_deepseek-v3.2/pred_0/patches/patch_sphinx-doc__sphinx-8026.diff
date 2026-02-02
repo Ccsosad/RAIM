@@ -1,0 +1,43 @@
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+index 796b7ad..0f16e19 100644
+--- a/sphinx/builders/__init__.py
++++ b/sphinx/builders/__init__.py
+@@ -617,4 +617,12 @@ class Builder:
+             return getattr(self.config, optname)
+         except AttributeError:
+             optname = '%s_%s' % (default, option)
+-            return getattr(self.config, optname)
++            return getattr(self.config, optname)
++
++    def get_docpath(self, docname: str) -> str:
++        """Return the directory path for the given document, with a trailing slash if non-empty."""
++        import os
++        docpath = os.path.dirname(docname).replace(os.sep, '/')
++        if docpath:
++            docpath += '/'
++        return docpath
+diff --git a/sphinx/environment/adapters/asset.py b/sphinx/environment/adapters/asset.py
+index 2e81c26..58be0dd 100644
+--- a/sphinx/environment/adapters/asset.py
++++ b/sphinx/environment/adapters/asset.py
+@@ -8,6 +8,7 @@
+     :license: BSD, see LICENSE for details.
+ """
+ 
++import os
+ from sphinx.environment import BuildEnvironment
+ 
+ 
+@@ -20,4 +21,11 @@ class ImageAdapter:
+         while name in self.env.original_image_uri:
+             name = self.env.original_image_uri[name]
+ 
+-        return name
++        return name
++
++    def get_docpath(self, docname: str) -> str:
++        """Get the directory path for the given document, with a trailing slash if non-empty."""
++        docpath = os.path.dirname(docname).replace(os.sep, '/')
++        if docpath:
++            docpath += '/'
++        return docpath

@@ -1,0 +1,19 @@
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index a906241..608adcb 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -256,6 +256,14 @@ def generate_autosummary_content(name: str, obj: Any, parent: Any,
+     ns['objtype'] = doc.objtype
+     ns['underline'] = len(name) * '='
+ 
++    # merge autosummary_context from app.config into namespace if available
++    try:
++        extra_context = getattr(app.config, 'autosummary_context', {})
++        if isinstance(extra_context, dict):
++            ns.update(extra_context)
++    except AttributeError:
++        pass
++
+     return template.render(template_name, ns)
+ 
+ 

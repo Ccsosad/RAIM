@@ -1,0 +1,12 @@
+diff --git a/lib/matplotlib/contour.py b/lib/matplotlib/contour.py
+index 4305dde..7919147 100644
+--- a/lib/matplotlib/contour.py
++++ b/lib/matplotlib/contour.py
+@@ -752,6 +752,7 @@ class ContourSet(ContourLabeler, mcoll.Collection):
+                  cmap=None, colors=None, norm=None, vmin=None, vmax=None,
+                  extend='neither', antialiased=None, nchunk=0, locator=None,
+                  transform=None, negative_linestyles=None,
++                 clip_path=None,
+                  **kwargs):
+         """
+         Draw contour lines or filled regions, depending on

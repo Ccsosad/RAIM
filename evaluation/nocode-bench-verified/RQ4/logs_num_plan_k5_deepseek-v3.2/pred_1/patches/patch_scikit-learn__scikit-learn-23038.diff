@@ -1,0 +1,58 @@
+diff --git a/sklearn/cluster/_kmeans.py b/sklearn/cluster/_kmeans.py
+index 89ad263..967479b 100644
+--- a/sklearn/cluster/_kmeans.py
++++ b/sklearn/cluster/_kmeans.py
+@@ -803,7 +803,7 @@ class _BaseKMeans(
+     _parameter_constraints = {
+         "n_clusters": [Interval(Integral, 1, None, closed="left")],
+         "init": [StrOptions({"k-means++", "random"}), callable, "array-like"],
+-        "n_init": [Interval(Integral, 1, None, closed="left")],
++        "n_init": [Interval(Integral, 1, None, closed="left"), StrOptions({"auto"})],
+         "max_iter": [Interval(Integral, 1, None, closed="left")],
+         "tol": [Interval(Real, 0, None, closed="left")],
+         "verbose": [Interval(Integral, 0, None, closed="left"), bool],
+@@ -840,7 +840,10 @@ class _BaseKMeans(
+         self._tol = _tolerance(X, self.tol)
+ 
+         # init
+-        self._n_init = self.n_init
++        if self.n_init == "auto":
++            self._n_init = 1
++        else:
++            self._n_init = self.n_init
+         if _is_arraylike_not_scalar(self.init) and self._n_init != 1:
+             warnings.warn(
+                 "Explicit initial center position passed: performing only"
+@@ -1294,6 +1297,15 @@ class KMeans(_BaseKMeans):
+         copy_x=True,
+         algorithm="lloyd",
+     ):
++        # TODO(1.4): remove deprecation warning and change default to 'auto'
++        if n_init == 10:
++            warnings.warn(
++                "The default value of `n_init` will change from "
++                "10 to 'auto' in 1.4. Set `n_init='auto'` to silence "
++                "this warning.",
++                FutureWarning,
++                stacklevel=2,
++            )
+         super().__init__(
+             n_clusters=n_clusters,
+             init=init,
+@@ -1782,7 +1794,15 @@ class MiniBatchKMeans(_BaseKMeans):
+         n_init=3,
+         reassignment_ratio=0.01,
+     ):
+-
++        # TODO(1.4): remove deprecation warning and change default to 'auto'
++        if n_init == 3:
++            warnings.warn(
++                "The default value of `n_init` will change from "
++                "3 to 'auto' in 1.4. Set `n_init='auto'` to silence "
++                "this warning.",
++                FutureWarning,
++                stacklevel=2,
++            )
+         super().__init__(
+             n_clusters=n_clusters,
+             init=init,

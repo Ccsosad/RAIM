@@ -1,0 +1,103 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1017cc4..6126d68 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1722,6 +1722,79 @@ def autodoc_attrgetter(app: Sphinx, obj: Any, name: str, *defargs: Any) -> Any:
+     return safe_getattr(obj, name, *defargs)
+ 
+ 
++def _format_args(obj: Any) -> str:
++    """Format arguments of obj as a reST field list."""
++    if not callable(obj):
++        return ''
++
++    from sphinx.util.inspect import signature as Signature
++    from sphinx.util.typing import stringify
++
++    try:
++        sig = Signature(obj)
++    except (TypeError, ValueError):
++        return ''
++
++    params = []
++    for param in sig.parameters.values():
++        if param.annotation is not param.empty:
++            type_hint = stringify(param.annotation)
++            if param.kind == param.VAR_POSITIONAL:
++                params.append(':param *%s: *%s*' % (param.name, type_hint))
++            elif param.kind == param.VAR_KEYWORD:
++                params.append(':param **%s: *%s*' % (param.name, type_hint))
++            else:
++                params.append(':param %s: *%s*' % (param.name, type_hint))
++        else:
++            if param.kind == param.VAR_POSITIONAL:
++                params.append(':param *%s:' % param.name)
++            elif param.kind == param.VAR_KEYWORD:
++                params.append(':param **%s:' % param.name)
++            else:
++                params.append(':param %s:' % param.name)
++
++    return '\n'.join(params)
++
++
++def _format_retann(obj: Any) -> str:
++    """Format a return annotation of obj as a reST field list."""
++    if not callable(obj):
++        return ''
++
++    from sphinx.util.inspect import signature as Signature
++    from sphinx.util.typing import stringify
++
++    try:
++        sig = Signature(obj)
++    except (TypeError, ValueError):
++        return ''
++
++    if sig.return_annotation is not sig.empty:
++        return ':returns: *%s*' % stringify(sig.return_annotation)
++    else:
++        return ''
++
++
++def process_docstring_for_typehints(app: Sphinx, what: str, name: str, obj: Any,
++                                    options: Any, lines: "List[str]") -> None:
++    """Process docstring to handle typehints in description."""
++    if app.config.autodoc_typehints == 'description':
++        if what in ('function', 'method', 'class', 'exception') and obj.__doc__ is not None:
++            doc = getdoc(obj, getattr(obj, '__module__', None),
++                         app.config.autodoc_inherit_docstrings)
++            if doc and doc.startswith(obj.__doc__):
++                # check the object has a docstring
++                arg_doc = _format_args(obj)
++                if arg_doc:
++                    lines.insert(0, arg_doc)
++                    lines.insert(1, '')
++
++                ret_doc = _format_retann(obj)
++                if ret_doc:
++                    lines.append('')
++                    lines.append(ret_doc)
++
++
+ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_autodocumenter(ModuleDocumenter)
+     app.add_autodocumenter(ClassDocumenter)
+@@ -1744,14 +1817,16 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_config_value('autodoc_default_options', {}, True)
+     app.add_config_value('autodoc_docstring_signature', True, True)
+     app.add_config_value('autodoc_mock_imports', [], True)
+-    app.add_config_value('autodoc_typehints', "signature", True, ENUM("signature", "none"))
++    app.add_config_value('autodoc_typehints', "signature", True,
++                         ENUM("signature", "description", "none"))
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
+     app.add_event('autodoc-before-process-signature')
+     app.add_event('autodoc-process-docstring')
++    app.connect('autodoc-process-docstring', process_docstring_for_typehints)
+     app.add_event('autodoc-process-signature')
+     app.add_event('autodoc-skip-member')
+ 
+     app.setup_extension('sphinx.ext.autodoc.type_comment')
+ 
+-    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}
++    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

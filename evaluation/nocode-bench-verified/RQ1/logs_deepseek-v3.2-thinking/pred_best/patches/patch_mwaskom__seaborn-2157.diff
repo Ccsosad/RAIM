@@ -1,0 +1,130 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..94f6c0b 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -1270,6 +1270,125 @@ class _DistributionPlotter(VectorPlotter):
+         ax.autoscale_view(scalex=var == "x", scaley=var == "y")
+ 
+ 
++def displot(
++    data=None,
++    *,
++    x=None,
++    y=None,
++    hue=None,
++    row=None,
++    col=None,
++    col_wrap=None,
++    row_order=None,
++    col_order=None,
++    palette=None,
++    hue_order=None,
++    hue_norm=None,
++    legend="auto",
++    kind="hist",
++    height=5,
++    aspect=1,
++    facet_kws=None,
++    **kwargs
++):
++    """
++    Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distribution of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    `kind` parameter selects the approach to use:
++    
++    - `hist` for histograms
++    - `kde` for kernel density estimates
++    - `ecdf` for empirical cumulative distribution functions
++    - `rug` for rug plots
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure.
++    x, y : vectors or keys in `data`
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in `data`
++        Variables that define subsets to plot on different facets.
++    col_wrap : int
++        "Wrap" the column variable at this width, so that the column facets
++        span multiple rows.
++    row_order, col_order : lists of strings
++        Order to organize the rows and/or columns of the grid.
++    palette : string, list, dict, or matplotlib.colors.Colormap
++        Colors to use for the different levels of the `hue` variable.
++    hue_order : list
++        Specified order for the appearance of the `hue` variable levels.
++    hue_norm : tuple or matplotlib.colors.Normalize
++        Normalization in data units for colormap applied to the `hue` variable.
++    legend : bool or "auto"
++        If True, add a legend or use the existing legend. If False, do not.
++    kind : {"hist", "kde", "ecdf", "rug"}
++        The kind of plot to draw.
++    height : scalar
++        Height (in inches) of each facet.
++    aspect : scalar
++        Aspect ratio of each facet, so that `aspect * height` gives the width
++        of each facet in inches.
++    facet_kws : dict
++        Additional parameters passed to `FacetGrid`.
++    **kwargs
++        Other keyword arguments are passed to the underlying axes-level function.
++
++    Returns
++    -------
++    g : FacetGrid
++        Returns the `FacetGrid` object with the plot on it for further tweaking.
++    """
++    # Check the kind argument
++    if kind not in ["hist", "kde", "ecdf", "rug"]:
++        msg = f"kind must be one of {{'hist', 'kde', 'ecdf', 'rug'}}, got {kind!r}."
++        raise ValueError(msg)
++    
++    # Determine the plotting function
++    if kind == "hist":
++        plotter = histplot
++    elif kind == "kde":
++        plotter = kdeplot
++    elif kind == "ecdf":
++        plotter = ecdfplot
++    else:  # kind == "rug"
++        plotter = rugplot
++
++    # Build the FacetGrid
++    if facet_kws is None:
++        facet_kws = {}
++    
++    g = FacetGrid(
++        data=data,
++        row=row,
++        col=col,
++        col_wrap=col_wrap,
++        row_order=row_order,
++        col_order=col_order,
++        hue=hue,
++        palette=palette,
++        hue_order=hue_order,
++        hue_norm=hue_norm,
++        height=height,
++        aspect=aspect,
++        **facet_kws,
++    )
++    
++    # Map the plotting function
++    g.map_dataframe(plotter, x=x, y=y, **kwargs)
++    
++    # Add the legend
++    if legend:
++        g.add_legend()
++    
++    return g
++
++
+ # ==================================================================================== #
+ # External API
+ # ==================================================================================== #

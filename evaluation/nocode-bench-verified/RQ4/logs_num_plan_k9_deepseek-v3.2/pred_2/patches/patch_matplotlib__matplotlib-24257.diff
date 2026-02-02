@@ -1,0 +1,58 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..3fe33fc 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -235,6 +235,53 @@ class _StyleLibrary(dict):
+         return dict.__getitem__(self, key)
+ 
+ 
++def _load_style_from_package(style):
++    """Load a style from a package.
++
++    Parameters
++    ----------
++    style : str
++        A dotted style name, e.g., "mypackage.presentation".
++
++    Returns
++    -------
++    dict
++        The style dictionary.
++
++    Raises
++    ------
++    OSError
++        If the resource cannot be loaded.
++    """
++    import sys
++    parts = style.split('.')
++    if len(parts) < 2:
++        raise ValueError(f"Invalid dotted style name: {style}")
++    package_name = '.'.join(parts[:-1])
++    style_name = parts[-1]
++
++    try:
++        if sys.version_info >= (3, 10):
++            from importlib import resources
++        else:
++            import importlib_resources as resources
++    except ImportError:
++        raise ImportError(
++            "Using styles from packages requires importlib_resources "
++            "on Python < 3.10. Please install importlib_resources>=2.3.0."
++        ) from None
++
++    try:
++        resource_name = f"{style_name}.mplstyle"
++        with resources.open_text(package_name, resource_name) as f:
++            from . import read_style_file
++            return read_style_file(f)
++    except Exception as e:
++        raise OSError(
++            f"Cannot load style {style!r} from package {package_name!r}"
++        ) from e
++
++
+ # Load style library
+ # ==================
+ _base_library = read_style_directory(BASE_LIBRARY_PATH)

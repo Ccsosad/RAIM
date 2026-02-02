@@ -1,0 +1,99 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..9dda36f 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -1274,6 +1274,94 @@ class _DistributionPlotter(VectorPlotter):
+ # External API
+ # ==================================================================================== #
+ 
++def displot(
++    data=None, *,
++    # Vector variables
++    x=None, y=None, hue=None, row=None, col=None, weights=None,
++    # Distribution parameters
++    kind="hist", rug=False,
++    # Histogram parameters
++    stat="count", bins="auto", binwidth=None, binrange=None,
++    discrete=None, cumulative=False, common_bins=True, common_norm=True,
++    multiple="layer", element="bars", fill=True, shrink=1,
++    # KDE parameters
++    bw_adjust=1, cut=3, gridsize=200,
++    # Facet parameters
++    height=5, aspect=1,
++    # Other parameters
++    facet_kws=None, **kwargs,
++):
++    """Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    distribution of data, including histograms, kernel density estimation,
++    and empirical cumulative distribution functions. It can also represent
++    bivariate distributions with contour plots or heatmaps.
++
++    Parameters
++    ----------
++    kind : {"hist", "kde", "ecdf"}
++        Approach to visualizing the distribution.
++    rug : bool
++        If True, add a rug plot for each observation.
++    bw_adjust : number
++        Bandwidth scaling factor for KDE plots.
++    cut : number
++        Distance, in units of bandwidth, to extend the KDE curve past the extremes.
++    gridsize : int
++        Number of points in each dimension of the KDE evaluation grid.
++    height : float
++        Height (in inches) of each facet.
++    aspect : float
++        Aspect ratio of each facet.
++    facet_kws : dict
++        Additional parameters passed to FacetGrid.
++    **kwargs
++        Additional parameters passed to the underlying plotting function.
++
++    Returns
++    -------
++    FacetGrid
++    """
++    # Initialize the grid
++    facet_kws = {} if facet_kws is None else facet_kws
++    g = FacetGrid(
++        data=data, row=row, col=col, hue=hue,
++        height=height, aspect=aspect, **facet_kws
++    )
++
++    # Map the appropriate plotting function
++    if kind == "hist":
++        plot_func = histplot
++    elif kind == "kde":
++        plot_func = kdeplot
++    elif kind == "ecdf":
++        plot_func = ecdfplot
++    else:
++        raise ValueError(f"kind must be 'hist', 'kde', or 'ecdf', got {kind}")
++
++    plot_kws = kwargs.copy()
++    if kind == "hist":
++        plot_kws.update(
++            stat=stat, bins=bins, binwidth=binwidth, binrange=binrange,
++            discrete=discrete, cumulative=cumulative, common_bins=common_bins,
++            common_norm=common_norm, multiple=multiple, element=element,
++            fill=fill, shrink=shrink,
++        )
++    elif kind == "kde":
++        plot_kws.update(
++            bw_adjust=bw_adjust, cut=cut, gridsize=gridsize,
++            fill=fill, common_norm=common_norm,
++        )
++
++    g.map_dataframe(plot_func, x=x, y=y, weights=weights, **plot_kws)
++
++    if rug:
++        g.map_dataframe(rugplot, x=x, y=y, hue=hue)
++
++    return g
++
++
+ def histplot(
+     data=None, *,
+     # Vector variables

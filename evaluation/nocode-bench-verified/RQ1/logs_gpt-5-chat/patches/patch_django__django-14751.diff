@@ -1,0 +1,40 @@
+diff --git a/django/core/management/commands/makemigrations.py b/django/core/management/commands/makemigrations.py
+index 66985c1..6c54297 100644
+--- a/django/core/management/commands/makemigrations.py
++++ b/django/core/management/commands/makemigrations.py
+@@ -57,6 +57,10 @@ class Command(BaseCommand):
+             '--check', action='store_true', dest='check_changes',
+             help='Exit with a non-zero status if model changes are missing migrations.',
+         )
++        parser.add_argument(
++            '--scriptable', action='store_true', dest='scriptable',
++            help='Divert log output and input prompts to stderr, writing only paths of generated migration files to stdout.',
++        )
+ 
+     def log(self, msg):
+         self.stdout.write(msg)
+@@ -72,6 +76,10 @@ class Command(BaseCommand):
+         if self.migration_name and not self.migration_name.isidentifier():
+             raise CommandError('The migration name must be a valid Python identifier.')
+         self.include_header = options['include_header']
++        self.scriptable = options.get('scriptable')
++        if self.scriptable:
++            self.stdout, self.stderr = self.stderr, self.stdout
++            self.log = lambda msg: self.stderr.write(msg)
+         check_changes = options['check_changes']
+ 
+         # Make sure the app they asked for exists
+@@ -223,7 +231,12 @@ class Command(BaseCommand):
+                         migration_string = writer.path
+                     if migration_string.startswith('..'):
+                         migration_string = writer.path
+-                    self.log('  %s\n' % self.style.MIGRATE_LABEL(migration_string))
++                    if self.scriptable:
++                        # Print only the path of generated migration to stdout.
++                        self.stderr.write('  %s\n' % self.style.MIGRATE_LABEL(migration_string))
++                        self.stdout.write(f"{writer.path}\n")
++                    else:
++                        self.log('  %s\n' % self.style.MIGRATE_LABEL(migration_string))
+                     for operation in migration.operations:
+                         self.log('    - %s' % operation.describe())
+                 if not self.dry_run:

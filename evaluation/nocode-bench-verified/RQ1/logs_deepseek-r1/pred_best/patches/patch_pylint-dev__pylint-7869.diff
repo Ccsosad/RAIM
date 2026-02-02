@@ -1,0 +1,35 @@
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 4f6d68f..81f03b0 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -235,6 +235,16 @@ MSGS: dict[str, MessageDefinitionTuple] = {
+ }
+ 
+ 
++class NoHeaderReporter(reporters.TextReporter):
++    """Reporter that does not print the module header."""
++    
++    name = "no-header"
++    
++    def on_set_current_module(self, modname, filepath):
++        """Skip module header output."""
++        pass
++
++
+ # pylint: disable=too-many-instance-attributes,too-many-public-methods
+ class PyLinter(
+     _ArgumentsManager,
+@@ -290,6 +300,7 @@ class PyLinter(
+             self.set_reporter(TextReporter())
+         self._reporters: dict[str, type[reporters.BaseReporter]] = {}
+         """Dictionary of possible but non-initialized reporters."""
++        self.register_reporter(NoHeaderReporter)
+ 
+         # Attributes for checkers and plugins
+         self._checkers: defaultdict[
+@@ -1366,4 +1377,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)

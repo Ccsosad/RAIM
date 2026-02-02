@@ -1,0 +1,81 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..94e997b 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1654,6 +1654,22 @@ class Ellipse(Patch):
+         return self.get_patch_transform().transform(
+             [(-1, -1), (1, -1), (1, 1), (-1, 1)])
+ 
++    def get_vertices(self):
++        """
++        Return the coordinates of the vertices of the ellipse.
++
++        The vertices are the endpoints of the major axis.
++        """
++        return self.get_patch_transform().transform([(1, 0), (-1, 0)])
++
++    def get_co_vertices(self):
++        """
++        Return the coordinates of the co-vertices of the ellipse.
++
++        The co-vertices are the endpoints of the minor axis.
++        """
++        return self.get_patch_transform().transform([(0, 1), (0, -1)])
++
+ 
+ class Annulus(Patch):
+     """
+diff --git a/galleries/examples/shapes_and_collections/ellipse_arrow.py b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+new file mode 100644
+index 0000000..00c33eb
+--- /dev/null
++++ b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+@@ -0,0 +1,48 @@
++"""
++==========================================
++Adding an arrow to an ellipse to indicate rotation
++==========================================
++
++This example demonstrates how to add an arrow to an ellipse to show a clockwise
++or counter-clockwise rotation. The arrow is placed exactly on the ellipse by
++using the coordinates of the vertices obtained via `Ellipse.get_vertices()`.
++"""
++
++import matplotlib.pyplot as plt
++import matplotlib.patches as mpatches
++
++# Create an ellipse
++ellipse = mpatches.Ellipse(xy=(0.5, 0.5), width=0.8, height=0.4, angle=30,
++                           edgecolor='blue', facecolor='none', linewidth=2)
++
++fig, ax = plt.subplots()
++ax.add_patch(ellipse)
++
++# Get the vertices (endpoints of the major axis)
++vertices = ellipse.get_vertices()
++# Choose the first vertex as the starting point for the arrow
++x, y = vertices[0]
++
++# Add an arrow to indicate counter-clockwise rotation
++# The arrow is placed at the vertex and points along the tangent.
++# For a simple demonstration, we draw an arrow from the vertex to a point
++# slightly rotated along the ellipse.
++import numpy as np
++
++# Compute a point slightly rotated along the ellipse in counter-clockwise direction
++# We use the transformation to get a point at a small angle from the vertex.
++from matplotlib.transforms import Affine2D
++transform = ellipse.get_patch_transform()
++# Point at angle 10 degrees in unit circle
++point = transform.transform([(np.cos(np.radians(10)), np.sin(np.radians(10)))])
++
++# Draw arrow from vertex to the new point
++ax.annotate('', xy=point[0], xytext=(x, y),
++            arrowprops=dict(arrowstyle='->', lw=2, color='red'))
++
++ax.set_aspect('equal')
++ax.set_xlim(0, 1)
++ax.set_ylim(0, 1)
++ax.set_title('Ellipse with arrow indicating rotation')
++
++plt.show()

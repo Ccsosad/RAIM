@@ -1,0 +1,14 @@
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index d43c130..d03b9d4 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -188,6 +188,9 @@ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
+ 
+             ns = {}  # type: Dict[str, Any]
+ 
++            # Read the configuration for imported members
++            imported_members = getattr(app.config, 'autosummary_imported_members', False)
++
+             if doc.objtype == 'module':
+                 ns['members'] = dir(obj)
+                 ns['functions'], ns['all_functions'] = \

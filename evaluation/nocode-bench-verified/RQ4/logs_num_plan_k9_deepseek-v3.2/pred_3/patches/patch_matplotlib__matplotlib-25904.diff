@@ -1,0 +1,49 @@
+diff --git a/lib/matplotlib/spines.py b/lib/matplotlib/spines.py
+index 915b34c..7ee415a 100644
+--- a/lib/matplotlib/spines.py
++++ b/lib/matplotlib/spines.py
+@@ -479,7 +479,7 @@ class Spine(mpatches.Patch):
+ 
+ class SpinesProxy:
+     """
+-    A proxy to broadcast ``set_*`` method calls to all contained `.Spines`.
++    A proxy to broadcast ``set`` and ``set_*`` method calls to all contained `.Spines`.
+ 
+     The proxy cannot be used for any other operations on its members.
+ 
+@@ -490,6 +490,20 @@ class SpinesProxy:
+     def __init__(self, spine_dict):
+         self._spine_dict = spine_dict
+ 
++    def set(self, **kwargs):
++        """
++        Set properties on all spines in the proxy.
++
++        This method broadcasts the keyword arguments to the ``set`` method
++        of each spine. For example::
++
++            ax.spines[:].set(visible=False, color='red')
++
++        See also `matplotlib.artist.Artist.set`.
++        """
++        for spine in self._spine_dict.values():
++            spine.set(**kwargs)
++
+     def __getattr__(self, name):
+         broadcast_targets = [spine for spine in self._spine_dict.values()
+                              if hasattr(spine, name)]
+@@ -505,7 +519,7 @@ class SpinesProxy:
+         return x
+ 
+     def __dir__(self):
+-        names = []
++        names = ['set']
+         for spine in self._spine_dict.values():
+             names.extend(name
+                          for name in dir(spine) if name.startswith('set_'))
+@@ -585,4 +599,4 @@ class Spines(MutableMapping):
+         return iter(self._dict)
+ 
+     def __len__(self):
+-        return len(self._dict)
++        return len(self._dict)

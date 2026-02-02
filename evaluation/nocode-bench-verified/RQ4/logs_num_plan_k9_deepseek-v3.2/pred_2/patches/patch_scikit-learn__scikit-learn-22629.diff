@@ -1,0 +1,45 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..00beeb8 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -131,7 +131,7 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+             Labels as normalized encodings.
+         """
+         check_is_fitted(self)
+-        y = column_or_1d(y, warn=True)
++        y = column_or_1d(y, warn=True, dtype=None)
+         # transform of empty array is empty array
+         if _num_samples(y) == 0:
+             return np.array([])
+diff --git a/sklearn/utils/validation.py b/sklearn/utils/validation.py
+index 5a024da..4d9edb9 100644
+--- a/sklearn/utils/validation.py
++++ b/sklearn/utils/validation.py
+@@ -1140,7 +1140,7 @@ def _check_y(y, multi_output=False, y_numeric=False, estimator=None):
+     return y
+ 
+ 
+-def column_or_1d(y, *, warn=False):
++def column_or_1d(y, *, warn=False, dtype=None):
+     """Ravel column or 1d numpy array, else raises an error.
+ 
+     Parameters
+@@ -1150,6 +1150,9 @@ def column_or_1d(y, *, warn=False):
+ 
+     warn : bool, default=False
+        To control display of warnings.
++       
++    dtype : data-type, default=None
++       Data type for the output array. If None, the dtype is inferred.
+ 
+     Returns
+     -------
+@@ -1162,7 +1165,7 @@ def column_or_1d(y, *, warn=False):
+         If `y` is not a 1D array or a 2D array with a single row or column.
+     """
+     xp, _ = get_namespace(y)
+-    y = xp.asarray(y)
++    y = xp.asarray(y) if dtype is None else xp.asarray(y, dtype=dtype)
+     shape = y.shape
+     if len(shape) == 1:
+         return _asarray_with_order(xp.reshape(y, -1), order="C", xp=xp)

@@ -1,0 +1,209 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..d4badf1 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3310,6 +3310,204 @@ class Table:
+ 
+         return cls(out)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise.
++
++        Parameters
++        ----------
++        other : Table, array-like, or scalar
++            The object to compare with the table.
++
++        Returns
++        -------
++        result : Table
++            A boolean table with the same structure as the original table,
++            where each element indicates whether the corresponding element
++            in the table is equal to `other`.
++
++        Raises
++        ------
++        TypeError
++            If `other` is not a Table, array-like, or scalar.
++        ValueError
++            If `other` is a Table with different column names or an array
++            with incompatible shape.
++
++        Examples
++        --------
++        >>> t1 = Table([[1, 2], [3, 4]], names=['a', 'b'])
++        >>> t2 = Table([[1, 2], [3, 5]], names=['a', 'b'])
++        >>> t1.values_equal(t2)
++        <Table length=2>
++         a     b
++        bool  bool
++        ---- -----
++        True  True
++        True False
++
++        >>> t1.values_equal([1, 3])
++        <Table length=2>
++          a     b
++         bool  bool
++        ----- -----
++         True  True
++        False False
++
++        >>> t1.values_equal(3)
++        <Table length=2>
++          a     b
++         bool  bool
++        ----- -----
++        False  True
++        False False
++        """
++        # Case 1: other is a Table
++        if isinstance(other, self.__class__):
++            # Check if column names are the same
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # Check if shapes are the same
++            if len(self) != len(other):
++                raise ValueError('cannot compare tables with different number of rows')
++            # Compare each column element-wise
++            result = self.__class__(masked=False)
++            for name in self.colnames:
++                col_self = self[name]
++                col_other = other[name]
++                # Use numpy element-wise comparison
++                eq = (col_self == col_other)
++                if isinstance(eq, np.ma.MaskedArray):
++                    eq = eq.filled(False)
++                result[name] = eq
++            return result
++
++        # Case 2: other is array-like (list, tuple, np.ndarray, etc.)
++        elif np.ndim(other) == 1 and len(other) == len(self.colnames):
++            # Column-wise comparison: each column compared to one element of the array
++            result = self.__class__(masked=False)
++            for i, name in enumerate(self.colnames):
++                col_self = self[name]
++                # Compare the entire column with the scalar value other[i]
++                eq = (col_self == other[i])
++                if isinstance(eq, np.ma.MaskedArray):
++                    eq = eq.filled(False)
++                result[name] = eq
++            return result
++
++        # Case 3: other is a scalar
++        elif np.isscalar(other):
++            result = self.__class__(masked=False)
++            for name in self.colnames:
++                col_self = self[name]
++                eq = (col_self == other)
++                if isinstance(eq, np.ma.MaskedArray):
++                    eq = eq.filled(False)
++                result[name] = eq
++            return result
++
++        else:
++            raise TypeError('cannot compare table with {}; must be Table, array-like with length '
++                            'equal to number of columns, or scalar'.format(type(other).__name__))
++
++    def values_equal(self, other):
++        """
++        Compare table values element-wise.
++
++        Parameters
++        ----------
++        other : Table, array-like, or scalar
++            The object to compare with the table.
++
++        Returns
++        -------
++        result : Table
++            A boolean table with the same structure as the original table,
++            where each element indicates whether the corresponding element
++            in the table is equal to `other`.
++
++        Raises
++        ------
++        TypeError
++            If `other` is not a Table, array-like, or scalar.
++        ValueError
++            If `other` is a Table with different column names or an array
++            with incompatible shape.
++
++        Examples
++        --------
++        >>> t1 = Table([[1, 2], [3, 4]], names=['a', 'b'])
++        >>> t2 = Table([[1, 2], [3, 5]], names=['a', 'b'])
++        >>> t1.values_equal(t2)
++        <Table length=2>
++         a     b
++        bool  bool
++        ---- -----
++        True  True
++        True False
++
++        >>> t1.values_equal([1, 3])
++        <Table length=2>
++          a     b
++         bool  bool
++        ----- -----
++         True  True
++        False False
++
++        >>> t1.values_equal(3)
++        <Table length=2>
++          a     b
++         bool  bool
++        ----- -----
++        False  True
++        False False
++        """
++        from astropy.table import Table
++
++        # Case 1: other is a Table
++        if isinstance(other, Table):
++            # Check if column names are the same
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # Check if shapes are the same
++            if len(self) != len(other):
++                raise ValueError('cannot compare tables with different number of rows')
++            # Compare each column element-wise
++            result = Table(masked=self.masked or other.masked)
++            for name in self.colnames:
++                col_self = self[name]
++                col_other = other[name]
++                # Use numpy element-wise comparison
++                result[name] = (col_self == col_other)
++            return result
++
++        # Case 2: other is array-like (list, tuple, np.ndarray, etc.)
++        elif np.ndim(other) == 1 and len(other) == len(self.colnames):
++            # Column-wise comparison: each column compared to one element of the array
++            result = Table(masked=self.masked)
++            for i, name in enumerate(self.colnames):
++                col_self = self[name]
++                # Compare the entire column with the scalar value other[i]
++                result[name] = (col_self == other[i])
++            return result
++
++        # Case 3: other is a scalar
++        elif np.isscalar(other):
++            result = Table(masked=self.masked)
++            for name in self.colnames:
++                col_self = self[name]
++                result[name] = (col_self == other)
++            return result
++
++        # Case 4: other is an array with the same shape as the table?
++        # Actually, the requirement says array for column-wise comparison, which is handled above.
++        # But we should also handle an array with the same shape as the table (element-wise)?
++        # The requirement says "array (for column-wise comparison)", so we stick to that.
++
++        else:
++            raise TypeError('cannot compare table with {}; must be Table, array-like with length '
++                            'equal to number of columns, or scalar'.format(type(other).__name__))
++
+     info = TableInfo()
+ 
+ 

@@ -1,0 +1,49 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index dbde177..5fef907 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -824,7 +824,43 @@ class Table:
+                 try:
+                     cols[name].append(row[name])
+                 except KeyError:
+-                    raise ValueError(f'Row {i} has no value for column {name}')
++                    # Instead of raising an error, we append a masked placeholder.
++                    # We'll use None as a placeholder and later convert to masked.
++                    cols[name].append(None)
++
++        # Determine if any column has missing values (None)
++        has_missing = any(None in col for col in cols.values())
++        
++        # If there are missing values and the table is not already masked,
++        # we need to convert to a masked table.
++        if has_missing and not self.masked:
++            self._set_masked(True)
++
++        # Now convert the columns to appropriate column objects, handling None.
++        for name, col_vals in cols.items():
++            if None in col_vals:
++                # Create a masked column.
++                # First, create a regular array with the values, then mask the None entries.
++                # We need to infer the dtype from the non-None values.
++                non_none_vals = [val for val in col_vals if val is not None]
++                if non_none_vals:
++                    # Infer dtype from the first non-None value.
++                    first_val = non_none_vals[0]
++                    if isinstance(first_val, (int, float, complex)):
++                        dtype_ = type(first_val)
++                    else:
++                        dtype_ = object
++                else:
++                    dtype_ = object
++                
++                # Create a masked array.
++                arr = np.array(col_vals, dtype=dtype_)
++                mask = np.array([val is None for val in col_vals])
++                masked_arr = np.ma.array(arr, mask=mask)
++                cols[name] = masked_arr
++            else:
++                # No missing values, keep as list.
++                pass
+ 
+         if all(name is None for name in names):
+             names = names_from_data

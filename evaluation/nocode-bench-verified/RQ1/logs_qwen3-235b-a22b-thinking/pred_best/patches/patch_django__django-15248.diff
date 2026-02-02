@@ -1,0 +1,24 @@
+diff --git a/django/db/models/deletion.py b/django/db/models/deletion.py
+index 96922fd..52e4de0 100644
+--- a/django/db/models/deletion.py
++++ b/django/db/models/deletion.py
+@@ -76,8 +76,9 @@ def get_candidate_relations_to_delete(opts):
+ 
+ 
+ class Collector:
+-    def __init__(self, using):
++    def __init__(self, using, origin=None):
+         self.using = using
++        self.origin = origin
+         # Initially, {model: {instances}}, later values become lists.
+         self.data = defaultdict(set)
+         # {model: {(field, value): {instances}}}
+@@ -435,7 +436,7 @@ class Collector:
+                 if not model._meta.auto_created:
+                     for obj in instances:
+                         signals.post_delete.send(
+-                            sender=model, instance=obj, using=self.using
++                            sender=model, instance=obj, using=self.using, origin=self.origin
+                         )
+ 
+         # update collected instances

@@ -1,0 +1,21 @@
+diff --git a/astropy/visualization/wcsaxes/core.py b/astropy/visualization/wcsaxes/core.py
+index 573033c..48c686f 100644
+--- a/astropy/visualization/wcsaxes/core.py
++++ b/astropy/visualization/wcsaxes/core.py
+@@ -100,6 +100,16 @@ class WCSAxes(Axes):
+         super().__init__(fig, rect, **kwargs)
+         self._bboxes = []
+ 
++        # Auto-detect 1D plots
++        if frame_class is RectangularFrame:
++            # Only auto-detect if the user didn't specify a custom frame class
++            if slices is not None:
++                n_x = slices.count('x')
++                n_y = slices.count('y')
++                if (n_x == 1 and n_y == 0) or (n_x == 0 and n_y == 1):
++                    from .frame import RectangularFrame1D
++                    frame_class = RectangularFrame1D
++
+         self.frame_class = frame_class
+ 
+         if not (transData is None):

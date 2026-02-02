@@ -1,0 +1,82 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..0b23115 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -995,11 +995,11 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+                                http_headers=None, ftp_tls=None):
+     from astropy.utils.console import ProgressBarOrSpinner
+ 
+-    if timeout == 0:
++    if timeout == 0 or not conf.allow_internet:
+         raise urllib.error.URLError(
+-            f"URL {remote_url} was supposed to be downloaded but timeout was set to 0; "
+-            f"if this is unexpected check the astropy config file for the option "
+-            f"remote_timeout")
++            f"URL {remote_url} was supposed to be downloaded but internet access is not allowed; "
++            f"if this is unexpected check the astropy config file for the options "
++            f"remote_timeout and allow_internet")
+ 
+     if remote_url is None:
+         remote_url = source_url
+@@ -1122,7 +1122,9 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+     timeout : float, optional
+         The timeout, in seconds.  Otherwise, use
+         `astropy.utils.data.Conf.remote_timeout`. Set this to zero to prevent
+-        any attempt to download anything.
++        any attempt to download anything. Alternatively, set
++        `astropy.utils.data.Conf.allow_internet` to False to prevent any
++        internet access.
+ 
+     sources : list of str, optional
+         If provided, a list of URLs to try to obtain the file from. The
+@@ -1197,8 +1199,27 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+                 if os.path.exists(filename):
+                     return os.path.abspath(filename)
+ 
+-    errors = {}
++    # If allow_internet is False, we should skip any URL sources
++    filtered_sources = []
++    skipped_errors = {}
+     for source_url in sources:
++        if _is_url(source_url) and not conf.allow_internet:
++            skipped_errors[source_url] = RuntimeError(
++                f"Internet access is not allowed (allow_internet={conf.allow_internet}), "
++                f"so URL {source_url} was skipped.")
++        else:
++            filtered_sources.append(source_url)
++
++    # If there are no sources left, raise an error
++    if not filtered_sources and sources:
++        # All sources were skipped due to allow_internet=False
++        raise urllib.error.URLError(
++            f"Unable to open any source! Internet access is not allowed. "
++            f"Skipped sources: {list(skipped_errors.keys())}") \
++            from list(skipped_errors.values())[0]
++
++    errors = {}
++    for source_url in filtered_sources:
+         try:
+             f_name = _download_file_from_source(
+                     source_url,
+@@ -1229,17 +1250,17 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+             # instead.
+             errors[source_url] = e
+     else:   # No success
+-        if not sources:
++        if not filtered_sources:
+             raise KeyError(
+                 f"No sources listed and file {remote_url} not in cache! "
+                 f"Please include primary URL in sources if you want it to be "
+                 f"included as a valid source.")
+-        elif len(sources) == 1:
+-            raise errors[sources[0]]
++        elif len(filtered_sources) == 1:
++            raise errors[filtered_sources[0]]
+         else:
+             raise urllib.error.URLError(
+                 f"Unable to open any source! Exceptions were {errors}") \
+-                from errors[sources[0]]
++                from errors[filtered_sources[0]]
+ 
+     if cache:
+         try:

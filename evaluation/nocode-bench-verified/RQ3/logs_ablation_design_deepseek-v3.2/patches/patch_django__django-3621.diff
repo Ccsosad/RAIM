@@ -1,0 +1,29 @@
+diff --git a/django/template/defaulttags.py b/django/template/defaulttags.py
+index 8c6c1d4..0ce160d 100644
+--- a/django/template/defaulttags.py
++++ b/django/template/defaulttags.py
+@@ -1198,12 +1198,21 @@ def now(parser, token):
+     Sample usage::
+ 
+         It is {% now "jS F Y H:i" %}
++
++    You can also use the syntax ``{% now "Y" as current_year %}`` to store the
++    output inside a variable.
+     """
+     bits = token.split_contents()
+-    if len(bits) != 2:
+-        raise TemplateSyntaxError("'now' statement takes one argument")
++    if len(bits) not in (2, 4):
++        raise TemplateSyntaxError("'now' statement takes one or three arguments")
+     format_string = bits[1][1:-1]
+-    return NowNode(format_string)
++    if len(bits) == 2:
++        return NowNode(format_string)
++    else:
++        if bits[2] != 'as':
++            raise TemplateSyntaxError("'now' statement second argument must be 'as'")
++        variable_name = bits[3]
++        return NowNode(format_string, variable_name)
+ 
+ 
+ @register.tag

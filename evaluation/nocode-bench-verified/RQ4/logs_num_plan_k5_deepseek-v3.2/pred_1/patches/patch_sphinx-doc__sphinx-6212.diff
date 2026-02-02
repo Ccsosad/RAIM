@@ -1,0 +1,15 @@
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index d43c130..67aa799 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -94,6 +94,10 @@ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
+                               imported_members=False, app=None):
+     # type: (List[str], str, str, Callable, Callable, str, Builder, str, bool, Any) -> None
+ 
++    # If app is provided, override imported_members with config value
++    if app is not None:
++        imported_members = app.config.autosummary_imported_members
++
+     showed_sources = list(sorted(sources))
+     if len(showed_sources) > 20:
+         showed_sources = showed_sources[:10] + ['...'] + showed_sources[-10:]

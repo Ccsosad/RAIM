@@ -1,0 +1,36 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d9aca35..ed0b0ba 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -313,6 +313,7 @@ class PyObject(ObjectDescription):
+         'noindex': directives.flag,
+         'module': directives.unchanged,
+         'annotation': directives.unchanged,
++        'canonical': directives.unchanged,
+     }
+ 
+     doc_field_types = [
+@@ -391,6 +392,7 @@ class PyObject(ObjectDescription):
+         signode['module'] = modname
+         signode['class'] = classname
+         signode['fullname'] = fullname
++        signode['canonical'] = self.options.get('canonical')
+ 
+         sig_prefix = self.get_signature_prefix(sig)
+         if sig_prefix:
+@@ -438,7 +440,14 @@ class PyObject(ObjectDescription):
+ 
+     def add_target_and_index(self, name_cls: Tuple[str, str], sig: str,
+                              signode: desc_signature) -> None:
+-        modname = self.options.get('module', self.env.ref_context.get('py:module'))
++        # Use canonical module if specified, otherwise fall back to the current module
++        canonical = self.options.get('canonical')
++        if canonical:
++            # Extract module from canonical full qualified name
++            # canonical format: "module.name" or "package.module.name"
++            modname = canonical.rsplit('.', 1)[0] if '.' in canonical else ''
++        else:
++            modname = self.options.get('module', self.env.ref_context.get('py:module'))
+         fullname = (modname + '.' if modname else '') + name_cls[0]
+         node_id = make_id(self.env, self.state.document, '', fullname)
+         signode['ids'].append(node_id)

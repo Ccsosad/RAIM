@@ -1,0 +1,85 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..21e9b13 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -67,6 +67,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -74,6 +75,9 @@ def expand_modules(
+     result: dict[str, ModuleDescriptionDict] = {}
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
++    if source_roots:
++        # Add source roots to the path to allow discovering implicit namespace packages
++        path = list(source_roots) + path
+ 
+     for something in files_or_modules:
+         basename = os.path.basename(something)
+@@ -160,4 +164,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 21f6e51..bf3ae51 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -638,7 +638,7 @@ class PyLinter(
+                         skip_subtrees.append(root)
+                         continue
+ 
+-                    if "__init__.py" in files:
++                    if "__init__.py" in files or self._is_in_source_root(root):
+                         skip_subtrees.append(root)
+                         yield root
+                     else:
+@@ -891,6 +891,7 @@ class PyLinter(
+             self.config.ignore,
+             self.config.ignore_patterns,
+             self._ignore_paths,
++            source_roots=getattr(self.config, 'source_roots', ()),
+         )
+         for error in errors:
+             message = modname = error["mod"]
+@@ -933,6 +934,29 @@ class PyLinter(
+             if namespace:
+                 self.config = namespace or self._base_config
+ 
++    def _is_in_source_root(self, path: str) -> bool:
++        """Return True if the given path is under any of the source roots."""
++        source_roots = getattr(self.config, 'source_roots', ())
++        for root in source_roots:
++            try:
++                if os.path.commonpath([root, path]) == root:
++                    return True
++            except ValueError:
++                # This can happen if the root and path are on different drives on Windows.
++                continue
++        return False
++
++    def _is_in_source_root(self, path: str) -> bool:
++        """Return True if the given path is under any of the source roots."""
++        for root in self.config.source_roots:
++            try:
++                if os.path.commonpath([root, path]) == root:
++                    return True
++            except ValueError:
++                # This can happen if the root and path are on different drives on Windows.
++                continue
++        return False
++
+     def _get_namespace_for_file(
+         self, filepath: Path, namespaces: DirectoryNamespaceDict
+     ) -> argparse.Namespace | None:
+@@ -1367,4 +1391,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)

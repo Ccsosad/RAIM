@@ -1,0 +1,181 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index 5d84827..2ad2101 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -368,6 +368,176 @@ def hstack(tables, join_type='outer',
+     return out
+ 
+ 
++def cstack(tables, join_type='outer', metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along a third axis)
++
++    This corresponds roughly to running `numpy.dstack` on the individual
++    columns matched by name. All input tables must have the same number
++    of rows.
++
++    Parameters
++    ----------
++    tables : List of Table objects
++        Tables to stack depth-wise with the current table
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    metadata_conflicts : str
++        How to proceed with metadata conflicts. This should be one of:
++            * ``'silent'``: silently pick the last conflicting meta-data value
++            * ``'warn'``: pick the last conflicting meta-data value, but emit a warning (default)
++            * ``'error'``: raise an exception.
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++
++    Examples
++    --------
++    To stack two tables depth-wise do::
++
++      >>> from astropy.table import Table, cstack
++      >>> src1 = Table.read("""psf_frac  counts
++      ...                      0.10        45
++      ...                      0.50        90
++      ...                      0.90       120
++      ...                      """, format='ascii')
++      >>> src2 = Table.read("""psf_frac  counts
++      ...                      0.10       200
++      ...                      0.50       300
++      ...                      0.90       350
++      ...                      """, format='ascii')
++      >>> srcs = cstack([src1, src2])
++      >>> print(srcs)
++      psf_frac [2] counts [2]
++      ------------ ----------
++        0.1 .. 0.1  45 .. 200
++        0.5 .. 0.5  90 .. 300
++        0.9 .. 0.9 120 .. 350
++    """
++    tables = _get_list_of_tables(tables)  # validates input
++    if len(tables) == 1:
++        return tables[0]  # no point in stacking a single table
++    col_name_map = OrderedDict()
++
++    out = _cstack(tables, join_type, col_name_map)
++
++    _merge_table_meta(out, tables, metadata_conflicts=metadata_conflicts)
++
++    return out
++
++
++def cstack(tables, join_type='outer', metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along a third axis)
++
++    This corresponds roughly to running `numpy.dstack` on the individual
++    columns matched by name. All input tables must have the same number
++    of rows.
++
++    Parameters
++    ----------
++    tables : List of Table objects
++        Tables to stack depth-wise with the current table
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    metadata_conflicts : str
++        How to proceed with metadata conflicts. This should be one of:
++            * ``'silent'``: silently pick the last conflicting meta-data value
++            * ``'warn'``: pick the last conflicting meta-data value, but emit a warning (default)
++            * ``'error'``: raise an exception.
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++
++    Examples
++    --------
++    To stack two tables depth-wise do::
++
++      >>> from astropy.table import Table, cstack
++      >>> src1 = Table.read("""psf_frac  counts
++      ...                      0.10        45
++      ...                      0.50        90
++      ...                      0.90       120
++      ...                      """, format='ascii')
++      >>> src2 = Table.read("""psf_frac  counts
++      ...                      0.10       200
++      ...                      0.50       300
++      ...                      0.90       350
++      ...                      """, format='ascii')
++      >>> srcs = cstack([src1, src2])
++      >>> print(srcs)
++      psf_frac [2] counts [2]
++      ------------ ----------
++        0.1 .. 0.1  45 .. 200
++        0.5 .. 0.5  90 .. 300
++        0.9 .. 0.9 120 .. 350
++    """
++    tables = _get_list_of_tables(tables)  # validates input
++    if len(tables) == 1:
++        return tables[0]  # no point in stacking a single table
++
++    # Check that all tables have the same number of rows
++    n_rows = {len(t) for t in tables}
++    if len(n_rows) > 1:
++        raise ValueError("All tables must have the same number of rows for depth-wise stacking")
++
++    # Get the set of all column names
++    all_names = set()
++    for t in tables:
++        all_names.update(t.colnames)
++
++    # Determine which columns to include based on join_type
++    if join_type == 'exact':
++        # All tables must have the same columns
++        col_sets = [set(t.colnames) for t in tables]
++        if any(col_sets[0] != s for s in col_sets[1:]):
++            raise ValueError("For join_type='exact', all tables must have the same columns")
++        common_names = col_sets[0]
++    elif join_type == 'inner':
++        # Only columns that are in all tables
++        common_names = set.intersection(*[set(t.colnames) for t in tables])
++    elif join_type == 'outer':
++        # All columns from any table
++        common_names = all_names
++    else:
++        raise ValueError("join_type must be one of 'inner', 'exact', or 'outer'")
++
++    # Create a new table
++    from astropy.table import Table, Column
++    out = Table()
++
++    for name in common_names:
++        # Collect columns from each table that have this name
++        cols = []
++        for t in tables:
++            if name in t.colnames:
++                cols.append(t[name])
++            else:
++                # For outer join, create a masked column with the right shape
++                if join_type == 'outer':
++                    from astropy.table import MaskedColumn
++                    col = MaskedColumn(data=np.ma.masked_all((len(t),)), name=name)
++                    cols.append(col)
++                else:
++                    # This should not happen for inner or exact
++                    raise ValueError(f"Column {name} is missing in some table")
++
++        # Stack the columns depth-wise
++        stacked_data = np.dstack([col.data for col in cols])
++        # Create a new column with the stacked data
++        new_col = Column(data=stacked_data, name=name)
++        out.add_column(new_col)
++
++    # Merge table metadata
++    _merge_table_meta(out, tables, metadata_conflicts=metadata_conflicts)
++
++    return out
++
++
+ def unique(input_table, keys=None, silent=False, keep='first'):
+     """
+     Returns the unique rows of a table.

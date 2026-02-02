@@ -1,0 +1,18 @@
+diff --git a/sklearn/datasets/_arff_parser.py b/sklearn/datasets/_arff_parser.py
+index 1439b17..b91a34f 100644
+--- a/sklearn/datasets/_arff_parser.py
++++ b/sklearn/datasets/_arff_parser.py
+@@ -393,6 +393,7 @@ def _pandas_arff_parser(
+         "escapechar": "\\",
+         "dtype": dtypes_positional,
+     }
++    # merge defaults with user-provided kwargs, letting user values override
+     read_csv_kwargs = {**default_read_csv_kwargs, **(read_csv_kwargs or {})}
+     frame = pd.read_csv(gzip_file, **read_csv_kwargs)
+     try:
+@@ -534,4 +535,4 @@ def load_arff_from_gzip_file(
+     else:
+         raise ValueError(
+             f"Unknown parser: '{parser}'. Should be 'liac-arff' or 'pandas'."
+-        )
++        )

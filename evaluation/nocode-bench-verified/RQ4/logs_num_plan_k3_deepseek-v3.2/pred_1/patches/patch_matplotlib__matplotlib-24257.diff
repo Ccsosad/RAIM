@@ -1,0 +1,136 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..a8b4562 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -232,8 +232,45 @@ class _StyleLibrary(dict):
+             _api.warn_deprecated("3.6", message=_DEPRECATED_SEABORN_MSG)
+             key = _DEPRECATED_SEABORN_STYLES[key]
+ 
++        # Check if it's a package style.
++        if '.' in key:
++            # Split into package and style name.
++            parts = key.split('.')
++            if len(parts) != 2:
++                # We only support one level of dot? Actually, the requirement says
++                # subpackages are supported. So we should allow multiple dots.
++                # The last part is the style name, the rest is the package.
++                package_name = '.'.join(parts[:-1])
++                style_name = parts[-1]
++            else:
++                package_name, style_name = parts
++
++            # Load the style from the package.
++            from .package_styles import load_package_style
++            try:
++                return load_package_style(package_name, style_name)
++            except OSError as e:
++                # If the style cannot be loaded, we fall back to the dict.
++                # But we should raise a KeyError with a helpful message.
++                raise KeyError(f"Cannot load style {key!r} from package {package_name!r}") from e
++
+         return dict.__getitem__(self, key)
+ 
++    def __contains__(self, key):
++        # First, check the deprecated styles.
++        if key in _DEPRECATED_SEABORN_STYLES:
++            key = _DEPRECATED_SEABORN_STYLES[key]
++
++        # If it's a package style, we cannot know without trying to load.
++        if '.' in key:
++            # Try to load it. If it succeeds, then it exists.
++            try:
++                self.__getitem__(key)
++                return True
++            except KeyError:
++                return False
++        return dict.__contains__(self, key)
++
+ 
+ # Load style library
+ # ==================
+@@ -249,4 +286,4 @@ def reload_library():
+     available[:] = sorted(library.keys())
+ 
+ 
+-reload_library()
++reload_library()
+diff --git a/lib/matplotlib/style/package_styles.py b/lib/matplotlib/style/package_styles.py
+new file mode 100644
+index 0000000..0a6c4f8
+--- /dev/null
++++ b/lib/matplotlib/style/package_styles.py
+@@ -0,0 +1,74 @@
++"""
++Support for style files distributed in third-party packages.
++"""
++
++import sys
++import warnings
++
++from matplotlib import _api
++
++if sys.version_info >= (3, 10):
++    from importlib import resources
++else:
++    import importlib_resources as resources
++
++
++def load_package_style(package_name, style_name):
++    """
++    Load a style sheet from a package.
++
++    Parameters
++    ----------
++    package_name : str
++        The dotted name of the package (e.g., "mypackage").
++    style_name : str
++        The name of the style (e.g., "presentation").
++
++    Returns
++    -------
++    dict
++        The rcParams dictionary.
++
++    Raises
++    ------
++    OSError
++        If the resource does not exist.
++    """
++    # We don't import the package, but we use importlib.resources to access it.
++    # The style file should be located at:
++    #   package_name / style_name .mplstyle
++    # within the package's resource tree.
++    resource_path = f"{style_name}.mplstyle"
++    try:
++        # Use the files API to get a path-like object.
++        # This does not import the package.
++        ref = resources.files(package_name).joinpath(resource_path)
++        # Actually read the file.
++        with resources.as_file(ref) as path:
++            if not path.exists():
++                raise OSError(f"Style file {resource_path} not found in package {package_name}")
++            from matplotlib.style.core import rc_params_from_file
++            return rc_params_from_file(path, use_default_template=False)
++    except (AttributeError, ModuleNotFoundError, TypeError) as e:
++        # If the package doesn't exist or doesn't have the resource, we get an error.
++        raise OSError(f"Cannot load style {style_name} from package {package_name}") from e
++
++
++def is_package_style(style_name):
++    """
++    Check if a style name is a dotted package style.
++
++    Parameters
++    ----------
++    style_name : str
++        The style name to check.
++
++    Returns
++    -------
++    bool
++        True if the style name contains a dot and the part before the dot is a
++        valid package name (i.e., it can be resolved without importing).
++    """
++    # We consider it a package style if it contains at least one dot.
++    # We don't validate the package existence here to avoid overhead.
++    return '.' in style_name

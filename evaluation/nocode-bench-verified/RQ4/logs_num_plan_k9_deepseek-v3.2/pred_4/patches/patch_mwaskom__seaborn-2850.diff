@@ -1,0 +1,13 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 21c0562..455bde4 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -1623,7 +1623,7 @@ class PairGrid(Grid):
+             ax.set_xlabel(label)
+         for ax, label in zip(self.axes[:, 0], self.y_vars):
+             ax.set_ylabel(label)
+-        if self._corner:
++        if self._corner and self.diag_axes is not None and self.x_vars[0] == self.y_vars[0]:
+             self.axes[0, 0].set_ylabel("")
+ 
+     def _find_numeric_cols(self, data):

@@ -1,0 +1,274 @@
+diff --git a/xarray/plot/plot.py b/xarray/plot/plot.py
+index b16caf5..588684b 100644
+--- a/xarray/plot/plot.py
++++ b/xarray/plot/plot.py
+@@ -552,16 +552,16 @@ class _PlotMethods:
+     __call__.__annotations__ = plot.__annotations__
+ 
+     @functools.wraps(hist)
+-    def hist(self, ax=None, **kwargs):
++    def hist(self, *, ax=None, **kwargs):
+         return hist(self._da, ax=ax, **kwargs)
+ 
+     @functools.wraps(line)
+-    def line(self, *args, **kwargs):
+-        return line(self._da, *args, **kwargs)
++    def line(self, *, x: Hashable = None, y: Hashable = None, hue: Hashable = None, **kwargs):
++        return line(self._da, x=x, y=y, hue=hue, **kwargs)
+ 
+     @functools.wraps(step)
+-    def step(self, *args, **kwargs):
+-        return step(self._da, *args, **kwargs)
++    def step(self, *, x: Hashable = None, y: Hashable = None, hue: Hashable = None, **kwargs):
++        return step(self._da, x=x, y=y, hue=hue, **kwargs)
+ 
+ 
+ def override_signature(f):
+@@ -690,6 +690,23 @@ def _plot1d(plotfunc):
+         # All 1d plots in xarray share this function signature.
+         # Method signature below should be consistent.
+ 
++        # Deprecation warning for positional arguments
++        if args:
++            import warnings
++            warnings.warn(
++                "Positional arguments for plot methods are deprecated. "
++                "Use keyword arguments instead.",
++                FutureWarning,
++                stacklevel=2,
++            )
++            # Try to handle old-style positional arguments
++            if len(args) >= 1 and x is None:
++                x = args[0]
++            if len(args) >= 2 and y is None:
++                y = args[1]
++            if len(args) >= 3 and hue is None:
++                hue = args[2]
++
+         if subplot_kws is None:
+             subplot_kws = dict()
+ 
+@@ -833,7 +850,7 @@ def _plot1d(plotfunc):
+     @functools.wraps(newplotfunc)
+     def plotmethod(
+         _PlotMethods_obj,
+-        *args,
++        *,
+         x: Hashable = None,
+         y: Hashable = None,
+         z: Hashable = None,
+@@ -1119,9 +1136,58 @@ def _plot2d(plotfunc):
+         norm=None,
+         **kwargs,
+     ):
++        # Deprecation warning for positional arguments
++        import inspect
++        import warnings
++        
++        # Get the actual positional arguments passed
++        frame = inspect.currentframe()
++        caller_frame = frame.f_back if frame else None
++        if caller_frame:
++            call_args = inspect.getargvalues(caller_frame)
++            # Check if any positional arguments were passed (beyond 'darray')
++            if len(call_args.args) > 1 and call_args.args[1] in ['x', 'y']:
++                warnings.warn(
++                    "Positional arguments for plot methods are deprecated. "
++                    "Use keyword arguments instead.",
++                    FutureWarning,
++                    stacklevel=2,
++                )
+         # All 2d plots in xarray share this function signature.
+         # Method signature below should be consistent.
+ 
++        # Check for positional arguments (deprecated)
++        import inspect
++        import warnings
++        # This is a bit hacky but we need to check if x or y were passed positionally
++        # We can check the call stack
++        stack = inspect.stack()
++        if len(stack) > 1:
++            # Get the line that called this function
++            call_line = stack[1].code_context[0].strip() if stack[1].code_context else ''
++            # Check if it looks like positional arguments were used
++            # This is a simple heuristic - might not catch all cases
++            if call_line.count('(') > 0 and call_line.count(',') > 0:
++                # Look for patterns like plot(x, y) or plot(darray, x, y)
++                if not ('x=' in call_line or 'y=' in call_line):
++                    warnings.warn(
++                        "Positional arguments for plot methods are deprecated. "
++                        "Use keyword arguments instead.",
++                        FutureWarning,
++                        stacklevel=2,
++                    )
++
++        # Simple check for positional arguments
++        import warnings
++        # Check if kwargs contains positional arguments from old API
++        if 'args' in kwargs:
++            warnings.warn(
++                "Positional arguments for plot methods are deprecated. "
++                "Use keyword arguments instead.",
++                FutureWarning,
++                stacklevel=2,
++            )
++
+         # Decide on a default for the colorbar before facetgrids
+         if add_colorbar is None:
+             add_colorbar = True
+@@ -1319,6 +1385,7 @@ def _plot2d(plotfunc):
+     @functools.wraps(newplotfunc)
+     def plotmethod(
+         _PlotMethods_obj,
++        *,
+         x=None,
+         y=None,
+         figsize=None,
+diff --git a/xarray/plot/accessor.py b/xarray/plot/accessor.py
+new file mode 100644
+index 0000000..ad632b4
+--- /dev/null
++++ b/xarray/plot/accessor.py
+@@ -0,0 +1,142 @@
++"""
++Typed plot accessors for xarray objects.
++
++This module provides type hints for the plot accessors on DataArray and Dataset.
++"""
++
++from typing import TYPE_CHECKING, Any, Callable, Hashable, Literal, overload
++
++if TYPE_CHECKING:
++    from matplotlib.axes import Axes
++    from matplotlib.collections import PathCollection
++    from matplotlib.container import BarContainer
++    from matplotlib.figure import Figure
++    from matplotlib.quiver import Quiver
++    from matplotlib.streamplot import StreamplotSet
++
++    from ..core.dataarray import DataArray
++    from ..core.dataset import Dataset
++    from .facetgrid import FacetGrid
++
++
++class DataArrayPlotAccessor:
++    """Type stub for DataArray.plot accessor."""
++
++    def __init__(self, da: "DataArray") -> None:
++        ...
++
++    def __call__(self, **kwargs: Any) -> Any:
++        ...
++
++    def line(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        hue: Hashable | None = None,
++        **kwargs: Any,
++    ) -> "BarContainer | PathCollection | FacetGrid":
++        ...
++
++    def step(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        hue: Hashable | None = None,
++        **kwargs: Any,
++    ) -> "BarContainer | PathCollection | FacetGrid":
++        ...
++
++    def scatter(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        hue: Hashable | None = None,
++        **kwargs: Any,
++    ) -> "PathCollection | FacetGrid":
++        ...
++
++    def hist(self, ax: "Axes | None" = None, **kwargs: Any) -> Any:
++        ...
++
++    def imshow(
++        self,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Any:
++        ...
++
++    def pcolormesh(
++        self,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Any:
++        ...
++
++    def contour(
++        self,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Any:
++        ...
++
++    def contourf(
++        self,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Any:
++        ...
++
++    def surface(
++        self,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Any:
++        ...
++
++
++class DatasetPlotAccessor:
++    """Type stub for Dataset.plot accessor."""
++
++    def __init__(self, ds: "Dataset") -> None:
++        ...
++
++    def __call__(self, **kwargs: Any) -> Any:
++        ...
++
++    def scatter(
++        self,
++        x: Hashable,
++        y: Hashable,
++        *args: Any,
++        hue: Hashable | None = None,
++        **kwargs: Any,
++    ) -> "PathCollection | FacetGrid":
++        ...
++
++    def quiver(
++        self,
++        x: Hashable,
++        y: Hashable,
++        u: Hashable,
++        v: Hashable,
++        **kwargs: Any,
++    ) -> "Quiver | FacetGrid":
++        ...
++
++    def streamplot(
++        self,
++        x: Hashable,
++        y: Hashable,
++        u: Hashable,
++        v: Hashable,
++        **kwargs: Any,
++    ) -> "StreamplotSet | FacetGrid":
++        ...

@@ -1,0 +1,61 @@
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index daf5951..2a19a95 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1380,13 +1380,32 @@ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+                 return value
+ 
+     def __setitem__(self, key, value):
+-        raise TypeError(
+-            "this variable's data is stored in a dask array, "
+-            "which does not support item assignment. To "
+-            "assign to this variable, you must first load it "
+-            "into memory explicitly using the .load() "
+-            "method or accessing its .values attribute."
+-        )
++        from .dask_compat import dask_version_supports_item_assignment
++
++        if not dask_version_supports_item_assignment():
++            raise TypeError(
++                "this variable's data is stored in a dask array, "
++                "which does not support item assignment. To "
++                "assign to this variable, you must first load it "
++                "into memory explicitly using the .load() "
++                "method or accessing its .values attribute."
++            )
++
++        # Convert the indexer to a tuple that dask array can understand.
++        if isinstance(key, BasicIndexer):
++            key_tuple = key.tuple
++        elif isinstance(key, OuterIndexer):
++            key_tuple = key.tuple
++        elif isinstance(key, VectorizedIndexer):
++            # Dask array does not support vectorized indexing in __setitem__.
++            raise NotImplementedError(
++                "VectorizedIndexer is not supported for assignment to dask arrays."
++            )
++        else:
++            raise TypeError(f"Unsupported indexer type: {type(key)}")
++
++        # Dask array's __setitem__ returns a new array, so we replace the underlying array.
++        self.array = self.array.__setitem__(key_tuple, value)
+ 
+     def transpose(self, order):
+         return self.array.transpose(order)
+diff --git a/xarray/core/dask_compat.py b/xarray/core/dask_compat.py
+new file mode 100644
+index 0000000..5468dee
+--- /dev/null
++++ b/xarray/core/dask_compat.py
+@@ -0,0 +1,11 @@
++"""
++Compatibility functions for dask version-specific features.
++"""
++import dask
++
++
++def dask_version_supports_item_assignment() -> bool:
++    """Return True if the installed dask version supports item assignment on dask arrays."""
++    # Dask array __setitem__ has been available for a long time, but we require a recent version
++    # for proper support. We assume dask >= 2.0.0 supports it.
++    return dask.__version__ >= "2.0.0"

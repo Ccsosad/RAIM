@@ -1,0 +1,172 @@
+diff --git a/xarray/plot/plot.py b/xarray/plot/plot.py
+index b16caf5..7df479a 100644
+--- a/xarray/plot/plot.py
++++ b/xarray/plot/plot.py
+@@ -1,8 +1,11 @@
++
+ """
+-Use this module directly:
+-    import xarray.plot as xplt
++Main plotting module for xarray.
++
++This module is being renamed to dataarray_plot for clarity.
++For direct use, it is recommended to import from xarray.plot.dataarray_plot.
+ 
+-Or use the methods on a DataArray or Dataset:
++Alternatively, use the methods on a DataArray or Dataset:
+     DataArray.plot._____
+     Dataset.plot._____
+ """
+diff --git a/xarray/plot/accessor.py b/xarray/plot/accessor.py
+new file mode 100644
+index 0000000..35004c8
+--- /dev/null
++++ b/xarray/plot/accessor.py
+@@ -0,0 +1,104 @@
++"""
++Typed accessors for plotting.
++
++This module provides typed accessors for DataArray and Dataset plot methods.
++"""
++from __future__ import annotations
++
++from typing import TYPE_CHECKING, Any, Callable, Hashable, Literal
++
++if TYPE_CHECKING:
++    from ..core.dataarray import DataArray
++    from ..core.dataset import Dataset
++    from .facetgrid import FacetGrid
++
++    try:
++        import matplotlib.pyplot as plt
++    except ImportError:
++        plt: Any = None  # type: ignore
++
++    Collection = plt.matplotlib.collections.Collection
++
++
++class DataArrayPlotAccessor:
++    """Typed accessor for DataArray plot methods."""
++
++    def __init__(self, da: DataArray) -> None:
++        self._da = da
++
++    def __call__(self, **kwargs: Any) -> Any:
++        from .plot import plot
++
++        return plot(self._da, **kwargs)
++
++    def line(self, *args: Any, **kwargs: Any) -> Any:
++        from .plot import line
++
++        return line(self._da, *args, **kwargs)
++
++    def step(self, *args: Any, **kwargs: Any) -> Any:
++        from .plot import step
++
++        return step(self._da, *args, **kwargs)
++
++    def hist(self, *args: Any, **kwargs: Any) -> Any:
++        from .plot import hist
++
++        return hist(self._da, *args, **kwargs)
++
++    def scatter(self, *args: Any, **kwargs: Any) -> Any:
++        from .plot import scatter
++
++        return scatter(self._da, *args, **kwargs)
++
++    def imshow(self, *args: Any, **kwargs: Any) -> Any:
++        from .plot import imshow
++
++        return imshow(self._da, *args, **kwargs)
++
++    def contour(self, *args: Any, **kwargs: Any) -> Any:
++        from .plot import contour
++
++        return contour(self._da, *args, **kwargs)
++
++    def contourf(self, *args: Any, **kwargs: Any) -> Any:
++        from .plot import contourf
++
++        return contourf(self._da, *args, **kwargs)
++
++    def pcolormesh(self, *args: Any, **kwargs: Any) -> Any:
++        from .plot import pcolormesh
++
++        return pcolormesh(self._da, *args, **kwargs)
++
++    def surface(self, *args: Any, **kwargs: Any) -> Any:
++        from .plot import surface
++
++        return surface(self._da, *args, **kwargs)
++
++
++class DatasetPlotAccessor:
++    """Typed accessor for Dataset plot methods."""
++
++    def __init__(self, ds: Dataset) -> None:
++        self._ds = ds
++
++    def __call__(self, **kwargs: Any) -> Any:
++        from .dataset_plot import plot
++
++        return plot(self._ds, **kwargs)
++
++    def scatter(self, *args: Any, **kwargs: Any) -> Any:
++        from .dataset_plot import scatter
++
++        return scatter(self._ds, *args, **kwargs)
++
++    def quiver(self, *args: Any, **kwargs: Any) -> Any:
++        from .dataset_plot import quiver
++
++        return quiver(self._ds, *args, **kwargs)
++
++    def streamplot(self, *args: Any, **kwargs: Any) -> Any:
++        from .dataset_plot import streamplot
++
++        return streamplot(self._ds, *args, **kwargs)
+diff --git a/xarray/plot/dataarray_plot.py b/xarray/plot/dataarray_plot.py
+new file mode 100644
+index 0000000..1ce9936
+--- /dev/null
++++ b/xarray/plot/dataarray_plot.py
+@@ -0,0 +1,37 @@
++"""
++Plotting functions for DataArray.
++
++This module is a wrapper around the main plotting module to provide a
++cleaner import path and to avoid shadowing the plot method.
++"""
++from __future__ import annotations
++
++from typing import Any, Hashable
++
++from .plot import (
++    _PlotMethods,
++    contour,
++    contourf,
++    hist,
++    imshow,
++    line,
++    pcolormesh,
++    plot,
++    scatter,
++    step,
++    surface,
++)
++
++__all__ = [
++    "plot",
++    "line",
++    "step",
++    "hist",
++    "scatter",
++    "imshow",
++    "contour",
++    "contourf",
++    "pcolormesh",
++    "surface",
++    "_PlotMethods",
++]

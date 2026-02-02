@@ -1,0 +1,57 @@
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index daf5951..4f3df5d 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1380,13 +1380,24 @@ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+                 return value
+ 
+     def __setitem__(self, key, value):
+-        raise TypeError(
+-            "this variable's data is stored in a dask array, "
+-            "which does not support item assignment. To "
+-            "assign to this variable, you must first load it "
+-            "into memory explicitly using the .load() "
+-            "method or accessing its .values attribute."
+-        )
++        from . import dask_support
++
++        if dask_support.supports_setitem(self.array):
++            if isinstance(key, BasicIndexer):
++                self.array[key.tuple] = value
++            elif isinstance(key, VectorizedIndexer):
++                self.array.vindex[key.tuple] = value
++            else:
++                assert isinstance(key, OuterIndexer)
++                self.array[key.tuple] = value
++        else:
++            raise TypeError(
++                "this variable's data is stored in a dask array, "
++                "which does not support item assignment. To "
++                "assign to this variable, you must first load it "
++                "into memory explicitly using the .load() "
++                "method or accessing its .values attribute."
++            )
+ 
+     def transpose(self, order):
+         return self.array.transpose(order)
+diff --git a/xarray/core/dask_support.py b/xarray/core/dask_support.py
+new file mode 100644
+index 0000000..94b9874
+--- /dev/null
++++ b/xarray/core/dask_support.py
+@@ -0,0 +1,15 @@
++import importlib
++
++
++def supports_setitem(array) -> bool:
++    """Return True if the wrapped dask array supports item assignment."""
++    try:
++        da = importlib.import_module("dask.array")
++    except ImportError:
++        return False
++    # Dask added setitem support in version 2023.04.0
++    from packaging.version import Version
++
++    if isinstance(array, da.Array) and Version(da.__version__) >= Version("2023.4.0"):
++        return True
++    return False

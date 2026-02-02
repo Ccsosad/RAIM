@@ -1,0 +1,87 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..cf9ce12 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all dimensions that are not explicitly listed.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1863,6 +1864,10 @@ class DataArray(AbstractArray, DataWithCoords):
+         Dataset.transpose
+         """
+         if dims:
++            # Expand ellipsis
++            if ... in dims:
++                # Use the variable's method to expand
++                dims = self.variable._expand_ellipsis(dims)
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+@@ -3122,4 +3127,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..55ac0bc 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5449,4 +5449,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 873be99..f06a2d6 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -1202,6 +1202,22 @@ class Variable(
+             result = result._roll_one_dim(dim, count)
+         return result
+ 
++    def _expand_ellipsis(self, dims):
++        """Expand ... to all dimensions not explicitly listed."""
++        if ... not in dims:
++            return dims
++        if dims.count(...) > 1:
++            raise ValueError("Only one ellipsis may be used.")
++        # Find the position of the ellipsis
++        ellipsis_index = dims.index(...)
++        # Dimensions before and after the ellipsis
++        before = dims[:ellipsis_index]
++        after = dims[ellipsis_index + 1:]
++        # Dimensions not in before or after
++        other = [d for d in self.dims if d not in before and d not in after]
++        # Insert them at the ellipsis position
++        return before + tuple(other) + after
++
+     def transpose(self, *dims) -> "Variable":
+         """Return a new Variable object with transposed dimensions.
+ 
+@@ -1209,7 +1225,8 @@ class Variable(
+         ----------
+         *dims : str, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all dimensions that are not explicitly listed.
+ 
+         Returns
+         -------
+@@ -1228,6 +1245,8 @@ class Variable(
+         """
+         if len(dims) == 0:
+             dims = self.dims[::-1]
++        # Expand ellipsis
++        dims = self._expand_ellipsis(dims)
+         axes = self.get_axis_num(dims)
+         if len(dims) < 2:  # no need to transpose if only one dimension
+             return self.copy(deep=False)

@@ -1,0 +1,54 @@
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 38580cf..b854734 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -136,6 +136,20 @@ def _validate_date(s):
+         raise ValueError(
+             f'{s!r} should be a string that can be parsed by numpy.datetime64')
+ 
++def validate_ndivs(s):
++    """
++    Validate ndivs: either an integer >= 1 or the string 'auto'.
++    """
++    if s == 'auto':
++        return 'auto'
++    try:
++        n = int(s)
++        if n < 1:
++            raise ValueError
++        return n
++    except (ValueError, TypeError):
++        raise ValueError(f'{s!r} must be an integer >= 1 or the string "auto"')
++
+ 
+ def validate_bool(b):
+     """Convert b to ``bool`` or raise."""
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..af2b117 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2891,13 +2891,18 @@ class AutoMinorLocator(Locator):
+             return []
+ 
+         if self.ndivs is None:
+-
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
++            # Get the rcParam for this axis
++            axis_name = self.axis.axis_name  # 'x' or 'y'
++            rc_key = f"{axis_name}tick.minor.ndivs"
++            rc_val = mpl.rcParams.get(rc_key, 'auto')
++            if rc_val == 'auto':
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+             else:
+-                ndivs = 4
++                ndivs = rc_val
+         else:
+             ndivs = self.ndivs
+ 

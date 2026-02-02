@@ -1,0 +1,19 @@
+diff --git a/sklearn/base.py b/sklearn/base.py
+index 858d304..7888189 100644
+--- a/sklearn/base.py
++++ b/sklearn/base.py
+@@ -66,7 +66,13 @@ def clone(estimator, *, safe=True):
+     # XXX: not handling dictionaries
+     if estimator_type in (list, tuple, set, frozenset):
+         return estimator_type([clone(e, safe=safe) for e in estimator])
+-    elif not hasattr(estimator, "get_params") or isinstance(estimator, type):
++    
++    # Check if the estimator has a __sklearn_clone__ method.
++    # If it does, call it and return the result.
++    if hasattr(estimator, "__sklearn_clone__"):
++        return estimator.__sklearn_clone__()
++    
++    if not hasattr(estimator, "get_params") or isinstance(estimator, type):
+         if not safe:
+             return copy.deepcopy(estimator)
+         else:

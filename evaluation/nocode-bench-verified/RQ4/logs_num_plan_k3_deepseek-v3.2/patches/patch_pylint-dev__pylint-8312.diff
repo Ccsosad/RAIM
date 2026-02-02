@@ -1,0 +1,64 @@
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 336078d..ba01d99 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -899,8 +899,12 @@ class PyLinter(
+         self, files_or_modules: Sequence[str]
+     ) -> dict[str, ModuleDescriptionDict]:
+         """Get modules and errors from a list of modules and handle errors."""
++        # Expand glob patterns in the input
++        from pylint.lint.glob_utils import expand_globs
++
++        expanded = expand_globs(files_or_modules)
+         result, errors = expand_modules(
+-            files_or_modules,
++            expanded,
+             self.config.source_roots,
+             self.config.ignore,
+             self.config.ignore_patterns,
+@@ -1381,4 +1385,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)
+diff --git a/pylint/lint/glob_utils.py b/pylint/lint/glob_utils.py
+new file mode 100644
+index 0000000..249cc7e
+--- /dev/null
++++ b/pylint/lint/glob_utils.py
+@@ -0,0 +1,34 @@
++"""Utilities for glob pattern expansion."""
++import glob
++import os
++from typing import Sequence
++
++
++def expand_globs(files_or_modules: Sequence[str]) -> list[str]:
++    """Expand any glob patterns in the input sequence.
++
++    Parameters
++    ----------
++    files_or_modules : Sequence[str]
++        A sequence of paths, which may contain glob patterns.
++
++    Returns
++    -------
++    list[str]
++        A list of paths with glob patterns expanded.
++        Non-glob entries are passed through unchanged.
++    """
++    expanded: list[str] = []
++    for pattern in files_or_modules:
++        # Only expand if the pattern contains a wildcard
++        if "*" in pattern or "?" in pattern or "[" in pattern:
++            # Use recursive glob if pattern ends with '**'
++            if "**" in pattern:
++                matches = glob.glob(pattern, recursive=True)
++            else:
++                matches = glob.glob(pattern, recursive=False)
++            # Sort for deterministic output
++            expanded.extend(sorted(matches))
++        else:
++            expanded.append(pattern)
++    return expanded

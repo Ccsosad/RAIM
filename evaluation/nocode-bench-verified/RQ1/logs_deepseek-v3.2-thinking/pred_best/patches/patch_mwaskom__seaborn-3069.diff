@@ -1,0 +1,35 @@
+diff --git a/seaborn/_core/plot.py b/seaborn/_core/plot.py
+index 5b43615..932021e 100644
+--- a/seaborn/_core/plot.py
++++ b/seaborn/_core/plot.py
+@@ -1275,6 +1275,24 @@ class Plotter:
+                 view_scale = scale._setup(seed_values, prop, axis=axis_obj)
+                 set_scale_obj(view["ax"], axis, view_scale._matplotlib_scale)
+ 
++                # Apply categorical axis styling for Nominal scales
++                from seaborn._core.scales import Nominal
++                if isinstance(view_scale, Nominal):
++                    ax = view["ax"]
++                    # Set fixed margins for categorical axes
++                    if axis == "x":
++                        ax.margins(x=0.1)
++                    else:
++                        ax.margins(y=0.1)
++                    # Turn off grid for categorical axes
++                    if axis == "x":
++                        ax.xaxis.grid(False)
++                    else:
++                        ax.yaxis.grid(False)
++                    # Invert y axis for Nominal scale (like categorical axes in seaborn)
++                    if axis == "y":
++                        ax.invert_yaxis()
++
+                 for layer, new_series in zip(layers, transformed_data):
+                     layer_df = layer["data"].frame
+                     if var in layer_df:
+@@ -1646,4 +1664,4 @@ class Plotter:
+ 
+         engine_default = None if p._target is not None else "tight"
+         layout_engine = p._layout_spec.get("engine", engine_default)
+-        set_layout_engine(self._figure, layout_engine)
++        set_layout_engine(self._figure, layout_engine)

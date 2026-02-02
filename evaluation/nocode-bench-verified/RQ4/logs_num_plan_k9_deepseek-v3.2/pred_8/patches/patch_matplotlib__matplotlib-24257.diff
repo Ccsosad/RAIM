@@ -1,0 +1,10 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..646b39d 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -249,4 +249,4 @@ def reload_library():
+     available[:] = sorted(library.keys())
+ 
+ 
+-reload_library()
++reload_library()

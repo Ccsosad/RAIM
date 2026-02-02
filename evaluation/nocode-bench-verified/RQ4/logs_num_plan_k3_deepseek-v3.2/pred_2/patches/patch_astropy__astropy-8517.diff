@@ -1,0 +1,130 @@
+diff --git a/astropy/__init__.py b/astropy/__init__.py
+index 9e1bf3a..577c583 100644
+--- a/astropy/__init__.py
++++ b/astropy/__init__.py
+@@ -157,6 +157,9 @@ class Conf(_config.ConfigNamespace):
+ 
+ conf = Conf()
+ 
++# ScienceState for constants versions
++from .constants.config import physical_constants, astronomical_constants
++
+ # Create the test() function
+ from .tests.runner import TestRunner
+ test = TestRunner.make_test_runner_in(__path__[0])
+diff --git a/astropy/constants/__init__.py b/astropy/constants/__init__.py
+index b9b3036..292bb08 100644
+--- a/astropy/constants/__init__.py
++++ b/astropy/constants/__init__.py
+@@ -42,6 +42,34 @@ _lines = [
+ _utils._set_c(codata2014, iau2015, find_current_module(),
+               not_in_module_only=True, doclines=_lines, set_class=True)
+ 
++# Import ScienceState to get the current version
++from .config import physical_constants, astronomical_constants
++
++# Determine which constants to load based on ScienceState
++_physical_version = physical_constants.get()
++_astronomical_version = astronomical_constants.get()
++
++# Map version strings to modules
++if _physical_version == 'codata2010':
++    from .codata2010 import codata2010 as codata
++elif _physical_version == 'codata2014':
++    from .codata2014 import codata2014 as codata
++else:
++    raise ValueError(f'Unknown physical constants version: {_physical_version}')
++
++if _astronomical_version == 'iau2012':
++    from .iau2012 import iau2012 as iaudata
++elif _astronomical_version == 'iau2015':
++    from .iau2015 import iau2015 as iaudata
++else:
++    raise ValueError(f'Unknown astronomical constants version: {_astronomical_version}')
++
++# Now set the constants using the selected versions
++from .utils import _set_c
++from astropy.utils import find_current_module
++module = find_current_module()
++_set_c(codata, iaudata, module, not_in_module_only=False, set_class=True)
++
+ _lines.append(_lines[1])
+ 
+ if __doc__ is not None:
+@@ -99,4 +127,4 @@ def set_enabled_constants(modname):
+ del find_current_module
+ del contextmanager
+ del _utils
+-del _lines
++del _lines
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..1ebd5ed
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,65 @@
++"""
++Configuration for constants versions.
++"""
++
++from astropy.config import ScienceState
++
++__all__ = ['physical_constants', 'astronomical_constants']
++
++
++class _ConstantsScienceState(ScienceState):
++    """
++    Base class for constants version ScienceState classes.
++    """
++    _value = None
++    _versions_map = {}
++    _imported_modules = set()
++
++    @classmethod
++    def validate(cls, value):
++        # Map module names to actual version strings
++        if value in cls._versions_map:
++            return cls._versions_map[value]
++        return value
++
++    @classmethod
++    def _check_imported(cls):
++        """
++        Check if astropy.constants or astropy.units have been imported.
++        """
++        import sys
++        if 'astropy.constants' in sys.modules:
++            raise RuntimeError('astropy.constants is already imported')
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError('astropy.units is already imported')
++
++    @classmethod
++    def set(cls, value):
++        cls._check_imported()
++        return super().set(value)
++
++
++class physical_constants(_ConstantsScienceState):
++    """
++    ScienceState for physical constants version.
++
++    The value should be a string representing the version, e.g., 'codata2010'.
++    """
++    _value = 'codata2014'  # default
++    _versions_map = {
++        'astropyconst13': 'codata2010',
++        'astropyconst20': 'codata2014',
++    }
++
++
++class astronomical_constants(_ConstantsScienceState):
++    """
++    ScienceState for astronomical constants version.
++
++    The value should be a string representing the version, e.g., 'iau2012'.
++    """
++    _value = 'iau2015'  # default
++    _versions_map = {
++        'astropyconst13': 'iau2012',
++        'astropyconst20': 'iau2015',
++    }

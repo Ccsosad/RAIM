@@ -1,0 +1,21 @@
+diff --git a/astropy/table/join.py b/astropy/table/join.py
+new file mode 100644
+index 0000000..9c6786b
+--- /dev/null
++++ b/astropy/table/join.py
+@@ -0,0 +1,15 @@
++    if join_type not in ['inner', 'outer', 'left', 'right', 'cartesian']:
++        raise ValueError("join_type must be one of 'inner', 'outer', 'left', 'right', 'cartesian'")
++
++    if join_type == 'cartesian':
++        if keys is not None:
++            raise ValueError("cannot supply keys for a cartesian join")
++        out = Table()
++        common_cols = set(left.colnames) & set(right.colnames)
++        for name in left.colnames:
++            new_name = name + '_1' if name in common_cols else name
++            out[new_name] = np.repeat(left[name], len(right))
++        for name in right.colnames:
++            new_name = name + '_2' if name in common_cols else name
++            out[new_name] = np.tile(right[name], len(left))
++        return out

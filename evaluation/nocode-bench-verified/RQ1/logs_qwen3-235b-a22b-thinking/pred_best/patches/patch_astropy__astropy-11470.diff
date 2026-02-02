@@ -1,0 +1,67 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..e96cab2 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -1040,6 +1040,11 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+     def _scale_operation(self, op, *args):
+         """Scale all non-angular components, leaving angular ones unchanged.
+ 
++        For representations with differentials, the operation is performed by
++        transforming to cartesian, applying the operation, and transforming back
++        to the original representation (except for UnitSphericalRepresentation,
++        which returns SphericalRepresentation if there is a scale change).
++
+         Parameters
+         ----------
+         op : `~operator` callable
+@@ -1049,8 +1054,48 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             be multiplied with, divided by).
+         """
+ 
+-        self._raise_if_has_differentials(op.__name__)
+-
++        # If there are differentials, transform to Cartesian, apply operation, and transform back
++        if self.differentials:
++            # Convert to Cartesian representation with appropriate differentials
++            difs_cls = {k: CartesianDifferential for k in self.differentials.keys()}
++            crep = self.represent_as(CartesianRepresentation, differential_class=difs_cls)
++            
++            # Apply the scale operation to the Cartesian representation
++            scaled_crep = crep._scale_operation(op, *args)
++            
++            # Convert back to the original representation
++            difs_cls = {k: diff.__class__ for k, diff in self.differentials.items()}
++            result = scaled_crep.represent_as(self.__class__, difs_cls)
++            
++            # Handle special case for UnitSphericalRepresentation
++            if isinstance(self, UnitSphericalRepresentation) and op in (operator.mul, operator.truediv):
++                # Check if there's a scale change
++                arg = args[0]
++                # For multiplication, if |arg| != 1, there's a scale change
++                # For division, if |arg| != 1, there's a scale change
++                if op == operator.mul:
++                    scale_factor = arg
++                else:  # op == operator.truediv
++                    scale_factor = 1 / arg
++                
++                # Check if scale_factor is not equal to 1 (considering units and arrays)
++                try:
++                    # Check if scale_factor is a quantity
++                    if hasattr(scale_factor, 'unit'):
++                        is_scale_change = not (scale_factor.unit.is_unity() and np.all(scale_factor.value == 1))
++                    else:
++                        is_scale_change = not np.all(scale_factor == 1)
++                except (TypeError, AttributeError):
++                    # If we can't determine if it's 1, assume it's a scale change
++                    is_scale_change = True
++                
++                if is_scale_change:
++                    # Convert to SphericalRepresentation
++                    result = result.represent_as(SphericalRepresentation, difs_cls)
++            
++            return result
++
++        # If no differentials, proceed as before
+         results = []
+         for component, cls in self.attr_classes.items():
+             value = getattr(self, component)

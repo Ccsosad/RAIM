@@ -1,0 +1,96 @@
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index 31d7f5b..3b04b01 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -84,6 +84,7 @@ class CheckExternalLinksBuilder(Builder):
+                                for x in self.app.config.linkcheck_anchors_ignore]
+         self.auth = [(re.compile(pattern), auth_info) for pattern, auth_info
+                      in self.app.config.linkcheck_auth]
++        self.request_headers = self.app.config.linkcheck_request_headers
+         self.good = set()       # type: Set[str]
+         self.broken = {}        # type: Dict[str, str]
+         self.redirected = {}    # type: Dict[str, Tuple[str, int]]
+@@ -105,15 +106,35 @@ class CheckExternalLinksBuilder(Builder):
+             self.workers.append(thread)
+ 
+     def check_thread(self) -> None:
++        # Default headers
++        headers = {
++            'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
++        }
+         kwargs = {
+             'allow_redirects': True,
+-            'headers': {
+-                'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+-            },
++            'headers': headers,
+         }
+         if self.app.config.linkcheck_timeout:
+             kwargs['timeout'] = self.app.config.linkcheck_timeout
+ 
++        def get_headers_for_url(url: str) -> dict:
++            """Return headers to use for the given URL."""
++            # Parse the URL to get the base
++            try:
++                parsed = urlparse(url)
++                base = f"{parsed.scheme}://{parsed.netloc}/"
++            except Exception:
++                base = None
++
++            # First, try to find an exact match
++            if base and base in self.request_headers:
++                return self.request_headers[base]
++            # Then try the wildcard
++            if "*" in self.request_headers:
++                return self.request_headers["*"]
++            # Otherwise, return empty dict
++            return {}
++
+         def check_uri() -> Tuple[str, str, int]:
+             # split off anchor
+             if '#' in uri:
+@@ -139,11 +160,19 @@ class CheckExternalLinksBuilder(Builder):
+             else:
+                 auth_info = None
+ 
++            # Get headers for this URL
++            url_headers = get_headers_for_url(req_url)
++            # Merge with default headers (url_headers take precedence)
++            merged_headers = headers.copy()
++            merged_headers.update(url_headers)
++            current_kwargs = kwargs.copy()
++            current_kwargs['headers'] = merged_headers
++
+             try:
+                 if anchor and self.app.config.linkcheck_anchors:
+                     # Read the whole document and see if #anchor exists
+                     response = requests.get(req_url, stream=True, config=self.app.config,
+-                                            auth=auth_info, **kwargs)
++                                            auth=auth_info, **current_kwargs)
+                     found = check_anchor(response, unquote(anchor))
+ 
+                     if not found:
+@@ -153,13 +182,13 @@ class CheckExternalLinksBuilder(Builder):
+                         # try a HEAD request first, which should be easier on
+                         # the server and the network
+                         response = requests.head(req_url, config=self.app.config,
+-                                                 auth=auth_info, **kwargs)
++                                                 auth=auth_info, **current_kwargs)
+                         response.raise_for_status()
+                     except HTTPError:
+                         # retry with GET request if that fails, some servers
+                         # don't like HEAD requests.
+                         response = requests.get(req_url, stream=True, config=self.app.config,
+-                                                auth=auth_info, **kwargs)
++                                                auth=auth_info, **current_kwargs)
+                         response.raise_for_status()
+             except HTTPError as err:
+                 if err.response.status_code == 401:
+@@ -337,6 +366,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+ 
+     app.add_config_value('linkcheck_ignore', [], None)
+     app.add_config_value('linkcheck_auth', [], None)
++    app.add_config_value('linkcheck_request_headers', {}, None)
+     app.add_config_value('linkcheck_retries', 1, None)
+     app.add_config_value('linkcheck_timeout', None, None, [int])
+     app.add_config_value('linkcheck_workers', 5, None)

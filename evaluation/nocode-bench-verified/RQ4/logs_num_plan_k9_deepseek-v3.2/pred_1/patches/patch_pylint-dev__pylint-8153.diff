@@ -1,0 +1,18 @@
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 21f6e51..64ea671 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -891,6 +891,7 @@ class PyLinter(
+             self.config.ignore,
+             self.config.ignore_patterns,
+             self._ignore_paths,
++            self.config.source_roots,
+         )
+         for error in errors:
+             message = modname = error["mod"]
+@@ -1367,4 +1368,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)

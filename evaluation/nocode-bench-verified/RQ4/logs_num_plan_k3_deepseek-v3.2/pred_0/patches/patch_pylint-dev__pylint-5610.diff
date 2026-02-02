@@ -1,0 +1,83 @@
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..6073d0d
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,77 @@
++# Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
++# For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
++
++"""Private import checker for pylint."""
++from typing import TYPE_CHECKING, List
++
++from astroid import nodes
++from pylint import checkers
++from pylint.checkers import utils
++from pylint.interfaces import HIGH
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++
++class PrivateImportChecker(checkers.BaseChecker):
++    """Check for imports of private objects (prefixed with '_') from external modules."""
++
++    name = "private-import"
++    msgs = {
++        "W5501": (
++            "Import of private %s '%s' from external package",
++            "import-private-name",
++            "Used when a private object (prefixed with '_') is imported from an external package.",
++        )
++    }
++
++    def visit_importfrom(self, node: nodes.ImportFrom) -> None:
++        """Check imports from external modules for private names."""
++        # Skip if it's a relative import
++        if node.level:
++            return
++
++        # Skip if importing from __future__
++        if node.modname == "__future__":
++            return
++
++        # Check each imported name
++        for name, alias in node.names:
++            imported_name = alias or name
++            # Check if the imported name starts with '_'
++            if imported_name.startswith("_"):
++                # Determine if it's a module or object
++                # If the name is being imported as a module (has dots in the original name)
++                # but that's not typical for ImportFrom. Actually, ImportFrom imports objects.
++                # So we treat it as an object.
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=("object", imported_name),
++                    confidence=HIGH,
++                )
++
++    def visit_import(self, node: nodes.Import) -> None:
++        """Check imports for private module names."""
++        for name, alias in node.names:
++            imported_name = alias or name
++            # Split the module name to check each part
++            parts = imported_name.split(".")
++            # Check if any part (except the last if it's being aliased?) starts with '_'
++            # Actually, for imports like `import _private_module`, we should warn.
++            # But also for `import package._private_module`.
++            # We'll check all parts.
++            for part in parts:
++                if part.startswith("_"):
++                    self.add_message(
++                        "import-private-name",
++                        node=node,
++                        args=("module", imported_name),
++                        confidence=HIGH,
++                    )
++                    break
++
++
++def register(linter: "PyLinter") -> None:
++    """Required method to auto-register this checker."""
++    linter.register_checker(PrivateImportChecker(linter))

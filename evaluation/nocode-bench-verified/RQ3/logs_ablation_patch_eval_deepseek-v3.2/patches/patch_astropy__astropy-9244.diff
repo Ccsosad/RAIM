@@ -1,0 +1,87 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..50429dc 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -416,6 +416,82 @@ class IERS(QTable):
+         return super()._convert_col_for_table(col)
+ 
+ 
++from astropy.utils.state import ScienceState
++
++class earth_orientation_table(ScienceState):
++    """Global earth orientation table used for time and coordinate transformations.
++
++    This should be an instance of `IERS` or a subclass. The default is
++    `IERS_Auto.open()`, which automatically downloads the latest IERS data.
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            from . import IERS_Auto
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError("earth_orientation_table must be an instance of IERS.")
++        return value
++
++
++from astropy.utils.state import ScienceState
++
++class earth_orientation_table(ScienceState):
++    """Global earth orientation table used for time and coordinate transformations.
++
++    This should be an instance of `IERS` or a subclass. The default is
++    `IERS_Auto.open()`, which automatically downloads the latest IERS data.
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            from .iers import IERS_Auto
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError("earth_orientation_table must be an instance of IERS.")
++        return value
++
++
++from astropy.utils.state import ScienceState
++
++class earth_orientation_table(ScienceState):
++    """Global earth orientation table used for time and coordinate transformations.
++
++    This should be an instance of `IERS` or a subclass. The default is
++    `IERS_Auto.open()`, which automatically downloads the latest IERS data.
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError("earth_orientation_table must be an instance of IERS.")
++        return value
++
++
++class earth_orientation_table(ScienceState):
++    """Global earth orientation table used for time and coordinate transformations.
++
++    This should be an instance of `IERS` or a subclass. The default is
++    `IERS_Auto.open()`, which automatically downloads the latest IERS data.
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError("earth_orientation_table must be an instance of IERS.")
++        return value
++
++
+ class IERS_A(IERS):
+     """IERS Table class targeted to IERS A, provided by USNO.
+ 

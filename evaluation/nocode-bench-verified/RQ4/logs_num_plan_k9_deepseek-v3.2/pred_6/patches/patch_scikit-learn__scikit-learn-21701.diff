@@ -1,0 +1,255 @@
+diff --git a/sklearn/random_projection.py b/sklearn/random_projection.py
+index d06dfcd..5a0f034 100644
+--- a/sklearn/random_projection.py
++++ b/sklearn/random_projection.py
+@@ -302,12 +302,19 @@ class BaseRandomProjection(
+ 
+     @abstractmethod
+     def __init__(
+-        self, n_components="auto", *, eps=0.1, dense_output=False, random_state=None
++        self,
++        n_components="auto",
++        *,
++        eps=0.1,
++        dense_output=False,
++        random_state=None,
++        compute_inverse_components=False,
+     ):
+         self.n_components = n_components
+         self.eps = eps
+         self.dense_output = dense_output
+         self.random_state = random_state
++        self.compute_inverse_components = compute_inverse_components
+ 
+     @abstractmethod
+     def _make_random_matrix(self, n_components, n_features):
+@@ -399,6 +406,16 @@ class BaseRandomProjection(
+             " not the proper shape."
+         )
+ 
++        # Compute inverse components if requested
++        if self.compute_inverse_components:
++            # Compute the pseudo-inverse of the components matrix
++            # Note: components_ is (n_components, n_features)
++            # We want inverse_components_ of shape (n_features, n_components)
++            # Using pinv (Moore-Penrose pseudo-inverse) for stability
++            self.inverse_components_ = np.linalg.pinv(self.components_.T)
++        else:
++            self.inverse_components_ = None
++
+         return self
+ 
+     def transform(self, X):
+@@ -429,6 +446,116 @@ class BaseRandomProjection(
+         X_new = safe_sparse_dot(X, self.components_.T, dense_output=self.dense_output)
+         return X_new
+ 
++    def inverse_transform(self, X):
++        """Project data back to its original space.
++
++        Parameters
++        ----------
++        X : {ndarray, sparse matrix} of shape (n_samples, n_components)
++            Data to be transformed back.
++
++        Returns
++        ----------
++        X_original : ndarray of shape (n_samples, n_features)
++            Reconstructed data in the original space. Always a dense array.
++        """
++        check_is_fitted(self)
++        X = self._validate_data(
++            X,
++            accept_sparse=["csr", "csc"],
++            reset=False,
++            dtype=[np.float64, np.float32],
++        )
++
++        if X.shape[1] != self.n_components_:
++            raise ValueError(
++                "Impossible to perform inverse transformation:"
++                "X has a different number of features than the fitted components. "
++                "(%s != %s)" % (X.shape[1], self.n_components_)
++            )
++
++        # If inverse_components_ is not precomputed, compute it on the fly
++        if self.inverse_components_ is None:
++            # Compute the pseudo-inverse of components_.T
++            # components_ is (n_components, n_features)
++            # So we need the pseudo-inverse of components_.T which is (n_features, n_components)
++            inv_comp = np.linalg.pinv(self.components_.T)
++        else:
++            inv_comp = self.inverse_components_
++
++        # The inverse transform is X * inv_comp.T
++        # But note: inv_comp is (n_features, n_components)
++        # So we need to compute X * inv_comp.T = (X * inv_comp.T)
++        # Alternatively, we can compute (X * inv_comp.T) = (inv_comp * X.T).T
++        # However, we want to avoid large transposes. Let's do:
++        #   X_new = X @ inv_comp.T
++        # But inv_comp is already the pseudo-inverse of components_.T, so it is (n_features, n_components)
++        # Therefore, we need to compute X @ inv_comp.T.
++        # But note: the documentation says we compute the product of X and the transpose of inverse components.
++        # So we should compute X @ inv_comp.T.
++        # However, we stored inv_comp as (n_features, n_components), so its transpose is (n_components, n_features).
++        # But wait: the documentation says inverse_components_ is (n_features, n_components).
++        # And we are to compute X * inverse_components_.T.
++        # So we do: X @ inv_comp.T
++        X_original = X @ inv_comp.T
++
++        return X_original
++
++    def inverse_transform(self, X):
++        """Project data back to its original space.
++
++        Parameters
++        ----------
++        X : {ndarray, sparse matrix} of shape (n_samples, n_components)
++            Data to be transformed back.
++
++        Returns
++        -------
++        X_original : ndarray of shape (n_samples, n_features)
++            Reconstructed data in the original space. Always a dense array.
++        """
++        check_is_fitted(self)
++        X = self._validate_data(
++            X,
++            accept_sparse=["csr", "csc"],
++            reset=False,
++            dtype=[np.float64, np.float32],
++        )
++
++        if X.shape[1] != self.n_components_:
++            raise ValueError(
++                "Impossible to perform inverse transformation:"
++                "X has a different number of features than the fitted components. "
++                "(%s != %s)" % (X.shape[1], self.n_components_)
++            )
++
++        # If inverse_components_ is not precomputed, compute it on the fly
++        if self.inverse_components_ is None:
++            # Compute the pseudo-inverse of components_.T
++            # components_ is (n_components, n_features)
++            # So we need the pseudo-inverse of components_.T which is (n_features, n_components)
++            inv_comp = np.linalg.pinv(self.components_.T)
++        else:
++            inv_comp = self.inverse_components_
++
++        # The inverse transform is X * inv_comp.T
++        # But note: inv_comp is (n_features, n_components)
++        # So we need to compute X * inv_comp.T = (X * inv_comp.T)
++        # Alternatively, we can compute (X * inv_comp.T) = (inv_comp * X.T).T
++        # However, we want to avoid large transposes. Let's do:
++        #   X_new = X @ inv_comp.T
++        # But inv_comp is already the pseudo-inverse of components_.T, so it is (n_features, n_components)
++        # Therefore, we need to compute X @ inv_comp.T.
++        # But note: the documentation says we compute the product of X and the transpose of inverse components.
++        # So we should compute X @ inv_comp.T.
++        # However, we stored inv_comp as (n_features, n_components), so its transpose is (n_components, n_features).
++        # But wait: the documentation says inverse_components_ is (n_features, n_components).
++        # And we are to compute X * inverse_components_.T.
++        # So we do: X @ inv_comp.T
++        X_original = X @ inv_comp.T
++
++        return X_original
++
+     @property
+     def _n_features_out(self):
+         """Number of transformed output features.
+@@ -452,6 +579,95 @@ class GaussianRandomProjection(BaseRandomProjection):
+ 
+     .. versionadded:: 0.13
+ 
++    Parameters
++    ----------
++    n_components : int or 'auto', default='auto'
++        Dimensionality of the target projection space.
++
++        n_components can be automatically adjusted according to the
++        number of samples in the dataset and the bound given by the
++        Johnson-Lindenstrauss lemma. In that case the quality of the
++        embedding is controlled by the ``eps`` parameter.
++
++        It should be noted that Johnson-Lindenstrauss lemma can yield
++        very conservative estimated of the required number of components
++        as it makes no assumption on the structure of the dataset.
++
++    eps : float, default=0.1
++        Parameter to control the quality of the embedding according to
++        the Johnson-Lindenstrauss lemma when n_components is set to
++        'auto'. The value should be strictly positive.
++
++        Smaller values lead to better embedding and higher number of
++        dimensions (n_components) in the target projection space.
++
++    dense_output : bool, default=False
++        If True, ensure that the output of the random projection is a dense
++        numpy array even if the input is sparse. In practice, if the
++        number of components is small the number of zero components in
++        the projected data will be very small and will be stored as a
++        dense array.
++
++        If False, the projected data uses a sparse representation if
++        the input is sparse.
++
++    random_state : int, RandomState instance or None, default=None
++        Controls the pseudo random number generator used to generate the
++        projection matrix at fit time.
++        Pass an int for reproducible output across multiple function calls.
++        See :term:`Glossary <random_state>`.
++
++    compute_inverse_components : bool, default=False
++        If True, compute the pseudo-inverse of the components matrix during
++        fit and store it as `inverse_components_` for use in `inverse_transform`.
++        This increases memory usage but speeds up inverse_transform.
++
++        .. versionadded:: 1.1
++
++    Attributes
++    ----------
++    n_components_ : int
++        Concrete number of components computed when n_components="auto".
++
++    components_ : ndarray of shape (n_components, n_features)
++        Random matrix used for the projection.
++
++    inverse_components_ : ndarray of shape (n_features, n_components) or None
++        Pseudo-inverse of the components matrix. Only computed if
++        `compute_inverse_components` is True.
++
++        .. versionadded:: 1.1
++
++    Examples
++    --------
++    >>> import numpy as np
++    >>> from sklearn.random_projection import GaussianRandomProjection
++    >>> rng = np.random.RandomState(42)
++    >>> X = rng.rand(100, 10000)
++    >>> transformer = GaussianRandomProjection(random_state=rng)
++    >>> X_new = transformer.fit_transform(X)
++    >>> X_new.shape
++    (100, 3947)
++
++    See Also
++    --------
++    SparseRandomProjection : Reduce dimensionality through sparse
++        random projection.
++
++    References
++    ----------
++    .. [1] Sanjoy Dasgupta. 2000. Experiments with random projection.
++           In Proceedings of the 16th conference on Uncertainty in artificial
++           intelligence (UAI'00), Craig Boutilier and Moisés Goldszmidt (Eds.).
++           Morgan Kaufmann Publishers Inc., San Francisco, CA, USA, 143-151.
++
++    .. [2] Ella Bingham and Heikki Mannila. 2001. Random projection in
++           dimensionality reduction: applications to image and text data.
++           In Proceedings of the seventh ACM SIGKDD international conference
++           on Knowledge discovery and data mining (KDD '01). ACM, New York,
++           NY, USA, 245-250.
++    """
++
+     Parameters
+     ----------
+     n_components : int or 'auto', default='auto'

@@ -1,0 +1,125 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..9a54954 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -970,6 +970,120 @@ class _DistributionPlotter(VectorPlotter):
+         cbar,
+         cbar_ax,
+         cbar_kws,
++
++
++def displot(
++    data=None, *, x=None, y=None, hue=None, row=None, col=None,
++    kind="hist", rug=False, rug_kws=None, log_scale=None, legend=True,
++    **kwargs
++):
++    """
++    Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distributions of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    `kind` parameter selects the approach to use:
++
++    - `hist` for histogram
++    - `kde` for kernel density estimate
++    - `ecdf` for empirical cumulative distribution function
++
++    Additionally, a `rug` plot can be added to any of these kinds of plots.
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure. Either a long-form collection of vectors that can be
++        assigned to named variables or a wide-form dataset that will be internally
++        reshaped.
++    x, y : vectors or keys in `data`
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in `data`
++        Variables that define subsets to plot on different facets.
++    kind : {"hist", "kde", "ecdf"}
++        Kind of plot to draw.
++    rug : bool
++        If True, show each observation with marginal ticks (like `rugplot`).
++    rug_kws : dict
++        Keyword arguments for `rugplot`.
++    log_scale : bool or number, or pair of bools or numbers
++        Set axis scale(s) to log. A single value sets the data axis for univariate
++        plots and both axes for bivariate plots. A pair of values sets each axis
++        independently. Numeric values are interpreted as the desired base (default
++        10). If `False`, use linear units.
++    legend : bool
++        If False, suppress the legend for semantic variables.
++    **kwargs
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    g : FacetGrid
++        Returns the `FacetGrid` object with the plot on it for further tweaking.
++
++    See Also
++    --------
++    histplot : Draw a histogram.
++    kdeplot : Draw a kernel density estimate.
++    ecdfplot : Draw an empirical cumulative distribution function.
++    rugplot : Draw a rug plot.
++
++    Examples
++    --------
++    See the API documentation for examples.
++    """
++    # Import here to avoid circular imports
++    from seaborn.axisgrid import FacetGrid
++
++    # Handle log scaling
++    if log_scale is not None:
++        if isinstance(log_scale, (bool, int, float)):
++            log_scale_x = log_scale_y = log_scale
++        else:
++            log_scale_x, log_scale_y = log_scale
++        kwargs["log_scale"] = (log_scale_x, log_scale_y)
++
++    # Initialize the FacetGrid
++    g = FacetGrid(
++        data=data, row=row, col=col, hue=hue,
++        sharex=True, sharey=True, legend_out=True, margin_titles=True
++    )
++
++    # Select the plotting function
++    if kind == "hist":
++        from seaborn.distributions import histplot
++        plot_func = histplot
++    elif kind == "kde":
++        from seaborn.distributions import kdeplot
++        plot_func = kdeplot
++    elif kind == "ecdf":
++        from seaborn.distributions import ecdfplot
++        plot_func = ecdfplot
++    else:
++        raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind}")
++
++    # Map the plot function
++    g.map_dataframe(plot_func, x=x, y=y, **kwargs)
++
++    # Add rug plot if requested
++    if rug:
++        from seaborn.distributions import rugplot
++        rug_kws = rug_kws or {}
++        g.map_dataframe(rugplot, x=x, y=y, **rug_kws)
++
++    # Set axis scales
++    if log_scale is not None:
++        g.set(xscale="log" if log_scale_x else "linear",
++              yscale="log" if log_scale_y else "linear")
++
++    # Add legend
++    if legend and hue is not None:
++        g.add_legend()
++
++    return g
+         estimate_kws,
+         contour_kws,
+         ax,

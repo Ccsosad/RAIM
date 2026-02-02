@@ -1,0 +1,75 @@
+diff --git a/requests/exceptions.py b/requests/exceptions.py
+index dd3ff05..fff05cc 100644
+--- a/requests/exceptions.py
++++ b/requests/exceptions.py
+@@ -29,6 +29,20 @@ class InvalidJSONError(RequestException):
+     """A JSON error occurred."""
+ 
+ 
++class JSONDecodeError(InvalidJSONError):
++    """A JSON decode error occurred."""
++
++    def __init__(self, *args, **kwargs):
++        """
++        Construct the JSONDecodeError.
++
++        :param args: The arguments to pass to the parent exception.
++        :param kwargs: The keyword arguments to pass to the parent exception.
++        """
++        # The original exception (if any) is stored in `self.__cause__` via raise ... from ...
++        super().__init__(*args, **kwargs)
++
++
+ class HTTPError(RequestException):
+     """An HTTP error occurred."""
+ 
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..b79f206 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -882,19 +882,15 @@ class Response(object):
+         r"""Returns the json-encoded content of a response, if any.
+ 
+         :param \*\*kwargs: Optional arguments that ``json.loads`` takes.
+-        :raises simplejson.JSONDecodeError: If the response body does not
+-            contain valid json and simplejson is installed.
+-        :raises json.JSONDecodeError: If the response body does not contain
+-            valid json and simplejson is not installed on Python 3.
+-        :raises ValueError: If the response body does not contain valid
+-            json and simplejson is not installed on Python 2.        
++        :raises requests.exceptions.JSONDecodeError: If the response body does not
++            contain valid json.
+         """
+ 
+         if not self.encoding and self.content and len(self.content) > 3:
+             # No encoding set. JSON RFC 4627 section 3 states we should expect
+             # UTF-8, -16 or -32. Detect which one to use; If the detection or
+             # decoding fails, fall back to `self.text` (using charset_normalizer to make
+-            # a best guess).
++            a best guess).
+             encoding = guess_json_utf(self.content)
+             if encoding is not None:
+                 try:
+@@ -907,7 +903,15 @@ class Response(object):
+                     # and the server didn't bother to tell us what codec *was*
+                     # used.
+                     pass
+-        return complexjson.loads(self.text, **kwargs)
++        try:
++            return complexjson.loads(self.text, **kwargs)
++        except (ValueError, TypeError, complexjson.JSONDecodeError) as e:
++            # Catch JSON-related exceptions and raise our unified JSONDecodeError
++            # Note: complexjson might be simplejson or stdlib json.
++            # simplejson.JSONDecodeError inherits from ValueError and JSONDecodeError.
++            # stdlib json.JSONDecodeError inherits from ValueError (Python 3) or ValueError (Python 2).
++            # We catch ValueError, TypeError and complexjson.JSONDecodeError to cover all.
++            raise requests.exceptions.JSONDecodeError(e, request=self.request, response=self)
+ 
+     @property
+     def links(self):
+@@ -963,4 +967,4 @@ class Response(object):
+ 
+         release_conn = getattr(self.raw, 'release_conn', None)
+         if release_conn is not None:
+-            release_conn()
++            release_conn()

@@ -1,0 +1,94 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..cccc985 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -36,6 +36,48 @@ class _BaseGrid:
+                 ax.set(**kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return self.
++        
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid. The function should accept the grid
++            as its first argument and may modify it in place.
++        *args, **kwargs
++            Additional arguments passed to the function.
++            
++        Returns
++        -------
++        self : object
++            Returns self for method chaining.
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++        
++        This method is similar to pandas' pipe method. It allows you to
++        perform operations on the grid object within a method chain.
++        
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid. The function should accept the grid
++            as its first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++            
++        Returns
++        -------
++        object
++            The result of the function call.
++        """
++        return func(self, *args, **kwargs)
++
+     @property
+     def fig(self):
+         """DEPRECATED: prefer the `figure` property."""
+@@ -84,6 +126,7 @@ class Grid(_BaseGrid):
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+         self._figure.tight_layout(*args, **kwargs)
++        return self
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -1006,6 +1049,8 @@ class FacetGrid(Grid):
+         if y is not None:
+             self.map(plt.axhline, y=y, **line_kws)
+ 
++        return self
++
+     # ------ Properties that are part of the public API and documented by Sphinx
+ 
+     @property
+@@ -1883,6 +1928,23 @@ class JointGrid(_BaseGrid):
+ 
+         return self
+ 
++    def tight_layout(self, *args, **kwargs):
++        """
++        Call tight_layout on the underlying figure and return self.
++        
++        Parameters
++        ----------
++        *args, **kwargs
++            Arguments passed to :meth:`matplotlib.figure.Figure.tight_layout`.
++            
++        Returns
++        -------
++        self : JointGrid instance
++            Returns self for method chaining.
++        """
++        self._figure.tight_layout(*args, **kwargs)
++        return self
++
+     def set_axis_labels(self, xlabel="", ylabel="", **kwargs):
+         """Set axis labels on the bivariate axes.
+ 

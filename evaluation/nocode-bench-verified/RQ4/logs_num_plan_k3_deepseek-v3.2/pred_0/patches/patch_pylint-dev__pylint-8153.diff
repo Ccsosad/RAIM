@@ -1,0 +1,114 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..2ebf871 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -67,13 +67,23 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+     """
+     result: dict[str, ModuleDescriptionDict] = {}
+     errors: list[ErrorDescriptionDict] = []
++    # Prepend source roots to the path for module discovery
+     path = sys.path.copy()
++    if source_roots:
++        # Resolve relative paths to absolute paths relative to cwd
++        resolved_source_roots = []
++        for root in source_roots:
++            resolved = os.path.abspath(root)
++            if resolved not in path:
++                resolved_source_roots.append(resolved)
++        path = resolved_source_roots + path
+ 
+     for something in files_or_modules:
+         basename = os.path.basename(something)
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 21f6e51..0853799 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -678,6 +678,9 @@ class PyLinter(
+         # TODO: Move the parallel invocation into step 5 of the checking process
+         if not self.config.from_stdin and self.config.jobs > 1:
+             original_sys_path = sys.path[:]
++            # In parallel mode, we cannot easily pass source_roots to the child processes.
++            # So we rely on the fact that the source_roots are already in the configuration.
++            # The child processes will use the same configuration.
+             check_parallel(
+                 self,
+                 self.config.jobs,
+@@ -688,22 +691,35 @@ class PyLinter(
+             return
+ 
+         # 3) Get all FileItems
+-        with fix_import_path(files_or_modules):
+-            if self.config.from_stdin:
+-                fileitems = self._get_file_descr_from_stdin(files_or_modules[0])
+-                data: str | None = _read_stdin()
+-            else:
+-                fileitems = self._iterate_file_descrs(files_or_modules)
+-                data = None
+-
+-        # The contextmanager also opens all checkers and sets up the PyLinter class
+-        with fix_import_path(files_or_modules):
+-            with self._astroid_module_checker() as check_astroid_module:
+-                # 4) Get the AST for each FileItem
+-                ast_per_fileitem = self._get_asts(fileitems, data)
+-
+-                # 5) Lint each ast
+-                self._lint_files(ast_per_fileitem, check_astroid_module)
++        # Add source roots to sys.path for the duration of the check
++        original_sys_path = sys.path[:]
++        source_roots = getattr(self.config, 'source_roots', ())
++        if source_roots:
++            resolved_source_roots = []
++            for root in source_roots:
++                resolved = os.path.abspath(root)
++                if resolved not in sys.path:
++                    resolved_source_roots.append(resolved)
++            sys.path = resolved_source_roots + sys.path
++        try:
++            with fix_import_path(files_or_modules):
++                if self.config.from_stdin:
++                    fileitems = self._get_file_descr_from_stdin(files_or_modules[0])
++                    data: str | None = _read_stdin()
++                else:
++                    fileitems = self._iterate_file_descrs(files_or_modules)
++                    data = None
++
++            # The contextmanager also opens all checkers and sets up the PyLinter class
++            with fix_import_path(files_or_modules):
++                with self._astroid_module_checker() as check_astroid_module:
++                    # 4) Get the AST for each FileItem
++                    ast_per_fileitem = self._get_asts(fileitems, data)
++
++                    # 5) Lint each ast
++                    self._lint_files(ast_per_fileitem, check_astroid_module)
++        finally:
++            sys.path = original_sys_path
+ 
+     def _get_asts(
+         self, fileitems: Iterator[FileItem], data: str | None
+@@ -886,11 +902,13 @@ class PyLinter(
+ 
+     def _expand_files(self, modules: Sequence[str]) -> dict[str, ModuleDescriptionDict]:
+         """Get modules and errors from a list of modules and handle errors."""
++        source_roots = getattr(self.config, 'source_roots', ())
+         result, errors = expand_modules(
+             modules,
+             self.config.ignore,
+             self.config.ignore_patterns,
+             self._ignore_paths,
++            source_roots,
+         )
+         for error in errors:
+             message = modname = error["mod"]
+@@ -1367,4 +1385,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)

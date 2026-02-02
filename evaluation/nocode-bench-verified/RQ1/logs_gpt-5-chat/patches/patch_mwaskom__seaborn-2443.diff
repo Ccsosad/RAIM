@@ -1,0 +1,27 @@
+diff --git a/seaborn/categorical.py b/seaborn/categorical.py
+index 27d5801..b1819fa 100644
+--- a/seaborn/categorical.py
++++ b/seaborn/categorical.py
+@@ -1603,10 +1603,22 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+ 
+         # Update the position of each point on the categorical axis
+         # Do this after plotting so that the numerical axis limits are correct
++        # Store original coordinates and defer swarming to draw time
++        self.beeswarms = []
+         for center, swarm in zip(centers, swarms):
+             if swarm.get_offsets().size:
++                swarm.orig_xyr = swarm.get_offsets().copy()
++                self.beeswarms.append((center, swarm, width, s, kws.copy()))
+                 self.swarm_points(ax, swarm, center, width, s, **kws)
+ 
++        # Attach a draw event for dynamic swarming
++        def _on_draw(event):
++            for center, swarm, width, s, kws in self.beeswarms:
++                if hasattr(swarm, "orig_xyr"):
++                    swarm.set_offsets(swarm.orig_xyr)
++                    self.swarm_points(ax, swarm, center, width, s, **kws)
++        ax.figure.canvas.mpl_connect("draw_event", _on_draw)
++
+     def plot(self, ax, kws):
+         """Make the full plot."""
+         self.draw_swarmplot(ax, kws)

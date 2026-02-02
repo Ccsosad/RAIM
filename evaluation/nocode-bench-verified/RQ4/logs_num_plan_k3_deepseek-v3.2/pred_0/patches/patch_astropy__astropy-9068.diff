@@ -1,0 +1,74 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..fb6bc23 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,69 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A new table with the same column names and boolean values for each
++            element.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table with different column names.
++        """
++        from astropy.table import Table
++
++        if isinstance(other, Table):
++            # Check column names
++            if set(self.colnames) != set(other.colnames):
++                raise ValueError('cannot compare tables with different column names')
++            # Ensure same order
++            other = other[self.colnames]
++
++            # Compare each column
++            data = {}
++            for name in self.colnames:
++                col_self = self[name]
++                col_other = other[name]
++                # Use element-wise equality, handling masks if present
++                if hasattr(col_self, 'mask') and hasattr(col_other, 'mask'):
++                    # Both are masked
++                    eq = (col_self.data == col_other.data) & (col_self.mask == col_other.mask)
++                elif hasattr(col_self, 'mask'):
++                    # Only self is masked
++                    eq = (col_self.data == col_other) & (col_self.mask == False)
++                elif hasattr(col_other, 'mask'):
++                    # Only other is masked
++                    eq = (col_self == col_other.data) & (col_other.mask == False)
++                else:
++                    eq = col_self == col_other
++                data[name] = eq
++        else:
++            # other is an array or scalar
++            # We compare column-wise: each column is compared to the same other.
++            data = {}
++            for name in self.colnames:
++                col = self[name]
++                if hasattr(col, 'mask'):
++                    eq = (col.data == other) & (col.mask == False)
++                else:
++                    eq = col == other
++                data[name] = eq
++
++        # Create a new table with boolean columns
++        result = Table(data, names=self.colnames)
++        return result
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

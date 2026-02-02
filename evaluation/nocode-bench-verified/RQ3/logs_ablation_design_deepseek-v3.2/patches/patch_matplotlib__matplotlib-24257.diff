@@ -1,0 +1,105 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..2d9baa1 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -200,6 +200,61 @@ def update_user_library(library):
+     return library
+ 
+ 
++def _load_style_from_package(package_style_name):
++    """Load a style from a package using dotted notation.
++    
++    Parameters
++    ----------
++    package_style_name : str
++        A string like "mypackage.presentation" where "mypackage" is the
++        package name and "presentation" is the style filename without extension.
++    
++    Returns
++    -------
++    dict
++        The rc parameters dictionary.
++    
++    Raises
++    ------
++    ModuleNotFoundError
++        If the package cannot be found.
++    FileNotFoundError
++        If the style file does not exist in the package.
++    """
++    # Split the package_style_name into package path and style name
++    parts = package_style_name.split('.')
++    if len(parts) < 2:
++        raise ValueError(f"Invalid package style name: {package_style_name}. "
++                         "Expected format: 'package.style'")
++    style_name = parts[-1]
++    package_path = '.'.join(parts[:-1])
++    
++    # Try to use importlib.resources (Python >=3.10) or importlib_resources (backport)
++    try:
++        # First try importlib.resources (standard library in Python >=3.10)
++        import importlib.resources as importlib_resources
++    except ImportError:
++        # Fall back to importlib_resources backport for Python <3.10
++        import importlib_resources
++    
++    try:
++        # Get the package resources
++        package = importlib_resources.files(package_path)
++        # Look for the style file with .mplstyle extension
++        style_file = package.joinpath(f"{style_name}.{STYLE_EXTENSION}")
++        # Read the file contents
++        with importlib_resources.as_file(style_file) as path:
++            return rc_params_from_file(path, use_default_template=False)
++    except ModuleNotFoundError as e:
++        raise ModuleNotFoundError(
++            f"Cannot find package '{package_path}' for style '{package_style_name}'"
++        ) from e
++    except FileNotFoundError as e:
++        raise FileNotFoundError(
++            f"Cannot find style file '{style_name}.{STYLE_EXTENSION}' in package '{package_path}'"
++        ) from e
++
++
+ def read_style_directory(style_dir):
+     """Return dictionary of styles defined in *style_dir*."""
+     styles = dict()
+@@ -212,6 +267,32 @@ def read_style_directory(style_dir):
+     return styles
+ 
+ 
++def _load_style(style_name):
++    """Load a style by name, which could be a file path, package style, or library style.
++    
++    This is a helper function for `use` and `context`.
++    """
++    # First check if it's a package-style path (contains at least one dot and not a file path)
++    if '.' in style_name and not os.path.exists(style_name):
++        # Try to load as a package style
++        try:
++            return _load_style_from_package(style_name)
++        except (ModuleNotFoundError, FileNotFoundError):
++            # If not found as package, fall through to other methods
++            pass
++    
++    # Then check if it's a file path
++    if os.path.exists(style_name):
++        return rc_params_from_file(style_name, use_default_template=False)
++    
++    # Finally, check the style library
++    if style_name in library:
++        return library[style_name]
++    
++    # If we get here, the style wasn't found
++    raise ValueError(f"{style_name} is not a valid style name, file path, or package style")
++
++
+ def update_nested_dict(main_dict, new_dict):
+     """
+     Update nested dict (only level of nesting) with new values.
+@@ -249,4 +330,4 @@ def reload_library():
+     available[:] = sorted(library.keys())
+ 
+ 
+-reload_library()
++reload_library()

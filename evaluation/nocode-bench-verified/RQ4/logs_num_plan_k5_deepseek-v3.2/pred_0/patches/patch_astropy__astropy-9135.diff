@@ -1,0 +1,302 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..9d2383f 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -2290,6 +2290,51 @@ def _add_special_operator(sop_name, sop):
+     SPECIAL_OPERATORS[sop_name] = sop
+ 
+ 
++def fix_inputs(model, fixed_inputs):
++    """
++    Fix one or more inputs of a model to constant values.
++
++    Parameters
++    ----------
++    model : `~astropy.modeling.Model`
++        The model to which the fixed inputs are applied.
++    fixed_inputs : dict
++        A dictionary mapping input names to their fixed values.
++        The keys can be either input names (strings) or indices (integers).
++
++    Returns
++    -------
++    fixed_model : `~astropy.modeling.CompoundModel`
++        A new compound model with the specified inputs fixed.
++
++    Examples
++    --------
++    >>> from astropy.modeling.models import Polynomial2D
++    >>> poly = Polynomial2D(degree=2)
++    >>> fixed_poly = fix_inputs(poly, {'x': 0})
++    >>> fixed_poly.n_inputs
++    1
++    >>> fixed_poly.n_outputs
++    1
++    """
++    from .core import CompoundModel
++
++    # Convert input keys to indices
++    fixed = {}
++    for key, value in fixed_inputs.items():
++        if isinstance(key, str):
++            try:
++                idx = model.inputs.index(key)
++            except ValueError:
++                raise ValueError(f"Input {key} not found in model inputs.")
++        else:
++            idx = key
++        fixed[idx] = value
++
++    # Create a new compound model with the 'fix' operation
++    return CompoundModel('fix', model, None, fixed_inputs=fixed)
++
++
+ class CompoundModel(Model):
+     '''
+     Base class for compound models.
+@@ -2298,12 +2343,13 @@ class CompoundModel(Model):
+     to combine models is through the model operators.
+     '''
+ 
+-    def __init__(self, op, left, right, name=None, inverse=None):
++    def __init__(self, op, left, right, name=None, inverse=None, fixed_inputs=None):
+         self.__dict__['_param_names'] = None
+         self._n_submodels = None
+         self.op = op
+         self.left = left
+         self.right = right
++        self._fixed_inputs = fixed_inputs
+         self._bounding_box = None
+         self._user_bounding_box = None
+         self._leaflist = None
+@@ -2317,66 +2363,96 @@ class CompoundModel(Model):
+             self.inverse = inverse
+         # else:
+         #     self._user_inverse = None
+-        if len(left) != len(right):
+-            raise ValueError(
+-                'Both operands must have equal values for n_models')
+-        else:
++        if op == 'fix':
++            # Unary operation
++            if fixed_inputs is None:
++                raise ValueError("fixed_inputs must be provided for 'fix' operation")
+             self._n_models = len(left)
+-        if ((left.model_set_axis != right.model_set_axis)
+-                or left.model_set_axis):  # not False and not 0
+-            raise ValueError("model_set_axis must be False or 0 and consistent for operands")
+-        else:
+             self._model_set_axis = left.model_set_axis
+-        if op in ['+', '-', '*', '/', '**'] or op in SPECIAL_OPERATORS:
+-            if (left.n_inputs != right.n_inputs) or \
+-               (left.n_outputs != right.n_outputs):
+-                raise ModelDefinitionError(
+-                    'Both operands must match numbers of inputs and outputs')
++            # The number of inputs is reduced by the number of fixed inputs
++            self.n_inputs = left.n_inputs - len(fixed_inputs)
++            self.n_outputs = left.n_outputs
++            # Adjust inputs: remove the fixed ones
++            old_inputs = list(left.inputs)
++            for idx in sorted(fixed_inputs.keys(), reverse=True):
++                del old_inputs[idx]
++            self.inputs = tuple(old_inputs)
++            self.outputs = left.outputs
++            # Adjust bounding box
++            if left.bounding_box is not None:
++                # Remove the dimensions corresponding to fixed inputs
++                bbox = left.bounding_box
++                if not isinstance(bbox, tuple):
++                    bbox = (bbox,)
++                # Convert to list for manipulation
++                bbox_list = list(bbox)
++                for idx in sorted(fixed_inputs.keys(), reverse=True):
++                    del bbox_list[idx]
++                if len(bbox_list) == 1:
++                    self._bounding_box = bbox_list[0]
++                else:
++                    self._bounding_box = tuple(bbox_list)
++        else:
++            if len(left) != len(right):
++                raise ValueError(
++                    'Both operands must have equal values for n_models')
+             else:
++                self._n_models = len(left)
++            if ((left.model_set_axis != right.model_set_axis)
++                    or left.model_set_axis):  # not False and not 0
++                raise ValueError("model_set_axis must be False or 0 and consistent for operands")
++            else:
++                self._model_set_axis = left.model_set_axis
++            if op in ['+', '-', '*', '/', '**'] or op in SPECIAL_OPERATORS:
++                if (left.n_inputs != right.n_inputs) or \
++                   (left.n_outputs != right.n_outputs):
++                    raise ModelDefinitionError(
++                        'Both operands must match numbers of inputs and outputs')
++                else:
++                    self.n_inputs = left.n_inputs
++                    self.n_outputs = left.n_outputs
++                    self.inputs = left.inputs
++                    self.outputs = left.outputs
++            elif op == '&':
++                self.n_inputs = left.n_inputs + right.n_inputs
++                self.n_outputs = left.n_outputs + right.n_outputs
++                self.inputs = combine_labels(left.inputs, right.inputs)
++                self.outputs = combine_labels(left.outputs, right.outputs)
++                if inverse is None and self.both_inverses_exist():
++                    self._has_inverse = True
++                    self._inverse = CompoundModel('&',
++                                                  self.left.inverse,
++                                                  self.right.inverse,
++                                                  inverse=self)
++            elif op == '|':
++                if left.n_outputs != right.n_inputs:
++                    raise ModelDefinitionError(
++                        "Unsupported operands for |: {0} (n_inputs={1}, "
++                        "n_outputs={2}) and {3} (n_inputs={4}, n_outputs={5}); "
++                        "n_outputs for the left-hand model must match n_inputs "
++                        "for the right-hand model.".format(
++                            left.name, left.n_inputs, left.n_outputs, right.name,
++                            right.n_inputs, right.n_outputs))
++
+                 self.n_inputs = left.n_inputs
+-                self.n_outputs = left.n_outputs
++                self.n_outputs = right.n_outputs
+                 self.inputs = left.inputs
+-                self.outputs = left.outputs
+-        elif op == '&':
+-            self.n_inputs = left.n_inputs + right.n_inputs
+-            self.n_outputs = left.n_outputs + right.n_outputs
+-            self.inputs = combine_labels(left.inputs, right.inputs)
+-            self.outputs = combine_labels(left.outputs, right.outputs)
+-            if inverse is None and self.both_inverses_exist():
+-                self._has_inverse = True
+-                self._inverse = CompoundModel('&',
+-                                              self.left.inverse,
+-                                              self.right.inverse,
+-                                              inverse=self)
+-        elif op == '|':
+-            if left.n_outputs != right.n_inputs:
++                self.outputs = right.outputs
++                if inverse is None and self.both_inverses_exist():
++                    self._has_inverse = True
++                    self._inverse = CompoundModel('|',
++                                                  self.right.inverse,
++                                                  self.left.inverse,
++                                                  inverse=self)
++            else:
++                #raise ModelDefinitionError('Illegal operator: ', self.op)
+                 raise ModelDefinitionError(
+-                    "Unsupported operands for |: {0} (n_inputs={1}, "
+-                    "n_outputs={2}) and {3} (n_inputs={4}, n_outputs={5}); "
+-                    "n_outputs for the left-hand model must match n_inputs "
+-                    "for the right-hand model.".format(
+-                        left.name, left.n_inputs, left.n_outputs, right.name,
+-                        right.n_inputs, right.n_outputs))
+-
+-            self.n_inputs = left.n_inputs
+-            self.n_outputs = right.n_outputs
+-            self.inputs = left.inputs
+-            self.outputs = right.outputs
+-            if inverse is None and self.both_inverses_exist():
+-                self._has_inverse = True
+-                self._inverse = CompoundModel('|',
+-                                              self.right.inverse,
+-                                              self.left.inverse,
+-                                              inverse=self)
+-        else:
+-            #raise ModelDefinitionError('Illegal operator: ', self.op)
+-            raise ModelDefinitionError(
+-                "Unsupported operands for {0}: {1} (n_inputs={2}, "
+-                "n_outputs={3}) and {4} (n_inputs={5}, n_outputs={6}); "
+-                "models must have the same n_inputs and the same "
+-                "n_outputs for this operator".format(
+-                    operator, left.name, left.n_inputs, left.n_outputs,
+-                    right.name, right.n_inputs, right.n_outputs))
++                    "Unsupported operands for {0}: {1} (n_inputs={2}, "
++                    "n_outputs={3}) and {4} (n_inputs={5}, n_outputs={6}); "
++                    "models must have the same n_inputs and the same "
++                    "n_outputs for this operator".format(
++                        operator, left.name, left.n_inputs, left.n_outputs,
++                        right.name, right.n_inputs, right.n_outputs))
+         self.name = name
+         self._fittable = None
+         self.fit_deriv = None
+@@ -2475,38 +2551,49 @@ class CompoundModel(Model):
+ 
+     def _evaluate(self, *args, **kw):
+         op = self.op
+-        if op != '&':
+-            leftval = self.left(*args, **kw)
+-            if op != '|':
+-                rightval = self.right(*args, **kw)
++        if op == 'fix':
++            # Insert the fixed inputs into the argument list
++            fixed = self._fixed_inputs
++            # Convert args to a list for manipulation
++            args_list = list(args)
++            # Insert fixed values at the correct positions
++            for idx, val in sorted(fixed.items(), reverse=True):
++                args_list.insert(idx, val)
++            # Call the left model with the new arguments
++            return self.left(*args_list, **kw)
+         else:
+-            leftval = self.left(*(args[:self.left.n_inputs]), **kw)
+-            rightval = self.right(*(args[self.left.n_inputs:]), **kw)
+-        if op == '+':
+-            return binary_operation(operator.add, leftval, rightval)
+-        elif op == '-':
+-            return binary_operation(operator.sub, leftval, rightval)
+-        elif op == '*':
+-            return binary_operation(operator.mul, leftval, rightval)
+-        elif op == '/':
+-            return binary_operation(operator.truediv, leftval, rightval)
+-        elif op == '**':
+-            return binary_operation(operator.pow, leftval, rightval)
+-        elif op == '&':
+-            if not isinstance(leftval, tuple):
+-                leftval = (leftval,)
+-            if not isinstance(rightval, tuple):
+-                rightval = (rightval,)
+-            return leftval + rightval
+-        elif op == '|':
+-            if isinstance(leftval, tuple):
+-                return self.right(*leftval, **kw)
++            if op != '&':
++                leftval = self.left(*args, **kw)
++                if op != '|':
++                    rightval = self.right(*args, **kw)
+             else:
+-                return self.right(leftval, **kw)
+-        elif op in SPECIAL_OPERATORS:
+-            return binary_operation(SPECIAL_OPERATORS[op], leftval, rightval)
+-        else:
+-            raise ModelDefinitionError('Unrecognized operator {op}')
++                leftval = self.left(*(args[:self.left.n_inputs]), **kw)
++                rightval = self.right(*(args[self.left.n_inputs:]), **kw)
++            if op == '+':
++                return binary_operation(operator.add, leftval, rightval)
++            elif op == '-':
++                return binary_operation(operator.sub, leftval, rightval)
++            elif op == '*':
++                return binary_operation(operator.mul, leftval, rightval)
++            elif op == '/':
++                return binary_operation(operator.truediv, leftval, rightval)
++            elif op == '**':
++                return binary_operation(operator.pow, leftval, rightval)
++            elif op == '&':
++                if not isinstance(leftval, tuple):
++                    leftval = (leftval,)
++                if not isinstance(rightval, tuple):
++                    rightval = (rightval,)
++                return leftval + rightval
++            elif op == '|':
++                if isinstance(leftval, tuple):
++                    return self.right(*leftval, **kw)
++                else:
++                    return self.right(leftval, **kw)
++            elif op in SPECIAL_OPERATORS:
++                return binary_operation(SPECIAL_OPERATORS[op], leftval, rightval)
++            else:
++                raise ModelDefinitionError('Unrecognized operator {op}')
+ 
+     @property
+     def param_names(self):

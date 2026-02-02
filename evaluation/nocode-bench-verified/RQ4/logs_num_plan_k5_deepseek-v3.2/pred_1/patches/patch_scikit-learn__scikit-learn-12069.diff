@@ -1,0 +1,131 @@
+diff --git a/sklearn/decomposition/_kernel_pca.py b/sklearn/decomposition/_kernel_pca.py
+index 6f0266a..a517a7d 100644
+--- a/sklearn/decomposition/_kernel_pca.py
++++ b/sklearn/decomposition/_kernel_pca.py
+@@ -16,6 +16,10 @@ from ..base import BaseEstimator, TransformerMixin
+ from ..preprocessing import KernelCenterer
+ from ..metrics.pairwise import pairwise_kernels
+ from ..utils.validation import _deprecate_positional_args
++from ..utils._arpack import _init_arpack_v0
++from scipy.sparse.linalg import eigsh
++import scipy.linalg
++import numpy as np
+ 
+ 
+ class KernelPCA(TransformerMixin, BaseEstimator):
+@@ -59,10 +63,12 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+         Learn the inverse transform for non-precomputed kernels.
+         (i.e. learn to find the pre-image of a point)
+ 
+-    eigen_solver : {'auto', 'dense', 'arpack'}, default='auto'
++    eigen_solver : {'auto', 'dense', 'arpack', 'randomized'}, default='auto'
+         Select eigensolver to use. If n_components is much less than
+         the number of training samples, arpack may be more efficient
+-        than the dense eigensolver.
++        than the dense eigensolver. The randomized solver can be used
++        to compute the decomposition when the number of requested
++        components is smaller than the number of training samples.
+ 
+     tol : float, default=0
+         Convergence tolerance for arpack.
+@@ -206,7 +212,7 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+             eigen_solver = self.eigen_solver
+ 
+         if eigen_solver == 'dense':
+-            self.lambdas_, self.alphas_ = linalg.eigh(
++            self.lambdas_, self.alphas_ = scipy.linalg.eigh(
+                 K, eigvals=(K.shape[0] - n_components, K.shape[0] - 1))
+         elif eigen_solver == 'arpack':
+             v0 = _init_arpack_v0(K.shape[0], self.random_state)
+@@ -215,6 +221,10 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+                                                 tol=self.tol,
+                                                 maxiter=self.max_iter,
+                                                 v0=v0)
++        elif eigen_solver == 'randomized':
++            from ._kernel_pca_solvers import _randomized_kernel_pca
++            self.lambdas_, self.alphas_ = _randomized_kernel_pca(
++                K, n_components, self.random_state)
+ 
+         # make sure that the eigenvalues are ok and fix numerical issues
+         self.lambdas_ = _check_psd_eigenvalues(self.lambdas_,
+@@ -388,4 +398,4 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+ 
+     def _more_tags(self):
+         return {'preserves_dtype': [np.float64, np.float32],
+-                'pairwise': self.kernel == 'precomputed'}
++                'pairwise': self.kernel == 'precomputed'}
+diff --git a/sklearn/decomposition/_kernel_pca_solvers.py b/sklearn/decomposition/_kernel_pca_solvers.py
+new file mode 100644
+index 0000000..f0d98af
+--- /dev/null
++++ b/sklearn/decomposition/_kernel_pca_solvers.py
+@@ -0,0 +1,69 @@
++"""
++Solvers for Kernel PCA.
++"""
++
++import numpy as np
++from scipy.linalg import svd
++from ..utils.extmath import randomized_svd
++
++
++def _randomized_kernel_pca(K, n_components, random_state=None):
++    """Compute the top eigenvalues and eigenvectors of a kernel matrix using
++    randomized SVD.
++
++    Parameters
++    ----------
++    K : ndarray of shape (n_samples, n_samples)
++        Kernel matrix.
++
++    n_components : int
++        Number of components to compute.
++
++    random_state : int, RandomState instance or None, default=None
++        Determines random number generation for randomized SVD.
++
++    Returns
++    -------
++    lambdas : ndarray of shape (n_components,)
++        Eigenvalues of the kernel matrix in decreasing order.
++
++    alphas : ndarray of shape (n_samples, n_components)
++        Eigenvectors of the kernel matrix, normalized to have unit norm in
++        the kernel feature space.
++    """
++    n_samples = K.shape[0]
++    if n_components > n_samples:
++        raise ValueError(
++            f"n_components={n_components} must be less than or equal to "
++            f"n_samples={n_samples}.")
++
++    # Randomized SVD directly on the kernel matrix.
++    # Note: K is symmetric positive semi-definite, so we can use randomized SVD
++    # to approximate its eigenvalues and eigenvectors.
++    # The randomized SVD returns U, S, V such that K ≈ U * diag(S) * V^T.
++    # Since K is symmetric, we have U ≈ V.
++    U, S, _ = randomized_svd(K, n_components=n_components,
++                             n_oversamples=10, n_iter='auto',
++                             random_state=random_state)
++
++    # The eigenvalues of K are the squares of the singular values? Actually,
++    # for a symmetric matrix, the singular values are the absolute values of
++    # the eigenvalues. Since K is PSD, the eigenvalues are non-negative and
++    # equal to the singular values.
++    lambdas = S
++
++    # The eigenvectors are the left singular vectors.
++    alphas = U
++
++    # Flip eigenvectors' sign to enforce deterministic output.
++    # We use the same technique as in svd_flip.
++    max_abs_rows = np.argmax(np.abs(alphas), axis=0)
++    signs = np.sign(alphas[max_abs_rows, range(alphas.shape[1])])
++    alphas *= signs
++
++    # Sort in descending order.
++    indices = np.argsort(lambdas)[::-1]
++    lambdas = lambdas[indices]
++    alphas = alphas[:, indices]
++
++    return lambdas, alphas

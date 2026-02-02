@@ -1,0 +1,54 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..99b9364 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -424,6 +424,9 @@ class PhysicalType:
+     __array__ = None
+ 
+ 
++_attrname_physical_mapping = {}
++
++
+ def def_physical_type(unit, name):
+     """
+     Add a mapping between a unit and the corresponding physical type(s).
+@@ -476,6 +479,8 @@ def def_physical_type(unit, name):
+ 
+     for ptype_name in physical_type_names:
+         _name_physical_mapping[ptype_name] = physical_type
++        attr_name = ptype_name.replace(" ", "_").replace("(", "").replace(")", "")
++        _attrname_physical_mapping[attr_name] = physical_type
+ 
+ 
+ def get_physical_type(obj):
+@@ -525,7 +530,13 @@ def get_physical_type(obj):
+         return obj
+ 
+     if isinstance(obj, str):
+-        return _physical_type_from_str(obj)
++        try:
++            return _physical_type_from_str(obj)
++        except ValueError:
++            try:
++                return _attrname_physical_mapping[obj]
++            except KeyError as exc:
++                raise ValueError(f"Unknown physical type {obj!r}.") from exc
+ 
+     try:
+         unit = obj if isinstance(obj, core.UnitBase) else quantity.Quantity(obj, copy=False).unit
+@@ -546,6 +557,15 @@ for unit, physical_type in _units_and_physical_types:
+     def_physical_type(unit, physical_type)
+ 
+ 
++import sys
++
++# Add physical types to module namespace
++for attr_name, ptype in _attrname_physical_mapping.items():
++    setattr(sys.modules[__name__], attr_name, ptype)
++
++del sys, attr_name, ptype
++
++
+ # This generates a docstring addition for this module that describes all of the
+ # standard physical types defined here.
+ if __doc__ is not None:

@@ -1,0 +1,23 @@
+diff --git a/sphinx/ext/autosummary/__init__.py b/sphinx/ext/autosummary/__init__.py
+index a7f2a9d..534ba3f 100644
+--- a/sphinx/ext/autosummary/__init__.py
++++ b/sphinx/ext/autosummary/__init__.py
+@@ -311,9 +311,10 @@ class Autosummary(SphinxDirective):
+                 logger.warning(__('failed to import object %s'), real_name)
+                 items.append((display_name, '', '', real_name))
+                 continue
++            if not self.config.autosummary_imported_members and not documenter.check_module():
++                continue
+             if documenter.options.members and not documenter.check_module():
+                 continue
+-
+             # try to also get a source code analyzer for attribute docs
+             try:
+                 documenter.analyzer = ModuleAnalyzer.for_module(
+@@ -733,5 +734,6 @@ def setup(app):
+     app.add_config_value('autosummary_generate', [], True, [bool])
+     app.add_config_value('autosummary_mock_imports',
+                          lambda config: config.autodoc_mock_imports, 'env')
++    app.add_config_value('autosummary_imported_members', False, 'env')
+ 
+     return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

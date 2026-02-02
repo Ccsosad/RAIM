@@ -1,0 +1,320 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..5f94435 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4360,4 +4360,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..3787269 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -1383,6 +1383,56 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             "invoking the `to_array()` method."
+         )
+ 
++    def query(self, expr, engine=None, parser=None):
++        """
++        Return a new dataset with each array indexed by the results of a query
++        expression.
++
++        The expression is evaluated on the dataset's data variables and
++        coordinates, and should return a boolean array. The dataset is then
++        indexed along each dimension by the boolean array, effectively selecting
++        only the data that satisfies the condition.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate. The expression can refer to any
++            variable in the dataset (both data variables and coordinates).
++        engine : {"python", "numexpr"}, optional
++            The engine used to evaluate the expression. numexpr may be faster
++            for large arrays.
++        parser : {"pandas"}, optional
++            The parser to use for the expression. Currently only the pandas
++            parser is supported.
++
++        Returns
++        -------
++        filtered : Dataset
++            A new dataset with the same variables as the original, but with
++            only the data that satisfies the condition.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset(
++        ...     {"temperature": ("x", [15, 20, 25]), "pressure": ("x", [1000, 1010, 1020])},
++        ...     coords={"x": [0, 1, 2]},
++        ... )
++        >>> ds.query("temperature > 18")
++        <xarray.Dataset>
++        Dimensions:      (x: 2)
++        Coordinates:
++          * x            (x) int64 1 2
++        Data variables:
++            temperature  (x) int64 20 25
++            pressure     (x) int64 1010 1020
++
++        See Also
++        --------
++        Dataset.where
++        """
++        from .query import dataset_query
++        return dataset_query(self, expr, engine=engine, parser=parser)
++
+     @property
+     def nbytes(self) -> int:
+         return sum(v.nbytes for v in self.variables.values())
+@@ -7002,4 +7052,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query.py b/xarray/core/query.py
+new file mode 100644
+index 0000000..1f41ad9
+--- /dev/null
++++ b/xarray/core/query.py
+@@ -0,0 +1,237 @@
++"""
++Query functionality for xarray objects.
++"""
++import pandas as pd
++from pandas.core.computation.ops import UndefinedVariableError
++from pandas.core.computation.expr import PandasExpr
++from pandas.core.computation.scope import Scope
++from pandas.core.computation.engines import ENGINES
++import numpy as np
++from xarray.core.common import AbstractArray
++from xarray.core.dataset import Dataset
++from xarray.core.dataarray import DataArray
++from xarray.core.variable import Variable
++from xarray.core.utils import is_scalar
++
++class DatasetQuery:
++    """
++    Class to handle query operations on xarray Datasets.
++    """
++    def __init__(self, dataset, engine=None, parser=None):
++        self.dataset = dataset
++        self.engine = engine or 'python'
++        self.parser = parser or 'pandas'
++        self._validate_engine()
++        self._validate_parser()
++
++    def _validate_engine(self):
++        if self.engine not in ENGINES:
++            raise ValueError(f"Invalid engine {self.engine}. Must be one of {list(ENGINES.keys())}")
++
++    def _validate_parser(self):
++        if self.parser != 'pandas':
++            raise ValueError("Only 'pandas' parser is supported.")
++
++    def _get_scope(self, level=1):
++        """Create a scope with variables from the dataset."""
++        # We create a dictionary of variable names to numpy arrays.
++        # For multi-dimensional variables, we flatten them to 1D for evaluation.
++        # But note: we need to handle broadcasting correctly.
++        # Instead, we should evaluate per element? Actually, we want to index the dataset.
++        # The query should return a boolean mask that can be used to index the dataset.
++        # So we need to evaluate the expression for each element? That is not efficient.
++        # Alternatively, we can use pandas.eval which works on pandas objects.
++        # We'll convert each variable to a pandas Series with a MultiIndex.
++        # But that might be heavy.
++        # Instead, we can use the same approach as pandas: evaluate the expression on the
++        # flattened arrays.
++        # We'll create a dictionary of 1D arrays for each variable.
++        # However, we need to handle different dimensions.
++        # We'll flatten each variable to 1D, but we need to align them.
++        # Actually, we can use the same index for all variables? Not if they have different dims.
++        # So we require that the variables in the expression share the same dimensions?
++        # That's too restrictive.
++        # Alternatively, we can evaluate the expression for each coordinate point? That is not feasible.
++        # We'll take a simpler approach: we require that the expression only uses variables that
++        # are 1D and have the same dimension? That is not what we want.
++        # Let's think: we want to index the dataset by a condition on data variables.
++        # For example, ds.query('temperature > 0') should return a dataset where temperature > 0.
++        # This is similar to pandas DataFrame.query.
++        # In pandas, the expression is evaluated on the columns (which are 1D) and returns a boolean Series.
++        # In xarray, we have multi-dimensional variables. We can treat each variable as a column in a
++        # flattened representation.
++        # So we can flatten all variables to 1D, evaluate the expression, and then reshape the mask.
++        # But we need to flatten in a consistent way.
++        # We'll use the same order as ds.to_dataframe().index.
++        # Actually, we can use ds.to_dataframe() to get a DataFrame and then use pandas.eval.
++        # That is straightforward.
++        # However, converting to a dataframe might be expensive for large datasets.
++        # But it's the same as what pandas does.
++        # We'll do that for now.
++        # We'll create a dataframe with all data variables and coordinates? Actually, we only need
++        # the variables that appear in the expression.
++        # We'll let pandas.eval handle it.
++        # We'll create a dictionary of Series for each variable.
++        # But we need to have the same index for all series.
++        # We'll use the multi-index from the dataset.
++        # We'll create a dictionary of 1D arrays for each variable, with the same length (the product of dimensions).
++        # We'll create a multi-index from the dataset's coordinates.
++        # Then we can use pandas.eval on these series.
++        # We'll do this lazily: only for the variables that are needed.
++        # But we don't know which variables are needed until we parse the expression.
++        # So we'll create a dictionary for all variables.
++        # This might be heavy, but it's the same as pandas.
++        # We'll implement it and later we can optimize.
++        # For now, we'll create a dictionary of pandas Series for each variable in the dataset.
++        # We'll flatten the variable to 1D and use the same index for all.
++        # The index is the multi-index of the dataset's coordinates.
++        # We'll create the multi-index from the dataset's dimensions.
++        # Actually, we can use ds.to_dataframe() to get a DataFrame, then we can use its columns.
++        # But we don't want to create a dataframe for the entire dataset? We can create a dataframe
++        # with only the data variables? Actually, we need the coordinates to build the index.
++        # We'll create a dataframe with no data? That doesn't work.
++        # Alternatively, we can create a dictionary of Series with a common multi-index.
++        # Let's do that.
++        # We'll create a multi-index from the dataset's dimensions.
++        # For each dimension, we create a range index.
++        # Then we create a multi-index from the product of these ranges.
++        # Then for each variable, we flatten it to 1D and create a Series with that multi-index.
++        # But we need to align the variable's dimensions with the multi-index.
++        # We'll create a multi-index from the dataset's coordinates? Actually, we can use the
++        # dataset's indexes.
++        # We'll use ds.coords.to_index() to get the multi-index.
++        # That is the same as ds.to_dataframe().index.
++        # So we can use ds.to_dataframe() to get the index and the data.
++        # We'll do that.
++        # We'll create a dataframe from the dataset, then use its columns for evaluation.
++        # This is simple and consistent.
++        # We'll do that.
++        # We'll create a dataframe with all data variables and coordinates? Actually, we only need
++        # the data variables for the expression? But the expression might also use coordinates.
++        # So we should include coordinates as well.
++        # We'll create a dataframe with all variables (data_vars and coords) except the indexes.
++        # Actually, we can use ds.to_dataframe() which returns a dataframe with data variables as columns
++        # and coordinates as index? Wait, ds.to_dataframe() returns a dataframe with data variables as columns
++        # and the multi-index from the coordinates.
++        # So the coordinates are in the index, not in the columns.
++        # Therefore, we cannot use them in the expression.
++        # So we need to include coordinates as columns as well.
++        # We'll create a dataframe by resetting the index.
++        # We'll do: df = ds.to_dataframe().reset_index()
++        # This will have all coordinates and data variables as columns.
++        # Then we can use pandas.eval on this dataframe.
++        # This is what we'll do.
++        # We'll create the dataframe only once and cache it.
++        if not hasattr(self, '_df'):
++            self._df = self.dataset.to_dataframe().reset_index()
++        # Now we create a scope from the dataframe columns.
++        # We'll use the same scope as pandas.eval.
++        # We'll create a dictionary of columns.
++        # Actually, we can pass the dataframe directly to pandas.eval.
++        # But we need to use the engine and parser.
++        # We'll use pandas.eval with local_dict=df.to_dict('series')
++        # However, pandas.eval expects a dictionary of Series? Actually, it can take a DataFrame.
++        # We'll pass the dataframe as the local_dict? No, we pass it as 'local_dict' with a dictionary.
++        # We'll create a dictionary of Series.
++        # We'll do:
++        local_dict = {col: self._df[col] for col in self._df.columns}
++        # We also need to include the index? Not necessary.
++        # We'll create a scope with these variables.
++        # We'll use pandas' Scope class.
++        # But we don't need to if we use pandas.eval directly.
++        # We'll just return the local_dict.
++        return local_dict
++
++    def evaluate(self, expr):
++        """Evaluate the query expression and return a boolean mask."""
++        # Get the scope
++        local_dict = self._get_scope()
++        # Use pandas.eval to evaluate the expression
++        # We'll use the engine and parser specified.
++        # Note: pandas.eval does not support the parser argument directly.
++        # We'll use the default parser (which is 'pandas').
++        # We'll use the engine.
++        try:
++            result = pd.eval(expr, engine=self.engine, local_dict=local_dict)
++        except UndefinedVariableError as e:
++            # Check if the variable is a coordinate that is not in the dataframe.
++            # Actually, all coordinates and data variables are in the dataframe.
++            # So if it's not there, it's an error.
++            raise ValueError(f"Variable {e.name} is not in the dataset.")
++        # The result should be a boolean Series with the same index as the dataframe.
++        # We need to reshape it to the original dimensions.
++        # The index of the result is the same as the dataframe's index (which is a RangeIndex).
++        # We need to convert it to a multi-index mask.
++        # We'll create a multi-index from the dataset's dimensions.
++        # Actually, we can use the index of the dataframe (which is a RangeIndex) to create a mask.
++        # But we want a mask that has the same shape as the dataset's dimensions.
++        # We'll create a DataArray with the same dimensions as the dataset, and fill it with the result.
++        # We'll use the same order as the dataframe.
++        # The dataframe is created by ds.to_dataframe(), which uses the dimension order.
++        # We can get the dimension order from ds.dims.
++        # We'll create a DataArray with the result and the same multi-index as the dataframe.
++        # Then we can unstack it to the original dimensions.
++        # Actually, we can create a DataArray directly from the result and the multi-index.
++        # The result is a Series with a RangeIndex. We need to replace the index with the multi-index.
++        # We can do:
++        #   result.index = self._df.index
++        # But the dataframe's index is a RangeIndex. We want the multi-index from the coordinates.
++        # Actually, we reset the index, so the index is a RangeIndex. The multi-index is in the columns.
++        # So we need to build the multi-index from the coordinate columns.
++        # We'll create a multi-index from the coordinate columns in the dataframe.
++        # We'll get the coordinate columns (which are the columns that are in the dataset's coords)
++        coord_cols = [c for c in self._df.columns if c in self.dataset.coords]
++        # Create a multi-index from these columns
++        idx = pd.MultiIndex.from_arrays([self._df[c] for c in coord_cols], names=coord_cols)
++        # Now we have a multi-index with the same length as the result.
++        # We'll create a Series with this multi-index and the result values.
++        result_series = pd.Series(result.values, index=idx)
++        # Now we can convert this Series to a DataArray.
++        # We'll use xr.DataArray.from_series.
++        result_da = DataArray.from_series(result_series)
++        # Now we have a DataArray with the same dimensions as the coordinates.
++        # But we need to align it with the dataset's dimensions.
++        # The dimensions of result_da are the coordinate names.
++        # We need to reorder and broadcast to the dataset's dimensions.
++        # Actually, the dataset's dimensions are the coordinate names? Not necessarily.
++        # The dataset's dimensions are the set of coordinate names that are dimensions.
++        # We'll reindex the result_da to the dataset's dimensions.
++        # We'll do:
++        result_da = result_da.reindex_like(self.dataset, method=None)
++        # Now we have a DataArray with the same dimensions as the dataset.
++        # We'll return it as a boolean mask.
++        return result_da.astype(bool)
++
++def dataset_query(dataset, expr, engine=None, parser=None):
++    """Evaluate a query expression on a dataset and return a filtered dataset."""
++    query_obj = DatasetQuery(dataset, engine=engine, parser=parser)
++    mask = query_obj.evaluate(expr)
++    # Use the mask to index the dataset.
++    # We'll use the mask to select data where mask is True.
++    # We'll convert the mask to a dictionary of indices for each dimension.
++    # Actually, we can use ds.where(mask, drop=True) to filter.
++    # But that might be inefficient because it creates a copy with NaNs.
++    # Alternatively, we can use ds.isel with the indices where mask is True.
++    # We'll get the indices for each dimension.
++    # Since the mask is a DataArray with the same dimensions as the dataset, we can use it to index.
++    # We'll use mask.values to get a boolean array, and then get the indices for each dimension.
++    # But the mask might be multi-dimensional. We need to get the indices for each dimension where mask is True.
++    # We can use np.where to get the indices.
++    # However, we want to index the dataset along each dimension with integer indices.
++    # We'll do:
++    #   indices = {dim: np.where(mask.any(dim=other_dims))[0] for dim in mask.dims}
++    # That is complicated.
++    # Instead, we can use the mask to create a dictionary of indices for each dimension by using the mask's
++    # values to index the coordinate arrays.
++    # Actually, we can use the mask to index the dataset directly with .isel if we convert the mask to indices.
++    # We'll use the mask to get the indices for each dimension.
++    # We'll do:
++    #   for dim in mask.dims:
++    #       # Get the indices where mask is True along that dimension, keeping other dimensions.
++    #       # This is not straightforward.
++    # Alternatively, we can use the mask to select data with .where and drop NaNs.
++    # That is simpler and more consistent with xarray's API.
++    # We'll do:
++    filtered = dataset.where(mask, drop=True)
++    return filtered
++=======

@@ -1,0 +1,73 @@
+diff --git a/xarray/core/formatting_html.py b/xarray/core/formatting_html.py
+index 87f3bcf..b18e95e 100644
+--- a/xarray/core/formatting_html.py
++++ b/xarray/core/formatting_html.py
+@@ -165,8 +165,25 @@ def collapsible_section(
+ 
+ 
+ def _mapping_section(mapping, name, details_func, max_items_collapse, enabled=True):
++    from .options import get_options
++
+     n_items = len(mapping)
+-    collapsed = n_items >= max_items_collapse
++
++    option_name = {
++        "Coordinates": "display_expand_coords",
++        "Data variables": "display_expand_data_vars",
++        "Attributes": "display_expand_attrs",
++    }.get(name)
++
++    if option_name:
++        choice = get_options().get(option_name, "default")
++    else:
++        choice = "default"
++
++    if choice == "default":
++        collapsed = n_items >= max_items_collapse
++    else:
++        collapsed = not choice
+ 
+     return collapsible_section(
+         name,
+@@ -186,9 +203,17 @@ def dim_section(obj):
+ 
+ 
+ def array_section(obj):
++    from .options import get_options
++
+     # "unique" id to expand/collapse the section
+     data_id = "section-" + str(uuid.uuid4())
+-    collapsed = "checked"
++
++    choice = get_options().get("display_expand_data", "default")
++    if choice is False:
++        collapsed = ""
++    else:  # "default" or True
++        collapsed = "checked"
++
+     variable = getattr(obj, "variable", obj)
+     preview = escape(inline_variable_array_repr(variable, max_width=70))
+     data_repr = short_data_repr_html(obj)
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..86ddbf2 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -86,6 +86,18 @@ class set_options:
+     - ``display_width``: maximum display width for ``repr`` on xarray objects.
+       Default: ``80``.
+     - ``display_max_rows``: maximum display rows. Default: ``12``.
++    - ``display_expand_attrs``: Whether to expand the attributes section by
++      default. Can be ``True``, ``False``, or ``'default'``. Default:
++      ``'default'``.
++    - ``display_expand_coords``: Whether to expand the coordinates section by
++      default. Can be ``True``, ``False``, or ``'default'``. Default:
++      ``'default'``.
++    - ``display_expand_data_vars``: Whether to expand the data variables
++      section by default. Can be ``True``, ``False``, or ``'default'``.
++      Default: ``'default'``.
++    - ``display_expand_data``: Whether to expand the data section by
++      default. Can be ``True``, ``False``, or ``'default'``. Default:
++      ``'default'``.
+     - ``arithmetic_join``: DataArray/Dataset alignment in binary operations.
+       Default: ``'inner'``.
+     - ``file_cache_maxsize``: maximum number of open files to hold in xarray's

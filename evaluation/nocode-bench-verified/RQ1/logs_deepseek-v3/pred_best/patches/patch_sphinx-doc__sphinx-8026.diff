@@ -1,0 +1,22 @@
+diff --git a/sphinx/environment/__init__.py b/sphinx/environment/__init__.py
+index 9ed8cac..7a68145 100644
+--- a/sphinx/environment/__init__.py
++++ b/sphinx/environment/__init__.py
+@@ -344,6 +344,17 @@ class BuildEnvironment:
+             pathname = path.join(base, pathname)  # type: ignore
+         return pathname
+ 
++    def get_docpath(self, docname: str) -> str:
++        """Return the directory path for the document, with a trailing slash if non-empty.
++
++        The path is relative to the source directory.
++        """
++        pathname = self.doc2path(docname, base=None)
++        dirpath = path.dirname(pathname)
++        if dirpath:
++            dirpath += '/'
++        return dirpath
++
+     def relfn2path(self, filename: str, docname: str = None) -> Tuple[str, str]:
+         """Return paths to a file referenced from a document, relative to
+         documentation root and absolute.

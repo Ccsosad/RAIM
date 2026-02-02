@@ -1,0 +1,25 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 4db1264..071bcd9 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -311,8 +311,19 @@ class ColorizedTextReporter(TextReporter):
+         self.write_message(msg)
+ 
+ 
++class NoHeaderTextReporter(TextReporter):
++    """Text reporter that does not print the module header."""
++
++    name = "no-header"
++
++    def handle_message(self, msg: Message) -> None:
++        """Manage message of different types, without printing module header."""
++        self.write_message(msg)
++
++
+ def register(linter: PyLinter) -> None:
+     linter.register_reporter(TextReporter)
+     linter.register_reporter(ParseableTextReporter)
+     linter.register_reporter(VSTextReporter)
+-    linter.register_reporter(ColorizedTextReporter)
++    linter.register_reporter(ColorizedTextReporter)
++    linter.register_reporter(NoHeaderTextReporter)

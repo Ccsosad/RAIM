@@ -1,0 +1,176 @@
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..5202489 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -1001,4 +1001,4 @@ def _easy_facetgrid(
+     if kind == "dataset":
+         return g.map_dataset(plotfunc, x, y, **kwargs)
+ 
+-    raise ValueError(f"kind must be one of `line`, `dataarray`, `dataset`, got {kind}")
++    raise ValueError(f"kind must be one of `line`, `dataarray`, `dataset`, got {kind}")
+diff --git a/xarray/plot/plot.py b/xarray/plot/plot.py
+index b16caf5..de1e078 100644
+--- a/xarray/plot/plot.py
++++ b/xarray/plot/plot.py
+@@ -564,6 +564,19 @@ class _PlotMethods:
+         return step(self._da, *args, **kwargs)
+ 
+ 
++import warnings
++
++warnings.warn(
++    "The module xarray.plot.plot is deprecated and will be removed in a future version. "
++    "Use xarray.plot.dataarray_plot instead.",
++    DeprecationWarning,
++    stacklevel=2,
++)
++
++
++from .deprecation import deprecate_positional_args
++
++
+ def override_signature(f):
+     def wrapper(func):
+         func.__wrapped__ = f
+@@ -887,6 +900,49 @@ def _plot1d(plotfunc):
+     return newplotfunc
+ 
+ 
++@_plot1d
++def scatter(
++    x,
++    y,
++    *args,
++    ax=None,
++    add_labels=True,
++    **kwargs,
++):
++    """
++    Scatter plot of y vs. x.
++
++    Parameters
++    ----------
++    x, y : array-like
++        The data positions.
++    ax : matplotlib axes, optional
++        Axis on which to plot.
++    add_labels : bool, optional
++        Whether to add labels.
++    **kwargs
++        Passed to matplotlib.pyplot.scatter.
++
++    Returns
++    -------
++    PathCollection
++        The scatter plot artist.
++    """
++    from matplotlib.pyplot import scatter as mpl_scatter
++
++    if add_labels:
++        ax.set_xlabel("x")
++        ax.set_ylabel("y")
++
++    return mpl_scatter(x, y, *args, ax=ax, **kwargs)
++
++
++# Apply deprecation decorator to scatter
++scatter = deprecate_positional_args(
++    scatter, version="2022.10.1", allowed_args=["x", "y"]
++)
++
++
+ def _add_labels(
+     add_labels: bool | Sequence[bool],
+     darrays: Sequence[T_DataArray],
+diff --git a/xarray/plot/__init__.py b/xarray/plot/__init__.py
+new file mode 100644
+index 0000000..140bc16
+--- /dev/null
++++ b/xarray/plot/__init__.py
+@@ -0,0 +1,6 @@
++# For backward compatibility, import from dataarray_plot
++from .dataarray_plot import *
++from .facetgrid import *
++
++# Also import plot as dataarray_plot for backward compatibility
++from . import plot as dataarray_plot
+diff --git a/xarray/plot/dataarray_plot.py b/xarray/plot/dataarray_plot.py
+new file mode 100644
+index 0000000..f3ec00b
+--- /dev/null
++++ b/xarray/plot/dataarray_plot.py
+@@ -0,0 +1,7 @@
++"""
++This module was renamed from plot.py to dataarray_plot.py.
++For backward compatibility, it is still accessible as xarray.plot.plot.
++"""
++
++# Re-export everything from the original plot module
++from .plot import *
+diff --git a/xarray/plot/deprecation.py b/xarray/plot/deprecation.py
+new file mode 100644
+index 0000000..1c2d53f
+--- /dev/null
++++ b/xarray/plot/deprecation.py
+@@ -0,0 +1,61 @@
++"""
++Deprecation warnings for xarray plotting module.
++"""
++
++import warnings
++from typing import Any, Callable
++
++
++def deprecate_positional_args(
++    func: Callable | None = None,
++    *,
++    version: str = "future",
++    allowed_args: list[str] | None = None,
++) -> Callable:
++    """
++    Decorator to deprecate positional arguments in a function.
++
++    Parameters
++    ----------
++    func : Callable, optional
++        The function to decorate.
++    version : str, optional
++        The version when positional arguments will be removed.
++    allowed_args : list of str, optional
++        List of argument names that are allowed to be positional.
++
++    Returns
++    -------
++    Callable
++        The decorated function.
++    """
++
++    def decorator(f: Callable) -> Callable:
++        def wrapper(*args: Any, **kwargs: Any) -> Any:
++            if allowed_args is not None:
++                # Check if any positional args beyond allowed ones
++                if len(args) > len(allowed_args):
++                    warnings.warn(
++                        f"Passing additional positional arguments to {f.__name__} "
++                        f"is deprecated and will be removed in xarray {version}. "
++                        "Pass them as keyword arguments instead.",
++                        FutureWarning,
++                        stacklevel=2,
++                    )
++            else:
++                # If no allowed_args specified, deprecate all positional args
++                if args:
++                    warnings.warn(
++                        f"Passing positional arguments to {f.__name__} "
++                        f"is deprecated and will be removed in xarray {version}. "
++                        "Pass them as keyword arguments instead.",
++                        FutureWarning,
++                        stacklevel=2,
++                    )
++            return f(*args, **kwargs)
++
++        return wrapper
++
++    if func is not None:
++        return decorator(func)
++    return decorator

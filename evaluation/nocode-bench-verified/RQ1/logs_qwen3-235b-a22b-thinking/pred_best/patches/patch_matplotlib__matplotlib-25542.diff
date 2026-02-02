@@ -1,0 +1,38 @@
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index b79bffd..b398ccf 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -1832,16 +1832,28 @@ class LinearLocator(Locator):
+ class MultipleLocator(Locator):
+     """
+     Set a tick on each integer multiple of the *base* within the view
+-    interval.
++    interval, optionally shifted by *offset*.
++
++    Parameters
++    ----------
++    base : float, default: 1.0
++        The base step size for ticks.
++    offset : float, default: 0.0
++        The offset to shift the ticks by.
+     """
+ 
+-    def __init__(self, base=1.0):
+-        self._edge = _Edge_integer(base, 0)
++    def __init__(self, base=1.0, offset=0.0):
++        self.base = base
++        self.offset = offset
++        self._edge = _Edge_integer(base, offset)
+ 
+-    def set_params(self, base):
++    def set_params(self, base=None, offset=None):
+         """Set parameters within this locator."""
+         if base is not None:
+-            self._edge = _Edge_integer(base, 0)
++            self.base = base
++        if offset is not None:
++            self.offset = offset
++        self._edge = _Edge_integer(self.base, self.offset)
+ 
+     def __call__(self):
+         """Return the locations of the ticks."""

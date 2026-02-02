@@ -1,0 +1,19 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index e770a09..5990de6 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -1023,7 +1023,7 @@ class LeapSeconds(QTable):
+             raise ValueError('none of the files could be read. The '
+                              'following errors were raised:\n' + str(err_list))
+ 
+-        if self.expires < self._today():
++        if self.expires < self._today() and conf.auto_download:
+             warn('leap-second file is expired.', IERSStaleWarning)
+ 
+         return self
+@@ -1173,4 +1173,4 @@ class LeapSeconds(QTable):
+             if initialize_erfa == 'only':
+                 return 0
+ 
+-        return erfa.leap_seconds.update(self)
++        return erfa.leap_seconds.update(self)

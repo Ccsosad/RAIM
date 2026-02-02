@@ -1,0 +1,20 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..de1e67d 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -177,7 +177,14 @@ class Nominal(Scale):
+             name = None  # To work around mpl<3.4 compat issues
+ 
+             def set_default_locators_and_formatters(self, axis):
+-                ...
++                # Set fixed margins, no grid, and invert y axis for categorical-like appearance
++                # Only for real matplotlib axes, not for PseudoAxis
++                if hasattr(axis, 'set_margin'):
++                    axis.set_margin(0.2)
++                if hasattr(axis, 'grid'):
++                    axis.grid(False)
++                if hasattr(axis, 'set_inverted') and axis.axis_name == 'y':
++                    axis.set_inverted(True)
+                 # axis.set_major_locator(major_locator)
+                 # if minor_locator is not None:
+                 #     axis.set_minor_locator(minor_locator)

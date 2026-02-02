@@ -1,0 +1,130 @@
+diff --git a/astropy/visualization/wcsaxes/coordinates_map.py b/astropy/visualization/wcsaxes/coordinates_map.py
+index 54139f3..e34cce6 100644
+--- a/astropy/visualization/wcsaxes/coordinates_map.py
++++ b/astropy/visualization/wcsaxes/coordinates_map.py
+@@ -1,12 +1,41 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ from textwrap import indent
+ from collections import OrderedDict
+ 
+ from .coordinate_helpers import CoordinateHelper
+-from .frame import RectangularFrame
++from .frame import RectangularFrame, BaseFrame
+ from .coordinate_range import find_coordinate_range
+ 
++class RectangularFrame1D(BaseFrame):
++    """
++    A frame for 1D plots, which has only one spine.
++    """
++    spine_names = ('b', 't', 'l', 'r')
++
++    def __init__(self, axes, transform, path=None):
++        super().__init__(axes, transform, path=path)
++
++    def _update_patch_path(self):
++        # For 1D, we don't need a patch.
++        self.patch = None
++
++    def sample(self, count=100):
++        # Return a single spine for the bottom.
++        xmin, xmax = self.axes.get_xlim()
++        ymin, ymax = self.axes.get_ylim()
++        # We assume the plot is horizontal.
++        x = np.linspace(xmin, xmax, count)
++        y = np.full(count, ymin)
++        data = np.column_stack([x, y])
++        pixel = self.axes.transData.transform(data)
++        world = self.transform.transform(data)
++        spine = {
++            'b': Spine(data=data, pixel=pixel, world=world, normal_angle=90)
++        }
++        return spine
++
+ 
+ class CoordinatesMap:
+     """
+@@ -49,7 +78,24 @@ class CoordinatesMap:
+         self._axes = axes
+         self._transform = transform
+ 
+-        self.frame = frame_class(axes, self._transform, path=previous_frame_path)
++        # Determine if we are in 1D or 2D
++        visible_count = 0
++        for index in range(len(coord_meta['type'])):
++            if 'visible' in coord_meta:
++                visible = coord_meta['visible'][index]
++            else:
++                visible = True
++            if visible:
++                visible_count += 1
++
++        # Use RectangularFrame1D for 1D plots
++        if visible_count == 1 and frame_class is RectangularFrame:
++            from .frame import RectangularFrame1D
++            frame_class_to_use = RectangularFrame1D
++        else:
++            frame_class_to_use = frame_class
++
++        self.frame = frame_class_to_use(axes, self._transform, path=previous_frame_path)
+ 
+         # Set up coordinates
+         self._coords = []
+@@ -168,4 +214,4 @@ class CoordinatesMap:
+     def __repr__(self):
+         s = f'<CoordinatesMap with {len(self._coords)} world coordinates:\n\n'
+         table = indent(str(self._as_table()), '  ')
+-        return s + table + '\n\n>'
++        return s + table + '\n\n>'
+diff --git a/astropy/visualization/wcsaxes/wcsapi.py b/astropy/visualization/wcsaxes/wcsapi.py
+index 18817a1..50b7cec 100644
+--- a/astropy/visualization/wcsaxes/wcsapi.py
++++ b/astropy/visualization/wcsaxes/wcsapi.py
+@@ -33,10 +33,14 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+             raise ValueError("'slices' should have as many elements as WCS "
+                              "has pixel dimensions (should be {})"
+                              .format(wcs.pixel_n_dim))
+-    elif wcs.pixel_n_dim < 2:
+-        raise ValueError("WCS should have at least 2 pixel dimensions")
+-    elif slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
+-        raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    elif wcs.pixel_n_dim < 1:
++        raise ValueError("WCS should have at least 1 pixel dimension")
++    elif slices is not None:
++        # For 1D or 2D WCS, check slices
++        if wcs.pixel_n_dim == 2 and slices != ('x', 'y') and slices != ('y', 'x'):
++            raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++        elif wcs.pixel_n_dim == 1 and slices != ('x',) and slices != ('y',):
++            raise ValueError("WCS only has 1 pixel dimension and cannot be sliced")
+ 
+     is_fits_wcs = isinstance(wcs, WCS)
+ 
+@@ -124,11 +128,22 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+     invert_xy = False
+     if slices is not None:
+         wcs_slice = list(slices)
+-        wcs_slice[wcs_slice.index("x")] = slice(None)
+-        wcs_slice[wcs_slice.index("y")] = slice(None)
+-        wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
+-        invert_xy = slices.index('x') > slices.index('y')
+-        world_keep = wcs._world_keep
++        if 'x' in wcs_slice and 'y' in wcs_slice:
++            wcs_slice[wcs_slice.index("x")] = slice(None)
++            wcs_slice[wcs_slice.index("y")] = slice(None)
++            wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
++            invert_xy = slices.index('x') > slices.index('y')
++            world_keep = wcs._world_keep
++        elif 'x' in wcs_slice:
++            wcs_slice[wcs_slice.index("x")] = slice(None)
++            wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
++            world_keep = wcs._world_keep
++        elif 'y' in wcs_slice:
++            wcs_slice[wcs_slice.index("y")] = slice(None)
++            wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
++            world_keep = wcs._world_keep
++        else:
++            world_keep = list(range(wcs.world_n_dim))
+     else:
+         world_keep = list(range(wcs.world_n_dim))
+ 

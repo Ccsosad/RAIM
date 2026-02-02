@@ -1,0 +1,34 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..fb62ab2 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -996,6 +996,11 @@ class FacetGrid(Grid):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+         return self._fig
+ 
++    @property
++    def figure(self):
++        """Alias for the underlying matplotlib Figure (preferred over .fig)."""
++        return self._fig
++
+     @property
+     def axes(self):
+         """An array of the :class:`matplotlib.axes.Axes` objects in the grid."""
+@@ -1236,6 +1241,8 @@ class PairGrid(Grid):
+         self.fig = fig
+         self.axes = axes
+         self.data = data
++        # Add new attribute for unified figure access
++        self.figure = fig
+ 
+         # Save what we are going to do with the diagonal
+         self.diag_sharey = diag_sharey
+@@ -1654,6 +1661,8 @@ class JointGrid(object):
+         self.ax_joint = ax_joint
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y
++        # Compatibility alias for underlying matplotlib figure
++        self.figure = f
+ 
+         # Turn off tick visibility for the measure axis on the marginal plots
+         plt.setp(ax_marg_x.get_xticklabels(), visible=False)

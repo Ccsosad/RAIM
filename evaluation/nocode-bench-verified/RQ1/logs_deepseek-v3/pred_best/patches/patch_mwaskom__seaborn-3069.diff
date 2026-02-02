@@ -1,0 +1,18 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..fea13df 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -156,6 +156,13 @@ class Nominal(Scale):
+         if new._label_params is None:
+             new = new.label()
+ 
++        # Set seaborn-like categorical axis defaults
++        if axis is not None and isinstance(axis, mpl.axes.Axes):
++            axis.margins(x=0.02)  # Fixed small margin
++            axis.grid(False)  # No grid
++            if prop.name == "y":  # Invert y axis for nominal scale
++                axis.invert_yaxis()
++
+         # TODO flexibility over format() which isn't great for numbers / dates
+         stringify = np.vectorize(format)
+ 

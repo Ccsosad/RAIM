@@ -1,0 +1,13 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..a0463df 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -2283,7 +2283,7 @@ BINARY_OPERATORS = {
+     '&': _join_operator
+ }
+ 
+-SPECIAL_OPERATORS = {}
++SPECIAL_OPERATORS = {'fix': None}
+ 
+ 
+ def _add_special_operator(sop_name, sop):

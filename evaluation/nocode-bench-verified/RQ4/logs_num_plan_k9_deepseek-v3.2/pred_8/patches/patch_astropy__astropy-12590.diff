@@ -1,0 +1,40 @@
+diff --git a/astropy/cosmology/flrw.py b/astropy/cosmology/flrw.py
+index ecb617a..4c2d861 100644
+--- a/astropy/cosmology/flrw.py
++++ b/astropy/cosmology/flrw.py
+@@ -295,6 +295,11 @@ class FLRW(Cosmology):
+         """Omega curvature; the effective curvature density/critical density at z=0."""
+         return self._Ok0
+ 
++    @property
++    def Otot0(self):
++        """Omega total; the total density/critical density at z=0."""
++        return self._Om0 + self._Ode0 + self._Ogamma0 + self._Onu0 + self._Ok0
++
+     @property
+     def Tnu0(self):
+         """Temperature of the neutrino background as `~astropy.units.Quantity` at z=0."""
+@@ -527,6 +532,23 @@ class FLRW(Cosmology):
+             return np.zeros(z.shape) if hasattr(z, "shape") else 0.0
+         return self.Ogamma(z) * self.nu_relative_density(z)
+ 
++    def Otot(self, z):
++        """Return the total density parameter at redshift ``z``.
++
++        Parameters
++        ----------
++        z : Quantity-like ['redshift'], array-like, or `~numbers.Number`
++            Input redshift.
++
++        Returns
++        -------
++        Otot : ndarray or float
++            The total density relative to the critical density at each redshift.
++            Returns `float` if the input is scalar.
++        """
++        z = aszarr(z)
++        return self.Om(z) + self.Ode(z) + self.Ogamma(z) + self.Onu(z) + self.Ok(z)
++
+     def Tcmb(self, z):
+         """Return the CMB temperature at redshift ``z``.
+ 

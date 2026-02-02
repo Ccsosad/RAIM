@@ -1,0 +1,212 @@
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..7fe0a19 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -348,7 +348,7 @@ class FacetGrid:
+ 
+     def map_plot1d(
+         self, func: Callable, x: Hashable, y: Hashable, **kwargs: Any
+-    ) -> Self:
++    ) -> FacetGrid:
+         """
+         Apply a plotting function to a 1d facet's subset of the data.
+ 
+@@ -1001,4 +1001,4 @@ def _easy_facetgrid(
+     if kind == "dataset":
+         return g.map_dataset(plotfunc, x, y, **kwargs)
+ 
+-    raise ValueError(f"kind must be one of `line`, `dataarray`, `dataset`, got {kind}")
++    raise ValueError(f"kind must be one of `line`, `dataarray`, `dataset`, got {kind}")
+diff --git a/xarray/plot/accessor.py b/xarray/plot/accessor.py
+new file mode 100644
+index 0000000..e2047d3
+--- /dev/null
++++ b/xarray/plot/accessor.py
+@@ -0,0 +1,187 @@
++"""
++Plot accessors with static typing.
++"""
++
++from __future__ import annotations
++
++from typing import TYPE_CHECKING, Any, Callable, Hashable, Literal
++
++import numpy as np
++
++from xarray.core.types import T_DataArray, T_Dataset
++
++if TYPE_CHECKING:
++    from matplotlib.axes import Axes
++    from matplotlib.figure import Figure
++
++    from xarray import DataArray, Dataset
++    from xarray.core.types import (
++        HueStyleOptions,
++        Plot1dMethod,
++        Plot2dMethod,
++        PlotMethod,
++    )
++
++
++class DataArrayPlotAccessor:
++    """Plot accessor for DataArray objects with static typing."""
++
++    def __init__(self, da: T_DataArray) -> None:
++        self._da = da
++
++    def __call__(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Default plot method."""
++        from .dataarray_plot import plot
++
++        return plot(self._da, *args, **kwargs)
++
++    def line(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Line plot."""
++        from .dataarray_plot import line
++
++        return line(self._da, *args, **kwargs)
++
++    def step(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Step plot."""
++        from .dataarray_plot import step
++
++        return step(self._da, *args, **kwargs)
++
++    def scatter(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Scatter plot."""
++        from .dataarray_plot import scatter
++
++        return scatter(self._da, *args, **kwargs)
++
++    def pcolormesh(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Pseudocolor plot."""
++        from .dataarray_plot import pcolormesh
++
++        return pcolormesh(self._da, *args, **kwargs)
++
++    def imshow(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Image plot."""
++        from .dataarray_plot import imshow
++
++        return imshow(self._da, *args, **kwargs)
++
++    def contour(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Contour plot."""
++        from .dataarray_plot import contour
++
++        return contour(self._da, *args, **kwargs)
++
++    def contourf(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Filled contour plot."""
++        from .dataarray_plot import contourf
++
++        return contourf(self._da, *args, **kwargs)
++
++    def hist(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Histogram plot."""
++        from .dataarray_plot import hist
++
++        return hist(self._da, *args, **kwargs)
++
++    def surface(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Surface plot."""
++        from .dataarray_plot import surface
++
++        return surface(self._da, *args, **kwargs)
++
++
++class DatasetPlotAccessor:
++    """Plot accessor for Dataset objects with static typing."""
++
++    def __init__(self, ds: T_Dataset) -> None:
++        self._ds = ds
++
++    def __call__(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Default plot method."""
++        from .dataset_plot import plot
++
++        return plot(self._ds, *args, **kwargs)
++
++    def line(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Line plot."""
++        from .dataset_plot import line
++
++        return line(self._ds, *args, **kwargs)
++
++    def scatter(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Scatter plot."""
++        from .dataset_plot import scatter
++
++        return scatter(self._ds, *args, **kwargs)
++
++    def quiver(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Quiver plot."""
++        from .dataset_plot import quiver
++
++        return quiver(self._ds, *args, **kwargs)
++
++    def streamplot(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Streamplot."""
++        from .dataset_plot import streamplot
++
++        return streamplot(self._ds, *args, **kwargs)

@@ -1,0 +1,26 @@
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index d43c130..1cfb6f2 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -93,6 +93,11 @@ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
+                               base_path=None, builder=None, template_dir=None,
+                               imported_members=False, app=None):
+     # type: (List[str], str, str, Callable, Callable, str, Builder, str, bool, Any) -> None
++    if app is not None and imported_members is False:
++        imported_members = app.config.autosummary_imported_members
++    # type: (List[str], str, str, Callable, Callable, str, Builder, str, bool, Any) -> None
++    if app is not None and imported_members is False:
++        imported_members = getattr(app.config, 'autosummary_imported_members', False)
+ 
+     showed_sources = list(sorted(sources))
+     if len(showed_sources) > 20:
+@@ -230,7 +235,8 @@ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
+         generate_autosummary_docs(new_files, output_dir=output_dir,
+                                   suffix=suffix, warn=warn, info=info,
+                                   base_path=base_path, builder=builder,
+-                                  template_dir=template_dir, app=app)
++                                  template_dir=template_dir,
++                                  imported_members=imported_members, app=app)
+ 
+ 
+ # -- Finding documented entries in files ---------------------------------------

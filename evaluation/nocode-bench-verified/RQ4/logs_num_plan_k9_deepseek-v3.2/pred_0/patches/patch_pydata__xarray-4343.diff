@@ -1,0 +1,146 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..7d57a8a 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -742,6 +742,141 @@ class CFTimeIndex(pd.Index):
+         return self._round_via_method(freq, _round_to_nearest_half_even)
+ 
+ 
++def parse_iso8601_like(datetime_str):
++    """
++    Parse a datetime string that may be in one of three formats:
++    1. ISO 8601 basic format (YYYYMMDDhhmmss)
++    2. ISO 8601 extended format (YYYY-MM-DDThh:mm:ss)
++    3. cftime default format (YYYY-MM-DD hh:mm:ss)
++
++    Returns a dict with keys: year, month, day, hour, minute, second, microsecond.
++    """
++    import re
++
++    # Pattern for extended format with either 'T' or space as separator.
++    extended_pattern = (
++        r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})"
++        r"[T ](?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})"
++        r"(?:\.(?P<microsecond>\d{1,6}))?$"
++    )
++    # Pattern for basic format (no separators).
++    basic_pattern = (
++        r"^(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})"
++        r"(?P<hour>\d{2})(?P<minute>\d{2})(?P<second>\d{2})"
++        r"(?:\.(?P<microsecond>\d{1,6}))?$"
++    )
++
++    match = re.match(extended_pattern, datetime_str)
++    if not match:
++        match = re.match(basic_pattern, datetime_str)
++
++    if not match:
++        raise ValueError(f"Unrecognized datetime string: {datetime_str}")
++
++    components = match.groupdict()
++    result = {}
++    for key in ('year', 'month', 'day', 'hour', 'minute', 'second'):
++        result[key] = int(components[key]) if components[key] else 0
++    microsecond = components['microsecond']
++    if microsecond is None:
++        result['microsecond'] = 0
++    else:
++        microsecond = microsecond.ljust(6, '0')
++        result['microsecond'] = int(microsecond)
++
++    return result
++
++
++def parse_iso8601_like(datetime_str):
++    """
++    Parse a datetime string that may be in one of three formats:
++    1. ISO 8601 basic format (YYYYMMDDhhmmss)
++    2. ISO 8601 extended format (YYYY-MM-DDThh:mm:ss)
++    3. cftime default format (YYYY-MM-DD hh:mm:ss)
++
++    Returns a dict with keys: year, month, day, hour, minute, second, microsecond.
++    """
++    # First, try to parse as ISO 8601 extended format with 'T' or space separator.
++    # We'll use a regex to capture the components.
++    import re
++
++    # Pattern for extended format with either 'T' or space as separator.
++    extended_pattern = (
++        r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})"
++        r"[T ](?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})"
++        r"(?:\.(?P<microsecond>\d{1,6}))?$"
++    )
++    # Pattern for basic format (no separators).
++    basic_pattern = (
++        r"^(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})"
++        r"(?P<hour>\d{2})(?P<minute>\d{2})(?P<second>\d{2})"
++        r"(?:\.(?P<microsecond>\d{1,6}))?$"
++    )
++
++    match = re.match(extended_pattern, datetime_str)
++    if not match:
++        match = re.match(basic_pattern, datetime_str)
++
++    if not match:
++        raise ValueError(f"Unrecognized datetime string: {datetime_str}")
++
++    components = match.groupdict()
++    # Convert to integers, default to 0 for missing parts.
++    result = {}
++    for key in ('year', 'month', 'day', 'hour', 'minute', 'second'):
++        result[key] = int(components[key]) if components[key] else 0
++    # Microsecond might be None or a string with trailing zeros.
++    microsecond = components['microsecond']
++    if microsecond is None:
++        result['microsecond'] = 0
++    else:
++        # Pad to 6 digits to convert to microseconds.
++        microsecond = microsecond.ljust(6, '0')
++        result['microsecond'] = int(microsecond)
++
++    return result
++
++
++def _parse_iso8601_with_reso(date_type, datetime_str):
++    """
++    Parse an ISO 8601-like datetime string and return a cftime object and resolution.
++
++    Parameters
++    ----------
++    date_type : cftime.datetime class
++    datetime_str : str
++
++    Returns
++    -------
++    parsed : cftime.datetime
++    resolution : str
++    """
++    parsed_components = parse_iso8601_like(datetime_str)
++
++    # Determine the resolution based on which components are non-zero.
++    if parsed_components['hour'] or parsed_components['minute'] or parsed_components['second'] or parsed_components['microsecond']:
++        resolution = 'second'
++    elif parsed_components['day']:
++        resolution = 'day'
++    elif parsed_components['month']:
++        resolution = 'month'
++    else:
++        resolution = 'year'
++
++    # Create the cftime object.
++    parsed = date_type(
++        parsed_components['year'],
++        parsed_components['month'],
++        parsed_components['day'],
++        parsed_components['hour'],
++        parsed_components['minute'],
++        parsed_components['second'],
++        parsed_components['microsecond'],
++    )
++
++    return parsed, resolution
++
++
+ def _parse_iso8601_without_reso(date_type, datetime_str):
+     date, _ = _parse_iso8601_with_reso(date_type, datetime_str)
+     return date

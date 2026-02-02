@@ -1,0 +1,27 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..04e380d 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -177,11 +177,17 @@ class Nominal(Scale):
+             name = None  # To work around mpl<3.4 compat issues
+ 
+             def set_default_locators_and_formatters(self, axis):
+-                ...
+-                # axis.set_major_locator(major_locator)
+-                # if minor_locator is not None:
+-                #     axis.set_minor_locator(minor_locator)
+-                # axis.set_major_formatter(major_formatter)
++                super().set_default_locators_and_formatters(axis)
++                # Turn off grid for this axis
++                axis.grid(False)
++                # Set fixed margins (no extra padding) for this axis
++                if axis.axis_name == 'x':
++                    axis.axes.margins(x=0)
++                else:
++                    axis.axes.margins(y=0)
++                # Invert the y-axis for categorical plots
++                if axis.axis_name == 'y':
++                    axis.axes.invert_yaxis()
+ 
+         mpl_scale = CatScale(data.name)
+         if axis is None:

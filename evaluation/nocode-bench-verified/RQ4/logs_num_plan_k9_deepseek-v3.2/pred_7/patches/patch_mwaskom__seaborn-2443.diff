@@ -1,0 +1,135 @@
+diff --git a/seaborn/categorical.py b/seaborn/categorical.py
+index 27d5801..defc984 100644
+--- a/seaborn/categorical.py
++++ b/seaborn/categorical.py
+@@ -1467,6 +1467,40 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+ 
+         return np.array(swarm)
+ 
++    def _attach_swarm_callback(self, ax):
++        """Attach a draw callback to recalculate the swarm on draw events."""
++        def update_swarms(event):
++            for artist in ax.collections:
++                if hasattr(artist, '_swarm_params'):
++                    params = artist._swarm_params
++                    self.swarm_points(ax, artist, **params)
++                    # Reorder the offsets to match the original data order
++                    if hasattr(artist, '_sorter'):
++                        sorter = artist._sorter
++                        offsets = artist.get_offsets()
++                        sorted_offsets = offsets.copy()
++                        orig_offsets = np.empty_like(sorted_offsets)
++                        orig_offsets[sorter] = sorted_offsets
++                        artist.set_offsets(orig_offsets)
++        ax.callbacks.connect('draw_event', update_swarms)
++
++    def _attach_swarm_callback(self, ax):
++        """Attach a draw callback to recalculate the swarm on draw events."""
++        def update_swarms(event):
++            for artist in ax.collections:
++                if hasattr(artist, '_swarm_params'):
++                    center, width, s, kws = artist._swarm_params
++                    self.swarm_points(ax, artist, center, width, s, **kws)
++                    # Reorder the offsets to match the original data order
++                    if hasattr(artist, '_sorter'):
++                        sorter = artist._sorter
++                        offsets = artist.get_offsets()
++                        sorted_offsets = offsets.copy()
++                        orig_offsets = np.empty_like(sorted_offsets)
++                        orig_offsets[sorter] = sorted_offsets
++                        artist.set_offsets(orig_offsets)
++        ax.callbacks.connect('draw_event', update_swarms)
++
+     def add_gutters(self, points, center, width):
+         """Stop points from extending beyond their territory."""
+         half_width = width / 2
+@@ -1558,19 +1592,21 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+ 
+                 # Sort the points for the beeswarm algorithm
+                 sorter = np.argsort(swarm_data)
+-                swarm_data = swarm_data[sorter]
+-                point_colors = point_colors[sorter]
++                swarm_data_sorted = swarm_data[sorter]
++                point_colors_sorted = point_colors[sorter]
+ 
+                 # Plot the points in centered positions
+-                cat_pos = np.ones(swarm_data.size) * i
+-                kws.update(c=palette[point_colors])
++                cat_pos = np.ones(swarm_data_sorted.size) * i
++                kws.update(c=palette[point_colors_sorted])
+                 if self.orient == "v":
+-                    points = ax.scatter(cat_pos, swarm_data, s=s, **kws)
++                    points = ax.scatter(cat_pos, swarm_data_sorted, s=s, **kws)
+                 else:
+-                    points = ax.scatter(swarm_data, cat_pos, s=s, **kws)
++                    points = ax.scatter(swarm_data_sorted, cat_pos, s=s, **kws)
+ 
+                 centers.append(i)
+                 swarms.append(points)
++                # Store the sorter and original data for later reordering
++                points._sorter = sorter
+ 
+             else:
+                 offsets = self.hue_offsets
+@@ -1583,20 +1619,22 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+ 
+                     # Sort the points for the beeswarm algorithm
+                     sorter = np.argsort(swarm_data)
+-                    swarm_data = swarm_data[sorter]
+-                    point_colors = point_colors[sorter]
++                    swarm_data_sorted = swarm_data[sorter]
++                    point_colors_sorted = point_colors[sorter]
+ 
+                     # Plot the points in centered positions
+                     center = i + offsets[j]
+-                    cat_pos = np.ones(swarm_data.size) * center
+-                    kws.update(c=palette[point_colors])
++                    cat_pos = np.ones(swarm_data_sorted.size) * center
++                    kws.update(c=palette[point_colors_sorted])
+                     if self.orient == "v":
+-                        points = ax.scatter(cat_pos, swarm_data, s=s, **kws)
++                        points = ax.scatter(cat_pos, swarm_data_sorted, s=s, **kws)
+                     else:
+-                        points = ax.scatter(swarm_data, cat_pos, s=s, **kws)
++                        points = ax.scatter(swarm_data_sorted, cat_pos, s=s, **kws)
+ 
+                     centers.append(center)
+                     swarms.append(points)
++                    # Store the sorter and original data for later reordering
++                    points._sorter = sorter
+ 
+         # Autoscale the valus axis to set the data/axes transforms properly
+         ax.autoscale_view(scalex=self.orient == "h", scaley=self.orient == "v")
+@@ -1606,6 +1644,32 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+         for center, swarm in zip(centers, swarms):
+             if swarm.get_offsets().size:
+                 self.swarm_points(ax, swarm, center, width, s, **kws)
++                # Reorder the offsets to match the original data order
++                if hasattr(swarm, '_sorter'):
++                    sorter = swarm._sorter
++                    offsets = swarm.get_offsets()
++                    sorted_offsets = offsets.copy()
++                    orig_offsets = np.empty_like(sorted_offsets)
++                    orig_offsets[sorter] = sorted_offsets
++                    swarm.set_offsets(orig_offsets)
++                # Store the parameters for draw-time swarming
++                swarm._swarm_params = {
++                    'center': center, 'width': width, 's': s, 'kws': kws
++                }
++        # Attach a draw callback to recalculate the swarm on draw events
++        self._attach_swarm_callback(ax)
++                # Reorder the offsets to match the original data order
++                if hasattr(swarm, '_sorter'):
++                    sorter = swarm._sorter
++                    offsets = swarm.get_offsets()
++                    sorted_offsets = offsets.copy()
++                    orig_offsets = np.empty_like(sorted_offsets)
++                    orig_offsets[sorter] = sorted_offsets
++                    swarm.set_offsets(orig_offsets)
++                # Store the parameters for draw-time swarming
++                swarm._swarm_params = (center, width, s, kws)
++        # Attach a draw callback to recalculate the swarm on draw events
++        self._attach_swarm_callback(ax)
+ 
+     def plot(self, ax, kws):
+         """Make the full plot."""

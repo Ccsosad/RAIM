@@ -1,0 +1,12 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..8587392 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -84,6 +84,7 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         for i in range(n_features):
+             Xi = X_list[i]
+             if self.categories == 'auto':
++                # Include missing values (np.nan and None) as valid categories
+                 cats = _unique(Xi)
+             else:
+                 cats = np.array(self.categories[i], dtype=Xi.dtype)

@@ -1,0 +1,27 @@
+diff --git a/sklearn/pipeline.py b/sklearn/pipeline.py
+index 37667a3..38243e6 100644
+--- a/sklearn/pipeline.py
++++ b/sklearn/pipeline.py
+@@ -1054,6 +1054,7 @@ class FeatureUnion(TransformerMixin, _BaseComposition):
+                 continue
+             if trans == "passthrough":
+                 trans = FunctionTransformer()
++                trans._passthrough = True
+             yield (name, trans, get_weight(name))
+ 
+     @deprecated(
+@@ -1098,8 +1099,13 @@ class FeatureUnion(TransformerMixin, _BaseComposition):
+                     "Transformer %s (type %s) does not provide get_feature_names_out."
+                     % (str(name), type(trans).__name__)
+                 )
++            feature_names_out = trans.get_feature_names_out(input_features)
++            if hasattr(trans, '_passthrough') and trans._passthrough and feature_names_out is None:
++                # Generate generic feature names for passthrough when input_features is None
++                n_features = trans.n_features_in_
++                feature_names_out = [f"x{i}" for i in range(n_features)]
+             feature_names.extend(
+-                [f"{name}__{f}" for f in trans.get_feature_names_out(input_features)]
++                [f"{name}__{f}" for f in feature_names_out]
+             )
+         return np.asarray(feature_names, dtype=object)
+ 

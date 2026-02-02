@@ -1,0 +1,40 @@
+diff --git a/pylint/pyreverse/main.py b/pylint/pyreverse/main.py
+index 946d88c..6d14fe4 100644
+--- a/pylint/pyreverse/main.py
++++ b/pylint/pyreverse/main.py
+@@ -246,10 +246,28 @@ OPTIONS: Options = (
+             "used to determine a package namespace for modules located under the source root.",
+         },
+     ),
++    (
++        ["show-stdlib", "L"],
++        {
++            "action": "store_true",
++            "dest": "show_stdlib",
++            "default": False,
++            "help": "Include standard library modules in the diagram. By default they are ignored.",
++        },
++    ),
++    (
++        ["show-stdlib", "L"],
++        {
++            "action": "store_true",
++            "dest": "show_stdlib",
++            "default": False,
++            "help": "Include standard library modules in the diagram. By default they are ignored.",
++        },
++    ),
+ )
+ 
+ 
+-class Run(_ArgumentsManager, _ArgumentsProvider):
++class Run(_ArgumentsManager, _ArgumentsProvider:
+     """Base class providing common behaviour for pyreverse commands."""
+ 
+     options = OPTIONS
+@@ -301,4 +319,4 @@ class Run(_ArgumentsManager, _ArgumentsProvider):
+ 
+ 
+ if __name__ == "__main__":
+-    Run(sys.argv[1:])
++    Run(sys.argv[1:])

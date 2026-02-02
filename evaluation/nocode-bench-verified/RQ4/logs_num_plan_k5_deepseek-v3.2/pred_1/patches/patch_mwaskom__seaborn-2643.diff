@@ -1,0 +1,148 @@
+diff --git a/seaborn/__init__.py b/seaborn/__init__.py
+index 0016b4b..b67d3ad 100644
+--- a/seaborn/__init__.py
++++ b/seaborn/__init__.py
+@@ -12,10 +12,11 @@ from .axisgrid import *  # noqa: F401,F403
+ from .widgets import *  # noqa: F401,F403
+ from .colors import xkcd_rgb, crayons  # noqa: F401
+ from . import cm  # noqa: F401
++from .legend_utils import move_legend  # noqa: F401
+ 
+ # Capture the original matplotlib rcParams
+ import matplotlib as mpl
+ _orig_rc_params = mpl.rcParams.copy()
+ 
+ # Define the seaborn version
+-__version__ = "0.12.0.dev0"
++__version__ = "0.12.0.dev0"
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index c1f490d..363826f 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -114,6 +114,11 @@ class Grid(_BaseGrid):
+             Returns self for easy chaining.
+ 
+         """
++        # Remove the existing legend, if any
++        if hasattr(self, '_legend') and self._legend is not None:
++            self._legend.remove()
++            self._legend = None
++
+         # Find the data for the legend
+         if legend_data is None:
+             legend_data = self._legend_data
+diff --git a/seaborn/legend_utils.py b/seaborn/legend_utils.py
+new file mode 100644
+index 0000000..1c98d40
+--- /dev/null
++++ b/seaborn/legend_utils.py
+@@ -0,0 +1,109 @@
++"""
++Utilities for working with legends.
++"""
++import matplotlib as mpl
++import matplotlib.pyplot as plt
++from matplotlib.legend import Legend
++import numpy as np
++
++
++def move_legend(obj, loc, **kwargs):
++    """
++    Move an existing legend to a new location, or update its properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.FacetGrid or seaborn.axisgrid.JointGrid
++        The object with the legend.
++    loc : str or int
++        The new location of the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid values.
++    **kwargs
++        Additional keyword arguments are passed to the underlying legend method.
++        These can be used to set other properties, such as `title`, `frameon`,
++        `ncol`, etc. Also, `bbox_to_anchor` can be used for more precise control.
++
++    Returns
++    -------
++    None
++
++    Examples
++    --------
++    .. include:: ../doc/docstrings/move_legend.ipynb
++    """
++    # Check if the object is a seaborn Grid
++    if hasattr(obj, '_legend') and hasattr(obj, 'add_legend'):
++        _move_legend_grid(obj, loc, **kwargs)
++    else:
++        # Assume it's an Axes or similar
++        _move_legend_ax(obj, loc, **kwargs)
++
++
++def _move_legend_ax(ax, loc, **kwargs):
++    """Move legend for an axes-level plot."""
++    # Get the existing legend
++    legend = ax.get_legend()
++    if legend is None:
++        # No legend to move
++        return
++
++    # Get the handles and labels from the existing legend
++    handles = legend.legendHandles
++    labels = [t.get_text() for t in legend.texts]
++
++    # Remove the old legend
++    legend.remove()
++
++    # Create a new legend with the new location and other parameters
++    new_legend = ax.legend(handles, labels, loc=loc, **kwargs)
++
++    # If there was a title, we need to set it again because ax.legend doesn't
++    # take title as a parameter? Actually, it does via kwargs.
++    # But we should also preserve the title fontsize if not overridden.
++    if hasattr(legend, 'get_title'):
++        old_title = legend.get_title()
++        if old_title is not None:
++            old_title_text = old_title.get_text()
++            if 'title' not in kwargs:
++                new_legend.set_title(old_title_text, prop=old_title.get_fontproperties())
++
++
++def _move_legend_grid(grid, loc, **kwargs):
++    """Move legend for a seaborn Grid object (FacetGrid, JointGrid, etc.)."""
++    # If there is no existing legend, we cannot move it.
++    if grid._legend is None:
++        return
++
++    # Get the existing legend
++    old_legend = grid._legend
++
++    # Get the handles and labels from the existing legend
++    handles = old_legend.legendHandles
++    labels = [t.get_text() for t in old_legend.texts]
++
++    # Remove the old legend
++    old_legend.remove()
++
++    # We need to know if the legend was drawn outside the axes (legend_out)
++    # But the grid might not have that attribute? Actually, FacetGrid has _legend_out.
++    # We'll let the grid's add_legend method handle the positioning.
++    # However, we want to update the existing legend with new parameters.
++    # So we call grid.add_legend with the existing handles and labels.
++
++    # The grid's add_legend method expects legend_data as a mapping from label to handle.
++    legend_data = {label: handle for handle, label in zip(handles, labels)}
++
++    # The title might be in the old legend
++    title = old_legend.get_title()
++    if title is not None:
++        title_text = title.get_text()
++        if 'title' not in kwargs:
++            kwargs['title'] = title_text
++
++    # Call the grid's add_legend method with the new location and other parameters.
++    # We need to pass the legend_data, and the new loc.
++    # Also, we should pass any other kwargs to add_legend.
++    grid.add_legend(legend_data=legend_data, **kwargs)
++
++    # Note: The grid's add_legend method will handle the positioning (including
++    # legend_out) and resize the figure if necessary.

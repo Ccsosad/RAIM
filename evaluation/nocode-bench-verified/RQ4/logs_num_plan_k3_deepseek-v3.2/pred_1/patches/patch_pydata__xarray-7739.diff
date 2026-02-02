@@ -1,0 +1,10 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 1dd2ee6..f26085b 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -6883,4 +6883,4 @@ class DataArray(
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor["DataArray"])
++    str = utils.UncachedAccessor(StringAccessor["DataArray"])

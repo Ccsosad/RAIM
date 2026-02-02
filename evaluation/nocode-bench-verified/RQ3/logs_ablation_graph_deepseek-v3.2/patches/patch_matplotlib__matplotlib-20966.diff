@@ -1,0 +1,127 @@
+diff --git a/matplotlib/cm.py b/matplotlib/cm.py
+new file mode 100644
+index 0000000..4f3c912
+--- /dev/null
++++ b/matplotlib/cm.py
+@@ -0,0 +1,41 @@
++import numpy as np
++from matplotlib import colors
++
++class ScalarMappable:
++    def __init__(self, norm=None, cmap=None):
++        self.norm = norm if norm is not None else colors.Normalize()
++        self.cmap = cmap
++        self.callbacks = colors.CallbackRegistry()
++        self.norm.callbacks.connect('changed', self._on_norm_changed)
++
++    def _on_norm_changed(self):
++        self.callbacks.process('changed')
++
++    def to_rgba(self, x, alpha=None, bytes=False, norm=True):
++        if norm:
++            x = self.norm(x)
++        rgba = self.cmap(x, alpha=alpha, bytes=bytes)
++        return rgba
++
++    def set_array(self, A):
++        self._A = A
++
++    def get_array(self):
++        return self._A
++
++    def get_cmap(self):
++        return self.cmap
++
++    def get_norm(self):
++        return self.norm
++
++    def set_cmap(self, cmap):
++        self.cmap = cmap
++        self.callbacks.process('changed')
++
++    def set_norm(self, norm):
++        if norm is not self.norm:
++            self.norm.callbacks.disconnect(self._on_norm_changed)
++            self.norm = norm
++            self.norm.callbacks.connect('changed', self._on_norm_changed)
++            self.callbacks.process('changed')
+diff --git a/matplotlib/colors.py b/matplotlib/colors.py
+new file mode 100644
+index 0000000..9902b20
+--- /dev/null
++++ b/matplotlib/colors.py
+@@ -0,0 +1,74 @@
++import numpy as np
++from matplotlib import cbook
++
++class Normalize:
++    """
++    A class which, when called, can normalize data into
++    the [0.0, 1.0] interval.
++    """
++    def __init__(self, vmin=None, vmax=None, clip=False):
++        self.vmin = vmin
++        self.vmax = vmax
++        self.clip = clip
++        self.callbacks = cbook.CallbackRegistry()
++
++    def __call__(self, value, clip=None):
++        if clip is None:
++            clip = self.clip
++        result, is_scalar = self.process_value(value)
++        self.autoscale_None(result)
++        vmin, vmax = self.vmin, self.vmax
++        if vmin == vmax:
++            result.fill(0)
++        else:
++            vmin = float(vmin)
++            vmax = float(vmax)
++            result = (result - vmin) / (vmax - vmin)
++            if clip:
++                result = np.clip(result, 0, 1)
++        if is_scalar:
++            result = result[0]
++        return result
++
++    def process_value(self, value):
++        if isinstance(value, np.ndarray):
++            result = value.astype(float)
++            is_scalar = False
++        else:
++            try:
++                result = np.asarray([value]).astype(float)
++            except (TypeError, ValueError):
++                raise ValueError("Unable to normalize %s" % value)
++            is_scalar = True
++        return result, is_scalar
++
++    def autoscale_None(self, A):
++        if self.vmin is None:
++            self.vmin = np.min(A)
++        if self.vmax is None:
++            self.vmax = np.max(A)
++
++    def autoscale(self, A):
++        self.vmin = np.min(A)
++        self.vmax = np.max(A)
++
++    def scaled(self):
++        return self.vmin is not None and self.vmax is not None
++
++    @property
++    def vmin(self):
++        return self._vmin
++
++    @vmin.setter
++    def vmin(self, value):
++        self._vmin = value
++        self.callbacks.process('changed')
++
++    @property
++    def vmax(self):
++        return self._vmax
++
++    @vmax.setter
++    def vmax(self, value):
++        self._vmax = value
++        self.callbacks.process('changed')

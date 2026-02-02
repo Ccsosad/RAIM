@@ -1,0 +1,119 @@
+diff --git a/sklearn/cluster/_kmeans.py b/sklearn/cluster/_kmeans.py
+index 89ad263..d03500c 100644
+--- a/sklearn/cluster/_kmeans.py
++++ b/sklearn/cluster/_kmeans.py
+@@ -803,7 +803,7 @@ class _BaseKMeans(
+     _parameter_constraints = {
+         "n_clusters": [Interval(Integral, 1, None, closed="left")],
+         "init": [StrOptions({"k-means++", "random"}), callable, "array-like"],
+-        "n_init": [Interval(Integral, 1, None, closed="left")],
++        "n_init": [Interval(Integral, 1, None, closed="left"), StrOptions({"auto"})],
+         "max_iter": [Interval(Integral, 1, None, closed="left")],
+         "tol": [Interval(Real, 0, None, closed="left")],
+         "verbose": [Interval(Integral, 0, None, closed="left"), bool],
+@@ -839,8 +839,16 @@ class _BaseKMeans(
+         # tol
+         self._tol = _tolerance(X, self.tol)
+ 
++        # n_init
++        if self.n_init == "auto":
++            if self.__class__.__name__ == "KMeans":
++                self._n_init = 1 if self.init == "k-means++" else 10
++            else:  # MiniBatchKMeans
++                self._n_init = 1 if self.init == "k-means++" else 3
++        else:
++            self._n_init = self.n_init
++
+         # init
+-        self._n_init = self.n_init
+         if _is_arraylike_not_scalar(self.init) and self._n_init != 1:
+             warnings.warn(
+                 "Explicit initial center position passed: performing only"
+@@ -1150,11 +1158,20 @@ class KMeans(_BaseKMeans):
+         If a callable is passed, it should take arguments X, n_clusters and a
+         random state and return an initialization.
+ 
+-    n_init : int, default=10
++    n_init : int or "auto", default=10
+         Number of time the k-means algorithm will be run with different
+         centroid seeds. The final results will be the best output of
+         n_init consecutive runs in terms of inertia.
+ 
++        When `n_init='auto'`, the number of runs will be 1 if using
++        `init='k-means++'`, and 10 otherwise.
++
++        .. versionadded:: 1.2
++           `n_init='auto'` was added.
++
++        .. versionchanged:: 1.2
++           The default value of `n_init` will change from 10 to `'auto'` in version 1.4.
++
+     max_iter : int, default=300
+         Maximum number of iterations of the k-means algorithm for a
+         single run.
+@@ -1286,7 +1303,7 @@ class KMeans(_BaseKMeans):
+         n_clusters=8,
+         *,
+         init="k-means++",
+-        n_init=10,
++        n_init="warn",
+         max_iter=300,
+         tol=1e-4,
+         verbose=0,
+@@ -1294,6 +1311,15 @@ class KMeans(_BaseKMeans):
+         copy_x=True,
+         algorithm="lloyd",
+     ):
++        if n_init == "warn":
++            warnings.warn(
++                "The default value of `n_init` will change from 10 to 'auto' in 1.4. "
++                "Set `n_init=10` explicitly to suppress this warning.",
++                FutureWarning,
++                stacklevel=2,
++            )
++            n_init = 10
++
+         super().__init__(
+             n_clusters=n_clusters,
+             init=init,
+@@ -1667,11 +1693,20 @@ class MiniBatchKMeans(_BaseKMeans):
+         If `None`, the heuristic is `init_size = 3 * batch_size` if
+         `3 * batch_size < n_clusters`, else `init_size = 3 * n_clusters`.
+ 
+-    n_init : int, default=3
++    n_init : int or "auto", default=3
+         Number of random initializations that are tried.
+         In contrast to KMeans, the algorithm is only run once, using the
+         best of the ``n_init`` initializations as measured by inertia.
+ 
++        When `n_init='auto'`, the number of runs will be 1 if using
++        `init='k-means++'`, and 3 otherwise.
++
++        .. versionadded:: 1.2
++           `n_init='auto'` was added.
++
++        .. versionchanged:: 1.2
++           The default value of `n_init` will change from 3 to `'auto'` in version 1.4.
++
+     reassignment_ratio : float, default=0.01
+         Control the fraction of the maximum number of counts for a center to
+         be reassigned. A higher value means that low count centers are more
+@@ -1779,9 +1814,17 @@ class MiniBatchKMeans(_BaseKMeans):
+         tol=0.0,
+         max_no_improvement=10,
+         init_size=None,
+-        n_init=3,
++        n_init="warn",
+         reassignment_ratio=0.01,
+     ):
++        if n_init == "warn":
++            warnings.warn(
++                "The default value of `n_init` will change from 3 to 'auto' in 1.4. "
++                "Set `n_init=3` explicitly to suppress this warning.",
++                FutureWarning,
++                stacklevel=2,
++            )
++            n_init = 3
+ 
+         super().__init__(
+             n_clusters=n_clusters,

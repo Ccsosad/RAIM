@@ -1,0 +1,91 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..99782a0 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1644,6 +1644,36 @@ class Ellipse(Patch):
+ 
+     angle = property(get_angle, set_angle)
+ 
++    def get_vertices(self):
++        """
++        Return the coordinates of the vertices of the ellipse.
++
++        The vertices are the endpoints of the major axis. The first point
++        is the one at angle 0 degrees (before rotation) and the second at
++        180 degrees.
++
++        Returns
++        -------
++        vertices : (2, 2) array
++            The coordinates of the two vertices: ``[[x0, y0], [x1, y1]]``.
++        """
++        return self.get_patch_transform().transform([(1, 0), (-1, 0)])
++
++    def get_co_vertices(self):
++        """
++        Return the coordinates of the co-vertices of the ellipse.
++
++        The co-vertices are the endpoints of the minor axis. The first point
++        is the one at angle 90 degrees (before rotation) and the second at
++        270 degrees.
++
++        Returns
++        -------
++        co_vertices : (2, 2) array
++            The coordinates of the two co-vertices: ``[[x0, y0], [x1, y1]]``.
++        """
++        return self.get_patch_transform().transform([(0, 1), (0, -1)])
++
+     def get_corners(self):
+         """
+         Return the corners of the ellipse bounding box.
+diff --git a/galleries/examples/shapes_and_collections/ellipse_arrow.py b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+new file mode 100644
+index 0000000..3876726
+--- /dev/null
++++ b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+@@ -0,0 +1,44 @@
++"""
++===================================
++Ellipse with arrow indicating rotation
++===================================
++
++This example shows how to add an arrow to an ellipse to indicate a clockwise or
++counter-clockwise rotation. The arrow is placed exactly on the ellipse by using
++the coordinates of the vertices obtained via `Ellipse.get_vertices()`.
++"""
++
++import matplotlib.pyplot as plt
++import matplotlib.patches as mpatches
++
++# Create an ellipse
++ellipse = mpatches.Ellipse(xy=(0.5, 0.5), width=0.8, height=0.4, angle=30,
++                           edgecolor='blue', facecolor='none', linewidth=2)
++
++fig, ax = plt.subplots()
++ax.add_patch(ellipse)
++
++# Get the vertices (endpoints of the major axis)
++vertices = ellipse.get_vertices()
++# Choose the first vertex as the starting point for the arrow
++x, y = vertices[0]
++
++# Add an arrow from the vertex pointing along the major axis (rotated by the ellipse angle)
++# We'll create a small offset in the direction of the major axis.
++# The vector from the center to the vertex gives the direction.
++center = ellipse.get_center()
++dx = x - center[0]
++dy = y - center[1]
++
++# Scale down the vector for the arrow length
++scale = 0.3
++ax.arrow(x, y, dx * scale, dy * scale, head_width=0.05, head_length=0.05,
++         fc='red', ec='red', label='Rotation direction')
++
++ax.set_aspect('equal')
++ax.set_xlim(0, 1)
++ax.set_ylim(0, 1)
++ax.set_title('Ellipse with arrow indicating rotation')
++ax.legend()
++
++plt.show()

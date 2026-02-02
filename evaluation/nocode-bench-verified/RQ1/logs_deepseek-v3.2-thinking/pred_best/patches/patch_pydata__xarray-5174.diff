@@ -1,0 +1,54 @@
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index daf5951..7266508 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1380,13 +1380,42 @@ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+                 return value
+ 
+     def __setitem__(self, key, value):
+-        raise TypeError(
+-            "this variable's data is stored in a dask array, "
+-            "which does not support item assignment. To "
+-            "assign to this variable, you must first load it "
+-            "into memory explicitly using the .load() "
+-            "method or accessing its .values attribute."
+-        )
++        # Check if the dask array supports item assignment
++        # Dask arrays only have __setitem__ if created with writeable=True
++        if not hasattr(self.array, '__setitem__'):
++            raise TypeError(
++                "this variable's data is stored in a dask array, "
++                "which does not support item assignment. To "
++                "assign to this variable, you must first load it "
++                "into memory explicitly using the .load() "
++                "method or accessing its .values attribute."
++            )
++        
++        # Transform the key using the same logic as __getitem__
++        if not isinstance(key, VectorizedIndexer):
++            # Apply the same slice(None) optimization as in __getitem__
++            rewritten_indexer = False
++            new_indexer = []
++            for idim, k in enumerate(key.tuple):
++                if isinstance(k, Iterable) and duck_array_ops.array_equiv(
++                    k, np.arange(self.array.shape[idim])
++                ):
++                    new_indexer.append(slice(None))
++                    rewritten_indexer = True
++                else:
++                    new_indexer.append(k)
++            if rewritten_indexer:
++                key = type(key)(tuple(new_indexer))
++        
++        # Perform assignment based on indexer type
++        if isinstance(key, BasicIndexer):
++            self.array[key.tuple] = value
++        elif isinstance(key, VectorizedIndexer):
++            self.array.vindex[key.tuple] = value
++        else:
++            assert isinstance(key, OuterIndexer)
++            # Let dask handle the assignment, raising NotImplementedError if needed
++            self.array[key.tuple] = value
+ 
+     def transpose(self, order):
+         return self.array.transpose(order)

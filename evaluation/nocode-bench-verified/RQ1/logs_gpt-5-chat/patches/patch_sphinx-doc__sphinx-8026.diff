@@ -1,0 +1,19 @@
+diff --git a/sphinx/environment/__init__.py b/sphinx/environment/__init__.py
+index 9ed8cac..ef6483f 100644
+--- a/sphinx/environment/__init__.py
++++ b/sphinx/environment/__init__.py
+@@ -351,7 +351,14 @@ class BuildEnvironment:
+         In the input "filename", absolute filenames are taken as relative to the
+         source dir, while relative filenames are relative to the dir of the
+         containing document.
++
++        This also supports the ``{docpath}`` token for the directory path of the current document.
+         """
++        if '{docpath}' in filename:
++            docdir = path.dirname(self.doc2path(docname or self.docname, base=None))
++            if docdir and not docdir.endswith(os.sep):
++                docdir = docdir + os.sep
++            filename = filename.replace('{docpath}', docdir)
+         if filename.startswith('/') or filename.startswith(os.sep):
+             rel_fn = filename[1:]
+         else:

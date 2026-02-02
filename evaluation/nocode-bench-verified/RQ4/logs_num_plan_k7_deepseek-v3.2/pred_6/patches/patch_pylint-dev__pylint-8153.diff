@@ -1,0 +1,97 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..240b938 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -14,21 +14,36 @@ from astroid import modutils
+ from pylint.typing import ErrorDescriptionDict, ModuleDescriptionDict
+ 
+ 
+-def _modpath_from_file(filename: str, is_namespace: bool, path: list[str]) -> list[str]:
++def _modpath_from_file(
++    filename: str, is_namespace: bool, path: list[str], source_roots: Sequence[str] = ()
++) -> list[str]:
+     def _is_package_cb(inner_path: str, parts: list[str]) -> bool:
+         return modutils.check_modpath_has_init(inner_path, parts) or is_namespace
+ 
++    # Augment the path with the source roots for module resolution
++    augmented_path = list(path)
++    for root in source_roots:
++        if root not in augmented_path:
++            augmented_path.append(root)
++
+     return modutils.modpath_from_file_with_callback(  # type: ignore[no-any-return]
+-        filename, path=path, is_package_cb=_is_package_cb
++        filename, path=augmented_path, is_package_cb=_is_package_cb
+     )
+ 
+ 
+-def get_python_path(filepath: str) -> str:
+-    """TODO This get the python path with the (bad) assumption that there is always
+-    an __init__.py.
++def get_python_path(filepath: str, source_roots: Sequence[str] = ()) -> str:
++    """Get the python path for the given file.
+ 
+-    This is not true since python 3.3 and is causing problem.
++    If source_roots are provided, the first source root that is a parent of the
++    file is returned. Otherwise, fall back to the traditional method.
+     """
++    # First, try to find a source root that contains the file
++    for root in source_roots:
++        root = os.path.abspath(root)
++        if os.path.commonpath([root, filepath]) == root:
++            return root
++
++    # Fall back to the old method
+     dirname = os.path.realpath(os.path.expanduser(filepath))
+     if not os.path.isdir(dirname):
+         dirname = os.path.dirname(dirname)
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 21f6e51..64ea671 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -891,6 +891,7 @@ class PyLinter(
+             self.config.ignore,
+             self.config.ignore_patterns,
+             self._ignore_paths,
++            self.config.source_roots,
+         )
+         for error in errors:
+             message = modname = error["mod"]
+@@ -1367,4 +1368,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)
+diff --git a/pylint/lint/path_resolution.py b/pylint/lint/path_resolution.py
+new file mode 100644
+index 0000000..af92239
+--- /dev/null
++++ b/pylint/lint/path_resolution.py
+@@ -0,0 +1,26 @@
++"""Path resolution utilities for pylint."""
++import os
++from typing import Sequence
++
++def discover_package_path(filepath: str, source_roots: Sequence[str]) -> str:
++    """Discover the package path for a file given a list of source roots.
++
++    Args:
++        filepath: The absolute path to the file.
++        source_roots: A sequence of source root directories.
++
++    Returns:
++        The package path for the file.
++    """
++    # Normalize the filepath
++    filepath = os.path.abspath(filepath)
++
++    # Find the first source root that is a parent of the file
++    for root in source_roots:
++        root = os.path.abspath(root)
++        if os.path.commonpath([root, filepath]) == root:
++            # The file is under this source root
++            return root
++
++    # If no source root contains the file, return the directory containing the file
++    return os.path.dirname(filepath)

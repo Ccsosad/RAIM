@@ -1,0 +1,32 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index fb4476d..62e71b9 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -117,6 +117,27 @@ class Grid(_BaseGrid):
+         self._figure.tight_layout(*args, **kwargs)
+         return self
+ 
++    def tick_params(self, **kwargs):
++        """Customize the appearance of ticks, tick labels, and gridlines.
++
++        This method wraps :meth:`matplotlib.axes.Axes.tick_params` and applies
++        the same parameters to all subplots in the grid.
++
++        Parameters
++        ----------
++        **kwargs
++            Keyword arguments are passed to :meth:`matplotlib.axes.Axes.tick_params`.
++
++        Returns
++        -------
++        self : Grid instance
++            Returns self for easy chaining.
++
++        """
++        for ax in self.axes.flat:
++            ax.tick_params(**kwargs)
++        return self
++
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+         """Draw a legend, maybe placing it outside axes and resizing the figure.

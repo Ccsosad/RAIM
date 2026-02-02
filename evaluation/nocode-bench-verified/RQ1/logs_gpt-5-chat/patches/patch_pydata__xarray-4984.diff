@@ -1,0 +1,166 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..cca1c9c 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1294,22 +1294,31 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().tail(indexers, **indexers_kwargs)
+         return self._from_temp_dataset(ds)
+ 
+-    def thin(
+-        self,
+-        indexers: Union[Mapping[Hashable, int], int] = None,
+-        **indexers_kwargs: Any,
+-    ) -> "DataArray":
+-        """Return a new DataArray whose data is given by each `n` value
+-        along the specified dimension(s).
++    def query(self, expr: str) -> "DataArray":
++        """Filter this DataArray by evaluating a query expression on the data variable.
+ 
+-        See Also
+-        --------
+-        Dataset.thin
+-        DataArray.head
+-        DataArray.tail
++        Parameters
++        ----------
++        expr : str
++            A boolean expression on DataArray values or coordinates.
++
++        Returns
++        -------
++        DataArray
++            A new DataArray filtered to entries where the query expression is True.
+         """
+-        ds = self._to_temp_dataset().thin(indexers, **indexers_kwargs)
+-        return self._from_temp_dataset(ds)
++        import numpy as np
++        local_dict = {self.name if self.name is not None else "_data": self}
++        local_dict.update(self.coords)
++        try:
++            condition = eval(expr, {}, local_dict)
++        except Exception as e:
++            raise ValueError(f"Failed to evaluate query expression: {e}")
++        if not isinstance(condition, xr.DataArray):
++            raise TypeError("Query expression must evaluate to a DataArray of booleans.")
++        if condition.dtype != bool:
++            raise ValueError("Query expression must evaluate to boolean values.")
++        return self.where(condition, drop=True)
+ 
+     def broadcast_like(
+         self, other: Union["DataArray", Dataset], exclude: Iterable[Hashable] = None
+@@ -4360,4 +4369,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..d9ce95e 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -2169,80 +2169,32 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         coord_names = self._coord_names & variables.keys() | coord_vars.keys()
+         return self._replace_with_new_dims(variables, coord_names, indexes=indexes)
+ 
+-    def sel(
+-        self,
+-        indexers: Mapping[Hashable, Any] = None,
+-        method: str = None,
+-        tolerance: Number = None,
+-        drop: bool = False,
+-        **indexers_kwargs: Any,
+-    ) -> "Dataset":
+-        """Returns a new dataset with each array indexed by tick labels
+-        along the specified dimension(s).
+-
+-        In contrast to `Dataset.isel`, indexers for this method should use
+-        labels instead of integers.
+-
+-        Under the hood, this method is powered by using pandas's powerful Index
+-        objects. This makes label based indexing essentially just as fast as
+-        using integer indexing.
+-
+-        It also means this method uses pandas's (well documented) logic for
+-        indexing. This means you can use string shortcuts for datetime indexes
+-        (e.g., '2000-01' to select all values in January 2000). It also means
+-        that slices are treated as inclusive of both the start and stop values,
+-        unlike normal Python indexing.
++    def query(self, expr: str) -> "Dataset":
++        """Filter this dataset by evaluating a query expression on data variables.
+ 
+         Parameters
+         ----------
+-        indexers : dict, optional
+-            A dict with keys matching dimensions and values given
+-            by scalars, slices or arrays of tick labels. For dimensions with
+-            multi-index, the indexer may also be a dict-like object with keys
+-            matching index level names.
+-            If DataArrays are passed as indexers, xarray-style indexing will be
+-            carried out. See :ref:`indexing` for the details.
+-            One of indexers or indexers_kwargs must be provided.
+-        method : {None, "nearest", "pad", "ffill", "backfill", "bfill"}, optional
+-            Method to use for inexact matches:
+-
+-            * None (default): only exact matches
+-            * pad / ffill: propagate last valid index value forward
+-            * backfill / bfill: propagate next valid index value backward
+-            * nearest: use nearest valid index value
+-        tolerance : optional
+-            Maximum distance between original and new labels for inexact
+-            matches. The values of the index at the matching locations must
+-            satisfy the equation ``abs(index[indexer] - target) <= tolerance``.
+-        drop : bool, optional
+-            If ``drop=True``, drop coordinates variables in `indexers` instead
+-            of making them scalar.
+-        **indexers_kwargs : {dim: indexer, ...}, optional
+-            The keyword arguments form of ``indexers``.
+-            One of indexers or indexers_kwargs must be provided.
++        expr : str
++            A boolean expression involving data variables names, similar to pandas.query syntax.
++            For example: ``"temperature > 10 & precipitation < 5"``.
+ 
+         Returns
+         -------
+-        obj : Dataset
+-            A new Dataset with the same contents as this dataset, except each
+-            variable and dimension is indexed by the appropriate indexers.
+-            If indexer DataArrays have coordinates that do not conflict with
+-            this object, then these coordinates will be attached.
+-            In general, each array's data will be a view of the array's data
+-            in this dataset, unless vectorized indexing was triggered by using
+-            an array indexer, in which case the data will be a copy.
+-
+-        See Also
+-        --------
+-        Dataset.isel
+-        DataArray.sel
++        Dataset
++            A new dataset, filtered to entries where the query expression is True.
+         """
+-        indexers = either_dict_or_kwargs(indexers, indexers_kwargs, "sel")
+-        pos_indexers, new_indexes = remap_label_indexers(
+-            self, indexers=indexers, method=method, tolerance=tolerance
+-        )
+-        result = self.isel(indexers=pos_indexers, drop=drop)
+-        return result._overwrite_indexes(new_indexes)
++        import numpy as np
++        mask_vars = {}
++        local_dict = {k: v for k, v in self.data_vars.items()}
++        try:
++            condition = eval(expr, {}, local_dict)
++        except Exception as e:
++            raise ValueError(f"Failed to evaluate query expression: {e}")
++        if not isinstance(condition, xr.DataArray):
++            raise TypeError("Query expression must evaluate to a DataArray of booleans.")
++        if condition.dtype != bool:
++            raise ValueError("Query must evaluate to boolean values.")
++        return self.where(condition, drop=True)
+ 
+     def head(
+         self,
+@@ -7002,4 +6954,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

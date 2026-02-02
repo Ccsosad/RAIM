@@ -1,0 +1,97 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..18556c7 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -81,6 +81,65 @@ def _apply_style(d, warn=True):
+     mpl.rcParams.update(_remove_blacklisted_style_params(d, warn=warn))
+ 
+ 
++def _rc_params_from_package(dotted_name):
++    """
++    Return rcParams from a style file in a package.
++
++    The dotted name should be in the form "package.name" where the style file
++    is located at `package/name.mplstyle` within the package.
++    """
++    import importlib.util
++    from pathlib import Path
++    # Split the dotted name into package and resource
++    parts = dotted_name.split('.')
++    if len(parts) < 2:
++        raise ValueError(f"Invalid dotted style name: {dotted_name!r}")
++    package_name = '.'.join(parts[:-1])
++    resource_name = parts[-1]
++
++    # Get the package spec without importing
++    spec = importlib.util.find_spec(package_name)
++    if spec is None:
++        raise ImportError(f"Cannot find package {package_name!r}")
++    if spec.origin is None:
++        raise ImportError(f"Package {package_name!r} has no __init__.py")
++    package_dir = Path(spec.origin).parent
++    style_file = package_dir / f"{resource_name}.mplstyle"
++    if not style_file.is_file():
++        raise IOError(f"Cannot find style file {style_file!s}")
++    from .core import rc_params_from_file
++    return rc_params_from_file(style_file, use_default_template=False)
++
++
++def _rc_params_from_package(dotted_name):
++    """
++    Return rcParams from a style file in a package.
++
++    The dotted name should be in the form "package.name" where the style file
++    is located at `package/name.mplstyle` within the package.
++    """
++    import importlib.util
++    from pathlib import Path
++    # Split the dotted name into package and resource
++    parts = dotted_name.split('.')
++    if len(parts) < 2:
++        raise ValueError(f"Invalid dotted style name: {dotted_name!r}")
++    package_name = '.'.join(parts[:-1])
++    resource_name = parts[-1]
++
++    # Get the package spec without importing
++    spec = importlib.util.find_spec(package_name)
++    if spec is None:
++        raise ImportError(f"Cannot find package {package_name!r}")
++    if spec.origin is None:
++        raise ImportError(f"Package {package_name!r} has no __init__.py")
++    package_dir = Path(spec.origin).parent
++    style_file = package_dir / f"{resource_name}.mplstyle"
++    if not style_file.is_file():
++        raise IOError(f"Cannot find style file {style_file!s}")
++    return rc_params_from_file(style_file, use_default_template=False)
++
++
+ @_docstring.Substitution(
+     "\n".join(map("- {}".format, sorted(STYLE_BLACKLIST, key=str.lower)))
+ )
+@@ -104,6 +163,9 @@ def use(style):
+         +------+-------------------------------------------------------------+
+         | str  | The name of a style or a path/URL to a style file. For a    |
+         |      | list of available style names, see `.style.available`.      |
++        |      | Additionally, a dotted package name like                    |
++        |      | ``package.name`` can be used to load a style file from a    |
++        |      | third-party package (without importing the package).        |
+         +------+-------------------------------------------------------------+
+         | dict | Dictionary with valid key/value pairs for                   |
+         |      | `matplotlib.rcParams`.                                      |
+@@ -148,6 +210,16 @@ def use(style):
+         elif style in library:
+             _apply_style(library[style])
+         else:
++            # Check if it's a dotted package name
++            if isinstance(style, str) and '.' in style:
++                # Try to load from a package resource
++                try:
++                    rc = _rc_params_from_package(style)
++                    _apply_style(rc)
++                    continue
++                except (ImportError, IOError):
++                    # Fall through to the file loading
++                    pass
+             try:
+                 rc = rc_params_from_file(style, use_default_template=False)
+                 _apply_style(rc)

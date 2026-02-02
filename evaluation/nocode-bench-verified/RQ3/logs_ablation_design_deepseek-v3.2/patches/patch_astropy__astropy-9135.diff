@@ -1,0 +1,188 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..069dff5 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -3985,6 +3985,176 @@ def prepare_bounding_box_inputs(self, input_shape, inputs, bbox):
+     return args, valid_ind, allout
+ 
+ 
++def fix_inputs(model, fixed_inputs):
++    """
++    Create a new model by fixing one or more input variables to constant values.
++
++    Parameters
++    ----------
++    model : `~astropy.modeling.Model`
++        The model to which input constraints are applied.
++    fixed_inputs : dict or list of tuples
++        Dictionary mapping input names to fixed values, or list of (index, value)
++        pairs. Inputs can be specified by name (string) or index (integer).
++
++    Returns
++    -------
++    new_model : `~astropy.modeling.CompoundModel`
++        A new compound model with the specified inputs fixed.
++
++    Examples
++    --------
++    >>> from astropy.modeling.models import Gaussian2D
++    >>> model = Gaussian2D()
++    >>> # Fix input 'x' to 0.0
++    >>> new_model = fix_inputs(model, {'x': 0.0})
++    >>> # Fix the first input (x) to 0.0
++    >>> new_model = fix_inputs(model, {0: 0.0})
++    >>> # Fix multiple inputs
++    >>> new_model = fix_inputs(model, {'x': 0.0, 'y': 1.0})
++    """
++    from .mappings import Mapping, Identity
++
++    # Convert fixed_inputs to a dictionary mapping input indices to values
++    fixed_dict = {}
++    input_names = model.inputs
++    
++    for key, value in fixed_inputs.items():
++        if isinstance(key, str):
++            # Input specified by name
++            try:
++                idx = input_names.index(key)
++            except ValueError:
++                raise ValueError(f"Input '{key}' is not a valid input name for "
++                                 f"this model. Valid inputs are: {input_names}")
++        elif isinstance(key, int):
++            # Input specified by index
++            if key < 0 or key >= len(input_names):
++                raise ValueError(f"Input index {key} is out of range. "
++                                 f"Model has {len(input_names)} inputs.")
++            idx = key
++        else:
++            raise TypeError("Keys in fixed_inputs must be strings (input names) "
++                            "or integers (input indices)")
++        
++        if idx in fixed_dict:
++            raise ValueError(f"Input '{input_names[idx]}' (index {idx}) "
++                             f"specified multiple times")
++        fixed_dict[idx] = value
++    
++    if not fixed_dict:
++        raise ValueError("No inputs specified to fix")
++    
++    # Sort by index to maintain order
++    fixed_indices = sorted(fixed_dict.keys())
++    fixed_values = [fixed_dict[idx] for idx in fixed_indices]
++    
++    # Create a mapping that selects only the non-fixed inputs
++    n_inputs = model.n_inputs
++    remaining_indices = [i for i in range(n_inputs) if i not in fixed_dict]
++    
++    if not remaining_indices:
++        raise ValueError("Cannot fix all inputs; at least one input must remain free")
++    
++    # Create a mapping that takes the remaining inputs and passes them through
++    mapping = Mapping(remaining_indices)
++    mapping.inputs = tuple(model.inputs[i] for i in remaining_indices)
++    mapping.outputs = tuple(model.inputs[i] for i in remaining_indices)
++    
++    # Create a model that outputs the fixed values as constants
++    # We use Identity models with fixed parameters to output constants
++    from .models import Const1D
++    
++    # For each fixed input, create a constant model
++    fixed_models = []
++    for idx, value in zip(fixed_indices, fixed_values):
++        # Create a Const1D model with the fixed value
++        const_model = Const1D(amplitude=value, fixed={'amplitude': True})
++        const_model.inputs = ()
++        const_model.outputs = (model.inputs[idx],)
++        fixed_models.append(const_model)
++    
++    # Combine the fixed models with '&' operator
++    if len(fixed_models) > 1:
++        from functools import reduce
++        fixed_output_model = reduce(lambda a, b: a & b, fixed_models)
++    else:
++        fixed_output_model = fixed_models[0]
++    
++    # Combine the fixed outputs with the mapping of remaining inputs
++    # The total model should have: fixed outputs + mapped remaining inputs
++    # But we need to reorder to match the original input order
++    # Instead, we create a compound model that takes remaining inputs,
++    # and internally uses the fixed values
++    
++    # Create a compound model that evaluates the original model
++    # with a combination of fixed values and passed-through inputs
++    
++    # First, create a model that takes the remaining inputs and combines
++    # them with fixed values in the correct order
++    total_inputs = []
++    current_rem_idx = 0
++    current_fixed_idx = 0
++    
++    for i in range(n_inputs):
++        if i in fixed_dict:
++            # Use the fixed constant model output
++            # We need to extract just the constant model for this input
++            fixed_model = fixed_models[current_fixed_idx]
++            total_inputs.append(fixed_model)
++            current_fixed_idx += 1
++        else:
++            # Use the identity mapping for this input
++            # Create a single-input identity model
++            identity = Identity(1)
++            identity.inputs = (model.inputs[i],)
++            identity.outputs = (model.inputs[i],)
++            # Connect it to the appropriate remaining input
++            # We'll use a custom mapping later
++            total_inputs.append(identity)
++            current_rem_idx += 1
++    
++    # Now combine all these models with '&' operator
++    from functools import reduce
++    input_combiner = reduce(lambda a, b: a & b, total_inputs)
++    
++    # The input_combiner now has n_inputs outputs, but we need to
++    # feed them into the original model in the correct order
++    # We can use a pipe operator
++    
++    # Create a mapping that reorders outputs to match original model inputs
++    # Actually, input_combiner already outputs in the correct order
++    # because we built it in order
++    
++    # Now pipe into the original model
++    new_model = input_combiner | model
++    
++    # Set the inputs of the new model to be just the remaining inputs
++    new_model.inputs = tuple(model.inputs[i] for i in remaining_indices)
++    
++    # Handle bounding box if present
++    try:
++        bbox = model.bounding_box
++        if bbox is not None:
++            # Convert to list for manipulation
++            bbox_list = list(bbox)
++            # Remove dimensions corresponding to fixed inputs
++            # Note: bounding_box is stored in reverse order
++            bbox_list_rev = list(bbox_list)[::-1]  # Now in input order
++            new_bbox_rev = [bbox_list_rev[i] for i in remaining_indices]
++            new_bbox = tuple(new_bbox_rev[::-1])  # Back to reverse order
++            
++            if len(new_bbox) == 1:
++                new_bbox = new_bbox[0]
++            
++            new_model.bounding_box = new_bbox
++    except NotImplementedError:
++        # No bounding box defined, nothing to do
++        pass
++    
++    return new_model
++
++
+ def prepare_bounding_box_outputs(valid_result, valid_ind,
+                                  input_shape, fill_value):
+     result = [np.zeros(input_shape) + fill_value
+diff --git a/astropy/modeling/__init__.py b/astropy/modeling/__init__.py
+new file mode 100644
+index 0000000..151373a
+--- /dev/null
++++ b/astropy/modeling/__init__.py
+@@ -0,0 +1 @@
++from .core import Model, CompoundModel, fix_inputs

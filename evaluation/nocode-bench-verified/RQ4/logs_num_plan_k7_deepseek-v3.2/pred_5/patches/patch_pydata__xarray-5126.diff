@@ -1,0 +1,72 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..0af0c70 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -379,7 +379,10 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+     summary = [f"{title}:"]
+     if mapping:
+         len_mapping = len(mapping)
+-        if len_mapping > max_rows:
++        if max_rows == 0:
++            # Collapse: show only the title
++            pass
++        elif len_mapping > max_rows:
+             summary = [f"{summary[0]} ({max_rows}/{len_mapping})"]
+             first_rows = max_rows // 2 + max_rows % 2
+             items = list(mapping.items())
+@@ -395,21 +398,48 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+     return "\n".join(summary)
+ 
+ 
+-data_vars_repr = functools.partial(
+-    _mapping_repr, title="Data variables", summarizer=summarize_datavar
+-)
++def _get_max_rows(option_name):
++    expand_opt = OPTIONS.get(option_name, "default")
++    if expand_opt is True:
++        return None
++    elif expand_opt is False:
++        return 0
++    else:  # "default" or any other
++        return OPTIONS["display_max_rows"]
+ 
+ 
+-attrs_repr = functools.partial(
+-    _mapping_repr, title="Attributes", summarizer=summarize_attr
+-)
++def data_vars_repr(data_vars, col_width=None):
++    max_rows = _get_max_rows("display_expand_data_vars")
++    return _mapping_repr(
++        data_vars,
++        title="Data variables",
++        summarizer=summarize_datavar,
++        col_width=col_width,
++        max_rows=max_rows,
++    )
++
++
++def attrs_repr(attrs, col_width=None):
++    max_rows = _get_max_rows("display_expand_attrs")
++    return _mapping_repr(
++        attrs,
++        title="Attributes",
++        summarizer=summarize_attr,
++        col_width=col_width,
++        max_rows=max_rows,
++    )
+ 
+ 
+ def coords_repr(coords, col_width=None):
+     if col_width is None:
+         col_width = _calculate_col_width(_get_col_items(coords))
++    max_rows = _get_max_rows("display_expand_coords")
+     return _mapping_repr(
+-        coords, title="Coordinates", summarizer=summarize_coord, col_width=col_width
++        coords,
++        title="Coordinates",
++        summarizer=summarize_coord,
++        col_width=col_width,
++        max_rows=max_rows,
+     )
+ 
+ 

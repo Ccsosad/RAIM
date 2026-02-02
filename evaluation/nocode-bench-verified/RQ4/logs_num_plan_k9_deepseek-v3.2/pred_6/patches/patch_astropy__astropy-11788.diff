@@ -1,0 +1,11 @@
+diff --git a/astropy/units/astrophys.py b/astropy/units/astrophys.py
+new file mode 100644
+index 0000000..f951e23
+--- /dev/null
++++ b/astropy/units/astrophys.py
+@@ -0,0 +1,5 @@
++# Angstrom
++Angstrom = UnitAngstrom = 1e-10 * m
++angstrom = Angstrom
++# milli-Angstrom
++mAngstrom = mangstrom = 1e-3 * Angstrom

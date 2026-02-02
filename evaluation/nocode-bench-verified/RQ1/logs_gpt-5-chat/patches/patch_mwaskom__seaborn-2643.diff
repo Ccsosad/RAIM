@@ -1,0 +1,78 @@
+diff --git a/seaborn/utils_legend.py b/seaborn/utils_legend.py
+new file mode 100644
+index 0000000..2079535
+--- /dev/null
++++ b/seaborn/utils_legend.py
+@@ -0,0 +1,72 @@
++"""Utility functions for legend manipulation in seaborn."""
++import matplotlib as mpl
++
++def move_legend(obj, loc, **kwargs):
++    """Move and/or update the legend on an existing axes or seaborn grid.
++
++    Parameters
++    ----------
++    obj : matplotlib Axes or seaborn axisgrid.Grid
++        Object containing the legend to be moved.
++    loc : str or int
++        New location argument for the legend.
++    kwargs : key, value mappings
++        Additional arguments passed to legend() call (e.g., bbox_to_anchor, ncol, etc.).
++
++    Returns
++    -------
++    legend : matplotlib.legend.Legend
++        The updated legend object.
++    """
++    # Determine target legend parent
++    legend = None
++    figure = None
++
++    if hasattr(obj, "legend"):  # seaborn Grid/Figure-level plots
++        legend = getattr(obj, "legend", None)
++        figure = getattr(obj, "figure", getattr(obj, "_figure", None))
++    elif isinstance(obj, mpl.axes.Axes):
++        legend = getattr(obj, "legend_", None)
++        figure = obj.figure
++    elif isinstance(obj, mpl.figure.Figure):
++        figure = obj
++        leg_list = [c for c in figure.legends]
++        if leg_list:
++            legend = leg_list[0]
++
++    if legend is None:
++        # Nothing to move, silently return
++        return None
++
++    # Get handles and labels
++    try:
++        handles = legend.legendHandles
++        labels = [t.get_text() for t in legend.texts]
++    except Exception:
++        handles, labels = [], []
++
++    # Remove old legend
++    parent = None
++    if hasattr(obj, "legend_"):
++        obj.legend_ = None
++    elif hasattr(obj, "figure") and isinstance(obj, mpl.axes.Axes):
++        for l in list(obj.figure.legends):
++            l.remove()
++        parent = obj.figure
++    elif figure is not None:
++        for l in list(figure.legends):
++            l.remove()
++        parent = figure
++
++    if parent is None:
++        parent = figure or getattr(obj, "figure", None)
++
++    # Create new legend
++    if isinstance(obj, mpl.axes.Axes):
++        new_leg = obj.legend(handles, labels, loc=loc, **kwargs)
++    else:
++        if parent is None:
++            parent = legend.figure
++        new_leg = parent.legend(handles, labels, loc=loc, **kwargs)
++
++    return new_leg

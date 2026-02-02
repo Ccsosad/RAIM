@@ -1,0 +1,49 @@
+diff --git a/pylint/lint/base_options.py b/pylint/lint/base_options.py
+index 055eb4f..ce6799c 100644
+--- a/pylint/lint/base_options.py
++++ b/pylint/lint/base_options.py
+@@ -103,7 +103,7 @@ def _make_linter_options(linter: PyLinter) -> Options:
+                 "short": "f",
+                 "group": "Reports",
+                 "help": "Set the output format. Available formats are text,"
+-                " parseable, colorized, json and msvs (visual studio)."
++                " parseable, colorized, json, msvs (visual studio) and no-header."
+                 " You can also give a reporter class, e.g. mypackage.mymodule."
+                 "MyReporterClass.",
+                 "kwargs": {"linter": linter},
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 4db1264..58821ba 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -212,6 +212,20 @@ class TextReporter(BaseReporter):
+         TextWriter().format(layout, self.out)
+ 
+ 
++class NoHeaderTextReporter(TextReporter):
++    """A reporter that outputs messages without module headers."""
++
++    name = "no-header"
++    extension = "txt"
++
++    def handle_message(self, msg: Message) -> None:
++        """Manage message of different type and in the context of path.
++        This version skips the module header output.
++        """
++        # Skip the header entirely and just write the message
++        self.write_message(msg)
++
++
+ class ParseableTextReporter(TextReporter):
+     """A reporter very similar to TextReporter, but display messages in a form
+     recognized by most text editors :
+@@ -312,6 +326,10 @@ class ColorizedTextReporter(TextReporter):
+ 
+ 
+ def register(linter: PyLinter) -> None:
++    linter.register_reporter(TextReporter)
++    linter.register_reporter(ParseableTextReporter)
++    linter.register_reporter(ColorizedTextReporter)
++    linter.register_reporter(NoHeaderTextReporter)
+     linter.register_reporter(TextReporter)
+     linter.register_reporter(ParseableTextReporter)
+     linter.register_reporter(VSTextReporter)

@@ -1,0 +1,72 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index e6fae2b..d0cbfc0 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1804,6 +1804,54 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def convert_calendar(self, calendar, align_on=None, missing=None, use_cftime=None):
++        """Convert the DataArray to another calendar.
++
++        Parameters
++        ----------
++        calendar : str
++            The target calendar name.
++        align_on : {None, 'date', 'year'}, optional
++            How to align the source and target calendars. If None, both calendars are
++            aligned on the date. If 'date', the calendars are aligned on the date.
++            If 'year', the calendars are aligned on the year.
++        missing : {None, 'raise', 'skip', 'fill'}, optional
++            How to handle dates that are missing in the target calendar. If None, raise
++            an error. If 'skip', missing dates are skipped. If 'fill', missing dates are
++            filled with NaN.
++        use_cftime : bool, optional
++            If True, use cftime.datetime objects. If False, use pandas.Timestamp.
++            If None (default), use cftime.datetime for non-standard calendars and
++            pandas.Timestamp for standard calendars.
++
++        Returns
++        -------
++        DataArray
++            Converted DataArray.
++        """
++        from ..coding.calendar_ops import convert_calendar as _convert_calendar
++        return _convert_calendar(self, calendar, align_on, missing, use_cftime)
++
++    def interp_calendar(self, target, use_cftime=None):
++        """Interpolate the DataArray to another calendar.
++
++        Parameters
++        ----------
++        target : DataArray or CFTimeIndex or pd.DatetimeIndex
++            The target calendar dates.
++        use_cftime : bool, optional
++            If True, use cftime.datetime objects. If False, use pandas.Timestamp.
++            If None (default), use cftime.datetime for non-standard calendars and
++            pandas.Timestamp for standard calendars.
++
++        Returns
++        -------
++        DataArray
++            Interpolated DataArray.
++        """
++        from ..coding.calendar_ops import interp_calendar as _interp_calendar
++        return _interp_calendar(self, target, use_cftime)
++
+     def rename(
+         self,
+         new_name_or_name_dict: Union[Hashable, Mapping[Any, Hashable]] = None,
+@@ -4658,4 +4706,4 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..d58f83f
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1 @@
++[content]

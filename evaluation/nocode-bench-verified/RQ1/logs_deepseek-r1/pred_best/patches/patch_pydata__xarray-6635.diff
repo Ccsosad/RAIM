@@ -1,0 +1,99 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 2fd732e..f60df2c 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3067,7 +3067,7 @@ class DataArray(
+             invalid_netcdf=invalid_netcdf,
+         )
+ 
+-    def to_dict(self, data: bool = True) -> dict:
++    def to_dict(self, data: bool = True, include_encoding: bool = False) -> dict:
+         """
+         Convert this xarray.DataArray into a dictionary following xarray
+         naming conventions.
+@@ -3081,15 +3081,17 @@ class DataArray(
+         data : bool, optional
+             Whether to include the actual data in the dictionary. When set to
+             False, returns just the schema.
++        include_encoding : bool, optional
++            Whether to include the variable encoding in the dictionary.
+ 
+         See Also
+         --------
+         DataArray.from_dict
+         """
+-        d = self.variable.to_dict(data=data)
++        d = self.variable.to_dict(data=data, include_encoding=include_encoding)
+         d.update({"coords": {}, "name": self.name})
+         for k in self.coords:
+-            d["coords"][k] = self.coords[k].variable.to_dict(data=data)
++            d["coords"][k] = self.coords[k].variable.to_dict(data=data, include_encoding=include_encoding)
+         return d
+ 
+     @classmethod
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index f468716..812a537 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5944,7 +5944,7 @@ class Dataset(DataWithCoords, DatasetReductions, DatasetArithmetic, Mapping):
+ 
+         return df
+ 
+-    def to_dict(self, data=True):
++    def to_dict(self, data=True, include_encoding=False):
+         """
+         Convert this dataset to a dictionary following xarray naming
+         conventions.
+@@ -5958,6 +5958,8 @@ class Dataset(DataWithCoords, DatasetReductions, DatasetArithmetic, Mapping):
+         data : bool, optional
+             Whether to include the actual data in the dictionary. When set to
+             False, returns just the schema.
++        include_encoding : bool, optional
++            Whether to include the variable encoding in the dictionary.
+ 
+         See Also
+         --------
+@@ -5970,9 +5972,9 @@ class Dataset(DataWithCoords, DatasetReductions, DatasetArithmetic, Mapping):
+             "data_vars": {},
+         }
+         for k in self.coords:
+-            d["coords"].update({k: self[k].variable.to_dict(data=data)})
++            d["coords"].update({k: self[k].variable.to_dict(data=data, include_encoding=include_encoding)})
+         for k in self.data_vars:
+-            d["data_vars"].update({k: self[k].variable.to_dict(data=data)})
++            d["data_vars"].update({k: self[k].variable.to_dict(data=data, include_encoding=include_encoding)})
+         return d
+ 
+     @classmethod
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index e92d01c..64105d2 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -533,13 +533,25 @@ class Variable(AbstractArray, NdimSizeLenMixin, VariableArithmetic):
+         """Convert this variable to a pandas.Index"""
+         return self.to_index_variable().to_index()
+ 
+-    def to_dict(self, data=True):
+-        """Dictionary representation of variable."""
++    def to_dict(self, data=True, include_encoding=False):
++        """Dictionary representation of variable.
++
++        Parameters
++        ----------
++        data : bool, optional
++            Whether to include the actual data in the dictionary. When set to
++            False, returns just the schema.
++        include_encoding : bool, optional
++            Whether to include the variable encoding in the dictionary.
++        """
+         item = {"dims": self.dims, "attrs": decode_numpy_dict_values(self.attrs)}
+         if data:
+             item["data"] = ensure_us_time_resolution(self.values).tolist()
+         else:
+             item.update({"dtype": str(self.dtype), "shape": self.shape})
++        if include_encoding:
++            encoding = self.encoding or {}
++            item["encoding"] = decode_numpy_dict_values(encoding)
+         return item
+ 
+     @property

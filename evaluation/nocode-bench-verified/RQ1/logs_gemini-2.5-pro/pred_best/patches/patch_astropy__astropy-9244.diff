@@ -1,0 +1,93 @@
+diff --git a/astropy/coordinates/builtin_frames/utils.py b/astropy/coordinates/builtin_frames/utils.py
+index f9279a5..6acd915 100644
+--- a/astropy/coordinates/builtin_frames/utils.py
++++ b/astropy/coordinates/builtin_frames/utils.py
+@@ -38,7 +38,7 @@ def get_polar_motion(time):
+     gets the two polar motion components in radians for use with apio13
+     """
+     # Get the polar motion from the IERS table
+-    xp, yp, status = iers.IERS_Auto.open().pm_xy(time, return_status=True)
++    xp, yp, status = iers.earth_orientation_table.get().pm_xy(time, return_status=True)
+ 
+     wmsg = None
+     if np.any(status == iers.TIME_BEFORE_IERS_RANGE):
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 175be72..d5f4561 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -1654,8 +1654,8 @@ class Time(ShapedLikeNDArray):
+         ----------
+         iers_table : `~astropy.utils.iers.IERS` table, optional
+             Table containing UT1-UTC differences from IERS Bulletins A
+-            and/or B.  If `None`, use default combined version (see
+-            `astropy.utils.iers.IERS_Auto`)
++            and/or B.  If `None`, use the table from
++            `~astropy.utils.iers.earth_orientation_table`.
+         return_status : bool
+             Whether to return status values.  If `False` (default), iers
+             raises `IndexError` if any time is out of the range
+@@ -1689,8 +1689,8 @@ class Time(ShapedLikeNDArray):
+             array([ True, False]...)
+         """
+         if iers_table is None:
+-            from astropy.utils.iers import IERS_Auto
+-            iers_table = IERS_Auto.open()
++            from astropy.utils import iers
++            iers_table = iers.earth_orientation_table.get()
+ 
+         return iers_table.ut1_utc(self.utc, return_status=return_status)
+ 
+@@ -1705,8 +1705,8 @@ class Time(ShapedLikeNDArray):
+         # Sec. 4.3.1: the arg DUT is the quantity delta_UT1 = UT1 - UTC in
+         # seconds. It is obtained from tables published by the IERS.
+         if not hasattr(self, '_delta_ut1_utc'):
+-            from astropy.utils.iers import IERS_Auto
+-            iers_table = IERS_Auto.open()
++            from astropy.utils import iers
++            iers_table = iers.earth_orientation_table.get()
+             # jd1, jd2 are normally set (see above), except if delta_ut1_utc
+             # is access directly; ensure we behave as expected for that case
+             if jd1 is None:
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..a26a4b7 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -23,11 +23,12 @@ from astropy import units as u
+ from astropy.table import QTable, MaskedColumn
+ from astropy.utils.data import get_pkg_data_filename, clear_download_cache
+ from astropy.utils.compat import NUMPY_LT_1_17
++from astropy.utils.state import ScienceState
+ from astropy import utils
+ from astropy.utils.exceptions import AstropyWarning
+ 
+ __all__ = ['Conf', 'conf',
+-           'IERS', 'IERS_B', 'IERS_A', 'IERS_Auto',
++           'IERS', 'IERS_B', 'IERS_A', 'IERS_Auto', 'earth_orientation_table',
+            'FROM_IERS_B', 'FROM_IERS_A', 'FROM_IERS_A_PREDICTION',
+            'TIME_BEFORE_IERS_RANGE', 'TIME_BEYOND_IERS_RANGE',
+            'IERS_A_FILE', 'IERS_A_URL', 'IERS_A_URL_MIRROR', 'IERS_A_README',
+@@ -801,4 +802,23 @@ class IERS_Auto(IERS_A):
+             table['dX_2000A_B'][:n_iers_b] = iers_b['dX_2000A']
+             table['dY_2000A_B'][:n_iers_b] = iers_b['dY_2000A']
+ 
+-        return table
++        return table
++
++
++class earth_orientation_table(ScienceState):
++    """
++    The table used for Earth orientation parameters.  This is used for
++    all time and coordinate transformations.  By default, it is an
++    `~astropy.utils.iers.IERS_Auto` instance, which means the latest IERS-A
++    is downloaded and used.  If set to `None`, it will revert to the default.
++    """
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            return IERS_Auto.open()
++
++        if not isinstance(value, IERS):
++            raise ValueError(
++                'earth_orientation_table must be an IERS table instance.')
++
++        return value

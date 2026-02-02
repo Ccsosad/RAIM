@@ -1,0 +1,219 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 17fe6af..d758863 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3788,6 +3788,208 @@ class DataArray(AbstractArray, DataWithCoords):
+             dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov
+         )
+ 
++    def curvefit(
++        self,
++        coords,
++        func,
++        reduce_dims=None,
++        param_names=None,
++        bounds=None,
++        **kwargs,
++    ):
++        """
++        Curve fitting using `scipy.optimize.curve_fit`.
++
++        Parameters
++        ----------
++        coords : hashable, DataArray, or sequence of hashable or DataArray
++            Coordinate(s) to use as the independent variable(s) for the fitting.
++            If a single hashable, it is the name of a coordinate in the DataArray.
++            If a DataArray, it is used directly.
++            If a sequence, each element can be a hashable or DataArray.
++        func : callable
++            The model function to fit. It must take the independent variable(s) as the first
++            argument and the parameters to fit as separate remaining arguments.
++        reduce_dims : hashable or sequence of hashable, optional
++            Dimensions to reduce by fitting. If None, fit over all dimensions.
++        param_names : sequence of str, optional
++            Names of the fitted parameters. If not provided, names are generated as
++            "param0", "param1", ... .
++        bounds : 2-tuple or dict of 2-tuples, optional
++            Lower and upper bounds on parameters. If a dict, keys are parameter names.
++            If a single tuple, the same bounds are applied to all parameters.
++        **kwargs
++            Additional keyword arguments are passed to `scipy.optimize.curve_fit`.
++
++        Returns
++        -------
++        curvefit_results : Dataset
++            A dataset containing:
++
++            curvefit_parameters
++                The optimal values for the parameters.
++            curvefit_parameter_errors
++                The estimated errors of the parameters (if available from the fit).
++
++        See Also
++        --------
++        scipy.optimize.curve_fit
++        DataArray.polyfit
++        """
++        from scipy.optimize import curve_fit
++
++        # Prepare the independent variable(s)
++        if isinstance(coords, (str, DataArray)):
++            coords = [coords]
++        elif coords is None:
++            raise ValueError("coords must be provided")
++
++        # Get the coordinate data
++        coord_arrays = []
++        for c in coords:
++            if isinstance(c, str):
++                if c not in self.coords:
++                    raise ValueError(f"Coordinate {c} not found in DataArray")
++                coord_arrays.append(self.coords[c].data)
++            elif isinstance(c, DataArray):
++                # Align with self
++                c_aligned, self_aligned = xr.align(c, self, join="inner")
++                coord_arrays.append(c_aligned.data)
++                self = self_aligned
++            else:
++                raise TypeError("coords must be hashable, DataArray, or sequence thereof")
++
++        # Stack the coordinate arrays along a new dimension if there are multiple
++        if len(coord_arrays) == 1:
++            xdata = coord_arrays[0]
++        else:
++            xdata = np.stack(coord_arrays, axis=-1)
++
++        # Determine dimensions to reduce
++        if reduce_dims is None:
++            reduce_dims = list(self.dims)
++        elif isinstance(reduce_dims, str):
++            reduce_dims = [reduce_dims]
++        else:
++            reduce_dims = list(reduce_dims)
++
++        # Flatten the data and coordinates over the reduction dimensions
++        other_dims = [d for d in self.dims if d not in reduce_dims]
++        if other_dims:
++            # Reshape to (other_dims, reduce_dims)
++            transpose_dims = other_dims + reduce_dims
++            data_transposed = self.transpose(*transpose_dims)
++            xdata_transposed = xdata.transpose(*transpose_dims) if hasattr(xdata, 'transpose') else xdata
++            # Flatten the reduction dimensions
++            data_flat = data_transposed.data.reshape(-1, np.prod([self.sizes[d] for d in reduce_dims]))
++            if len(coord_arrays) == 1:
++                xdata_flat = xdata_transposed.reshape(-1, np.prod([self.sizes[d] for d in reduce_dims]))
++            else:
++                xdata_flat = xdata_transposed.reshape(-1, np.prod([self.sizes[d] for d in reduce_dims]), len(coord_arrays))
++        else:
++            # No other dimensions: flatten all
++            data_flat = self.data.ravel()
++            if len(coord_arrays) == 1:
++                xdata_flat = xdata.ravel()
++            else:
++                xdata_flat = xdata.reshape(-1, len(coord_arrays))
++
++        # Prepare bounds
++        if bounds is not None:
++            if isinstance(bounds, dict):
++                if param_names is None:
++                    raise ValueError("param_names must be provided when bounds is a dict")
++                # Convert to tuple of lower and upper bounds in the same order as parameters
++                lower = [bounds.get(name, (-np.inf, np.inf))[0] for name in param_names]
++                upper = [bounds.get(name, (-np.inf, np.inf))[1] for name in param_names]
++                bounds = (lower, upper)
++            elif isinstance(bounds, tuple) and len(bounds) == 2:
++                # Assume same bounds for all parameters
++                pass
++            else:
++                raise TypeError("bounds must be a 2-tuple or a dict")
++
++        # Fit the function for each slice
++        if other_dims:
++            n_slices = data_flat.shape[0]
++            params = []
++            errors = []
++            for i in range(n_slices):
++                ydata = data_flat[i]
++                if len(coord_arrays) == 1:
++                    x = xdata_flat[i]
++                else:
++                    x = xdata_flat[i]
++                # Remove NaN values
++                mask = ~np.isnan(ydata)
++                if not mask.any():
++                    # All NaN: fill with NaN
++                    popt = np.full(len(param_names) if param_names else 1, np.nan)
++                    pcov = np.full((len(popt), len(popt)), np.nan)
++                else:
++                    try:
++                        popt, pcov = curve_fit(func, x[mask], ydata[mask], bounds=bounds, **kwargs)
++                    except RuntimeError:
++                        # Fit failed: fill with NaN
++                        popt = np.full(len(param_names) if param_names else 1, np.nan)
++                        pcov = np.full((len(popt), len(popt)), np.nan)
++                params.append(popt)
++                if pcov is not None:
++                    perr = np.sqrt(np.diag(pcov))
++                else:
++                    perr = np.full_like(popt, np.nan)
++                errors.append(perr)
++            params = np.array(params)
++            errors = np.array(errors)
++            # Reshape to other_dims
++            param_shape = [self.sizes[d] for d in other_dims]
++            param_dims = other_dims
++        else:
++            # Single fit
++            mask = ~np.isnan(data_flat)
++            if not mask.any():
++                popt = np.full(len(param_names) if param_names else 1, np.nan)
++                pcov = np.full((len(popt), len(popt)), np.nan)
++            else:
++                try:
++                    popt, pcov = curve_fit(func, xdata_flat[mask], data_flat[mask], bounds=bounds, **kwargs)
++                except RuntimeError:
++                    popt = np.full(len(param_names) if param_names else 1, np.nan)
++                    pcov = np.full((len(popt), len(popt)), np.nan)
++            params = popt
++            if pcov is not None:
++                errors = np.sqrt(np.diag(pcov))
++            else:
++                errors = np.full_like(popt, np.nan)
++            param_shape = []
++            param_dims = []
++
++        # Create parameter names
++        if param_names is None:
++            n_params = params.shape[-1] if params.ndim > 0 else 1
++            param_names = [f"param{i}" for i in range(n_params)]
++        else:
++            if len(param_names) != params.shape[-1]:
++                raise ValueError("param_names length must match number of parameters")
++
++        # Build result dataset
++        data_vars = {}
++        for i, name in enumerate(param_names):
++            if other_dims:
++                data = params[..., i].reshape(param_shape)
++            else:
++                data = params[i]
++            data_vars[name] = (param_dims, data)
++            # Add errors if available
++            if errors is not None:
++                if other_dims:
++                    err_data = errors[..., i].reshape(param_shape)
++                else:
++                    err_data = errors[i]
++                data_vars[f"{name}_error"] = (param_dims, err_data)
++
++        return Dataset(data_vars, attrs=self.attrs.copy())
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,
+@@ -4424,4 +4626,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)

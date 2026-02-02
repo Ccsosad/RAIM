@@ -1,0 +1,74 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1017cc4..924571d 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1744,7 +1744,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_config_value('autodoc_default_options', {}, True)
+     app.add_config_value('autodoc_docstring_signature', True, True)
+     app.add_config_value('autodoc_mock_imports', [], True)
+-    app.add_config_value('autodoc_typehints', "signature", True, ENUM("signature", "none"))
++    app.add_config_value('autodoc_typehints', "signature", True, ENUM("signature", "description", "none"))
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
+     app.add_event('autodoc-before-process-signature')
+@@ -1754,4 +1754,9 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+ 
+     app.setup_extension('sphinx.ext.autodoc.type_comment')
+ 
++    # Add typehints formatter if needed
++    from sphinx.ext.autodoc import typehints_formatter
++    app.connect('autodoc-process-signature', typehints_formatter.process_signature)
++    app.connect('autodoc-process-docstring', typehints_formatter.process_docstring)
++
+     return {'version': sphinx.__display_version__, 'parallel_read_safe': True}
+diff --git a/sphinx/ext/autodoc/typehints_formatter.py b/sphinx/ext/autodoc/typehints_formatter.py
+new file mode 100644
+index 0000000..d76d5ec
+--- /dev/null
++++ b/sphinx/ext/autodoc/typehints_formatter.py
+@@ -0,0 +1,45 @@
++"""
++    sphinx.ext.autodoc.typehints_formatter
++    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++
++    Format type hints as description.
++
++    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
++    :license: BSD, see LICENSE for details.
++"""
++
++from typing import Any, List
++
++from sphinx.application import Sphinx
++
++
++def process_signature(app: Sphinx, what: str, name: str, obj: Any,
++                      options: Any, args: str, retann: str) -> Any:
++    """Remove type hints from the signature if autodoc_typehints is 'description'."""
++    if app.config.autodoc_typehints == 'description':
++        # Store the type hints in the options for later use in the docstring
++        options._typehints = (args, retann)
++        # Return empty strings for the signature to remove type hints
++        return '', ''
++    return None
++
++
++def process_docstring(app: Sphinx, what: str, name: str, obj: Any,
++                      options: Any, docstringlines: List[str]) -> None:
++    """Add type hints to the docstring if autodoc_typehints is 'description'."""
++    if app.config.autodoc_typehints == 'description' and hasattr(options, '_typehints'):
++        args, retann = options._typehints
++        lines = []
++        if args:
++            lines.append('   :type: ' + args)
++        if retann:
++            lines.append('   :rtype: ' + retann)
++        if lines:
++            # Insert the type hints at the beginning of the docstring
++            docstringlines[0:0] = lines + ['']
++
++
++def setup(app: Sphinx) -> None:
++    """Connect the events."""
++    app.connect('autodoc-process-signature', process_signature)
++    app.connect('autodoc-process-docstring', process_docstring)

@@ -1,0 +1,50 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..2a37740 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,45 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array-like, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A table with the same shape as this table and boolean values.
++            Each element is True if the corresponding element in this table
++            equals the corresponding element in `other`.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table and the column names do not match.
++        """
++        from astropy.table import Table
++
++        if isinstance(other, Table):
++            # Check column names
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # Compare each column
++            data = {}
++            for name in self.colnames:
++                data[name] = self[name] == other[name]
++            return Table(data, names=self.colnames)
++        else:
++            # Try to broadcast other to each column
++            data = {}
++            for name in self.colnames:
++                data[name] = self[name] == other
++            return Table(data, names=self.colnames)
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

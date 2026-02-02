@@ -1,0 +1,59 @@
+diff --git a/sklearn/pipeline.py b/sklearn/pipeline.py
+index 37667a3..8cc9dc3 100644
+--- a/sklearn/pipeline.py
++++ b/sklearn/pipeline.py
+@@ -1069,7 +1069,19 @@ class FeatureUnion(TransformerMixin, _BaseComposition):
+             Names of the features produced by transform.
+         """
+         feature_names = []
++        # Create a mapping from transformer name to the original transformer
++        # to check for "passthrough"
++        trans_dict = dict(self.transformer_list)
+         for name, trans, weight in self._iter():
++            # Check if the original transformer was "passthrough"
++            if trans_dict.get(name) == "passthrough":
++                # For passthrough, we cannot generate feature names without knowing
++                # the input feature names. Since get_feature_names does not have
++                # input_features, we raise an error.
++                raise ValueError(
++                    "Cannot get feature names for passthrough transformer without "
++                    "input feature names. Use get_feature_names_out instead."
++                )
+             if not hasattr(trans, "get_feature_names"):
+                 raise AttributeError(
+                     "Transformer %s (type %s) does not provide get_feature_names."
+@@ -1092,15 +1104,27 @@ class FeatureUnion(TransformerMixin, _BaseComposition):
+             Transformed feature names.
+         """
+         feature_names = []
++        # Create a mapping from transformer name to the original transformer
++        # to check for "passthrough"
++        trans_dict = dict(self.transformer_list)
+         for name, trans, _ in self._iter():
+-            if not hasattr(trans, "get_feature_names_out"):
+-                raise AttributeError(
+-                    "Transformer %s (type %s) does not provide get_feature_names_out."
+-                    % (str(name), type(trans).__name__)
++            # Check if the original transformer was "passthrough"
++            if trans_dict.get(name) == "passthrough":
++                # For passthrough, we pass through the input features
++                if input_features is None:
++                    raise ValueError(
++                        "input_features is required for passthrough transformer"
++                    )
++                feature_names.extend([f"{name}__{f}" for f in input_features])
++            else:
++                if not hasattr(trans, "get_feature_names_out"):
++                    raise AttributeError(
++                        "Transformer %s (type %s) does not provide get_feature_names_out."
++                        % (str(name), type(trans).__name__)
++                    )
++                feature_names.extend(
++                    [f"{name}__{f}" for f in trans.get_feature_names_out(input_features)]
+                 )
+-            feature_names.extend(
+-                [f"{name}__{f}" for f in trans.get_feature_names_out(input_features)]
+-            )
+         return np.asarray(feature_names, dtype=object)
+ 
+     def fit(self, X, y=None, **fit_params):

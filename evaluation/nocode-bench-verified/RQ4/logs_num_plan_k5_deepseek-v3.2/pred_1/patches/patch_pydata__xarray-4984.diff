@@ -1,0 +1,269 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..1202cda 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1260,6 +1260,40 @@ class DataArray(AbstractArray, DataWithCoords):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def query(
++        self,
++        expr: str,
++        engine: str = None,
++    ) -> "DataArray":
++        """Return a new dataarray with the rows where the query expression is True.
++
++        Parameters
++        ----------
++        expr : str
++            The query expression.
++        engine : str or None, default: None
++            The engine to use for evaluating the query. Currently only "python" is supported.
++
++        Returns
++        -------
++        DataArray
++            A new dataarray filtered by the query.
++
++        Examples
++        --------
++        >>> da = xr.DataArray([1, 2, 3], dims="x")
++        >>> da.query("x > 1")
++        <xarray.DataArray (x: 2)>
++        array([2, 3])
++        Dimensions without coordinates: x
++
++        See Also
++        --------
++        Dataset.query
++        """
++        from .query import query_dataarray
++        return query_dataarray(self, expr, engine)
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -4360,4 +4394,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..d76d136 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -7002,4 +7002,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query.py b/xarray/core/query.py
+new file mode 100644
+index 0000000..b646a3a
+--- /dev/null
++++ b/xarray/core/query.py
+@@ -0,0 +1,202 @@
++"""
++Query methods for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++
++from .common import _contains_datetime_like_objects
++from .utils import is_scalar
++
++
++def _get_query_engine(engine):
++    """Get the query engine.
++
++    Parameters
++    ----------
++    engine : str or None
++        The engine to use for evaluating the query. Currently only "python" is
++        supported.
++
++    Returns
++    -------
++    callable
++        A function that evaluates a query expression on a dictionary of arrays.
++    """
++    if engine is None:
++        engine = "python"
++    if engine == "python":
++        return _python_query_engine
++    else:
++        raise ValueError(f"Invalid engine {engine!r}. Only 'python' is supported.")
++
++
++def _python_query_engine(expr, variables):
++    """Evaluate a query expression using Python's eval.
++
++    Parameters
++    ----------
++    expr : str
++        The query expression.
++    variables : dict
++        Dictionary of variable names and arrays.
++
++    Returns
++    -------
++    mask : array-like
++        Boolean mask with the same shape as the arrays.
++    """
++    # We use pandas.eval for consistency with pandas, but fall back to python eval
++    # if pandas.eval fails.
++    try:
++        import pandas as pd
++        return pd.eval(expr, local_dict=variables)
++    except (NotImplementedError, ValueError, KeyError):
++        # Fall back to python eval
++        return eval(expr, {"np": np, "pd": pd}, variables)
++
++
++def _query_dataset(dataset, expr, engine):
++    """Evaluate a query expression on a dataset.
++
++    Parameters
++    ----------
++    dataset : Dataset
++        The dataset to query.
++    expr : str
++        The query expression.
++    engine : str or None
++        The engine to use for evaluating the query.
++
++    Returns
++    -------
++    mask : DataArray
++        Boolean DataArray with the same dimensions as the dataset.
++    """
++    # Collect variables for the query
++    variables = {}
++    for name, var in dataset.data_vars.items():
++        # Flatten the variable to 1D for querying? Actually, we want to keep dimensions.
++        # We'll pass the variable as is, and let the expression handle broadcasting.
++        variables[name] = var.values
++
++    # Also include coordinates? Probably not, because they are not data variables.
++    # But the user might want to use coordinates in the query.
++    for name, var in dataset.coords.items():
++        if name not in variables:
++            variables[name] = var.values
++
++    # Evaluate the expression
++    engine_func = _get_query_engine(engine)
++    mask = engine_func(expr, variables)
++
++    # Convert to boolean array
++    mask = np.asarray(mask, dtype=bool)
++
++    # Ensure the mask has the same shape as the dataset
++    # The expression might return a scalar or a lower-dimensional array.
++    # We need to broadcast to the dataset dimensions.
++    # We'll create a DataArray with the same dimensions as the dataset.
++    # First, find the dimensions that are in the dataset and in the mask.
++    # This is complex. For simplicity, we assume the mask is the same shape as the dataset.
++    # But actually, the query might reduce dimensions. We'll follow pandas behavior:
++    # The query returns a boolean array that can be used to index the dataset.
++    # In pandas, query returns rows. In xarray, we want to return a mask for all dimensions.
++    # We'll require that the expression returns a boolean array with the same shape as the dataset.
++    # However, we can also allow reduction along dimensions? Let's keep it simple for now.
++
++    # Check shape
++    if mask.shape != dataset.shape:
++        raise ValueError(
++            f"Query result has shape {mask.shape}, but dataset has shape {dataset.shape}. "
++            "The query expression must return a boolean array with the same shape as the dataset."
++        )
++
++    # Create a DataArray for the mask
++    from .dataarray import DataArray
++    mask_da = DataArray(mask, dims=dataset.dims, coords=dataset.coords)
++    return mask_da
++
++
++def query_dataset(dataset, expr, engine=None):
++    """Return a new dataset with the rows where the query expression is True.
++
++    Parameters
++    ----------
++    dataset : Dataset
++        The dataset to query.
++    expr : str
++        The query expression.
++    engine : str or None, default: None
++        The engine to use for evaluating the query. Currently only "python" is supported.
++
++    Returns
++    -------
++    Dataset
++        A new dataset filtered by the query.
++
++    Examples
++    --------
++    >>> ds = xr.Dataset({"a": ("x", [1, 2, 3]), "b": ("x", [4, 5, 6])})
++    >>> ds.query("a > 1")
++    <xarray.Dataset>
++    Dimensions:  (x: 2)
++    Dimensions without coordinates: x
++    Data variables:
++        a        (x) int64 2 3
++        b        (x) int64 5 6
++
++    >>> ds.query("a + b > 6")
++    <xarray.Dataset>
++    Dimensions:  (x: 2)
++    Dimensions without coordinates: x
++    Data variables:
++        a        (x) int64 2 3
++        b        (x) int64 5 6
++    """
++    mask = _query_dataset(dataset, expr, engine)
++    return dataset.where(mask, drop=True)
++
++
++def query_dataarray(dataarray, expr, engine=None):
++    """Return a new dataarray with the rows where the query expression is True.
++
++    Parameters
++    ----------
++    dataarray : DataArray
++        The dataarray to query.
++    expr : str
++        The query expression.
++    engine : str or None, default: None
++        The engine to use for evaluating the query. Currently only "python" is supported.
++
++    Returns
++    -------
++    DataArray
++        A new dataarray filtered by the query.
++
++    Examples
++    --------
++    >>> da = xr.DataArray([1, 2, 3], dims="x")
++    >>> da.query("x > 1")
++    <xarray.DataArray (x: 2)>
++    array([2, 3])
++    Dimensions without coordinates: x
++    """
++    # Convert the DataArray to a Dataset with a single variable
++    from .dataset import Dataset
++    ds = dataarray._to_temp_dataset()
++    # The dataset has a single variable with a special name.
++    # We need to allow the expression to reference the dataarray by its name or by a placeholder.
++    # We'll use the dataarray's name if it exists, otherwise we use "this".
++    if dataarray.name is None:
++        # Use a placeholder that is unlikely to clash with other variables.
++        ds = ds.rename({"_THIS_ARRAY": "this"})
++        expr = expr.replace("this", "this")  # no change, but we have the variable named "this"
++    else:
++        # The dataset already has the variable with the correct name.
++        pass
++
++    # Query the dataset
++    ds_filtered = query_dataset(ds, expr, engine)
++    # Convert back to DataArray
++    return dataarray._from_temp_dataset(ds_filtered)

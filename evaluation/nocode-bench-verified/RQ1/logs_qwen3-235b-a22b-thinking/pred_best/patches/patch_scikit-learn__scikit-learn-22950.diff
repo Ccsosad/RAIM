@@ -1,0 +1,52 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..6b7210e 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -544,18 +544,18 @@ def _ridge_regression(
+             "When positive=True, only 'lbfgs' solver can be used. "
+             f"Please change solver {solver} to 'lbfgs' "
+             "or set positive=False."
+-        )
++        )  # noqa: E501
+ 
+     if solver == "lbfgs" and not positive:
+         raise ValueError(
+             "'lbfgs' solver can be used only when positive=True. "
+             "Please use another solver."
+-        )
++        )  # noqa: E501
+ 
+-    if return_intercept and solver != "sag":
++    if return_intercept and solver != "sag" and not (solver == "lsqr" and sparse.issparse(X)):
+         raise ValueError(
+-            "In Ridge, only 'sag' solver can directly fit the "
+-            "intercept. Please change solver to 'sag' or set "
++            "In Ridge, only 'sag' solver and 'lsqr' solver (for sparse input) can directly fit the "
++            "intercept. Please change solver to 'sag' or 'lsqr' (for sparse input) or set "
+             "return_intercept=False."
+         )
+ 
+@@ -626,10 +626,21 @@ def _ridge_regression(
+             X_offset=X_offset,
+             X_scale=X_scale,
+             sample_weight_sqrt=sample_weight_sqrt if has_sw else None,
+-        )
++        )  # noqa: E501
+ 
+     elif solver == "lsqr":
+-        coef, n_iter = _solve_lsqr(X, y, alpha, max_iter, tol)
++        if return_intercept:
++            coef, n_iter = _solve_lsqr(
++                X,
++                y,
++                alpha,
++                max_iter,
++                tol,
++                X_offset=X_offset,
++                X_scale=X_scale,
++            )
++        else:
++            coef, n_iter = _solve_lsqr(X, y, alpha, max_iter, tol)
+ 
+     elif solver == "cholesky":
+         if n_features > n_samples:

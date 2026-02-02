@@ -1,0 +1,151 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..5a1477e 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -62,6 +62,48 @@ class _BaseGrid:
+         kwargs.setdefault("bbox_inches", "tight")
+         self.figure.savefig(*args, **kwargs)
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to each subplot Axes.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes an Axes as its first argument. Additional
++            arguments and keyword arguments are passed through.
++        *args, **kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        for ax in self.axes.flat:
++            if ax is not None:
++                func(ax, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to this object and return its result.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes this object as its first argument. Additional
++            arguments and keyword arguments are passed through.
++        *args, **kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        object : the result of the function call.
++
++        """
++        return func(self, *args, **kwargs)
++
+ 
+ class Grid(_BaseGrid):
+     """A grid that can have multiple subplots and an external legend."""
+@@ -84,6 +126,49 @@ class Grid(_BaseGrid):
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+         self._figure.tight_layout(*args, **kwargs)
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to each subplot Axes.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes an Axes as its first argument. Additional
++            arguments and keyword arguments are passed through.
++        *args, **kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        for ax in self.axes.flat:
++            if ax is not None:
++                func(ax, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to this object and return its result.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes this object as its first argument. Additional
++            arguments and keyword arguments are passed through.
++        *args, **kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        object : the result of the function call.
++
++        """
++        return func(self, *args, **kwargs)
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -1906,6 +1991,47 @@ class JointGrid(_BaseGrid):
+         self.ax_joint.set_ylabel(ylabel, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to each of the joint and marginal axes.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes an Axes as its first argument. Additional
++            arguments and keyword arguments are passed through.
++        *args, **kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        for ax in [self.ax_joint, self.ax_marg_x, self.ax_marg_y]:
++            func(ax, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to this object and return its result.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes this object as its first argument. Additional
++            arguments and keyword arguments are passed through.
++        *args, **kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        object : the result of the function call.
++
++        """
++        return func(self, *args, **kwargs)
++
+ 
+ JointGrid.__init__.__doc__ = """\
+ Set up the grid of subplots and store data internally for easy plotting.

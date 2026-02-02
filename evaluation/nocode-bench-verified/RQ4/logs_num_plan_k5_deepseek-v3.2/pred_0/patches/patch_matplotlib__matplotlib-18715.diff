@@ -1,0 +1,59 @@
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 38580cf..2fd7a8d 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -123,6 +123,20 @@ def _listify_validator(scalar_validator, allow_stringlist=False, *,
+     return f
+ 
+ 
++def validate_ndivs(s):
++    """
++    Validate ndivs: either an integer >= 1 or the string 'auto'.
++    """
++    if s == 'auto':
++        return s
++    try:
++        ival = int(s)
++    except ValueError:
++        raise ValueError(f"{s!r} must be 'auto' or an integer")
++    if ival < 1:
++        raise ValueError(f"{s!r} must be >= 1")
++    return ival
++
+ def validate_any(s):
+     return s
+ validate_anylist = _listify_validator(validate_any)
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..04e6ce5 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2891,13 +2891,17 @@ class AutoMinorLocator(Locator):
+             return []
+ 
+         if self.ndivs is None:
+-
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
++            # Get the rcParam for this axis
++            axis_name = self.axis.axis_name  # 'x' or 'y'
++            rc_param = mpl.rcParams[f'{axis_name}tick.minor.ndivs']
++            if rc_param == 'auto':
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+             else:
+-                ndivs = 4
++                ndivs = rc_param
+         else:
+             ndivs = self.ndivs
+ 
+@@ -2916,4 +2920,4 @@ class AutoMinorLocator(Locator):
+ 
+     def tick_values(self, vmin, vmax):
+         raise NotImplementedError('Cannot get tick locations for a '
+-                                  '%s type.' % type(self))
++                                  '%s type.' % type(self))

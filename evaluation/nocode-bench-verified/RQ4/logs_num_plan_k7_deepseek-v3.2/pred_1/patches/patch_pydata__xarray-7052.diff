@@ -1,0 +1,160 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 2dcd0f6..d2f926e 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -22,7 +22,7 @@ import pandas as pd
+ 
+ from ..coding.calendar_ops import convert_calendar, interp_calendar
+ from ..coding.cftimeindex import CFTimeIndex
+-from ..plot.plot import _PlotMethods
++from ..plot.dataarray_plot import _PlotMethods
+ from ..plot.utils import _get_units_from_attrs
+ from . import alignment, computation, dtypes, indexing, ops, utils
+ from ._reductions import DataArrayReductions
+diff --git a/xarray/plot/__init__.py b/xarray/plot/__init__.py
+index c73ecc2..cb2b5f2 100644
+--- a/xarray/plot/__init__.py
++++ b/xarray/plot/__init__.py
+@@ -1,6 +1,7 @@
++
+ from .dataset_plot import scatter
+ from .facetgrid import FacetGrid
+-from .plot import contour, contourf, hist, imshow, line, pcolormesh, plot, step, surface
++from .dataarray_plot import contour, contourf, hist, imshow, line, pcolormesh, plot, step, surface
+ 
+ __all__ = [
+     "plot",
+diff --git a/xarray/plot/dataarray_plot.py b/xarray/plot/dataarray_plot.py
+new file mode 100644
+index 0000000..2578ffe
+--- /dev/null
++++ b/xarray/plot/dataarray_plot.py
+@@ -0,0 +1,97 @@
++"""
++Plotting methods for DataArray objects.
++"""
++
++from __future__ import annotations
++
++from typing import TYPE_CHECKING, Any, Hashable, Literal
++
++import numpy as np
++
++from . import utils
++from .plot import _PlotMethods
++
++if TYPE_CHECKING:
++    from xarray import DataArray
++
++
++class DataArrayPlotAccessor(_PlotMethods):
++    """Plotting accessor for DataArray objects with static typing."""
++
++    def __init__(self, da: DataArray) -> None:
++        super().__init__(da)
++
++    def scatter(
++        self,
++        *args: Any,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
++    ) -> Any:
++        """
++        Scatter plot against data coordinates.
++
++        Wraps :py:func:`xarray.plot.scatter`.
++
++        Parameters
++        ----------
++        x : Hashable, optional
++            Coordinate for x axis. If None, use self.dims[0].
++        y : Hashable, optional
++            Coordinate for y axis. If None, use self.dims[1] if 2D, otherwise self.dims[0].
++        **kwargs : Any
++            Additional keyword arguments passed to matplotlib scatter.
++
++        Returns
++        -------
++        Any
++            The matplotlib scatter plot result.
++        """
++        # Handle deprecation of positional arguments
++        if args:
++            import warnings
++            warnings.warn(
++                "Positional arguments for scatter have been deprecated. "
++                "Use keyword arguments instead.",
++                FutureWarning,
++                stacklevel=2,
++            )
++            if len(args) >= 1:
++                x = args[0]
++            if len(args) >= 2:
++                y = args[1]
++            if len(args) > 2:
++                raise TypeError(
++                    f"scatter() takes at most 2 positional arguments but {len(args)} were given"
++                )
++
++        from .dataset_plot import scatter as ds_scatter
++
++        # Convert DataArray to Dataset for scatter plot
++        ds = self._da.to_dataset(name=self._da.name or "data")
++        return ds_scatter(ds, x=x, y=y, **kwargs)
++
++    # Add other plot methods with proper typing
++    def line(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """Line plot."""
++        # Similar implementation pattern as scatter
++        if args:
++            import warnings
++            warnings.warn(
++                "Positional arguments for line have been deprecated. "
++                "Use keyword arguments instead.",
++                FutureWarning,
++                stacklevel=2,
++            )
++        from .dataarray_plot import line as da_line
++        return da_line(self._da, *args, **kwargs)
++
++    # Add other plot methods as needed...
++
++
++# Update the _PlotMethods to use the typed accessor
++_PlotMethods = DataArrayPlotAccessor
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+new file mode 100644
+index 0000000..cd995f7
+--- /dev/null
++++ b/xarray/plot/facetgrid.py
+@@ -0,0 +1,25 @@
++# Add the map_plot1d method to FacetGrid class
++def map_plot1d(self, func, *args, **kwargs):
++    """
++    Apply a 1D plotting function to each subset of the data.
++
++    Parameters
++    ----------
++    func : callable
++        A 1D plotting function that takes a DataArray and returns a plot.
++    *args : tuple
++        Additional positional arguments to pass to `func`.
++    **kwargs : dict
++        Additional keyword arguments to pass to `func`.
++
++    Returns
++    -------
++    None
++        The plots are drawn on the respective axes.
++    """
++    # Implementation would go here
++    # This is a placeholder for the actual implementation
++    pass
++
++# Add the method to FacetGrid class
++FacetGrid.map_plot1d = map_plot1d

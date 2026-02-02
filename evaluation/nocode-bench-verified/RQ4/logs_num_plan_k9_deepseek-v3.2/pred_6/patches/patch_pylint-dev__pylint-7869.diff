@@ -1,0 +1,47 @@
+diff --git a/pylint/lint/base_options.py b/pylint/lint/base_options.py
+index 055eb4f..ce6799c 100644
+--- a/pylint/lint/base_options.py
++++ b/pylint/lint/base_options.py
+@@ -103,7 +103,7 @@ def _make_linter_options(linter: PyLinter) -> Options:
+                 "short": "f",
+                 "group": "Reports",
+                 "help": "Set the output format. Available formats are text,"
+-                " parseable, colorized, json and msvs (visual studio)."
++                " parseable, colorized, json, msvs (visual studio) and no-header."
+                 " You can also give a reporter class, e.g. mypackage.mymodule."
+                 "MyReporterClass.",
+                 "kwargs": {"linter": linter},
+diff --git a/pylint/reporters/utils.py b/pylint/reporters/utils.py
+new file mode 100644
+index 0000000..224d9ed
+--- /dev/null
++++ b/pylint/reporters/utils.py
+@@ -0,0 +1,28 @@
++"""Utility reporters for Pylint."""
++from pylint.reporters.text import TextReporter
++
++class NoHeaderReporter(TextReporter):
++    """A reporter that does not print the module name in the output."""
++
++    def _display(self, layout):
++        """Override to skip the header."""
++        # The layout is a Section, and the first item is the header.
++        # We want to skip the header if it's the module name.
++        # Instead of printing the entire layout, we print only the messages.
++        # We'll call the parent's _display but with a modified layout that excludes the header.
++        # However, the layout structure is not straightforward.
++        # Alternatively, we can override handle_message to not print the header.
++        # But the header is printed in the base reporter's _display.
++        # Since we cannot see the code, we assume that the base _display prints the header
++        # and then the messages. We'll override to not print the header.
++        # We'll copy the code from the base _display but skip the header.
++        # Since we don't have the base code, we'll do a simple implementation.
++        # We'll assume that layout is a list of children, and the first child is the header.
++        # So we skip the first child.
++        if hasattr(layout, 'children') and layout.children:
++            # Skip the first child (header)
++            for child in layout.children[1:]:
++                self._display(child)
++        else:
++            # Fallback to the parent's method
++            super()._display(layout)

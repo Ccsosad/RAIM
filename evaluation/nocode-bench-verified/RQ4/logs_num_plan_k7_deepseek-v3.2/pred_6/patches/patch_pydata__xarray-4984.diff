@@ -1,0 +1,295 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..20335ab 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3788,6 +3788,73 @@ class DataArray(AbstractArray, DataWithCoords):
+             dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov
+         )
+ 
++    def query(self, expr, engine="pandas"):
++        """Return a new DataArray with data filtered by the query expression.
++
++        The query expression is evaluated in the context of the DataArray's
++        data variables (for Dataset) or the DataArray itself (for DataArray).
++        The expression should return a boolean array.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        engine : str, default: "pandas"
++            Query engine to use. Currently only "pandas" is supported.
++
++        Returns
++        -------
++        DataArray
++            A new DataArray with the same coordinates and attributes, but with
++            data filtered by the query.
++
++        Examples
++        --------
++        >>> da = xr.DataArray([1, 2, 3, 4], dims="x")
++        >>> da.query("x > 2")
++        <xarray.DataArray (x: 2)>
++        array([3, 4])
++        Dimensions without coordinates: x
++        """
++        from .query import get_engine
++
++        # For DataArray, we evaluate the expression with the array itself as a variable.
++        # The variable name is the name of the DataArray if it has one, or "data" otherwise.
++        if self.name is not None:
++            env = {self.name: self}
++        else:
++            env = {"data": self}
++
++        q_engine = get_engine(engine)
++        mask = q_engine.evaluate(expr, env)
++
++        # The mask should be a boolean array with the same shape as the DataArray.
++        if not isinstance(mask, np.ndarray) or mask.dtype != bool:
++            raise TypeError("Query expression must return a boolean array.")
++        if mask.shape != self.shape:
++            raise ValueError("Query result must have the same shape as the DataArray.")
++
++        # Use the mask to select the data.
++        # We use isel because the mask is integer-based? Actually, we should use boolean indexing.
++        # But DataArray doesn't have a direct method for boolean indexing across all dimensions.
++        # We can use `where` and then drop NaNs? Alternatively, we can use `isel` with the mask.
++        # However, the mask is boolean, so we need to convert to indices.
++        indices = np.where(mask.reshape(-1))[0]
++        # We need to convert to a tuple of indices for each dimension.
++        # This is tricky for multi-dimensional arrays. Instead, we can use `isel` with a dict.
++        # But the mask is boolean and we want to select along all dimensions.
++        # We'll use `isel` with a single dimension if the array is 1D, otherwise we need to flatten.
++        # Actually, we can use `where` and then stack and drop NaNs.
++        # Let's do a simpler approach: use `where` and then drop NaNs.
++        # However, `where` returns the same shape with NaNs.
++        # Alternatively, we can use `sel` with a boolean DataArray.
++        # We'll create a boolean DataArray and use it for indexing.
++        from .dataarray import DataArray
++
++        mask_da = DataArray(mask, dims=self.dims, coords=self.coords)
++        result = self.where(mask_da, drop=True)
++        return result
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,
+@@ -4360,4 +4427,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..1331e3b 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6526,6 +6526,79 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+ 
+         return Dataset(data_vars=variables, attrs=self.attrs.copy())
+ 
++    def query(self, expr, engine="pandas"):
++        """Return a new Dataset with data filtered by the query expression.
++
++        The query expression is evaluated in the context of the Dataset's
++        data variables. The expression should return a boolean array.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        engine : str, default: "pandas"
++            Query engine to use. Currently only "pandas" is supported.
++
++        Returns
++        -------
++        Dataset
++            A new Dataset with the same coordinates and attributes, but with
++            data filtered by the query.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({"a": ("x", [1, 2, 3, 4])})
++        >>> ds.query("a > 2")
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Dimensions without coordinates: x
++        Data variables:
++            a        (x) int64 3 4
++        """
++        from .query import get_engine
++
++        # For Dataset, we evaluate the expression with all data variables.
++        env = dict(self.data_vars)
++        q_engine = get_engine(engine)
++        mask = q_engine.evaluate(expr, env)
++
++        # The mask should be a boolean array with the same shape as the Dataset's dimensions.
++        # We need to determine which dimension the mask is for.
++        # The mask might be 1D or multi-dimensional. We'll assume it's 1D for now.
++        if not isinstance(mask, np.ndarray) or mask.dtype != bool:
++            raise TypeError("Query expression must return a boolean array.")
++
++        # We need to find which dimension the mask aligns with.
++        # The mask should have the same size as one of the dimensions.
++        # We'll try to find a dimension that matches the mask size.
++        matching_dims = [dim for dim, size in self.dims.items() if size == mask.size]
++        if not matching_dims:
++            # If no dimension matches, try to see if the mask has the same shape as the data.
++            # We'll look for a data variable that has the same shape.
++            for var in self.data_vars.values():
++                if var.shape == mask.shape:
++                    # The mask matches the shape of this variable.
++                    # We can use it to index all variables that share the same dimensions.
++                    # We'll create a boolean DataArray with the same dims as the variable.
++                    from .dataarray import DataArray
++                    mask_da = DataArray(mask, dims=var.dims, coords=var.coords)
++                    # Use where to filter.
++                    result = self.where(mask_da, drop=True)
++                    return result
++
++            raise ValueError(
++                "Query result does not match any dimension or data variable shape."
++            )
++
++        # If there are multiple matching dimensions, we choose the first one.
++        dim = matching_dims[0]
++        # Create a boolean DataArray for that dimension.
++        from .dataarray import DataArray
++        mask_da = DataArray(mask, dims=(dim,), coords={dim: self.coords[dim]})
++        # Use where to filter.
++        result = self.where(mask_da, drop=True)
++        return result
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,
+@@ -7002,4 +7075,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query/__init__.py b/xarray/core/query/__init__.py
+new file mode 100644
+index 0000000..0a426aa
+--- /dev/null
++++ b/xarray/core/query/__init__.py
+@@ -0,0 +1,6 @@
++"""
++Query module for xarray.
++"""
++from .engines import get_engine, PandasQueryEngine
++
++__all__ = ["get_engine", "PandasQueryEngine"]
+diff --git a/xarray/core/query/engines.py b/xarray/core/query/engines.py
+new file mode 100644
+index 0000000..22f6436
+--- /dev/null
++++ b/xarray/core/query/engines.py
+@@ -0,0 +1,74 @@
++"""
++Query engines for evaluating expressions.
++"""
++import numpy as np
++import pandas as pd
++
++from ..utils import is_scalar
++
++
++class BaseQueryEngine:
++    """Base class for query engines."""
++
++    def __init__(self, parser=None):
++        self.parser = parser
++
++    def evaluate(self, expr, env):
++        """Evaluate an expression in the given environment.
++
++        Parameters
++        ----------
++        expr : str
++            The expression to evaluate.
++        env : dict
++            A dictionary mapping variable names to their values.
++
++        Returns
++        -------
++        result : array-like
++            The result of the evaluation, typically a boolean array.
++        """
++        raise NotImplementedError
++
++
++class PandasQueryEngine(BaseQueryEngine):
++    """Query engine using pandas.eval."""
++
++    def evaluate(self, expr, env):
++        # Convert arrays to pandas Series if they are 1D, otherwise leave as is.
++        # pandas.eval can handle numpy arrays in some cases.
++        local_env = {}
++        for k, v in env.items():
++            if hasattr(v, "to_series"):
++                local_env[k] = v.to_series()
++            else:
++                local_env[k] = v
++
++        try:
++            result = pd.eval(expr, local_dict=local_env, engine="numexpr")
++        except (NotImplementedError, KeyError):
++            # Fall back to python engine if numexpr is not available or fails.
++            result = pd.eval(expr, local_dict=local_env, engine="python")
++
++        # Convert back to numpy array if the result is a pandas Series.
++        if hasattr(result, "values"):
++            result = result.values
++        return result
++
++
++def get_engine(engine="pandas"):
++    """Get a query engine by name.
++
++    Parameters
++    ----------
++    engine : str, default: "pandas"
++        The name of the engine.
++
++    Returns
++    -------
++    engine : BaseQueryEngine
++    """
++    if engine == "pandas":
++        return PandasQueryEngine()
++    else:
++        raise ValueError(f"Unknown engine: {engine}")
+diff --git a/xarray/core/query/parser.py b/xarray/core/query/parser.py
+new file mode 100644
+index 0000000..1da534c
+--- /dev/null
++++ b/xarray/core/query/parser.py
+@@ -0,0 +1,23 @@
++"""
++Parser for query expressions.
++"""
++# Currently, we rely on pandas.eval for parsing.
++# This module is a placeholder for future custom parsers.
++
++class Parser:
++    """Base parser for query expressions."""
++
++    def parse(self, expr):
++        """Parse an expression.
++
++        Parameters
++        ----------
++        expr : str
++            The expression string.
++
++        Returns
++        -------
++        parsed : object
++            The parsed representation.
++        """
++        return expr

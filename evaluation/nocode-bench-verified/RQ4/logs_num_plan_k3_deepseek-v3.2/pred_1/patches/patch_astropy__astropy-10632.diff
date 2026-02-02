@@ -1,0 +1,61 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..501ecac 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -90,6 +90,10 @@ class Conf(_config.ConfigNamespace):
+         True,
+         'If True, temporary download files created when the cache is '
+         'inaccessible will be deleted at the end of the python session.')
++    allow_internet = _config.ConfigItem(
++        True,
++        'If True, allow downloading of remote files. If False, any attempt '
++        'to download a remote file will raise an error.')
+ 
+ 
+ conf = Conf()
+@@ -995,11 +999,16 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+                                http_headers=None, ftp_tls=None):
+     from astropy.utils.console import ProgressBarOrSpinner
+ 
+-    if timeout == 0:
++    if timeout == 0 or not conf.allow_internet:
++        raise urllib.error.URLError(
++            f"URL {remote_url} was supposed to be downloaded but internet access is not allowed; "
++            f"if this is unexpected check the astropy config file for the option "
++            f"allow_internet")
++    if not conf.allow_internet:
+         raise urllib.error.URLError(
+-            f"URL {remote_url} was supposed to be downloaded but timeout was set to 0; "
++            f"URL {remote_url} was supposed to be downloaded but internet access is not allowed; "
+             f"if this is unexpected check the astropy config file for the option "
+-            f"remote_timeout")
++            f"allow_internet")
+ 
+     if remote_url is None:
+         remote_url = source_url
+@@ -1168,6 +1177,12 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+         timeout = conf.remote_timeout
+     if sources is None:
+         sources = [remote_url]
++    # Check if we are allowed to download from the internet
++    if sources and not conf.allow_internet:
++        raise urllib.error.URLError(
++            f"URL {remote_url} was supposed to be downloaded but internet access is not allowed; "
++            f"if this is unexpected check the astropy config file for the option "
++            f"allow_internet")
+     if http_headers is None:
+         http_headers = {'User-Agent': conf.default_http_user_agent,
+                         'Accept': '*/*'}
+@@ -1198,6 +1213,12 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+                     return os.path.abspath(filename)
+ 
+     errors = {}
++    # Check if we are allowed to download from the internet
++    if sources and not conf.allow_internet:
++        raise urllib.error.URLError(
++            f"URL {remote_url} was supposed to be downloaded but internet access is not allowed; "
++            f"if this is unexpected check the astropy config file for the option "
++            f"allow_internet")
+     for source_url in sources:
+         try:
+             f_name = _download_file_from_source(

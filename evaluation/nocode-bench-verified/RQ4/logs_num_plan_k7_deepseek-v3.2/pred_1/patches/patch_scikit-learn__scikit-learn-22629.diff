@@ -1,0 +1,28 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 38b5c3a..ffb9d27 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -229,7 +229,22 @@ def _encode(values, *, uniques, check_unknown=True):
+             diff = _check_unknown(values, uniques)
+             if diff:
+                 raise ValueError(f"y contains previously unseen labels: {str(diff)}")
+-        return np.searchsorted(uniques, values)
++        # Handle NaN in values
++        if np.isnan(values).any():
++            # Find the index of NaN in uniques
++            nan_index = np.where(np.isnan(uniques))[0]
++            if nan_index.size == 0:
++                # This should not happen if check_unknown is True
++                # because _check_unknown would have raised an error
++                # But for safety, we treat it as an error
++                raise ValueError("NaN is not in uniques")
++            # Encode non-NaN values
++            encoded = np.searchsorted(uniques, values)
++            # Replace NaN positions with the index of NaN in uniques
++            encoded[np.isnan(values)] = nan_index[0]
++            return encoded
++        else:
++            return np.searchsorted(uniques, values)
+ 
+ 
+ def _check_unknown(values, known_values, return_mask=False):

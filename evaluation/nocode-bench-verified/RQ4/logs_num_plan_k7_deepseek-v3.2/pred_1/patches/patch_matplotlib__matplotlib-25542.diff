@@ -1,0 +1,51 @@
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index b79bffd..e0e2fe0 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -1833,15 +1833,25 @@ class MultipleLocator(Locator):
+     """
+     Set a tick on each integer multiple of the *base* within the view
+     interval.
++
++    Parameters
++    ----------
++    base : float, default: 1.0
++        The base multiple for the tick locations.
++    offset : float, default: 0.0
++        An offset to shift the ticks by.
+     """
+ 
+-    def __init__(self, base=1.0):
++    def __init__(self, base=1.0, offset=0.0):
+         self._edge = _Edge_integer(base, 0)
++        self._offset = offset
+ 
+-    def set_params(self, base):
++    def set_params(self, base=None, offset=None):
+         """Set parameters within this locator."""
+         if base is not None:
+             self._edge = _Edge_integer(base, 0)
++        if offset is not None:
++            self._offset = offset
+ 
+     def __call__(self):
+         """Return the locations of the ticks."""
+@@ -1852,9 +1862,15 @@ class MultipleLocator(Locator):
+         if vmax < vmin:
+             vmin, vmax = vmax, vmin
+         step = self._edge.step
+-        vmin = self._edge.ge(vmin) * step
+-        n = (vmax - vmin + 0.001 * step) // step
+-        locs = vmin - step + np.arange(n + 3) * step
++        # Shift the interval by -offset to align with base multiples
++        vmin_shifted = vmin - self._offset
++        vmax_shifted = vmax - self._offset
++        # Find the next integer multiple of step for the shifted interval
++        vmin_shifted = self._edge.ge(vmin_shifted) * step
++        n = (vmax_shifted - vmin_shifted + 0.001 * step) // step
++        locs_shifted = vmin_shifted - step + np.arange(n + 3) * step
++        # Shift back by +offset to get the final tick locations
++        locs = locs_shifted + self._offset
+         return self.raise_if_exceeds(locs)
+ 
+     def view_limits(self, dmin, dmax):

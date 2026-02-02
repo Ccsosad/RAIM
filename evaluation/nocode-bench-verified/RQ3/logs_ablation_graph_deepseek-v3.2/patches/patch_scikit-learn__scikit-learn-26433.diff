@@ -1,0 +1,111 @@
+diff --git a/sklearn/datasets/_openml.py b/sklearn/datasets/_openml.py
+index 2578f63..870f320 100644
+--- a/sklearn/datasets/_openml.py
++++ b/sklearn/datasets/_openml.py
+@@ -428,6 +428,7 @@ def _load_arff_response(
+     md5_checksum: str,
+     n_retries: int = 3,
+     delay: float = 1.0,
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Load the ARFF data associated with the OpenML URL.
+ 
+@@ -514,6 +515,8 @@ def _load_arff_response(
+         target_names_to_select=target_names_to_select,
+         shape=shape,
+     )
++    if read_csv_kwargs is not None:
++        arff_params["read_csv_kwargs"] = read_csv_kwargs
+     try:
+         X, y, frame, categories = _open_url_and_load_gzip_file(
+             url, data_home, n_retries, delay, arff_params
+@@ -530,7 +533,12 @@ def _load_arff_response(
+         # A parsing error could come from providing the wrong quotechar
+         # to pandas. By default, we use a double quote. Thus, we retry
+         # with a single quote before to raise the error.
+-        arff_params["read_csv_kwargs"] = {"quotechar": "'"}
++        fallback_read_csv_kwargs = {"quotechar": "'"}
++        if read_csv_kwargs is not None:
++            # Merge with user's read_csv_kwargs, but override quotechar
++            fallback_read_csv_kwargs = read_csv_kwargs.copy()
++            fallback_read_csv_kwargs["quotechar"] = "'"
++        arff_params["read_csv_kwargs"] = fallback_read_csv_kwargs
+         X, y, frame, categories = _open_url_and_load_gzip_file(
+             url, data_home, n_retries, delay, arff_params
+         )
+@@ -552,6 +560,7 @@ def _download_data_to_bunch(
+     n_retries: int = 3,
+     delay: float = 1.0,
+     parser: str,
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Download ARFF data, load it to a specific container and create to Bunch.
+ 
+@@ -657,6 +666,7 @@ def _download_data_to_bunch(
+         md5_checksum=md5_checksum,
+         n_retries=n_retries,
+         delay=delay,
++        read_csv_kwargs=read_csv_kwargs,
+     )
+ 
+     return Bunch(
+@@ -725,6 +735,7 @@ def fetch_openml(
+     n_retries: int = 3,
+     delay: float = 1.0,
+     parser: Optional[str] = "warn",
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Fetch dataset from openml by name or dataset id.
+ 
+@@ -829,6 +840,12 @@ def fetch_openml(
+            warning. Therefore, an `ImportError` will be raised from 1.4 if
+            the dataset is dense and pandas is not installed.
+ 
++    read_csv_kwargs : dict, default=None
++        Keyword arguments to pass to `pandas.read_csv` when using the pandas
++        parser. This allows to overwrite the default parameters used to read
++        the ARFF file. For example, to change the quote character, one can use
++        `read_csv_kwargs={'quotechar': "'"}`. Only available when `parser="pandas"`.
++
+     Returns
+     -------
+     data : :class:`~sklearn.utils.Bunch`
+@@ -991,6 +1008,15 @@ def fetch_openml(
+     else:
+         parser_ = parser
+ 
++    if read_csv_kwargs is not None and parser_ != "pandas":
++        warn(
++            "The parameter 'read_csv_kwargs' is only used when using the "
++            f"pandas parser. Currently using parser={parser_!r}. "
++            "The parameter will be ignored.",
++            UserWarning,
++            stacklevel=2,
++        )
++
+     if as_frame or parser_ == "pandas":
+         try:
+             check_pandas_support("`fetch_openml`")
+@@ -1033,6 +1059,14 @@ def fetch_openml(
+                 f"Sparse ARFF datasets cannot be loaded with parser={parser!r}. "
+                 "Use parser='liac-arff' or parser='auto' instead."
+             )
++    if read_csv_kwargs is not None and parser_ != "pandas":
++        warn(
++            "The parameter 'read_csv_kwargs' is only used when using the "
++            f"pandas parser. Currently using parser={parser_!r}. "
++            "The parameter will be ignored.",
++            UserWarning,
++            stacklevel=2,
++        )
+ 
+     # download data features, meta-info about column types
+     features_list = _get_data_features(data_id, data_home)
+@@ -1096,6 +1130,7 @@ def fetch_openml(
+         n_retries=n_retries,
+         delay=delay,
+         parser=parser_,
++        read_csv_kwargs=read_csv_kwargs,
+     )
+ 
+     if return_X_y:

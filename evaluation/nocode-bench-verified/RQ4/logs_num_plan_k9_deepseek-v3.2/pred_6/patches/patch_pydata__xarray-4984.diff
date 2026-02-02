@@ -1,0 +1,148 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..085236b 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1260,6 +1260,44 @@ class DataArray(AbstractArray, DataWithCoords):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def query(
++        self,
++        expr: str,
++        engine: str = None,
++    ) -> "DataArray":
++        """Return a new DataArray whose data is given by the results of a
++        query expression.
++
++        The query expression is evaluated against the data variables in the
++        underlying dataset. The expression can refer to any variable in the
++        dataset, including coordinates. The result of the expression must be a
++        boolean array.
++
++        Parameters
++        ----------
++        expr : str
++            The query expression to evaluate.
++        engine : str, optional
++            The evaluation engine to use. By default, uses pandas's default
++            evaluator.
++
++        Returns
++        -------
++        queried : DataArray
++            A new DataArray with the same contents as this DataArray, except
++            the data is indexed by the boolean mask resulting from the
++            query expression.
++
++        See Also
++        --------
++        DataArray.sel
++        DataArray.isel
++        Dataset.query
++        pandas.DataFrame.eval
++        """
++        ds = self._to_temp_dataset().query(expr, engine=engine)
++        return self._from_temp_dataset(ds)
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -4360,4 +4398,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..86dbbb5 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -2244,6 +2244,46 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         result = self.isel(indexers=pos_indexers, drop=drop)
+         return result._overwrite_indexes(new_indexes)
+ 
++    def query(
++        self,
++        expr: str,
++        engine: str = None,
++    ) -> "Dataset":
++        """Return a new dataset with each array indexed by the results of a
++        query expression.
++
++        The query expression is evaluated against the data variables in the
++        dataset. The expression can refer to any variable in the dataset,
++        including coordinates. The result of the expression must be a boolean
++        array.
++
++        Parameters
++        ----------
++        expr : str
++            The query expression to evaluate.
++        engine : str, optional
++            The evaluation engine to use. By default, uses pandas's default
++            evaluator.
++
++        Returns
++        -------
++        queried : Dataset
++            A new Dataset with the same contents as this dataset, except
++            the data is indexed by the boolean mask resulting from the
++            query expression.
++
++        See Also
++        --------
++        Dataset.sel
++        Dataset.isel
++        pandas.DataFrame.eval
++        """
++        from .query_dask import evaluate_query
++
++        mask = evaluate_query(self, expr, engine=engine)
++        # Use the mask to index the dataset
++        return self.sel({mask.dims[0]: mask})
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -7002,4 +7042,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query_dask.py b/xarray/core/query_dask.py
+new file mode 100644
+index 0000000..6a1a20f
+--- /dev/null
++++ b/xarray/core/query_dask.py
+@@ -0,0 +1,30 @@
++import pandas as pd
++
++from .dataset import Dataset
++from .dataarray import DataArray
++
++
++def evaluate_query(dataset, expr, engine=None):
++    """Evaluate a query expression on a Dataset.
++
++    Parameters
++    ----------
++    dataset : Dataset
++    expr : str
++        The query expression.
++    engine : str, optional
++        The evaluation engine. By default, uses pandas' default.
++
++    Returns
++    -------
++    mask : DataArray
++        Boolean mask with the same dimensions as the dataset.
++    """
++    # Convert to DataFrame
++    df = dataset.to_dataframe()
++    # Evaluate the query to get a boolean mask
++    # Note: df.eval returns a Series of values, which in our case should be booleans.
++    mask_series = df.eval(expr, engine=engine)
++    # Convert the Series to a DataArray
++    mask = mask_series.to_xarray()
++    return mask

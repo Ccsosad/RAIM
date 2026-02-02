@@ -1,0 +1,55 @@
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..8616977 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -907,7 +907,11 @@ class Response(object):
+                     # and the server didn't bother to tell us what codec *was*
+                     # used.
+                     pass
+-        return complexjson.loads(self.text, **kwargs)
++        from requests.json_adapter import load_json, JSONDecodeError
++        try:
++            return load_json(self, **kwargs)
++        except JSONDecodeError:
++            raise
+ 
+     @property
+     def links(self):
+@@ -963,4 +967,4 @@ class Response(object):
+ 
+         release_conn = getattr(self.raw, 'release_conn', None)
+         if release_conn is not None:
+-            release_conn()
++            release_conn()
+diff --git a/requests/json_adapter.py b/requests/json_adapter.py
+new file mode 100644
+index 0000000..ca9cbf7
+--- /dev/null
++++ b/requests/json_adapter.py
+@@ -0,0 +1,26 @@
++import json
++import requests.exceptions as exc
++
++try:
++    import simplejson as complexjson
++except ImportError:
++    complexjson = json
++
++
++class JSONDecodeError(exc.RequestException):
++    """Wrapper exception for JSON decoding errors."""
++
++    def __init__(self, original_exception):
++        super().__init__(str(original_exception))
++        self.original_exception = original_exception
++
++
++def load_json(response, **kwargs):
++    """Load JSON content from a Response object, raising JSONDecodeError on failure."""
++    try:
++        if not response.encoding and response.content and len(response.content) > 3:
++            encoding = response.apparent_encoding or 'utf-8'
++            return complexjson.loads(response.content.decode(encoding), **kwargs)
++        return complexjson.loads(response.text, **kwargs)
++    except (complexjson.JSONDecodeError, json.JSONDecodeError, ValueError) as e:
++        raise JSONDecodeError(e)

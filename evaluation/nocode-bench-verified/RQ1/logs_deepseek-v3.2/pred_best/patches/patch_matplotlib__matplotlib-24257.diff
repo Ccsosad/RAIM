@@ -1,0 +1,76 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..2806721 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -226,13 +226,70 @@ def update_nested_dict(main_dict, new_dict):
+     return main_dict
+ 
+ 
++def _load_style_from_package(name):
++    """Load a style from a package.
++
++    Parameters
++    ----------
++    name : str
++        Dotted name, e.g., "mypackage.presentation".
++
++    Returns
++    -------
++    dict
++        The rcParams dictionary.
++
++    Raises
++    ------
++    KeyError
++        If the resource cannot be found.
++    """
++    # Split the name into package and resource.
++    parts = name.split('.')
++    if len(parts) < 2:
++        raise KeyError(f"Invalid style name {name!r}")
++    package_name = parts[0]
++    resource_name = '.'.join(parts[1:]) + '.mplstyle'
++
++    # Try to use importlib.resources (available in Python>=3.9)
++    # but with the backport for older Pythons.
++    try:
++        import importlib.resources as importlib_resources
++    except ImportError:
++        import importlib_resources
++
++    try:
++        package = importlib_resources.files(package_name)
++    except Exception as e:
++        raise KeyError(f"Cannot find package {package_name!r} for style {name!r}") from e
++
++    try:
++        resource = package.joinpath(resource_name)
++        with importlib_resources.as_file(resource) as style_file:
++            from ._style import read_style_file
++            return read_style_file(style_file)
++    except Exception as e:
++        raise KeyError(f"Cannot load style {name!r} from package {package_name!r}") from e
++
++
+ class _StyleLibrary(dict):
+     def __getitem__(self, key):
+         if key in _DEPRECATED_SEABORN_STYLES:
+             _api.warn_deprecated("3.6", message=_DEPRECATED_SEABORN_MSG)
+             key = _DEPRECATED_SEABORN_STYLES[key]
+ 
+-        return dict.__getitem__(self, key)
++        # First, try to get from the dictionary.
++        try:
++            return dict.__getitem__(self, key)
++        except KeyError:
++            # If the key contains a dot, try to load it from a package.
++            if '.' in key:
++                style_dict = _load_style_from_package(key)
++                # Cache it for future use.
++                self[key] = style_dict
++                return style_dict
++            else:
++                raise
+ 
+ 
+ # Load style library

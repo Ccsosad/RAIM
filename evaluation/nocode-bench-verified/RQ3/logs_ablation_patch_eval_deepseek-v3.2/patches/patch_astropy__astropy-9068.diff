@@ -1,0 +1,63 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..67f5fbe 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,58 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A Table with the same shape as this table and boolean values.
++            Each element is True if the corresponding element in this table
++            equals the corresponding element in `other`.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table with different column names.
++        """
++        from astropy.table import Table
++
++        if isinstance(other, Table):
++            # Compare with another table
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # Create a new table with boolean columns
++            result = Table(masked=self.masked or other.masked)
++            for name in self.colnames:
++                result[name] = self[name] == other[name]
++            return result
++        elif np.isscalar(other):
++            # Compare with a scalar (broadcast column-wise)
++            result = Table(masked=self.masked)
++            for name in self.colnames:
++                result[name] = self[name] == other
++            return result
++        else:
++            # Assume it's an array-like object
++            # We expect it to be broadcastable column-wise
++            # Convert to array for safety
++            other = np.asarray(other)
++            if other.shape == (len(self.columns),):
++                # Column-wise comparison
++                result = Table(masked=self.masked)
++                for i, name in enumerate(self.colnames):
++                    result[name] = self[name] == other[i]
++                return result
++            else:
++                raise ValueError('Cannot compare with array of shape {}'.format(other.shape))
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

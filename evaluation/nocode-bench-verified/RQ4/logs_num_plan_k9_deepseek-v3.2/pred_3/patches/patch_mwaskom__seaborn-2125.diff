@@ -1,0 +1,108 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..eaa0740 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -27,7 +27,7 @@ from ._docstrings import (
+ )
+ 
+ 
+-__all__ = ["distplot", "kdeplot", "rugplot"]
++__all__ = ["distplot", "histplot", "kdeplot", "rugplot"]
+ 
+ 
+ _param_docs = DocstringComponents.from_nested_components(
+@@ -82,7 +82,93 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def __init__(
++        self,
++        data=None,
++        variables={},
++        binwidth=None,
++        bins=None,
++        binrange=None,
++        discrete=False,
++        cumulative=False,
++        common_bins=True,
++        common_norm=True,
++        stat="count",
++        shrink=1,
++        kde=False,
++        kde_kws=None,
++        line_kws=None,
++        thresh=0,
++        pthresh=None,
++        pmax=None,
++        cbar=False,
++        cbar_ax=None,
++        cbar_kws=None,
++    ):
++        super().__init__(data=data, variables=variables)
++        self.binwidth = binwidth
++        self.bins = bins
++        self.binrange = binrange
++        self.discrete = discrete
++        self.cumulative = cumulative
++        self.common_bins = common_bins
++        self.common_norm = common_norm
++        self.stat = stat
++        self.shrink = shrink
++        self.kde = kde
++        self.kde_kws = kde_kws or {}
++        self.line_kws = line_kws or {}
++        self.thresh = thresh
++        self.pthresh = pthresh
++        self.pmax = pmax
++        self.cbar = cbar
++        self.cbar_ax = cbar_ax
++        self.cbar_kws = cbar_kws or {}
++
++    def _define_bin_edges(self, data, weights, binwidth, bins, binrange, discrete):
++        """Compute bin edges for a single variable."""
++        if binrange is None:
++            start = data.min()
++            stop = data.max()
++        else:
++            start, stop = binrange
++
++        if discrete:
++            bins = np.arange(start - 0.5, stop + 1.5)
++        elif binwidth is not None:
++            bins = np.arange(start, stop + binwidth, binwidth)
++        elif bins is not None:
++            if isinstance(bins, int):
++                bins = np.linspace(start, stop, bins + 1)
++            else:
++                bins = np.asarray(bins)
++        else:
++            # Use numpy's auto-binning
++            bins = np.histogram_bin_edges(data, bins="auto", range=(start, stop))
++        return bins
++
++    def _compute_histogram(self, data, weights, bin_edges):
++        """Compute histogram counts for a single variable."""
++        heights, bin_edges = np.histogram(data, bins=bin_edges, weights=weights)
++        return heights, bin_edges
++
++    def plot(self, ax):
++        # This is a simplified version. In reality, we need to handle:
++        # - univariate and bivariate
++        # - hue mapping
++        # - different statistics (count, density, probability, etc.)
++        # - multiple representations (bars, step, poly)
++        # - etc.
++        # For now, we'll just plot a simple histogram.
++        x = self.comp_data["x"]
++        weights = self.comp_data.get("weights")
++        bin_edges = self._define_bin_edges(
++            x, weights, self.binwidth, self.bins, self.binrange, self.discrete
++        )
++        heights, bin_edges = self._compute_histogram(x, weights, bin_edges)
++        ax.bar(bin_edges[:-1], heights, width=np.diff(bin_edges), align="edge")
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):

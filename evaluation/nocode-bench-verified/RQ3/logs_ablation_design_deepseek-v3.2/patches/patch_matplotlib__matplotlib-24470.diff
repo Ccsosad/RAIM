@@ -1,0 +1,68 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..755bb14 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3075,7 +3075,7 @@ class Axes(_AxesBase):
+             autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
+             startangle=0, radius=1, counterclock=True,
+             wedgeprops=None, textprops=None, center=(0, 0),
+-            frame=False, rotatelabels=False, *, normalize=True):
++            frame=False, rotatelabels=False, *, normalize=True, hatch=None):
+         """
+         Plot a pie chart.
+ 
+@@ -3101,6 +3101,12 @@ class Axes(_AxesBase):
+             A sequence of colors through which the pie chart will cycle.  If
+             *None*, will use the colors in the currently active cycle.
+ 
++        hatch : str or list, default: None
++            A hatch pattern or list of hatch patterns to apply to the wedges.
++            If a string, the same hatching is applied to all wedges.
++            If a list, it must have the same length as *x* and provide a hatch
++            pattern for each wedge.
++
+         autopct : None or str or callable, default: None
+             If not *None*, is a string or function used to label the wedges
+             with their numeric value.  The label will be placed inside the
+@@ -3219,11 +3225,25 @@ class Axes(_AxesBase):
+         if textprops is None:
+             textprops = {}
+ 
++        # Process hatch patterns
++        if hatch is not None:
++            if isinstance(hatch, str):
++                # Repeat the same hatch for all wedges
++                hatches = [hatch] * len(x)
++            else:
++                hatches = list(hatch)  # in case it's a tuple or other iterable
++                if len(hatches) != len(x):
++                    raise ValueError(
++                        "hatch must be a string or a list with the same "
++                        "length as x")
++        else:
++            hatches = [None] * len(x)
++
+         texts = []
+         slices = []
+         autotexts = []
+ 
+-        for frac, label, expl in zip(x, labels, explode):
++        for frac, label, expl, hatch_pattern in zip(x, labels, explode, hatches):
+             x, y = center
+             theta2 = (theta1 + frac) if counterclock else (theta1 - frac)
+             thetam = 2 * np.pi * 0.5 * (theta1 + theta2)
+@@ -3235,6 +3255,8 @@ class Axes(_AxesBase):
+                                facecolor=get_next_color(),
+                                clip_on=False,
+                                label=label)
++            if hatch_pattern is not None:
++                w.set_hatch(hatch_pattern)
+             w.set(**wedgeprops)
+             slices.append(w)
+             self.add_patch(w)
+@@ -8280,4 +8302,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

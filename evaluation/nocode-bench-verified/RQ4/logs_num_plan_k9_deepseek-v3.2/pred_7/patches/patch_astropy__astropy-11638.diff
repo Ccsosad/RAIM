@@ -1,0 +1,69 @@
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 836039e..f4a233f 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -545,6 +545,11 @@ class TimeBase(ShapedLikeNDArray):
+             raise ValueError("Scale {!r} is not in the allowed scales {}"
+                              .format(scale, sorted(self.SCALES)))
+ 
++        # Check if we are transforming to or from UTC, and if so, ensure leap seconds are up to date.
++        if scale == 'utc' or self.scale == 'utc':
++            from astropy.utils.iers.leap_second_manager import update_leap_seconds_if_needed
++            update_leap_seconds_if_needed()
++
+         # Determine the chain of scale transformations to get from the current
+         # scale to the new scale.  MULTI_HOPS contains a dict of all
+         # transformations (xforms) that require intermediate xforms.
+diff --git a/astropy/utils/iers/leap_second_manager.py b/astropy/utils/iers/leap_second_manager.py
+new file mode 100644
+index 0000000..49f4253
+--- /dev/null
++++ b/astropy/utils/iers/leap_second_manager.py
+@@ -0,0 +1,47 @@
++"""
++A manager to handle leap second updates only when needed.
++"""
++
++from astropy.utils.iers import LeapSeconds, conf
++from astropy.utils.exceptions import AstropyWarning
++from warnings import warn
++
++__all__ = ['update_leap_seconds_if_needed']
++
++# Global flag to track if we've already updated leap seconds in this session.
++_LEAP_SECONDS_UPDATED = False
++
++
++def update_leap_seconds_if_needed():
++    """
++    Update the leap second table if it is out of date and auto_download is enabled.
++
++    This function is called when a time scale transformation involving UTC is
++    performed. It ensures that the leap second table is updated only when needed,
++    and only once per session.
++
++    Returns
++    -------
++    updated : bool
++        True if an update was attempted, False otherwise.
++    """
++    global _LEAP_SECONDS_UPDATED
++
++    # If we already updated in this session, don't do it again.
++    if _LEAP_SECONDS_UPDATED:
++        return False
++
++    # If auto_download is disabled, we should not try to update.
++    if not conf.auto_download:
++        return False
++
++    # Try to update the leap seconds.
++    try:
++        from astropy.time.core import update_leap_seconds
++        n_update = update_leap_seconds()
++        _LEAP_SECONDS_UPDATED = True
++        return n_update > 0
++    except Exception as exc:
++        warn("leap-second auto-update failed due to the following "
++             f"exception: {exc!r}", AstropyWarning)
++        return False

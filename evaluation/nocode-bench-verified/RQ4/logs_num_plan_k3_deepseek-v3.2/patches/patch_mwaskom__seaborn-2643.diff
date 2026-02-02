@@ -1,0 +1,61 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index c1f490d..7893cc0 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -248,6 +248,56 @@ class Grid(_BaseGrid):
+             return None
+ 
+ 
++def move_legend(obj, loc, **kwargs):
++    """
++    Recreate an existing legend at a new location and/or with new properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.Grid
++        The object with the legend to move.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid values.
++    **kwargs
++        Additional keyword arguments are passed to the underlying legend method.
++
++    Returns
++    -------
++    None
++
++    """
++    # Check if it's a Grid object
++    if hasattr(obj, '_legend') and hasattr(obj, 'axes'):
++        # It's a Grid-like object (FacetGrid, PairGrid, etc.)
++        legend = obj._legend
++        if legend is None:
++            raise ValueError("No legend found for the given Grid object.")
++        # Get the existing handles and labels
++        handles = legend.legendHandles
++        labels = [t.get_text() for t in legend.texts]
++        title = legend.get_title().get_text()
++        # Remove the old legend
++        legend.remove()
++        # Create a new legend using the Grid's add_legend method
++        kwargs['loc'] = loc
++        legend_data = dict(zip(labels, handles))
++        obj.add_legend(legend_data=legend_data, title=title, **kwargs)
++    else:
++        # Assume it's an Axes object
++        ax = obj
++        legend = ax.legend_
++        if legend is None:
++            raise ValueError("No legend found for the given Axes object.")
++        handles = legend.legendHandles
++        labels = [t.get_text() for t in legend.texts]
++        title = legend.get_title().get_text()
++        legend.remove()
++        new_legend = ax.legend(handles, labels, loc=loc, **kwargs)
++        new_legend.set_title(title)
++        ax.legend_ = new_legend
++
++
+ _facet_docs = dict(
+ 
+     data=dedent("""\

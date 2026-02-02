@@ -1,0 +1,57 @@
+diff --git a/sphinx/ext/autosummary/__init__.py b/sphinx/ext/autosummary/__init__.py
+index 0f35f73..58f7754 100644
+--- a/sphinx/ext/autosummary/__init__.py
++++ b/sphinx/ext/autosummary/__init__.py
+@@ -741,7 +741,8 @@ def process_generate_options(app: Sphinx) -> None:
+     with mock(app.config.autosummary_mock_imports):
+         generate_autosummary_docs(genfiles, builder=app.builder,
+                                   suffix=suffix, base_path=app.srcdir,
+-                                  app=app, imported_members=imported_members)
++                                  app=app, imported_members=imported_members,
++                                  overwrite=app.config.autosummary_generate_overwrite)
+ 
+ 
+ def setup(app: Sphinx) -> Dict[str, Any]:
+@@ -767,5 +768,6 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_config_value('autosummary_mock_imports',
+                          lambda config: config.autodoc_mock_imports, 'env')
+     app.add_config_value('autosummary_imported_members', [], False, [bool])
++    app.add_config_value('autosummary_generate_overwrite', True, False, [bool])
+ 
+-    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}
++    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index 6ecf807..9c177dc 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -194,7 +194,8 @@ def generate_autosummary_docs(sources: List[str], output_dir: str = None,
+                               suffix: str = '.rst', warn: Callable = None,
+                               info: Callable = None, base_path: str = None,
+                               builder: Builder = None, template_dir: str = None,
+-                              imported_members: bool = False, app: Any = None) -> None:
++                              imported_members: bool = False, app: Any = None,
++                              overwrite: bool = True) -> None:
+     if info:
+         warnings.warn('info argument for generate_autosummary_docs() is deprecated.',
+                       RemovedInSphinx40Warning)
+@@ -247,8 +248,8 @@ def generate_autosummary_docs(sources: List[str], output_dir: str = None,
+ 
+         fn = os.path.join(path, name + suffix)
+ 
+-        # skip it if it exists
+-        if os.path.isfile(fn):
++        # skip it if it exists and overwrite is False
++        if not overwrite and os.path.isfile(fn):
+             continue
+ 
+         new_files.append(fn)
+@@ -264,7 +265,8 @@ def generate_autosummary_docs(sources: List[str], output_dir: str = None,
+         generate_autosummary_docs(new_files, output_dir=output_dir,
+                                   suffix=suffix, warn=warn, info=info,
+                                   base_path=base_path, builder=builder,
+-                                  template_dir=template_dir, app=app)
++                                  template_dir=template_dir, app=app,
++                                  overwrite=overwrite)
+ 
+ 
+ # -- Finding documented entries in files ---------------------------------------

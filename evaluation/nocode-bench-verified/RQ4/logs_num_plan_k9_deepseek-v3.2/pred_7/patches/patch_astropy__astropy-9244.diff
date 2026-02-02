@@ -1,0 +1,41 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..f64ab68 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -801,4 +801,35 @@ class IERS_Auto(IERS_A):
+             table['dX_2000A_B'][:n_iers_b] = iers_b['dX_2000A']
+             table['dY_2000A_B'][:n_iers_b] = iers_b['dY_2000A']
+ 
+-        return table
++        return table
++
++
++class earth_orientation_table(ScienceState):
++    """
++    A `~astropy.utils.state.ScienceState` that specifies the Earth orientation
++    table to be used in time and coordinate transformations.
++
++    By default, this is set to an instance of `~astropy.utils.iers.IERS_Auto`,
++    which automatically downloads the latest IERS data.
++
++    To use a different table, set this ScienceState to any instance of
++    `~astropy.utils.iers.IERS` (or a subclass). For example::
++
++        >>> from astropy.utils import iers
++        >>> iers_b = iers.IERS_B.open()
++        >>> iers.earth_orientation_table.set(iers_b)
++
++    To reset to the default::
++
++        >>> iers.earth_orientation_table.set(None)
++
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError('earth_orientation_table must be an instance of IERS')
++        return value

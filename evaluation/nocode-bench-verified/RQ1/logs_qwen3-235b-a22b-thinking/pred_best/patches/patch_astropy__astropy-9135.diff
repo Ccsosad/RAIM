@@ -1,0 +1,93 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..6e47827 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -4020,4 +4020,87 @@ def hide_inverse(model):
+     the model or restore the inverse later.
+     """
+     del model.inverse
+-    return model
++    return model
++
++
++def fix_inputs(model, fixed_inputs):
++    """
++    Fix the values of some inputs of a model to create a new model.
++
++    Parameters
++    ----------
++    model : `~astropy.modeling.Model`
++        The model to fix inputs for.
++    fixed_inputs : dict
++        A dictionary mapping input names (str) or indices (int) to the values to fix.
++
++    Returns
++    -------
++    new_model : `~astropy.modeling.Model`
++        A new model with the fixed inputs removed from the inputs.
++
++    Notes
++    -----
++    If the input model has a bounding_box, the generated model will have the
++    bounding for the fixed input coordinates removed.
++    """
++    n_inputs = model.n_inputs
++    input_names = model.input_names
++
++    fixed_indices = set()
++    fixed_values = [None] * n_inputs
++
++    for key, value in fixed_inputs.items():
++        if isinstance(key, int):
++            idx = key
++        elif isinstance(key, str):
++            if input_names is None:
++                raise ValueError(f"Model has no named inputs, cannot fix by name '{key}'")
++            try:
++                idx = input_names.index(key)
++            except ValueError:
++                raise ValueError(f"Input name '{key}' not found in model inputs {input_names}")
++        else:
++            raise TypeError(f"Key in fixed_inputs must be int or str, got {type(key)}")
++
++        if idx < 0 or idx >= n_inputs:
++            raise ValueError(f"Input index {idx} out of range for model with {n_inputs} inputs")
++        if idx in fixed_indices:
++            raise ValueError(f"Input {idx} is fixed more than once")
++        fixed_indices.add(idx)
++        fixed_values[idx] = value
++
++    from .models import Const1D, Identity
++
++    input_models = []
++    for i in range(n_inputs):
++        if i in fixed_indices:
++            input_models.append(Const1D(fixed_values[i]))
++        else:
++            input_models.append(Identity(1))
++
++    combined = input_models[0]
++    for i in range(1, n_inputs):
++        combined = combined & input_models[i]
++
++    new_model = combined | model
++
++    if input_names is not None:
++        non_fixed_names = [input_names[i] for i in range(n_inputs) if i not in fixed_indices]
++        new_model._inputs = non_fixed_names
++
++    if hasattr(model, 'bounding_box') and model.bounding_box is not None:
++        bbox = model.bounding_box
++        if isinstance(bbox, tuple) and len(bbox) == 2:
++            lower, upper = bbox
++            if len(lower) == n_inputs and len(upper) == n_inputs:
++                non_fixed_indices = [i for i in range(n_inputs) if i not in fixed_indices]
++                new_lower = tuple(lower[i] for i in non_fixed_indices)
++                new_upper = tuple(upper[i] for i in non_fixed_indices)
++                new_model.bounding_box = (new_lower, new_upper)
++            else:
++                new_model.bounding_box = None
++        else:
++            new_model.bounding_box = None
++
++    return new_model

@@ -1,0 +1,101 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..76529cd 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -137,8 +137,31 @@ def _solve_sparse_cg(
+     return coefs
+ 
+ 
+-def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
++def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3, X_offset=None, X_scale=None):
+     n_samples, n_features = X.shape
++
++    if X_offset is not None and sparse.issparse(X):
++        # We are fitting an intercept with a sparse matrix.
++        # X is not centered, so we need a custom matvec.
++        # Create a LinearOperator that describes the centered and normalized X.
++        # This is equivalent to `(X - X_offset) / X_scale`.
++        def matvec(v):
++            v_scaled = v / X_scale
++            ret = X @ v_scaled
++            ret -= np.dot(X_offset, v_scaled)
++            return ret
++
++        def rmatvec(u):
++            ret = X.T @ u
++            ret -= np.sum(u) * X_offset
++            return ret / X_scale
++
++        X_op = sp_linalg.LinearOperator(
++            shape=X.shape, matvec=matvec, rmatvec=rmatvec, dtype=X.dtype
++        )
++    else:
++        X_op = X
++
+     coefs = np.empty((y.shape[1], n_features), dtype=X.dtype)
+     n_iter = np.empty(y.shape[1], dtype=np.int32)
+ 
+@@ -148,7 +171,7 @@ def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
+     for i in range(y.shape[1]):
+         y_column = y[:, i]
+         info = sp_linalg.lsqr(
+-            X, y_column, damp=sqrt_alpha[i], atol=tol, btol=tol, iter_lim=max_iter
++            X_op, y_column, damp=sqrt_alpha[i], atol=tol, btol=tol, iter_lim=max_iter
+         )
+         coefs[i] = info[0]
+         n_iter[i] = info[2]
+@@ -629,7 +652,9 @@ def _ridge_regression(
+         )
+ 
+     elif solver == "lsqr":
+-        coef, n_iter = _solve_lsqr(X, y, alpha, max_iter, tol)
++        coef, n_iter = _solve_lsqr(
++            X, y, alpha, max_iter, tol, X_offset=X_offset, X_scale=X_scale
++        )
+ 
+     elif solver == "cholesky":
+         if n_features > n_samples:
+@@ -764,16 +789,19 @@ class _BaseRidge(LinearModel, metaclass=ABCMeta):
+             else:
+                 solver = self.solver
+         elif sparse.issparse(X) and self.fit_intercept:
+-            if self.solver not in ["auto", "sparse_cg", "sag", "lbfgs"]:
++            if self.solver not in ["auto", "sparse_cg", "sag", "lbfgs", "lsqr"]:
+                 raise ValueError(
+                     "solver='{}' does not support fitting the intercept "
+                     "on sparse data. Please set the solver to 'auto' or "
+-                    "'sparse_cg', 'sag', 'lbfgs' "
++                    "'sparse_cg', 'sag', 'lbfgs', 'lsqr' "
+                     "or set `fit_intercept=False`".format(self.solver)
+                 )
+-            if self.solver == "lbfgs":
+-                solver = "lbfgs"
+-            elif self.solver == "sag" and self.max_iter is None and self.tol > 1e-4:
++
++            solver = self.solver
++            if solver == "auto":
++                solver = "sparse_cg"
++
++            if solver == "sag" and self.max_iter is None and self.tol > 1e-4:
+                 warnings.warn(
+                     '"sag" solver requires many iterations to fit '
+                     "an intercept with sparse inputs. Either set the "
+@@ -781,9 +809,6 @@ class _BaseRidge(LinearModel, metaclass=ABCMeta):
+                     '"tol" and a high "max_iter" (especially if inputs are '
+                     "not standardized)."
+                 )
+-                solver = "sag"
+-            else:
+-                solver = "sparse_cg"
+         else:
+             solver = self.solver
+ 
+@@ -827,7 +852,7 @@ class _BaseRidge(LinearModel, metaclass=ABCMeta):
+ 
+         else:
+             if sparse.issparse(X) and self.fit_intercept:
+-                # required to fit intercept with sparse_cg and lbfgs solver
++                # required to fit intercept with sparse_cg, lbfgs, and lsqr solver
+                 params = {"X_offset": X_offset, "X_scale": X_scale}
+             else:
+                 # for dense matrices or when intercept is set to 0

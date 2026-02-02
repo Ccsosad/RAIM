@@ -1,0 +1,35 @@
+diff --git a/astropy/cosmology/_cloneable.py b/astropy/cosmology/_cloneable.py
+new file mode 100644
+index 0000000..1838a79
+--- /dev/null
++++ b/astropy/cosmology/_cloneable.py
+@@ -0,0 +1,29 @@
++"""Module for cloneable objects in cosmology."""
++
++__all__ = ['Cloneable']
++
++class Cloneable:
++    """Mixin class for objects that can be cloned with modified attributes."""
++    
++    def clone(self, **kwargs):
++        """Return a copy of this object with modified attributes.
++        
++        Parameters
++        ----------
++        **kwargs
++            Attributes to modify in the clone.
++            
++        Returns
++        -------
++        Cloneable
++            A new instance of the same class with the modified attributes.
++        """
++        import copy
++        # Create a shallow copy first
++        new_obj = copy.copy(self)
++        # Deep copy mutable attributes
++        new_obj.__dict__ = copy.deepcopy(self.__dict__)
++        # Update with any new values
++        for key, value in kwargs.items():
++            setattr(new_obj, key, value)
++        return new_obj

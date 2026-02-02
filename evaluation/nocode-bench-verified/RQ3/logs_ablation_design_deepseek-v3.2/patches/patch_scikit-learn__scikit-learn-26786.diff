@@ -1,0 +1,65 @@
+diff --git a/sklearn/base.py b/sklearn/base.py
+index 487600c..84bd06a 100644
+--- a/sklearn/base.py
++++ b/sklearn/base.py
+@@ -83,6 +83,8 @@ def _clone_parametrized(estimator, *, safe=True):
+     # XXX: not handling dictionaries
+     if estimator_type in (list, tuple, set, frozenset):
+         return estimator_type([clone(e, safe=safe) for e in estimator])
++    elif estimator_type is dict:
++        return {k: clone(v, safe=safe) for k, v in estimator.items()}
+     elif not hasattr(estimator, "get_params") or isinstance(estimator, type):
+         if not safe:
+             return copy.deepcopy(estimator)
+diff --git a/sklearn/model_selection/_search.py b/sklearn/model_selection/_search.py
+index 6afb5f6..6fe8adc 100644
+--- a/sklearn/model_selection/_search.py
++++ b/sklearn/model_selection/_search.py
+@@ -1416,7 +1416,21 @@ class GridSearchCV(BaseSearchCV):
+ 
+     def _run_search(self, evaluate_candidates):
+         """Search all candidates in param_grid"""
+-        evaluate_candidates(ParameterGrid(self.param_grid))
++        from sklearn.base import clone
++        def clone_estimators_in_param_grid(param_grid):
++            if isinstance(param_grid, dict):
++                return {k: clone_estimators_in_param_grid(v) for k, v in param_grid.items()}
++            elif isinstance(param_grid, list):
++                return [clone_estimators_in_param_grid(v) for v in param_grid]
++            elif hasattr(param_grid, 'get_params'):
++                # This is an estimator
++                return clone(param_grid)
++            else:
++                return param_grid
++
++        # Clone estimator objects in the param_grid
++        param_grid = clone_estimators_in_param_grid(self.param_grid)
++        evaluate_candidates(ParameterGrid(param_grid))
+ 
+ 
+ class RandomizedSearchCV(BaseSearchCV):
+@@ -1803,8 +1817,22 @@ class RandomizedSearchCV(BaseSearchCV):
+ 
+     def _run_search(self, evaluate_candidates):
+         """Search n_iter candidates from param_distributions"""
++        from sklearn.base import clone
++        def clone_estimators_in_param_distributions(param_distributions):
++            if isinstance(param_distributions, dict):
++                return {k: clone_estimators_in_param_distributions(v) for k, v in param_distributions.items()}
++            elif isinstance(param_distributions, list):
++                return [clone_estimators_in_param_distributions(v) for v in param_distributions]
++            elif hasattr(param_distributions, 'get_params'):
++                # This is an estimator
++                return clone(param_distributions)
++            else:
++                return param_distributions
++
++        # Clone estimator objects in the param_distributions
++        param_distributions = clone_estimators_in_param_distributions(self.param_distributions)
+         evaluate_candidates(
+             ParameterSampler(
+-                self.param_distributions, self.n_iter, random_state=self.random_state
++                param_distributions, self.n_iter, random_state=self.random_state
+             )
+-        )
++        )

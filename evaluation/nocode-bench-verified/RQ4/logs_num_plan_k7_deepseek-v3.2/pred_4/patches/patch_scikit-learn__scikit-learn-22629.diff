@@ -1,0 +1,55 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..6a2d19b 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -97,6 +97,26 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+             Fitted label encoder.
+         """
+         y = column_or_1d(y, warn=True)
++        # Handle NaN values: treat all NaN as the same category
++        y = np.asarray(y)
++        # Create a mask for NaN values
++        nan_mask = np.isnan(y)
++        if nan_mask.any():
++            # Replace NaN with a unique sentinel value
++            # We'll use the minimum finite value minus 1 as sentinel
++            # But only if y is numeric
++            if y.dtype.kind in 'iufc':  # integer, unsigned, float, complex
++                # Find a sentinel value that doesn't exist in the data
++                finite_vals = y[~nan_mask]
++                if len(finite_vals) > 0:
++                    if y.dtype.kind in 'iu':  # integer types
++                        sentinel = np.min(finite_vals) - 1
++                    else:  # float types
++                        sentinel = np.nanmin(finite_vals) - 1
++                else:
++                    sentinel = -1 if y.dtype.kind in 'iu' else -1.0
++                y = y.copy()
++                y[nan_mask] = sentinel
+         self.classes_ = _unique(y)
+         return self
+ 
+@@ -136,6 +156,23 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         if _num_samples(y) == 0:
+             return np.array([])
+ 
++        # Handle NaN values
++        y = np.asarray(y)
++        nan_mask = np.isnan(y)
++        if nan_mask.any() and self.classes_.dtype.kind in 'iufc':
++            # Check if NaN was seen during fit
++            # Look for NaN in classes_
++            nan_in_classes = np.isnan(self.classes_)
++            if nan_in_classes.any():
++                # There should be exactly one NaN in classes_
++                nan_index = np.where(nan_in_classes)[0][0]
++                # Create a copy of y for encoding
++                y_encoded = y.copy()
++                # Replace NaN with a value that will encode to nan_index
++                # We need to use the actual NaN from classes_
++                y_encoded[nan_mask] = self.classes_[nan_index]
++                return _encode(y_encoded, uniques=self.classes_)
++        
+         return _encode(y, uniques=self.classes_)
+ 
+     def inverse_transform(self, y):

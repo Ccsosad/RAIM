@@ -1,0 +1,66 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d9aca35..3c9d25b 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -313,6 +313,7 @@ class PyObject(ObjectDescription):
+         'noindex': directives.flag,
+         'module': directives.unchanged,
+         'annotation': directives.unchanged,
++        'canonical': directives.unchanged,
+     }
+ 
+     doc_field_types = [
+@@ -391,6 +392,8 @@ class PyObject(ObjectDescription):
+         signode['module'] = modname
+         signode['class'] = classname
+         signode['fullname'] = fullname
++        if 'canonical' in self.options:
++            signode['canonical'] = self.options['canonical']
+ 
+         sig_prefix = self.get_signature_prefix(sig)
+         if sig_prefix:
+@@ -440,6 +443,10 @@ class PyObject(ObjectDescription):
+                              signode: desc_signature) -> None:
+         modname = self.options.get('module', self.env.ref_context.get('py:module'))
+         fullname = (modname + '.' if modname else '') + name_cls[0]
++        # If canonical is given, use it for the domain (cross-references)
++        canonical = self.options.get('canonical')
++        if canonical:
++            fullname = canonical
+         node_id = make_id(self.env, self.state.document, '', fullname)
+         signode['ids'].append(node_id)
+ 
+@@ -453,6 +460,19 @@ class PyObject(ObjectDescription):
+         domain = cast(PythonDomain, self.env.get_domain('py'))
+         domain.note_object(fullname, self.objtype, node_id, location=signode)
+ 
++        # If canonical is given, we want to index under the canonical name.
++        # So we need to adjust the modname and name_cls for the index text.
++        if canonical:
++            # Parse the canonical name to get module and classname?
++            # The canonical name is a fully qualified name.
++            # We'll split it into module and the rest.
++            parts = canonical.split('.')
++            if len(parts) > 1:
++                modname = parts[0]
++                name_cls = ('.'.join(parts[1:]), '')
++            else:
++                modname = ''
++                name_cls = (canonical, '')
+         indextext = self.get_index_text(modname, name_cls)
+         if indextext:
+             self.indexnode['entries'].append(('single', indextext, node_id, '', None))
+@@ -1209,7 +1229,12 @@ class PythonDomain(Domain):
+         if target is None:
+             return None
+         else:
+-            return '.'.join(filter(None, [modname, clsname, target]))
++            # If the node has a canonical attribute, use it.
++            canonical = node.get('canonical')
++            if canonical:
++                return canonical
++            else:
++                return '.'.join(filter(None, [modname, clsname, target]))
+ 
+ 
+ def builtin_resolver(app: Sphinx, env: BuildEnvironment,

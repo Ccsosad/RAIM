@@ -1,0 +1,67 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..9829a29 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,62 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A table with the same column names and length as self, with boolean
++            values indicating element-wise equality.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table and the column names do not match.
++        """
++        from astropy.table import Table
++
++        # If other is a Table, check column names
++        if isinstance(other, Table):
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # Compare each column
++            cols = []
++            for name in self.colnames:
++                col_self = self[name]
++                col_other = other[name]
++                # Use element-wise equality
++                eq = col_self == col_other
++                # If the result is a masked array, fill masked values with False
++                if isinstance(eq, np.ma.MaskedArray):
++                    eq = eq.filled(False)
++                # Convert to array if necessary
++                if hasattr(eq, '__array__'):
++                    eq = np.asarray(eq)
++                # Create a boolean column
++                cols.append(Column(eq, name=name, dtype=bool))
++            return self.__class__(cols, copy=False)
++        else:
++            # For array or scalar, broadcast to each column
++            cols = []
++            for name in self.colnames:
++                col_self = self[name]
++                # Compare with the same other for each column
++                eq = col_self == other
++                if isinstance(eq, np.ma.MaskedArray):
++                    eq = eq.filled(False)
++                if hasattr(eq, '__array__'):
++                    eq = np.asarray(eq)
++                cols.append(Column(eq, name=name, dtype=bool))
++            return self.__class__(cols, copy=False)
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

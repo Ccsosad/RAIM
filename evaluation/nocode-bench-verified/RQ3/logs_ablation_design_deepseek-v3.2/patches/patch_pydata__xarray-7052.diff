@@ -1,0 +1,141 @@
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..72b8e9b 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -278,7 +278,12 @@ class FacetGrid:
+         return self.axes[-1, :]
+ 
+     def map_dataarray(
+-        self, func: Callable, x: Hashable | None, y: Hashable | None, **kwargs: Any
++        self,
++        func: Callable,
++        *,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
+     ) -> FacetGrid:
+         """
+         Apply a plotting function to a 2d facet's subset of the data.
+@@ -347,7 +352,12 @@ class FacetGrid:
+         return self
+ 
+     def map_plot1d(
+-        self, func: Callable, x: Hashable, y: Hashable, **kwargs: Any
++        self,
++        func: Callable,
++        *,
++        x: Hashable,
++        y: Hashable,
++        **kwargs: Any,
+     ) -> Self:
+         """
+         Apply a plotting function to a 1d facet's subset of the data.
+@@ -503,9 +513,10 @@ class FacetGrid:
+     def map_dataarray_line(
+         self,
+         func: Callable,
+-        x: Hashable | None,
+-        y: Hashable | None,
+-        hue: Hashable | None,
++        *,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        hue: Hashable | None = None,
+         add_legend: bool = True,
+         _labels=None,
+         **kwargs: Any,
+@@ -545,6 +556,7 @@ class FacetGrid:
+     def map_dataset(
+         self,
+         func: Callable,
++        *,
+         x: Hashable | None = None,
+         y: Hashable | None = None,
+         hue: Hashable | None = None,
+diff --git a/xarray/plot/plot.py b/xarray/plot/plot.py
+index b16caf5..b566a07 100644
+--- a/xarray/plot/plot.py
++++ b/xarray/plot/plot.py
+@@ -540,7 +540,7 @@ class _PlotMethods:
+ 
+     __slots__ = ("_da",)
+ 
+-    def __init__(self, darray):
++    def __init__(self, darray: DataArray) -> None:
+         self._da = darray
+ 
+     def __call__(self, **kwargs):
+@@ -651,20 +651,20 @@ def _plot1d(plotfunc):
+     @functools.wraps(plotfunc)
+     def newplotfunc(
+         darray: T_DataArray,
+-        *args,
+-        x: Hashable = None,
+-        y: Hashable = None,
+-        z: Hashable = None,
+-        hue: Hashable = None,
++        *,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        z: Hashable | None = None,
++        hue: Hashable | None = None,
+         hue_style=None,
+-        markersize: Hashable = None,
+-        linewidth: Hashable = None,
++        markersize: Hashable | None = None,
++        linewidth: Hashable | None = None,
+         figsize=None,
+         size=None,
+         aspect=None,
+         ax=None,
+-        row: Hashable = None,
+-        col: Hashable = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
+         col_wrap=None,
+         xincrease=True,
+         yincrease=True,
+@@ -833,20 +833,20 @@ def _plot1d(plotfunc):
+     @functools.wraps(newplotfunc)
+     def plotmethod(
+         _PlotMethods_obj,
+-        *args,
+-        x: Hashable = None,
+-        y: Hashable = None,
+-        z: Hashable = None,
+-        hue: Hashable = None,
++        *,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        z: Hashable | None = None,
++        hue: Hashable | None = None,
+         hue_style=None,
+-        markersize: Hashable = None,
+-        linewidth: Hashable = None,
++        markersize: Hashable | None = None,
++        linewidth: Hashable | None = None,
+         figsize=None,
+         size=None,
+         aspect=None,
+         ax=None,
+-        row: Hashable = None,
+-        col: Hashable = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
+         col_wrap=None,
+         xincrease=True,
+         yincrease=True,
+@@ -919,7 +919,12 @@ def _add_labels(
+ 
+ @_plot1d
+ def scatter(
+-    xplt, yplt, *args, ax, add_labels: bool | Sequence[bool] = True, **kwargs
++    xplt,
++    yplt,
++    *,
++    ax,
++    add_labels: bool | Sequence[bool] = True,
++    **kwargs,
+ ) -> plt.scatter:
+     plt = import_matplotlib_pyplot()
+ 

@@ -1,0 +1,59 @@
+diff --git a/lib/matplotlib/cbook/__init__.py b/lib/matplotlib/cbook/__init__.py
+index 5c3e852..ed3f3ef 100644
+--- a/lib/matplotlib/cbook/__init__.py
++++ b/lib/matplotlib/cbook/__init__.py
+@@ -175,6 +175,9 @@ class CallbackRegistry:
+         self._func_cid_map = {}
+         # A hidden variable that marks cids that need to be pickled.
+         self._pickled_cids = set()
++        # A set of signals that are currently blocked.
++        # None is used to represent "all signals".
++        self._blocked = set()
+ 
+     def __getstate__(self):
+         return {
+@@ -267,6 +270,9 @@ class CallbackRegistry:
+         All of the functions registered to receive callbacks on *s* will be
+         called with ``*args`` and ``**kwargs``.
+         """
++        # Skip processing if the signal is blocked.
++        if None in self._blocked or s in self._blocked:
++            return
+         for cid, ref in list(self.callbacks.get(s, {}).items()):
+             func = ref()
+             if func is not None:
+@@ -280,6 +286,34 @@ class CallbackRegistry:
+                     else:
+                         raise
+ 
++    def blocked(self, signal=None):
++        """
++        Context manager to temporarily block callbacks.
++
++        Parameters
++        ----------
++        signal : str, optional
++            The signal to block. If not provided, all signals are blocked.
++
++        Examples
++        --------
++        >>> with callbacks.blocked():
++        ...     # All callbacks are blocked
++        ...     pass
++        >>> with callbacks.blocked(signal="key_press_event"):
++        ...     # Only key_press_event is blocked
++        ...     pass
++        """
++        class _Block:
++            def __init__(self, registry, sig):
++                self.registry = registry
++                self.sig = sig
++            def __enter__(self):
++                self.registry._blocked.add(self.sig)
++            def __exit__(self, *args):
++                self.registry._blocked.remove(self.sig)
++        return _Block(self, signal)
++
+ 
+ class silent_list(list):
+     """

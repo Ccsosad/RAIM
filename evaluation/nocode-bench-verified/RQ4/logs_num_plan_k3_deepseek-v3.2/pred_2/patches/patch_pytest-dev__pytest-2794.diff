@@ -1,0 +1,225 @@
+diff --git a/_pytest/terminal.py b/_pytest/terminal.py
+index 0ea9d7c..25e507b 100644
+--- a/_pytest/terminal.py
++++ b/_pytest/terminal.py
+@@ -576,6 +576,9 @@ class TerminalReporter:
+     def _outrep_summary(self, rep):
+         rep.toterminal(self.writer)
+         for secname, content in rep.sections:
++            # Skip the "Captured stdlog call" section if --no-print-logs is used
++            if secname == "Captured stdlog call" and not self.config.getoption("log_print", True):
++                continue
+             self.writer.sep("-", secname)
+             if content[-1:] == "\n":
+                 content = content[:-1]
+diff --git a/_pytest/logging.py b/_pytest/logging.py
+new file mode 100644
+index 0000000..17b339e
+--- /dev/null
++++ b/_pytest/logging.py
+@@ -0,0 +1,205 @@
++"""Logging support for pytest."""
++import logging
++import sys
++import warnings
++from contextlib import contextmanager
++from io import StringIO
++
++import py
++import six
++
++import pytest
++from _pytest.fixtures import fixture
++
++
++class LogCaptureHandler(logging.Handler):
++    """A logging handler that stores log records and the log text."""
++
++    def __init__(self):
++        logging.Handler.__init__(self)
++        self.records = []
++        self.stream = StringIO()
++
++    def emit(self, record):
++        self.records.append(record)
++        msg = self.format(record)
++        self.stream.write(msg + '\n')
++
++    def reset(self):
++        self.records = []
++        self.stream = StringIO()
++
++
++class LogCaptureFixture(object):
++    """Fixture used to capture log messages."""
++
++    def __init__(self, item):
++        self._item = item
++        self._handler = None
++        # Keep track of the original logging levels
++        self._orig_levels = {}
++
++    @property
++    def handler(self):
++        return self._handler
++
++    @property
++    def records(self):
++        """List of log records captured."""
++        return self.handler.records
++
++    @property
++    def text(self):
++        """Text of all captured log records."""
++        return self.handler.stream.getvalue()
++
++    @property
++    def record_tuples(self):
++        """List of captured log records as (logger_name, level, message) tuples."""
++        return [(r.name, r.levelno, r.getMessage()) for r in self.records]
++
++    def set_level(self, level, logger=None):
++        """Set the log level for the given logger (or the default handler)."""
++        if logger is None:
++            self.handler.setLevel(level)
++        else:
++            logger_obj = logging.getLogger(logger)
++            self._orig_levels.setdefault(logger, logger_obj.level)
++            logger_obj.setLevel(level)
++
++    @contextmanager
++    def at_level(self, level, logger=None):
++        """Context manager to temporarily set the log level."""
++        if logger is None:
++            orig_level = self.handler.level
++            self.handler.setLevel(level)
++            try:
++                yield
++            finally:
++                self.handler.setLevel(orig_level)
++        else:
++            logger_obj = logging.getLogger(logger)
++            orig_level = logger_obj.level
++            logger_obj.setLevel(level)
++            try:
++                yield
++            finally:
++                logger_obj.setLevel(orig_level)
++
++    def clear(self):
++        """Clear all captured log records."""
++        self.handler.reset()
++
++
++@pytest.fixture
++def caplog(request):
++    """Fixture to capture log messages."""
++    # Get the LogCaptureHandler instance from the test item
++    if not hasattr(request.node, '_logcapturehandler'):
++        # Create a new handler if one doesn't exist
++        handler = LogCaptureHandler()
++        request.node._logcapturehandler = handler
++    else:
++        handler = request.node._logcapturehandler
++    
++    fixture_obj = LogCaptureFixture(request.node)
++    fixture_obj._handler = handler
++    return fixture_obj
++
++
++class LoggingPlugin(object):
++    """Plugin to capture and manage logging during test execution."""
++    
++    def __init__(self, config):
++        self.config = config
++        self.log_level = getattr(logging, config.getoption('log_level', 'WARNING'))
++        self.log_format = config.getoption('log_format', 
++                                          '%(name)s:%(lineno)d %(levelname)s %(message)s')
++        self.log_date_format = config.getoption('log_date_format', None)
++        self.log_print = config.getoption('log_print', True)
++        
++        # Setup the capture handler
++        self.handler = LogCaptureHandler()
++        self.handler.setFormatter(self._create_formatter())
++        
++    def _create_formatter(self):
++        """Create a formatter based on configuration."""
++        if self.log_date_format:
++            return logging.Formatter(self.log_format, self.log_date_format)
++        return logging.Formatter(self.log_format)
++    
++    @pytest.hookimpl(tryfirst=True)
++    def pytest_runtest_setup(self, item):
++        """Setup log capturing for each test."""
++        # Attach the handler to the root logger
++        root_logger = logging.getLogger()
++        root_logger.addHandler(self.handler)
++        # Store the handler on the item for the caplog fixture
++        item._logcapturehandler = self.handler
++        
++    @pytest.hookimpl(tryfirst=True)
++    def pytest_runtest_teardown(self, item, nextitem):
++        """Teardown log capturing after each test."""
++        root_logger = logging.getLogger()
++        root_logger.removeHandler(self.handler)
++        
++    @pytest.hookimpl(hookwrapper=True)
++    def pytest_runtest_makereport(self, item, call):
++        """Add captured logs to the test report."""
++        outcome = yield
++        report = outcome.get_result()
++        
++        if call.when == "call" and report.failed and self.log_print:
++            # Add captured logs to the report
++            if hasattr(item, '_logcapturehandler'):
++                log_capture = item._logcapturehandler
++                if log_capture.records:
++                    log_content = log_capture.stream.getvalue()
++                    if log_content:
++                        report.sections.append(("Captured stdlog call", log_content))
++        
++        # Reset the handler for the next test
++        if hasattr(item, '_logcapturehandler'):
++            item._logcapturehandler.reset()
++
++
++def pytest_addoption(parser):
++    """Add command line options for logging."""
++    group = parser.getgroup("logging")
++    
++    group.addoption(
++        "--log-level",
++        dest="log_level",
++        default="WARNING",
++        help="Set the logging level (default: WARNING)"
++    )
++    
++    group.addoption(
++        "--log-format",
++        dest="log_format",
++        default="%(name)s:%(lineno)d %(levelname)s %(message)s",
++        help="Set the logging format"
++    )
++    
++    group.addoption(
++        "--log-date-format",
++        dest="log_date_format",
++        default=None,
++        help="Set the logging date format"
++    )
++    
++    group.addoption(
++        "--no-print-logs",
++        dest="log_print",
++        action="store_false",
++        default=True,
++        help="Don't print logs on test failure"
++    )
++
++
++def pytest_configure(config):
++    """Configure the logging plugin."""
++    # Register the plugin
++    if config.getoption("log_print") or hasattr(config, "workerinput"):
++        plugin = LoggingPlugin(config)
++        config.pluginmanager.register(plugin, "logging-plugin")

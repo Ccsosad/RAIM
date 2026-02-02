@@ -1,0 +1,13 @@
+diff --git a/sphinx/ext/autodoc/typehints.py b/sphinx/ext/autodoc/typehints.py
+index 5ae1ec7..f1e3be0 100644
+--- a/sphinx/ext/autodoc/typehints.py
++++ b/sphinx/ext/autodoc/typehints.py
+@@ -53,7 +53,7 @@ def record_typehints(app: Sphinx, objtype: str, name: str, obj: Any,
+ def merge_typehints(app: Sphinx, domain: str, objtype: str, contentnode: Element) -> None:
+     if domain != 'py':
+         return
+-    if app._autodoc_typehints_description is False:  # type: ignore
++    if app.config.autodoc_typehints != 'description':
+         return
+ 
+     signature = cast(addnodes.desc_signature, contentnode.parent[0])

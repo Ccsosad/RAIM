@@ -1,0 +1,58 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 677b319..defc3f7 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -2335,6 +2335,16 @@ class Axes(_AxesBase):
+         label = kwargs.pop('label', '')
+         tick_labels = kwargs.pop('tick_label', None)
+ 
++        # Store the original label for the container.
++        container_label = label
++
++        # If label is a list, broadcast it to the same length as x.
++        # x has already been broadcasted to the same length as height, width, etc.
++        if isinstance(label, list):
++            label = np.broadcast_to(label, len(x))
++        else:
++            label = [label] * len(x)
++
+         y = bottom  # Matches barh call signature.
+         if orientation == 'vertical':
+             if y is None:
+@@ -2420,14 +2430,14 @@ class Axes(_AxesBase):
+ 
+         patches = []
+         args = zip(left, bottom, width, height, color, edgecolor, linewidth,
+-                   hatch)
+-        for l, b, w, h, c, e, lw, htch in args:
++                   hatch, label)
++        for l, b, w, h, c, e, lw, htch, lbl in args:
+             r = mpatches.Rectangle(
+                 xy=(l, b), width=w, height=h,
+                 facecolor=c,
+                 edgecolor=e,
+                 linewidth=lw,
+-                label='_nolegend_',
++                label=lbl,
+                 hatch=htch,
+                 )
+             r._internal_update(kwargs)
+@@ -2465,8 +2475,11 @@ class Axes(_AxesBase):
+         else:  # horizontal
+             datavalues = width
+ 
++        # For the container, use the first label if label is a list.
++        if isinstance(container_label, list):
++            container_label = container_label[0] if container_label else ''
+         bar_container = BarContainer(patches, errorbar, datavalues=datavalues,
+-                                     orientation=orientation, label=label)
++                                     orientation=orientation, label=container_label)
+         self.add_container(bar_container)
+ 
+         if tick_labels is not None:
+@@ -8162,4 +8175,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

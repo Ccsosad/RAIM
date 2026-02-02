@@ -1,0 +1,17 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..4918ec6 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -192,6 +192,12 @@ class Nominal(Scale):
+             # and (B) allow the values parameter for a Coordinate to set xlim/ylim
+             axis.set_view_interval(0, len(units_seed) - 1)
+ 
++        # Set axis properties to match seaborn categorical style
++        axis.set_margin(0)
++        axis.grid(False)
++        if prop.name == "y":
++            axis.invert_yaxis()
++
+         new._matplotlib_scale = mpl_scale
+ 
+         # TODO array cast necessary to handle float/int mixture, which we need

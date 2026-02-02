@@ -1,0 +1,13 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index b0a0822..a3c8c07 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -616,7 +616,7 @@ class Continuous(ContinuousBase):
+         if base is None:
+             if symlog_thresh:
+                 log_base = 10
+-            base = log_base
++            base = log_base if log_base is not None else 10
+ 
+         if formatter is not None:
+             return formatter

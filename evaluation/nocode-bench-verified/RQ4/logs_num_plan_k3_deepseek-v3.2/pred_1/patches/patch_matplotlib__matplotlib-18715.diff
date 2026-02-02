@@ -1,0 +1,52 @@
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 38580cf..a74f591 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -1248,12 +1248,16 @@ _validators = {
+     # This is used for things that are hard to make backward compatible
+     # with a sane rcParam alone.  This does *not* turn on classic mode
+     # altogether.  For that use `matplotlib.style.use("classic")`.
+-    "_internal.classic_mode": validate_bool
++    "_internal.classic_mode": validate_bool,
++    "xtick.minor.ndivs": lambda v: v if v == 'auto' else validate_int(v),
++    "ytick.minor.ndivs": lambda v: v if v == 'auto' else validate_int(v),
+ }
+ _hardcoded_defaults = {  # Defaults not inferred from
+     # lib/matplotlib/mpl-data/matplotlibrc...
+     # ... because they are private:
+     "_internal.classic_mode": False,
++    "xtick.minor.ndivs": 'auto',
++    "ytick.minor.ndivs": 'auto',
+     # ... because they are deprecated:
+     # No current deprecations.
+     # backend is handled separately when constructing rcParamsDefault.
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..0714546 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2891,13 +2891,19 @@ class AutoMinorLocator(Locator):
+             return []
+ 
+         if self.ndivs is None:
+-
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
++            # Check the rcParam for this axis
++            if self.axis.axis_name == 'x':
++                ndivs = mpl.rcParams['xtick.minor.ndivs']
++            else:  # 'y'
++                ndivs = mpl.rcParams['ytick.minor.ndivs']
++            if ndivs == 'auto':
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+             else:
+-                ndivs = 4
++                ndivs = int(ndivs)
+         else:
+             ndivs = self.ndivs
+ 

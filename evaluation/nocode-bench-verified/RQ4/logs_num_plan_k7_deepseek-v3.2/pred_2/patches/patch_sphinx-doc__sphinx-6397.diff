@@ -1,0 +1,40 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..da8963f 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -417,9 +417,12 @@ class Documenter:
+             args, retann = result
+ 
+         if args is not None:
+-            return args + (retann and (' -> %s' % retann) or '')
++            sig = args + (retann and (' -> %s' % retann) or '')
+         else:
+-            return ''
++            sig = ''
++
++        from sphinx.ext.autodoc.typehints import format_signature as format_typehints
++        return format_typehints(sig, self.env.config)
+ 
+     def add_directive_header(self, sig):
+         # type: (str) -> None
+diff --git a/sphinx/ext/autodoc/typehints.py b/sphinx/ext/autodoc/typehints.py
+new file mode 100644
+index 0000000..55b93ca
+--- /dev/null
++++ b/sphinx/ext/autodoc/typehints.py
+@@ -0,0 +1,15 @@
++"""
++sphinx.ext.autodoc.typehints
++~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++
++Format type hints for autodoc.
++
++:copyright: Copyright 2007-2021 by the Sphinx team, see AUTHORS.
++:license: BSD, see LICENSE for details.
++"""
++
++def format_signature(signature, config):
++    """Format the signature according to the autodoc_typehints config."""
++    if config.autodoc_typehints == 'none':
++        return ''
++    return signature

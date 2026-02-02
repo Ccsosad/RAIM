@@ -1,0 +1,269 @@
+diff --git a/sphinx/builders/latex/__init__.py b/sphinx/builders/latex/__init__.py
+index 1c44ce3..ab3e1fb 100644
+--- a/sphinx/builders/latex/__init__.py
++++ b/sphinx/builders/latex/__init__.py
+@@ -184,6 +184,11 @@ class LaTeXBuilder(Builder):
+         self.context['release'] = self.config.release
+         self.context['use_xindy'] = self.config.latex_use_xindy
+ 
++        # Prepend extra packages to the packages list
++        extrapackages = self.context.get('extrapackages', '')
++        if extrapackages:
++            self.context['packages'] = extrapackages + '\n' + self.context['packages']
++
+         if self.config.today:
+             self.context['date'] = self.config.today
+         else:
+diff --git a/sphinx/builders/latex/elements.py b/sphinx/builders/latex/elements.py
+new file mode 100644
+index 0000000..be4c0a9
+--- /dev/null
++++ b/sphinx/builders/latex/elements.py
+@@ -0,0 +1,247 @@
++# -*- coding: utf-8 -*-
++"""
++    sphinx.builders.latex.elements
++    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++
++    Default values for LaTeX builder.
++
++    :copyright: Copyright 2007-2019 by the Sphinx team, see AUTHORS.
++    :license: BSD, see LICENSE for details.
++"""
++
++#: Default settings for LaTeX builder
++DEFAULT_SETTINGS = {
++    # document class
++    'docclass': 'article',
++    # 'howto' document class
++    'howto_class': 'article',
++    # font package for pdflatex
++    'fontpkg': r'\usepackage{times}',
++    # font package for xelatex/lualatex
++    'fontenc': r'\usepackage{fontspec}',
++    # packages for hyperref
++    'hyperref': r'\usepackage{hyperref}',
++    # packages for Babel
++    'babel': r'\usepackage{babel}',
++    # packages for polyglossia
++    'polyglossia': r'\usepackage{polyglossia}',
++    # packages for geometry
++    'geometry': r'\usepackage{geometry}',
++    # packages for fancyhdr
++    'fancyhdr': r'\usepackage{fancyhdr}',
++    # packages for titlesec
++    'titlesec': r'\usepackage{titlesec}',
++    # packages for fncychap
++    'fncychap': r'\usepackage[Bjornstrup]{fncychap}',
++    # packages for framed
++    'framed': r'\usepackage{framed}',
++    # packages for color
++    'color': r'\usepackage{color}',
++    # packages for float
++    'float': r'\usepackage{float}',
++    # packages for graphicx
++    'graphicx': r'\usepackage{graphicx}',
++    # packages for longtable
++    'longtable': r'\usepackage{longtable}',
++    # packages for tabularx
++    'tabularx': r'\usepackage{tabularx}',
++    # packages for ulem
++    'ulem': r'\usepackage{ulem}',
++    # packages for cmap
++    'cmap': r'\usepackage{cmap}',
++    # packages for textcomp
++    'textcomp': r'\usepackage{textcomp}',
++    # packages for amssymb
++    'amssymb': r'\usepackage{amssymb}',
++    # packages for amsmath
++    'amsmath': r'\usepackage{amsmath}',
++    # packages for stmaryrd
++    'stmaryrd': r'\usepackage{stmaryrd}',
++    # packages for ifthen
++    'ifthen': r'\usepackage{ifthen}',
++    # packages for makeidx
++    'makeidx': r'\usepackage{makeidx}',
++    # packages for sphinx
++    'sphinx': r'\usepackage{sphinx}',
++    # packages for sphinxhowto
++    'sphinxhowto': r'\usepackage{sphinxhowto}',
++    # packages for sphinxmanual
++    'sphinxmanual': r'\usepackage{sphinxmanual}',
++    # packages for tikz
++    'tikz': r'\usepackage{tikz}',
++    # packages for listings
++    'listings': r'\usepackage{listings}',
++    # packages for hyperref setup
++    'hyperrefsetup': r'\hypersetup{unicode=true}',
++    # packages for footnotes
++    'footnotes': r'\usepackage{footnote}',
++    # packages for parskip
++    'parskip': r'\usepackage{parskip}',
++    # packages for upquote
++    'upquote': r'\usepackage{upquote}',
++    # packages for microtype
++    'microtype': r'\usepackage{microtype}',
++    # packages for algorithm
++    'algorithm': r'\usepackage{algorithm}',
++    # packages for algorithmic
++    'algorithmic': r'\usepackage{algorithmic}',
++    # packages for caption
++    'caption': r'\usepackage{caption}',
++    # packages for subcaption
++    'subcaption': r'\usepackage{subcaption}',
++    # packages for epstopdf
++    'epstopdf': r'\usepackage{epstopdf}',
++    # packages for grffile
++    'grffile': r'\usepackage{grffile}',
++    # packages for pdftexcmds
++    'pdftexcmds': r'\usepackage{pdftexcmds}',
++    # packages for ifplatform
++    'ifplatform': r'\usepackage{ifplatform}',
++    # packages for latexmk
++    'latexmk': r'\usepackage{latexmk}',
++    # packages for xcolor
++    'xcolor': r'\usepackage{xcolor}',
++    # packages for import
++    'import': r'\usepackage{import}',
++    # packages for multirow
++    'multirow': r'\usepackage{multirow}',
++    # packages for dcolumn
++    'dcolumn': r'\usepackage{dcolumn}',
++    # packages for booktabs
++    'booktabs': r'\usepackage{booktabs}',
++    # packages for array
++    'array': r'\usepackage{array}',
++    # packages for tabulary
++    'tabulary': r'\usepackage{tabulary}',
++    # packages for mdwlist
++    'mdwlist': r'\usepackage{mdwlist}',
++    # packages for mathtools
++    'mathtools': r'\usepackage{mathtools}',
++    # packages for esint
++    'esint': r'\usepackage{esint}',
++    # packages for mhchem
++    'mhchem': r'\usepackage{mhchem}',
++    # packages for chemformula
++    'chemformula': r'\usepackage{chemformula}',
++    # packages for siunitx
++    'siunitx': r'\usepackage{siunitx}',
++    # packages for cancel
++    'cancel': r'\usepackage{cancel}',
++    # packages for wasysym
++    'wasysym': r'\usepackage{wasysym}',
++    # packages for marvosym
++    'marvosym': r'\usepackage{marvosym}',
++    # packages for eurosym
++    'eurosym': r'\usepackage{eurosym}',
++    # packages for mathspec
++    'mathspec': r'\usepackage{mathspec}',
++    # packages for unicode-math
++    'unicode-math': r'\usepackage{unicode-math}',
++    # packages for extarrows
++    'extarrows': r'\usepackage{extarrows}',
++    # packages for relsize
++    'relsize': r'\usepackage{relsize}',
++    # packages for fancyvrb
++    'fancyvrb': r'\usepackage{fancyvrb}',
++    # packages for scrextend
++    'scrextend': r'\usepackage{scrextend}',
++    # packages for setspace
++    'setspace': r'\usepackage{setspace}',
++    # packages for needspace
++    'needspace': r'\usepackage{needspace}',
++    # packages for hyphenat
++    'hyphenat': r'\usepackage{hyphenat}',
++    # packages for caption
++    'caption3': r'\usepackage{caption3}',
++    # packages for appendix
++    'appendix': r'\usepackage{appendix}',
++    # packages for varioref
++    'varioref': r'\usepackage{varioref}',
++    # packages for prettyref
++    'prettyref': r'\usepackage{prettyref}',
++    # packages for nameref
++    'nameref': r'\usepackage{nameref}',
++    # packages for glossaries
++    'glossaries': r'\usepackage{glossaries}',
++    # packages for acronym
++    'acronym': r'\usepackage{acronym}',
++    # packages for nomencl
++    'nomencl': r'\usepackage{nomencl}',
++    # packages for eqparbox
++    'eqparbox': r'\usepackage{eqparbox}',
++    # packages for environ
++    'environ': r'\usepackage{environ}',
++    # packages for trimspaces
++    'trimspaces': r'\usepackage{trimspaces}',
++    # packages for morefloats
++    'morefloats': r'\usepackage{morefloats}',
++    # packages for placeins
++    'placeins': r'\usepackage{placeins}',
++    # packages for afterpage
++    'afterpage': r'\usepackage{afterpage}',
++    # packages for datetime
++    'datetime': r'\usepackage{datetime}',
++    # packages for fmtcount
++    'fmtcount': r'\usepackage{fmtcount}',
++    # packages for etoolbox
++    'etoolbox': r'\usepackage{etoolbox}',
++    # packages for xparse
++    'xparse': r'\usepackage{xparse}',
++    # packages for lmodern
++    'lmodern': r'\usepackage{lmodern}',
++    # packages for mathpazo
++    'mathpazo': r'\usepackage{mathpazo}',
++    # packages for mathptmx
++    'mathptmx': r'\usepackage{mathptmx}',
++    # packages for helvet
++    'helvet': r'\usepackage{helvet}',
++    # packages for courier
++    'courier': r'\usepackage{courier}',
++    # packages for charter
++    'charter': r'\usepackage{charter}',
++    # packages for utopia
++    'utopia': r'\usepackage{utopia}',
++    # packages for newtxtext
++    'newtxtext': r'\usepackage{newtxtext}',
++    # packages for newtxmath
++    'newtxmath': r'\usepackage{newtxmath}',
++    # packages for libertine
++    'libertine': r'\usepackage{libertine}',
++    # packages for libertinust1math
++    'libertinust1math': r'\usepackage{libertinust1math}',
++    # packages for fouriernc
++    'fouriernc': r'\usepackage{fouriernc}',
++    # packages for fourier
++    'fourier': r'\usepackage{fourier}',
++    # packages for inconsolata
++    'inconsolata': r'\usepackage{inconsolata}',
++    # packages for biber
++    'biber': r'\usepackage{biber}',
++    # packages for bibunits
++    'bibunits': r'\usepackage{bibunits}',
++    # packages for chapterbib
++    'chapterbib': r'\usepackage{chapterbib}',
++    # packages for cite
++    'cite': r'\usepackage{cite}',
++    # packages for natbib
++    'natbib': r'\usepackage{natbib}',
++    # packages for biblatex
++    'biblatex': r'\usepackage{biblatex}',
++    # packages for csquotes
++    'csquotes': r'\usepackage{csquotes}',
++    # packages for url
++    'url': r'\usepackage{url}',
++    # packages for doi
++    'doi': r'\usepackage{doi}',
++    # packages for isodate
++    'isodate': r'\usepackage{isodate}',
++    # packages for hyphenat
++    'hyphenat2': r'\usepackage{hyphenat}',
++    # packages for extra packages
++    'extrapackages': '',
++}
++
++#: Additional settings for specific LaTeX engines or languages
++ADDITIONAL_SETTINGS = {
++    # ... (existing settings)
++}

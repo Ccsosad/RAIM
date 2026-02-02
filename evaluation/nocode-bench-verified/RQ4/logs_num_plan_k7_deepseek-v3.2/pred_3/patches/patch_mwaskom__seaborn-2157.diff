@@ -1,0 +1,261 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..45f9be9 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -2083,6 +2083,218 @@ def _freedman_diaconis_bins(a):
+         return int(np.ceil((a.max() - a.min()) / h))
+ 
+ 
++@_deprecate_positional_args
++def displot(
++    data=None,
++    *,
++    x=None, y=None, hue=None, row=None, col=None, weights=None,
++    kind="hist", rug=False, rug_kws=None,
++    log_scale=None, legend=True, palette=None, hue_order=None,
++    hue_norm=None, color=None, col_wrap=None, row_order=None,
++    col_order=None, height=5, aspect=1, facet_kws=None,
++    **kwargs
++):
++    """Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distributions of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    ``kind`` parameter selects the approach to use:
++
++    - :func:`histplot` (with ``kind="hist"``; the default)
++    - :func:`kdeplot` (with ``kind="kde"``)
++    - :func:`ecdfplot` (with ``kind="ecdf"``)
++
++    Additionally, a ``rug`` can be added to any kind of plot to show
++    individual observations.
++
++    Extra keyword arguments are passed to the underlying plotting function,
++    so you should refer to the documentation for each to see type-specific
++    options.
++
++    The relationship between ``displot`` and the axes-level functions is
++    similar to the relationship between :func:`relplot` and :func:`scatterplot`
++    or :func:`catplot` and :func:`catplot`. Unlike :func:`distplot`,
++    :func:`displot` is a figure-level function. This means that you cannot
++    call it on an existing axes, but it does give you more flexibility to
++    create complex figures with multiple plots.
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure. Either a long-form collection of vectors that
++        can be assigned to named variables or a wide-form dataset that will
++        be internally reshaped.
++    x, y : vectors or keys in ``data``
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in ``data``
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in ``data``
++        Variables that define subsets to plot on different facets.
++    weights : vector or key in ``data``
++        If provided, weight the contribution of the corresponding data points
++        towards the kernel density estimate or histogram bin count.
++    kind : {"hist", "kde", "ecdf"}
++        The kind of plot to draw. Corresponds to the underlying axes-level
++        function.
++    rug : bool
++        If True, show each observation with marginal ticks (like :func:`rugplot`).
++    rug_kws : dict
++        Keyword arguments for :func:`rugplot` when ``rug=True``.
++    log_scale : bool or number, or pair of bools or numbers
++        Set axis scale(s) to log. A single value sets the data axis for any
++        numeric axes in the plot. A pair of values sets each axis independently.
++        Numeric values are interpreted as the desired base (default 10).
++    legend : bool
++        If False, suppress the legend for semantic variables.
++    palette : string, list, dict, or :class:`matplotlib.colors.Colormap`
++        Method for choosing the colors to use when mapping the ``hue`` semantic.
++    hue_order : list
++        Specify the order of processing and plotting for categorical levels
++        of the ``hue`` semantic.
++    hue_norm : tuple or :class:`matplotlib.colors.Normalize`
++        Either a pair of values that set the normalization range in data units
++        or an object that will map from data units into a [0, 1] interval.
++    color : :class:`matplotlib.colors.Color`
++        Single color specification for when hue mapping is not used. Otherwise,
++        the plot will try to hook into the matplotlib property cycle.
++    col_wrap : int
++        "Wrap" the column variable at this width, so that the column facets
++        span multiple rows. Incompatible with a ``row`` facet.
++    row_order, col_order : lists
++        Order to organize the rows and/or columns of the facet grid.
++    height : scalar
++        Height (in inches) of each facet. See also: ``aspect``.
++    aspect : scalar
++        Aspect ratio of each facet, so that ``aspect * height`` gives the width
++        of each facet in inches.
++    facet_kws : dict
++        Additional parameters passed to :class:`FacetGrid`.
++    kwargs : key, value pairings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    :class:`FacetGrid`
++        Returns the :class:`FacetGrid` object with the plot on it for further
++        tweaking.
++
++    See Also
++    --------
++    histplot : Plot a histogram with optional kernel density estimate.
++    kdeplot : Plot univariate or bivariate distributions using kernel
++              density estimation.
++    ecdfplot : Plot empirical cumulative distribution functions.
++    rugplot : Plot marginal ticks.
++
++    Examples
++    --------
++
++    .. include:: ../docstrings/displot.ipynb
++
++    """
++    # Handle deprecation of positional arguments
++    # (already handled by decorator)
++
++    # Initialize the FacetGrid object
++    facet_kws = {} if facet_kws is None else facet_kws.copy()
++    if "sharex" not in facet_kws:
++        facet_kws["sharex"] = True
++    if "sharey" not in facet_kws:
++        facet_kws["sharey"] = True
++
++    g = FacetGrid(
++        data=data, row=row, col=col, hue=hue,
++        palette=palette, hue_order=hue_order, hue_norm=hue_norm,
++        height=height, aspect=aspect, col_wrap=col_wrap,
++        row_order=row_order, col_order=col_order,
++        **facet_kws,
++    )
++
++    # Prepare the keyword arguments for the plotting function
++    plot_kws = kwargs.copy()
++    plot_kws["legend"] = False  # We'll handle the legend at the FacetGrid level
++
++    # Define the plotting function based on kind
++    if kind == "hist":
++        plot_func = histplot
++    elif kind == "kde":
++        plot_func = kdeplot
++    elif kind == "ecdf":
++        plot_func = ecdfplot
++    else:
++        raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind}")
++
++    # Add rug plot if requested
++    if rug:
++        rug_kws = {} if rug_kws is None else rug_kws.copy()
++        rug_kws["legend"] = False
++
++    # Define a function that will plot on each facet
++    def _plot_single_facet(x, y, hue, data, **kwargs):
++        # Call the appropriate plotting function
++        ax = plt.gca()
++        plot_kws = kwargs.copy()
++        
++        # Handle log scaling
++        if log_scale is not None:
++            if isinstance(log_scale, (bool, int, float)):
++                plot_kws["log_scale"] = log_scale
++            elif isinstance(log_scale, (tuple, list)) and len(log_scale) == 2:
++                # For bivariate plots, we need to handle x and y separately
++                if x is not None and y is not None:
++                    plot_kws["log_scale"] = log_scale
++                else:
++                    plot_kws["log_scale"] = log_scale[0] if x is not None else log_scale[1]
++        
++        # Call the plotting function
++        if kind == "hist":
++            # histplot has different signature
++            plot_func(x=x, y=y, hue=hue, data=data, ax=ax, **plot_kws)
++        else:
++            # kdeplot and ecdfplot have similar signatures
++            plot_func(x=x, y=y, hue=hue, data=data, ax=ax, **plot_kws)
++        
++        # Add rug plot if requested
++        if rug:
++            rug_data = data.copy()
++            if hue is not None:
++                # Filter data for current hue level if hue mapping is used
++                if "hue" in plot_kws:
++                    hue_var = plot_kws["hue"]
++                    hue_val = data[hue_var].iloc[0] if len(data) > 0 else None
++                    rug_data = rug_data[rug_data[hue_var] == hue_val]
++            rugplot(x=x, y=y, data=rug_data, ax=ax, **rug_kws)
++
++    # Map the plotting function to the FacetGrid
++    g.map_dataframe(_plot_single_facet, x=x, y=y, **plot_kws)
++
++    # Add a legend if needed
++    if legend and hue is not None:
++        g.add_legend(title=hue, label_order=hue_order)
++
++    # Apply log scaling if requested
++    if log_scale is not None:
++        if isinstance(log_scale, (bool, int, float)):
++            log_base = 10 if log_scale is True else log_scale
++            for ax in g.axes.flat:
++                if x is not None:
++                    ax.set_xscale("log", base=log_base)
++                if y is not None:
++                    ax.set_yscale("log", base=log_base)
++        elif isinstance(log_scale, (tuple, list)) and len(log_scale) == 2:
++            for i, ax in enumerate(g.axes.flat):
++                x_log, y_log = log_scale
++                if x is not None and x_log:
++                    x_base = 10 if x_log is True else x_log
++                    ax.set_xscale("log", base=x_base)
++                if y is not None and y_log:
++                    y_base = 10 if y_log is True else y_log
++                    ax.set_yscale("log", base=y_base)
++
++    return g
++
++
+ @_deprecate_positional_args
+ def distplot(
+     *,
+@@ -2094,6 +2306,12 @@ def distplot(
+ ):
+     """Flexibly plot a univariate distribution of observations.
+ 
++    .. warning::
++        This function is deprecated and will be removed in a future version.
++        Please adapt your code to use :func:`displot` (a figure-level function
++        with similar flexibility) or :func:`histplot` (an axes-level function
++        for histograms).
++
+     This function combines the matplotlib ``hist`` function (with automatic
+     calculation of a good default bin size) with the seaborn :func:`kdeplot`
+     and :func:`rugplot` functions. It can also fit ``scipy.stats``
+@@ -2146,6 +2364,8 @@ def distplot(
+ 
+     See Also
+     --------
++    displot : Figure-level interface for distribution plots.
++    histplot : Plot a histogram with optional kernel density estimate.
+     kdeplot : Show a univariate or bivariate distribution with a kernel
+               density estimate.
+     rugplot : Draw small vertical lines to show each observation in a
+@@ -2216,6 +2436,15 @@ def distplot(
+         ...                             "alpha": 1, "color": "g"})
+ 
+     """
++    # Show deprecation warning
++    warnings.warn(
++        "`distplot` is a deprecated function and will be removed in a future "
++        "version. Please adapt your code to use either `displot` (a figure-level "
++        "function with similar flexibility) or `histplot` (an axes-level function "
++        "for histograms).",
++        FutureWarning, stacklevel=2
++    )
++    
+     # Handle deprecation of ``a```
+     if a is not None:
+         msg = "The `a` parameter is now called `x`. Please update your code."

@@ -1,0 +1,67 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..c1585ad 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -67,6 +67,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -81,13 +82,14 @@ def expand_modules(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+         ):
+             continue
++        
+         module_path = get_python_path(something)
+         additional_search_path = [".", module_path] + path
+         if os.path.exists(something):
+             # this is a file or a directory
+             try:
+                 modname = ".".join(
+-                    modutils.modpath_from_file(something, path=additional_search_path)
++                    discover_package_path(something, source_roots, additional_search_path)
+                 )
+             except ImportError:
+                 modname = os.path.splitext(basename)[0]
+@@ -160,4 +162,24 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors
++
++
++def discover_package_path(
++    filepath: str, source_roots: Sequence[str], path: Sequence[str]
++) -> list[str]:
++    """Discover the package path for a file, considering source roots for implicit namespace packages."""
++    abs_filepath = os.path.abspath(filepath)
++    
++    # Check if the file is under any of the source roots
++    for source_root in source_roots:
++        abs_source_root = os.path.abspath(source_root)
++        if os.path.commonpath([abs_source_root, abs_filepath]) == abs_source_root:
++            relpath = os.path.relpath(abs_filepath, abs_source_root)
++            parts = relpath.split(os.sep)
++            if parts[-1].endswith('.py'):
++                parts[-1] = parts[-1][:-3]
++            return parts
++    
++    # If not under any source root, use the default logic
++    return modutils.modpath_from_file(filepath, path=path)
+diff --git a/pylint/lint/parallel.py b/pylint/lint/parallel.py
+index 764ff41..84fbb20 100644
+--- a/pylint/lint/parallel.py
++++ b/pylint/lint/parallel.py
+@@ -51,7 +51,7 @@ def _worker_initialize(
+     # On the worker process side the messages are just collected and passed back to
+     # parent process as _worker_check_file function's return value
+     _worker_linter.set_reporter(reporters.CollectingReporter())
+-    _worker_linter.open()
++    _worker_linter.open()  # type: ignore[no-untyped-call]
+ 
+     # Patch sys.path so that each argument is importable just like in single job mode
+     _patch_sys_path(arguments or ())

@@ -1,0 +1,46 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..e684c32 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -514,7 +514,7 @@ class Documenter:
+                     logger.warning(__('missing attribute %s in object %s') %
+                                    (name, self.fullname), type='autodoc')
+             return False, sorted(selected)
+-        elif self.options.inherited_members:
++        elif self.options.inherited_members or self.options.imported_members:
+             return False, sorted((m.name, m.value) for m in members.values())
+         else:
+             return False, sorted((m.name, m.value) for m in members.values()
+@@ -819,7 +819,11 @@ class ModuleDocumenter(Documenter):
+                     hasattr(self.object, '__all__')):
+                 # for implicit module members, check __module__ to avoid
+                 # documenting imported objects
+-                return True, safe_getmembers(self.object)
++                if self.options.imported_members:
++                    # If imported_members is True, we include all members, so no need to check __module__
++                    return False, safe_getmembers(self.object)
++                else:
++                    return True, safe_getmembers(self.object)
+             else:
+                 memberlist = self.object.__all__
+                 # Sometimes __all__ is broken...
+@@ -832,7 +836,10 @@ class ModuleDocumenter(Documenter):
+                         type='autodoc'
+                     )
+                     # fall back to all members
+-                    return True, safe_getmembers(self.object)
++                    if self.options.imported_members:
++                        return False, safe_getmembers(self.object)
++                    else:
++                        return True, safe_getmembers(self.object)
+         else:
+             memberlist = self.options.members or []
+         ret = []
+@@ -1062,6 +1069,7 @@ class ClassDocumenter(DocstringSignatureMixin, ModuleLevelDocumenter):  # type:
+         'show-inheritance': bool_option, 'member-order': identity,
+         'exclude-members': members_set_option,
+         'private-members': bool_option, 'special-members': members_option,
++        'imported-members': bool_option,
+     }  # type: Dict[str, Callable]
+ 
+     def __init__(self, *args):

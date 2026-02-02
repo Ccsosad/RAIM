@@ -1,0 +1,54 @@
+diff --git a/requests/exceptions.py b/requests/exceptions.py
+index dd3ff05..2d13950 100644
+--- a/requests/exceptions.py
++++ b/requests/exceptions.py
+@@ -29,6 +29,10 @@ class InvalidJSONError(RequestException):
+     """A JSON error occurred."""
+ 
+ 
++class JSONDecodeError(InvalidJSONError):
++    """Failed to decode JSON in response."""
++
++
+ class HTTPError(RequestException):
+     """An HTTP error occurred."""
+ 
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..98df1f3 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -882,12 +882,8 @@ class Response(object):
+         r"""Returns the json-encoded content of a response, if any.
+ 
+         :param \*\*kwargs: Optional arguments that ``json.loads`` takes.
+-        :raises simplejson.JSONDecodeError: If the response body does not
+-            contain valid json and simplejson is installed.
+-        :raises json.JSONDecodeError: If the response body does not contain
+-            valid json and simplejson is not installed on Python 3.
+-        :raises ValueError: If the response body does not contain valid
+-            json and simplejson is not installed on Python 2.        
++        :raises requests.exceptions.JSONDecodeError: If the response body does not
++            contain valid json.
+         """
+ 
+         if not self.encoding and self.content and len(self.content) > 3:
+@@ -907,7 +903,12 @@ class Response(object):
+                     # and the server didn't bother to tell us what codec *was*
+                     # used.
+                     pass
+-        return complexjson.loads(self.text, **kwargs)
++        try:
++            return complexjson.loads(self.text, **kwargs)
++        except (simplejson.JSONDecodeError, json.JSONDecodeError, ValueError) as e:
++            # Catch JSON-related exceptions and raise a unified JSONDecodeError
++            from .exceptions import JSONDecodeError
++            raise JSONDecodeError(e, response=self)
+ 
+     @property
+     def links(self):
+@@ -963,4 +964,4 @@ class Response(object):
+ 
+         release_conn = getattr(self.raw, 'release_conn', None)
+         if release_conn is not None:
+-            release_conn()
++            release_conn()

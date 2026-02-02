@@ -1,0 +1,184 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..8d8404d 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -41,10 +41,10 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         """
+         if not (hasattr(X, 'iloc') and getattr(X, 'ndim', 0) == 2):
+             # if not a dataframe, do normal check_array validation
+-            X_temp = check_array(X, dtype=None)
++            X_temp = check_array(X, dtype=None, force_all_finite=False)
+             if (not hasattr(X, 'dtype')
+                     and np.issubdtype(X_temp.dtype, np.str_)):
+-                X = check_array(X, dtype=object)
++                X = check_array(X, dtype=object, force_all_finite=False)
+             else:
+                 X = X_temp
+             needs_validation = False
+@@ -59,7 +59,7 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         for i in range(n_features):
+             Xi = self._get_feature(X, feature_idx=i)
+             Xi = check_array(Xi, ensure_2d=False, dtype=None,
+-                             force_all_finite=needs_validation)
++                             force_all_finite=False)
+             X_columns.append(Xi)
+ 
+         return X_columns, n_samples, n_features
+@@ -71,6 +71,74 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         # numpy arrays, sparse arrays
+         return X[:, feature_idx]
+ 
++    def _check_unknown_with_nan(self, values, known_values, return_mask=False):
++        """
++        Check for unknown values, considering NaN and None as known.
++        """
++        # Helper to check for scalar NaN/None
++        def _is_scalar_nan(x):
++            return isinstance(x, float) and np.isnan(x)
++
++        # For object dtype, we consider None as missing as well
++        if values.dtype == object:
++            missing_mask = np.array([x is None or _is_scalar_nan(x) for x in values])
++        elif np.issubdtype(values.dtype, np.floating):
++            missing_mask = np.isnan(values)
++        else:
++            missing_mask = np.zeros(len(values), dtype=bool)
++
++        # For non-missing values, use the original _check_unknown
++        non_missing_values = values[~missing_mask]
++        if return_mask:
++            if len(non_missing_values) > 0:
++                diff, non_missing_mask = _check_unknown(
++                    non_missing_values, known_values, return_mask=True)
++            else:
++                diff = np.array([], dtype=values.dtype)
++                non_missing_mask = np.array([], dtype=bool)
++            # Build the full mask
++            full_mask = np.ones(len(values), dtype=bool)
++            full_mask[~missing_mask] = non_missing_mask
++            # For missing values, check if they are in known_values
++            for i in np.where(missing_mask)[0]:
++                val = values[i]
++                # Check if val is in known_values
++                if val is None:
++                    if None in known_values:
++                        full_mask[i] = True
++                    else:
++                        full_mask[i] = False
++                        diff = np.append(diff, val)
++                elif _is_scalar_nan(val):
++                    # Check for NaN in known_values
++                    if any(_is_scalar_nan(k) for k in known_values):
++                        full_mask[i] = True
++                    else:
++                        full_mask[i] = False
++                        diff = np.append(diff, val)
++                else:
++                    # This should not happen
++                    full_mask[i] = False
++                    diff = np.append(diff, val)
++            return diff, full_mask
++        else:
++            if len(non_missing_values) > 0:
++                diff = _check_unknown(non_missing_values, known_values,
++                                      return_mask=False)
++            else:
++                diff = np.array([], dtype=values.dtype)
++            # Check missing values
++            for val in values[missing_mask]:
++                if val is None:
++                    if None not in known_values:
++                        diff = np.append(diff, val)
++                elif _is_scalar_nan(val):
++                    if not any(_is_scalar_nan(k) for k in known_values):
++                        diff = np.append(diff, val)
++                else:
++                    diff = np.append(diff, val)
++            return diff
++
+     def _fit(self, X, handle_unknown='error'):
+         X_list, n_samples, n_features = self._check_X(X)
+ 
+@@ -92,8 +160,8 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+                         raise ValueError("Unsorted categories are not "
+                                          "supported for numerical categories")
+                 if handle_unknown == 'error':
+-                    diff = _check_unknown(Xi, cats)
+-                    if diff:
++                    diff = self._check_unknown_with_nan(Xi, cats)
++                    if len(diff):
+                         msg = ("Found unknown categories {0} in column {1}"
+                                " during fit".format(diff, i))
+                         raise ValueError(msg)
+@@ -115,8 +183,8 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+ 
+         for i in range(n_features):
+             Xi = X_list[i]
+-            diff, valid_mask = _check_unknown(Xi, self.categories_[i],
+-                                              return_mask=True)
++            diff, valid_mask = self._check_unknown_with_nan(
++                Xi, self.categories_[i], return_mask=True)
+ 
+             if not np.all(valid_mask):
+                 if handle_unknown == 'error':
+@@ -144,6 +212,60 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+ 
+         return X_int, X_mask
+ 
++    def _check_unknown_with_nan(self, values, known_values, return_mask=False):
++        """
++        Check for unknown values, considering NaN and None as known.
++        This function is a wrapper around _check_unknown that handles
++        missing values.
++        """
++        # If there are no missing values, use the original function
++        if not (np.issubdtype(values.dtype, np.floating) or
++                values.dtype == object):
++            return _check_unknown(values, known_values, return_mask=return_mask)
++
++        # We will handle missing values separately
++        # Create a mask for missing values in values
++        missing_mask = _isnan(values)
++        # For non-missing values, use _check_unknown
++        non_missing_values = values[~missing_mask]
++        if return_mask:
++            diff, non_missing_mask = _check_unknown(
++                non_missing_values, known_values, return_mask=True)
++            # Build the full mask
++            full_mask = np.ones(len(values), dtype=bool)
++            full_mask[~missing_mask] = non_missing_mask
++            # For missing values, check if they are in known_values
++            for i in np.where(missing_mask)[0]:
++                val = values[i]
++                # Check if val is in known_values
++                if _is_scalar_nan(val):
++                    # Check for NaN in known_values
++                    if any(_is_scalar_nan(k) for k in known_values):
++                        full_mask[i] = True
++                    else:
++                        full_mask[i] = False
++                        diff = np.append(diff, val)
++                else:
++                    # For None or other objects
++                    if val in known_values:
++                        full_mask[i] = True
++                    else:
++                        full_mask[i] = False
++                        diff = np.append(diff, val)
++            return diff, full_mask
++        else:
++            diff = _check_unknown(non_missing_values, known_values,
++                                  return_mask=False)
++            # Check missing values
++            for val in values[missing_mask]:
++                if _is_scalar_nan(val):
++                    if not any(_is_scalar_nan(k) for k in known_values):
++                        diff = np.append(diff, val)
++                else:
++                    if val not in known_values:
++                        diff = np.append(diff, val)
++            return diff
++
+     def _more_tags(self):
+         return {'X_types': ['categorical']}
+ 

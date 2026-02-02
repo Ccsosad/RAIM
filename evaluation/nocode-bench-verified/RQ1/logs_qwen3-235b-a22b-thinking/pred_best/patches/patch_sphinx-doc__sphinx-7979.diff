@@ -1,0 +1,13 @@
+diff --git a/sphinx/util/nodes.py b/sphinx/util/nodes.py
+index da00971..d1568ab 100644
+--- a/sphinx/util/nodes.py
++++ b/sphinx/util/nodes.py
+@@ -224,7 +224,7 @@ def is_translatable(node: Node) -> bool:
+             return False
+         return True
+ 
+-    if isinstance(node, nodes.image) and node.get('translatable'):
++    if isinstance(node, nodes.image) and node.get('translatable', True):
+         return True
+ 
+     if isinstance(node, addnodes.meta):

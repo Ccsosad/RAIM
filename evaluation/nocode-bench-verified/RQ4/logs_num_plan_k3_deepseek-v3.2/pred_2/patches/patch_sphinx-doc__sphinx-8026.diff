@@ -1,0 +1,98 @@
+diff --git a/sphinx/builders/html/__init__.py b/sphinx/builders/html/__init__.py
+index c052c27..e690573 100644
+--- a/sphinx/builders/html/__init__.py
++++ b/sphinx/builders/html/__init__.py
+@@ -594,6 +594,10 @@ class StandaloneHTMLBuilder(Builder):
+         self.imgpath = relative_uri(self.get_target_uri(docname), '_images')
+         self.dlpath = relative_uri(self.get_target_uri(docname), '_downloads')
+         self.current_docname = docname
++        # Set the current document path for the image formatter
++        from sphinx.util.uri_formatter import set_current_docpath
++        docpath = os.path.dirname(self.env.doc2path(docname))
++        set_current_docpath(docpath)
+         self.docwriter.write(doctree, destination)
+         self.docwriter.assemble_parts()
+         body = self.docwriter.parts['fragment']
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+new file mode 100644
+index 0000000..dee43a2
+--- /dev/null
++++ b/sphinx/builders/__init__.py
+@@ -0,0 +1,18 @@
++    def post_process_images(self, doctree: Node) -> None:
++        """Pick the best candidate for an image and link down-scaled images to
++        their high res version.
++        """
++        for node in doctree.traverse(nodes.image):
++            if 'uri' not in node:
++                continue
++            uri = node['uri']
++            if uri in self.images:
++                continue
++            if uri.find('://') != -1:
++                continue
++            relpath = relative_path(self.srcdir, self.env.doc2path(self.current_docname))
++            dest = self.get_target_uri(self.current_docname)
++            # Get the document path for the {docpath} token
++            docpath = os.path.dirname(self.env.doc2path(self.current_docname))
++            formatted = self.format_image_filename(uri, relpath, dest, docpath=docpath)
++            self.images[uri] = formatted
+diff --git a/sphinx/util/uri_formatter.py b/sphinx/util/uri_formatter.py
+new file mode 100644
+index 0000000..28d7170
+--- /dev/null
++++ b/sphinx/util/uri_formatter.py
+@@ -0,0 +1,53 @@
++"""
++URI formatter for Sphinx.
++"""
++
++import os
++from typing import Optional
++
++
++def format_image_filename(format_str: str, filename: str, docpath: Optional[str] = None) -> str:
++    """
++    Format an image filename according to the given format string.
++
++    The format string may contain the following tokens:
++    * ``{path}`` - the directory path component of the filename, with a trailing
++      slash if non-empty.
++    * ``{docpath}`` - the directory path component for the current document, with
++      a trailing slash if non-empty.
++    * ``{basename}`` - the filename without the directory path or file extension
++      components.
++    * ``{ext}`` - the file extension.
++    * ``{name}`` - the filename without the extension.
++    * ``{root}`` - the filename without the directory path.
++
++    If a token is not present in the format string, it is replaced by an empty string.
++
++    :param format_str: The format string.
++    :param filename: The original image filename.
++    :param docpath: The document path (directory of the current document).
++    :return: The formatted filename.
++    """
++    # Split the filename into path, basename and extension
++    path, root = os.path.split(filename)
++    if path:
++        path += '/'
++    name, ext = os.path.splitext(root)
++    basename = name
++
++    # Get the document path
++    if docpath is not None and docpath:
++        docpath = docpath.rstrip('/') + '/'
++    else:
++        docpath = ''
++
++    # Replace the tokens
++    formatted = format_str
++    formatted = formatted.replace('{path}', path)
++    formatted = formatted.replace('{docpath}', docpath)
++    formatted = formatted.replace('{basename}', basename)
++    formatted = formatted.replace('{ext}', ext)
++    formatted = formatted.replace('{name}', name)
++    formatted = formatted.replace('{root}', root)
++
++    return formatted

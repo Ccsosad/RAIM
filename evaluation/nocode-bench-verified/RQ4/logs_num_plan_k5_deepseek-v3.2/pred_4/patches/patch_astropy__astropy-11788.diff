@@ -1,0 +1,33 @@
+diff --git a/astropy/units/core.py b/astropy/units/core.py
+index 2b12b30..a2bfc17 100644
+--- a/astropy/units/core.py
++++ b/astropy/units/core.py
+@@ -2445,6 +2445,20 @@ def _add_prefixes(u, excludes=[], namespace=None, prefixes=False):
+                                             _error_check=False),
+                        namespace=namespace, format=format)
+ 
++    # Special case: add milli- prefix for Angstrom
++    if 'Angstrom' in u.names and 'm' not in excludes:
++        # Create milli-Angstrom
++        names = []
++        format = {}
++        for alias in u.short_names:
++            names.append('m' + alias)
++        for alias in u.long_names:
++            names.append('milli' + alias)
++        if len(names):
++            PrefixUnit(names, CompositeUnit(0.001, [u], [1],
++                                            _error_check=False),
++                       namespace=namespace, format=format)
++
+ 
+ def def_unit(s, represents=None, doc=None, format=None, prefixes=False,
+              exclude_prefixes=[], namespace=None):
+diff --git a/astropy/units/prefix_config.py b/astropy/units/prefix_config.py
+new file mode 100644
+index 0000000..14ff820
+--- /dev/null
++++ b/astropy/units/prefix_config.py
+@@ -0,0 +1,2 @@
++# This file is used to configure unit prefixes.
++# Currently, it is used to enable the milli- prefix for Angstrom.

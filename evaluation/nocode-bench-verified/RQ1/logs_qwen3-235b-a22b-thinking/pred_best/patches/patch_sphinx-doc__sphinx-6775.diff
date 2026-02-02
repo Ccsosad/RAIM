@@ -1,0 +1,12 @@
+diff --git a/sphinx/builders/latex/__init__.py b/sphinx/builders/latex/__init__.py
+index 1c44ce3..6da4028 100644
+--- a/sphinx/builders/latex/__init__.py
++++ b/sphinx/builders/latex/__init__.py
+@@ -182,6 +182,7 @@ class LaTeXBuilder(Builder):
+         # Apply user settings to context
+         self.context.update(self.config.latex_elements)
+         self.context['release'] = self.config.release
++        self.context.setdefault('extrapackages', '')
+         self.context['use_xindy'] = self.config.latex_use_xindy
+ 
+         if self.config.today:

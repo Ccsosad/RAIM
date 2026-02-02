@@ -1,0 +1,83 @@
+diff --git a/pylint/pyreverse/diadefslib.py b/pylint/pyreverse/diadefslib.py
+index 7f83c91..e80191a 100644
+--- a/pylint/pyreverse/diadefslib.py
++++ b/pylint/pyreverse/diadefslib.py
+@@ -70,7 +70,51 @@ class DiaDefGenerator:
+         """True if builtins and not show_builtins."""
+         if self.config.show_builtin:
+             return True
+-        return node.root().name != "builtins"  # type: ignore[no-any-return]
++        if node.root().name == "builtins":
++            return False
++        # Check if it's a standard library module
++        if not getattr(self.config, 'show_stdlib', False):
++            # Simple heuristic: check if module is in standard library paths
++            # This could be enhanced with more precise detection
++            module_name = node.root().name
++            if module_name and self._is_stdlib_module(module_name):
++                return False
++        return True
++
++    def _is_stdlib_module(self, module_name: str) -> bool:
++        """Check if a module is part of the standard library."""
++        # Import here to avoid circular imports
++        import sys
++        import os
++        
++        # Get the module if it's already loaded
++        if module_name in sys.modules:
++            module = sys.modules[module_name]
++            if hasattr(module, '__file__') and module.__file__:
++                # Check if file is in standard library paths
++                stdlib_paths = [
++                    os.path.dirname(os.__file__),  # Python standard library
++                    sys.prefix,
++                    getattr(sys, 'base_prefix', sys.prefix),
++                    getattr(sys, 'real_prefix', sys.prefix),  # For virtualenv
++                ]
++                
++                # Normalize paths for comparison
++                module_path = os.path.abspath(module.__file__)
++                for stdlib_path in stdlib_paths:
++                    if stdlib_path and os.path.exists(stdlib_path):
++                        stdlib_path_abs = os.path.abspath(stdlib_path)
++                        if module_path.startswith(stdlib_path_abs):
++                            return True
++        
++        # Check common standard library module names
++        stdlib_modules = {
++            'os', 'sys', 're', 'json', 'collections', 'itertools', 'math',
++            'datetime', 'typing', 'pathlib', 'functools', 'logging', 'hashlib',
++            'random', 'string', 'copy', 'decimal', 'fractions', 'statistics'
++        }
++        root_name = module_name.split('.')[0]
++        return root_name in stdlib_modules
+ 
+     def add_class(self, node: nodes.ClassDef) -> None:
+         """Visit one class and add it to diagram."""
+diff --git a/pylint/pyreverse/enhanced_config.py b/pylint/pyreverse/enhanced_config.py
+new file mode 100644
+index 0000000..03c7029
+--- /dev/null
++++ b/pylint/pyreverse/enhanced_config.py
+@@ -0,0 +1,20 @@
++"""Enhanced configuration for pyreverse with additional options."""
++
++from argparse import ArgumentParser, _ArgumentGroup
++
++
++def add_show_stdlib_argument(parser_or_group: ArgumentParser | _ArgumentGroup) -> None:
++    """Add the --show-stdlib argument to the parser or argument group.
++    
++    Args:
++        parser_or_group: Either an ArgumentParser or an ArgumentGroup to add the argument to.
++    """
++    parser_or_group.add_argument(
++        "-L",
++        "--show-stdlib",
++        dest="show_stdlib",
++        action="store_true",
++        default=False,
++        help="Include standard library modules in the diagram. "
++             "By default, standard library modules are excluded.",
++    )

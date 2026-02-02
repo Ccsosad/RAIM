@@ -1,0 +1,21 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 4db1264..5e3025f 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -212,6 +212,16 @@ class TextReporter(BaseReporter):
+         TextWriter().format(layout, self.out)
+ 
+ 
++class NoHeaderReporter(TextReporter):
++    """A reporter that doesn't include the module name in the output."""
++
++    name = "no-header"
++
++    def handle_message(self, msg: Message) -> None:
++        """Manage message without printing module header."""
++        self.write_message(msg)
++
++
+ class ParseableTextReporter(TextReporter):
+     """A reporter very similar to TextReporter, but display messages in a form
+     recognized by most text editors :

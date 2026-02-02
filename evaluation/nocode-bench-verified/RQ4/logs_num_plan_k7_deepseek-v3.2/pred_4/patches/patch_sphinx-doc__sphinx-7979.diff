@@ -1,0 +1,17 @@
+diff --git a/sphinx/transforms/i18n.py b/sphinx/transforms/i18n.py
+index 06e4d1b..a53889a 100644
+--- a/sphinx/transforms/i18n.py
++++ b/sphinx/transforms/i18n.py
+@@ -442,6 +442,12 @@ class Locale(SphinxTransform):
+ 
+             if isinstance(node, IMAGE_TYPE_NODES):
+                 node.update_all_atts(patch)
++                # Translate the alt text
++                alt = node.get('alt')
++                if alt:
++                    alt_translated = catalog.gettext(alt)
++                    if alt_translated and alt_translated != alt:
++                        node['alt'] = alt_translated
+ 
+             node['translated'] = True  # to avoid double translation
+ 

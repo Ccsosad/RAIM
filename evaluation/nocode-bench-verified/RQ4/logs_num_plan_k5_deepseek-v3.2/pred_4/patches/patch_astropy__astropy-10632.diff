@@ -1,0 +1,26 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..ceb39cb 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -90,6 +90,10 @@ class Conf(_config.ConfigNamespace):
+         True,
+         'If True, temporary download files created when the cache is '
+         'inaccessible will be deleted at the end of the python session.')
++    allow_internet = _config.ConfigItem(
++        True,
++        'If True, allow downloading files from the internet. If False, '
++        'only local files and files in the cache will be accessible.')
+ 
+ 
+ conf = Conf()
+@@ -1172,6 +1176,10 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+         http_headers = {'User-Agent': conf.default_http_user_agent,
+                         'Accept': '*/*'}
+ 
++    # If internet is not allowed, we should not try any source.
++    if not conf.allow_internet:
++        sources = []
++
+     missing_cache = ""
+ 
+     url_key = remote_url

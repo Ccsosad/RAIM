@@ -1,0 +1,57 @@
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 38580cf..2b6d114 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -1206,6 +1206,16 @@ _validators = {
+     "path.sketch":             validate_sketch,
+     "path.effects":            validate_anylist,
+     "agg.path.chunksize":      validate_int,  # 0 to disable chunking
++    "xtick.minor.ndivs":       validate_int_or_auto,
++    "ytick.minor.ndivs":       validate_int_or_auto,
++    "xtick.minor.ndivs":       lambda x: (x if x == 'auto' or (isinstance(x, int) and x > 0) else
++                                          (_raise_error(ValueError(f"{x} must be 'auto' or a positive integer")))),
++    "ytick.minor.ndivs":       lambda x: (x if x == 'auto' or (isinstance(x, int) and x > 0) else
++                                          (_raise_error(ValueError(f"{x} must be 'auto' or a positive integer")))),
++    "xtick.minor.ndivs":       lambda x: x if x == 'auto' or (isinstance(x, int) and x > 0) else
++                                          (_raise_error(ValueError(f"{x} must be 'auto' or a positive integer"))),
++    "ytick.minor.ndivs":       lambda x: x if x == 'auto' or (isinstance(x, int) and x > 0) else
++                                          (_raise_error(ValueError(f"{x} must be 'auto' or a positive integer"))),
+ 
+     # key-mappings (multi-character mappings should be a list/tuple)
+     "keymap.fullscreen": validate_stringlist,
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..5e6d0b0 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2891,13 +2891,19 @@ class AutoMinorLocator(Locator):
+             return []
+ 
+         if self.ndivs is None:
+-
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
++            # Check the rcParam for this axis
++            if self.axis.axis_name == 'x':
++                ndivs_rc = mpl.rcParams['xtick.minor.ndivs']
++            else:  # 'y'
++                ndivs_rc = mpl.rcParams['ytick.minor.ndivs']
++            if ndivs_rc == 'auto':
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+             else:
+-                ndivs = 4
++                ndivs = ndivs_rc
+         else:
+             ndivs = self.ndivs
+ 
+@@ -2916,4 +2922,4 @@ class AutoMinorLocator(Locator):
+ 
+     def tick_values(self, vmin, vmax):
+         raise NotImplementedError('Cannot get tick locations for a '
+-                                  '%s type.' % type(self))
++                                  '%s type.' % type(self))

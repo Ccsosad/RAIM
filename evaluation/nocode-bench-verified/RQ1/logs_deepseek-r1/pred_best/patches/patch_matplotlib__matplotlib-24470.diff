@@ -1,0 +1,79 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..7129a2f 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3072,7 +3072,7 @@ class Axes(_AxesBase):
+ 
+     @_preprocess_data(replace_names=["x", "explode", "labels", "colors"])
+     def pie(self, x, explode=None, labels=None, colors=None,
+-            autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
++            autopct=None, pctdistance=0.6, shadow=False, hatch=None, labeldistance=1.1,
+             startangle=0, radius=1, counterclock=True,
+             wedgeprops=None, textprops=None, center=(0, 0),
+             frame=False, rotatelabels=False, *, normalize=True):
+@@ -3114,6 +3114,11 @@ class Axes(_AxesBase):
+         shadow : bool, default: False
+             Draw a shadow beneath the pie.
+ 
++        hatch : str or list of str, default: None
++            Hatch pattern to use for the wedges. If a string, then all wedges
++            will have the same hatch. If a list, then each wedge will have a
++            different hatch. The length of the list must be the same as *x*.
++
+         normalize : bool, default: True
+             When *True*, always make a full pie by normalizing x so that
+             ``sum(x) == 1``. *False* makes a partial pie if ``sum(x) <= 1``
+@@ -3199,6 +3204,14 @@ class Axes(_AxesBase):
+             raise ValueError("'label' must be of length 'x'")
+         if len(x) != len(explode):
+             raise ValueError("'explode' must be of length 'x'")
++        if hatch is None:
++            hatches = [None] * len(x)
++        elif isinstance(hatch, str):
++            hatches = [hatch] * len(x)
++        elif len(hatch) != len(x):
++            raise ValueError("hatch must be None, a string, or a list of strings of length len(x)")
++        else:
++            hatches = hatch
+         if colors is None:
+             get_next_color = self._get_patches_for_fill.get_next_color
+         else:
+@@ -3223,7 +3236,7 @@ class Axes(_AxesBase):
+         slices = []
+         autotexts = []
+ 
+-        for frac, label, expl in zip(x, labels, explode):
++        for frac, label, expl, hatch_pattern in zip(x, labels, explode, hatches):
+             x, y = center
+             theta2 = (theta1 + frac) if counterclock else (theta1 - frac)
+             thetam = 2 * np.pi * 0.5 * (theta1 + theta2)
+@@ -3236,6 +3249,8 @@ class Axes(_AxesBase):
+                                clip_on=False,
+                                label=label)
+             w.set(**wedgeprops)
++            if hatch_pattern is not None:
++                w.set_hatch(hatch_pattern)
+             slices.append(w)
+             self.add_patch(w)
+ 
+diff --git a/lib/matplotlib/pyplot.py b/lib/matplotlib/pyplot.py
+index bce5058..e572fd2 100644
+--- a/lib/matplotlib/pyplot.py
++++ b/lib/matplotlib/pyplot.py
+@@ -2776,14 +2776,14 @@ def phase_spectrum(
+ @_copy_docstring_and_deprecators(Axes.pie)
+ def pie(
+         x, explode=None, labels=None, colors=None, autopct=None,
+-        pctdistance=0.6, shadow=False, labeldistance=1.1,
++        pctdistance=0.6, shadow=False, hatch=None, labeldistance=1.1,
+         startangle=0, radius=1, counterclock=True, wedgeprops=None,
+         textprops=None, center=(0, 0), frame=False,
+         rotatelabels=False, *, normalize=True, data=None):
+     return gca().pie(
+         x, explode=explode, labels=labels, colors=colors,
+         autopct=autopct, pctdistance=pctdistance, shadow=shadow,
+-        labeldistance=labeldistance, startangle=startangle,
++        hatch=hatch, labeldistance=labeldistance, startangle=startangle,
+         radius=radius, counterclock=counterclock,
+         wedgeprops=wedgeprops, textprops=textprops, center=center,
+         frame=frame, rotatelabels=rotatelabels, normalize=normalize,

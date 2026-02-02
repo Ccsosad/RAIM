@@ -1,0 +1,119 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 1dd2ee6..e14d7ef 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4174,7 +4174,7 @@ class DataArray(
+             zarr_version=zarr_version,
+         )
+ 
+-    def to_dict(self, data: bool = True, encoding: bool = False) -> dict[str, Any]:
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
+         """
+         Convert this xarray.DataArray into a dictionary following xarray
+         naming conventions.
+@@ -4185,9 +4185,10 @@ class DataArray(
+ 
+         Parameters
+         ----------
+-        data : bool, default: True
++        data : bool or str, default: True
+             Whether to include the actual data in the dictionary. When set to
+-            False, returns just the schema.
++            False, returns just the schema. If 'array', returns data as the
++            underlying array type. If 'list' or True, returns data as Python lists.
+         encoding : bool, default: False
+             Whether to include the Dataset's encoding in the dictionary.
+ 
+@@ -4200,10 +4201,23 @@ class DataArray(
+         DataArray.from_dict
+         Dataset.to_dict
+         """
+-        d = self.variable.to_dict(data=data)
++        if data == 'array':
++            var_dict = self.variable.to_dict(data=False)
++            var_dict['data'] = self.variable.data
++        else:
++            # Convert 'list' to True, and False to False
++            data_bool = data if isinstance(data, bool) else (data == 'list')
++            var_dict = self.variable.to_dict(data=data_bool)
++        d = var_dict
+         d.update({"coords": {}, "name": self.name})
+         for k, coord in self.coords.items():
+-            d["coords"][k] = coord.variable.to_dict(data=data)
++            if data == 'array':
++                coord_dict = coord.variable.to_dict(data=False)
++                coord_dict['data'] = coord.variable.data
++            else:
++                data_bool = data if isinstance(data, bool) else (data == 'list')
++                coord_dict = coord.variable.to_dict(data=data_bool)
++            d["coords"][k] = coord_dict
+         if encoding:
+             d["encoding"] = dict(self.encoding)
+         return d
+@@ -6883,4 +6897,4 @@ class DataArray(
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor["DataArray"])
++    str = utils.UncachedAccessor(StringAccessor["DataArray"])
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c4bcfde..5602327 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6154,6 +6154,50 @@ class Dataset(
+ 
+         return ordered_dims
+ 
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
++        """
++        Convert this dataset into a dictionary following xarray naming
++        conventions.
++
++        Parameters
++        ----------
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary. When set to
++            False, returns just the schema. If 'array', returns data as the
++            underlying array type. If 'list' or True, returns data as Python lists.
++        encoding : bool, default: False
++            Whether to include the Dataset's encoding in the dictionary.
++
++        Returns
++        -------
++        dict: dict
++        """
++        d: dict[str, Any] = {
++            "coords": {},
++            "attrs": dict(self.attrs),
++            "dims": dict(self.dims),
++            "data_vars": {},
++        }
++        for k, v in self.coords.items():
++            if data == 'array':
++                coord_dict = v.variable.to_dict(data=False)
++                coord_dict['data'] = v.variable.data
++            else:
++                data_bool = data if isinstance(data, bool) else (data == 'list')
++                coord_dict = v.variable.to_dict(data=data_bool)
++            d["coords"][k] = coord_dict
++        for k, v in self.data_vars.items():
++            if data == 'array':
++                var_dict = v.variable.to_dict(data=False)
++                var_dict['data'] = v.variable.data
++            else:
++                data_bool = data if isinstance(data, bool) else (data == 'list')
++                var_dict = v.variable.to_dict(data=data_bool)
++            d["data_vars"][k] = var_dict
++        if encoding:
++            d["encoding"] = dict(self.encoding)
++        return d
++
+     def to_pandas(self) -> pd.Series | pd.DataFrame:
+         """Convert this dataset into a pandas object without changing the number of dimensions.
+ 
+@@ -9252,4 +9296,4 @@ class Dataset(
+             loffset=loffset,
+             restore_coord_dims=restore_coord_dims,
+             **indexer_kwargs,
+-        )
++        )

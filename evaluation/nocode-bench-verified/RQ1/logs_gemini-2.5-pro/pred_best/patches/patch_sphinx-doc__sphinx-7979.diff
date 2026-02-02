@@ -1,0 +1,44 @@
+diff --git a/sphinx/transforms/i18n.py b/sphinx/transforms/i18n.py
+index 06e4d1b..366a633 100644
+--- a/sphinx/transforms/i18n.py
++++ b/sphinx/transforms/i18n.py
+@@ -222,6 +222,13 @@ class Locale(SphinxTransform):
+             if node.get('translated', False):  # to avoid double translation
+                 continue  # skip if the node is already translated by phase1
+ 
++            if isinstance(node, nodes.Text) and node.parent and isinstance(node.parent, IMAGE_TYPE_NODES):
++                msgstr = catalog.gettext(msg)
++                if msgstr and msgstr != msg:
++                    node.parent['alt'] = msgstr
++                node['translated'] = True
++                continue
++
+             msgstr = catalog.gettext(msg)
+             # XXX add marker to untranslated parts
+             if not msgstr or msgstr == msg:  # as-of-yet untranslated
+diff --git a/sphinx/util/nodes.py b/sphinx/util/nodes.py
+index da00971..600247b 100644
+--- a/sphinx/util/nodes.py
++++ b/sphinx/util/nodes.py
+@@ -250,6 +250,12 @@ META_TYPE_NODES = (
+ 
+ def extract_messages(doctree: Element) -> Iterable[Tuple[Element, str]]:
+     """Extract translatable messages from a document tree."""
++    for node in doctree.traverse(nodes.image):
++        if node.get('alt'):
++            textnode = nodes.Text(node['alt'])
++            textnode.parent = node
++            yield textnode, node['alt']
++
+     for node in doctree.traverse(is_translatable):  # type: nodes.Element
+         if isinstance(node, addnodes.translatable):
+             for msg in node.extract_original_messages():
+@@ -261,8 +267,6 @@ def extract_messages(doctree: Element) -> Iterable[Tuple[Element, str]]:
+                 msg = node.astext()
+         elif isinstance(node, IMAGE_TYPE_NODES):
+             msg = '.. image:: %s' % node['uri']
+-            if node.get('alt'):
+-                msg += '\n   :alt: %s' % node['alt']
+         elif isinstance(node, META_TYPE_NODES):
+             msg = node.rawcontent
+         elif isinstance(node, nodes.pending) and is_pending_meta(node):

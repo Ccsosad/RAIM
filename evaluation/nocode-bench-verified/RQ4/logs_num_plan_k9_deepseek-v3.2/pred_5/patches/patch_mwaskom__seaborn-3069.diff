@@ -1,0 +1,10 @@
+diff --git a/seaborn/_core/plot.py b/seaborn/_core/plot.py
+index 5b43615..4f0290a 100644
+--- a/seaborn/_core/plot.py
++++ b/seaborn/_core/plot.py
+@@ -1646,4 +1646,4 @@ class Plotter:
+ 
+         engine_default = None if p._target is not None else "tight"
+         layout_engine = p._layout_spec.get("engine", engine_default)
+-        set_layout_engine(self._figure, layout_engine)
++        set_layout_engine(self._figure, layout_engine)

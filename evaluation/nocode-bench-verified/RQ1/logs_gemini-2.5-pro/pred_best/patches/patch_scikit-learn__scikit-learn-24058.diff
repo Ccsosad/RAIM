@@ -1,0 +1,14 @@
+diff --git a/sklearn/preprocessing/_function_transformer.py b/sklearn/preprocessing/_function_transformer.py
+index ad17660..46eeea7 100644
+--- a/sklearn/preprocessing/_function_transformer.py
++++ b/sklearn/preprocessing/_function_transformer.py
+@@ -158,6 +158,9 @@ class FunctionTransformer(TransformerMixin, BaseEstimator):
+         self.kw_args = kw_args
+         self.inv_kw_args = inv_kw_args
+ 
++        if func is None and feature_names_out is None:
++            self.feature_names_out = "one-to-one"
++
+     def _check_input(self, X, *, reset):
+         if self.validate:
+             return self._validate_data(X, accept_sparse=self.accept_sparse, reset=reset)

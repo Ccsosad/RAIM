@@ -1,0 +1,14 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..533ac7d 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -191,6 +191,9 @@ def _standardize_physical_type_names(physical_type_input):
+     for ptype_input in physical_type_input:
+         if not isinstance(ptype_input, str):
+             raise ValueError(f"expecting a string, but got {ptype_input}")
++        # Check if the input is an attribute name and replace with the mapped name
++        if ptype_input in _attrname_physical_mapping:
++            ptype_input = _attrname_physical_mapping[ptype_input]
+         input_set = set(ptype_input.split("/"))
+         processed_set = {s.strip().replace("_", " ") for s in input_set}
+         standardized_physical_types |= processed_set

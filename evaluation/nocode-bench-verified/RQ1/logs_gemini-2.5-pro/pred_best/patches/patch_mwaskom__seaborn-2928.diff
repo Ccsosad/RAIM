@@ -1,0 +1,114 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..8786fb5 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -62,6 +62,31 @@ class _BaseGrid:
+         kwargs.setdefault("bbox_inches", "tight")
+         self.figure.savefig(*args, **kwargs)
+ 
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function `func` to the grid object and return its result.
++
++        This is useful for applying functions in a chain. The function
++        should take the grid object as its first argument.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid.
++        args : positional arguments
++            Positional arguments to pass to `func`.
++        kwargs : keyword arguments
++            Keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        result of func
++            The function `func` may return the grid object for further chaining,
++            or it may return something else.
++
++        """
++        return func(self, *args, **kwargs)
++
+ 
+ class Grid(_BaseGrid):
+     """A grid that can have multiple subplots and an external legend."""
+@@ -78,12 +103,20 @@ class Grid(_BaseGrid):
+         self._extract_legend_handles = False
+ 
+     def tight_layout(self, *args, **kwargs):
+-        """Call fig.tight_layout within rect that exclude the legend."""
++        """Call fig.tight_layout within rect that exclude the legend.
++
++        Returns
++        -------
++        self : Grid instance
++            Returns self for easy chaining.
++
++        """
+         kwargs = kwargs.copy()
+         kwargs.setdefault("rect", self._tight_layout_rect)
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+         self._figure.tight_layout(*args, **kwargs)
++        return self
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -189,6 +222,27 @@ class Grid(_BaseGrid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to each Axes in the grid.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes a :class:`matplotlib.axes.Axes` object
++            as its first argument.
++        args, kwargs :
++            Additional positional and keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        self
++            The Grid object.
++
++        """
++        for ax in self.axes.flat:
++            func(ax, *args, **kwargs)
++        return self
++
+     def _update_legend_data(self, ax):
+         """Extract the legend data from an axes object and save it."""
+         data = {}
+@@ -1839,6 +1893,27 @@ class JointGrid(_BaseGrid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to each Axes in the grid.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes a :class:`matplotlib.axes.Axes` object
++            as its first argument.
++        args, kwargs :
++            Additional positional and keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        self
++            The JointGrid object.
++
++        """
++        for ax in [self.ax_joint, self.ax_marg_x, self.ax_marg_y]:
++            func(ax, *args, **kwargs)
++        return self
++
+     def refline(
+         self, *, x=None, y=None, joint=True, marginal=True,
+         color='.5', linestyle='--', **line_kws

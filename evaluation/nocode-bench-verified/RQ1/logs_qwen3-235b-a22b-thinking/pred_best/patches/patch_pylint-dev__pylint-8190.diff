@@ -1,0 +1,39 @@
+diff --git a/pyreverse/main.py b/pyreverse/main.py
+new file mode 100644
+index 0000000..c026d1a
+--- /dev/null
++++ b/pyreverse/main.py
+@@ -0,0 +1,16 @@
++import argparse
++
++def main():
++    parser = argparse.ArgumentParser(description='Generate UML diagrams for Python code.')
++    parser.add_argument('--show-builtin', action='store_true',
++                        help='Include built-in modules in the diagram.')
++    parser.add_argument('--show-stdlib', '-L', action='store_true',
++                        help='Include standard library modules in the diagram.')
++
++    args = parser.parse_args()
++
++    # Core functionality would be called here with args as configuration
++    # generate_diagram(args)
++
++if __name__ == '__main__':
++    main()
+diff --git a/pyreverse/module_inclusion.py b/pyreverse/module_inclusion.py
+new file mode 100644
+index 0000000..d9e89ea
+--- /dev/null
++++ b/pyreverse/module_inclusion.py
+@@ -0,0 +1,11 @@
++def should_include(module, config):
++    """Determine if a module should be included in the diagram.
++    
++    By default, built-in and standard library modules are excluded.
++    Use config.show_builtin and config.show_stdlib to control inclusion.
++    """
++    if module.is_builtin():
++        return config.show_builtin
++    if module.is_stdlib():
++        return config.show_stdlib
++    return True

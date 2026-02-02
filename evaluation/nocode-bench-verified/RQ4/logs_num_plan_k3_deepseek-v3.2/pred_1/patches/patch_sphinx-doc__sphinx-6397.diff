@@ -1,0 +1,53 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..2e201a3 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -392,6 +392,10 @@ class Documenter:
+ 
+         Let the user process it via the ``autodoc-process-signature`` event.
+         """
++        # Check the configuration for typehints
++        typehints = self.env.config.autodoc_typehints
++        show_annotation = (typehints != 'none')
++
+         if self.args is not None:
+             # signature given explicitly
+             args = "(%s)" % self.args
+@@ -399,7 +403,14 @@ class Documenter:
+             # try to introspect the signature
+             try:
+                 try:
+-                    args = self.format_args(**kwargs)
++                    if show_annotation:
++                        args = self.format_args(**kwargs)
++                    else:
++                        # Try to call with show_annotation=False if the documenter supports it
++                        try:
++                            args = self.format_args(show_annotation=False, **kwargs)
++                        except TypeError:
++                            args = self.format_args(**kwargs)
+                 except TypeError:
+                     # retry without arguments for old documenters
+                     args = self.format_args()
+@@ -408,7 +419,7 @@ class Documenter:
+                                (self.fullname, err), type='autodoc')
+                 args = None
+ 
+-        retann = self.retann
++        retann = self.retann if show_annotation else None
+ 
+         result = self.env.events.emit_firstresult('autodoc-process-signature',
+                                                   self.objtype, self.fullname,
+diff --git a/sphinx/util/inspect.py b/sphinx/util/inspect.py
+index 275b3fa..9fbe6dc 100644
+--- a/sphinx/util/inspect.py
++++ b/sphinx/util/inspect.py
+@@ -465,7 +465,7 @@ class Signature:
+             args.append(arg.getvalue())
+             last_kind = param.kind
+ 
+-        if self.return_annotation is inspect.Parameter.empty:
++        if self.return_annotation is inspect.Parameter.empty or not show_annotation:
+             return '(%s)' % ', '.join(args)
+         else:
+             if 'return' in self.annotations:

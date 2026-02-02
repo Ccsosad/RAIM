@@ -1,0 +1,60 @@
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index daf5951..2c88412 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1380,6 +1380,55 @@ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+                 return value
+ 
+     def __setitem__(self, key, value):
++        # Check if dask version supports item assignment
++        try:
++            import dask
++            from packaging import version
++        except ImportError:
++            # If dask or packaging is not installed, we cannot assign
++            pass
++        else:
++            # Assume dask >= 2.0.0 supports item assignment
++            if version.parse(dask.__version__) >= version.parse('2.0.0'):
++                # Transform the key to replace trivial iterables with slice(None)
++                from collections.abc import Iterable
++                import numpy as np
++                from .. import duck_array_ops
++
++                if not isinstance(key, VectorizedIndexer):
++                    rewritten_indexer = False
++                    new_indexer = []
++                    for idim, k in enumerate(key.tuple):
++                        if isinstance(k, Iterable) and duck_array_ops.array_equiv(
++                            k, np.arange(self.array.shape[idim])
++                        ):
++                            new_indexer.append(slice(None))
++                            rewritten_indexer = True
++                        else:
++                            new_indexer.append(k)
++                    if rewritten_indexer:
++                        key = type(key)(tuple(new_indexer))
++
++                if isinstance(key, BasicIndexer):
++                    self.array[key.tuple] = value
++                    return
++                elif isinstance(key, VectorizedIndexer):
++                    self.array.vindex[key.tuple] = value
++                    return
++                elif isinstance(key, OuterIndexer):
++                    # For outer indexing, we try to assign, but it might not work.
++                    # We'll attempt the same manual orthogonal indexing as in __getitem__
++                    # but for assignment.
++                    key = key.tuple
++                    try:
++                        self.array[key] = value
++                        return
++                    except NotImplementedError:
++                        # manual orthogonal indexing for assignment is complex and not implemented.
++                        # Fall through to the error below.
++                        pass
++
++        # If we get here, either dask version is too old, or the indexer is not supported.
+         raise TypeError(
+             "this variable's data is stored in a dask array, "
+             "which does not support item assignment. To "

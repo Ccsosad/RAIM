@@ -1,0 +1,18 @@
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index 6ecf807..d4437e4 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -249,7 +249,12 @@ def generate_autosummary_docs(sources: List[str], output_dir: str = None,
+ 
+         # skip it if it exists
+         if os.path.isfile(fn):
+-            continue
++            # check overwrite behavior
++            overwrite = True
++            if app and hasattr(app, 'config') and hasattr(app.config, 'autosummary_generate_overwrite'):
++                overwrite = app.config.autosummary_generate_overwrite
++            if not overwrite:
++                continue
+ 
+         new_files.append(fn)
+ 

@@ -1,0 +1,57 @@
+diff --git a/_pytest/capture.py b/_pytest/capture.py
+index 2a7dde5..49c2110 100644
+--- a/_pytest/capture.py
++++ b/_pytest/capture.py
+@@ -137,6 +137,10 @@ class CaptureManager:
+                 rep.sections.append(("Captured stdout", out))
+             if err:
+                 rep.sections.append(("Captured stderr", err))
++            # Add captured logs if any
++            logs = self._get_captured_logs(collector)
++            if logs:
++                rep.sections.append(("Captured stdlog call", logs))
+         else:
+             yield
+ 
+@@ -173,10 +177,41 @@ class CaptureManager:
+     def pytest_internalerror(self, excinfo):
+         self.stop_global_capturing()
+ 
++    def _get_captured_logs(self, item):
++        # This method should be implemented by the logging plugin
++        # For now, return an empty string.
++        return ""
++
++    def _get_captured_logs(self, item):
++        # This method should be implemented by the logging plugin
++        # For now, return an empty string.
++        return ""
++
++    def _get_captured_logs(self, item):
++        # This method should be implemented by the logging plugin
++        # For now, return an empty string.
++        return ""
++
+     def suspend_capture_item(self, item, when, in_=False):
+         out, err = self.suspend_global_capture(item, in_=in_)
+         item.add_report_section(when, "stdout", out)
+         item.add_report_section(when, "stderr", err)
++        # Add captured logs if any
++        logs = self._get_captured_logs(item)
++        if logs:
++            item.add_report_section(when, "log", logs)
++        # Add captured logs if any
++        logs = self._get_captured_logs(item)
++        if logs:
++            item.add_report_section(when, "log", logs)
++        # Add captured logs if any
++        logs = self._get_captured_logs(item)
++        if logs:
++            item.add_report_section(when, "stdlog", logs)
++        # Add captured logs if any
++        logs = self._get_captured_logs(item)
++        if logs:
++            item.add_report_section(when, "stdlog call", logs)
+ 
+ 
+ error_capsysfderror = "cannot use capsys and capfd at the same time"

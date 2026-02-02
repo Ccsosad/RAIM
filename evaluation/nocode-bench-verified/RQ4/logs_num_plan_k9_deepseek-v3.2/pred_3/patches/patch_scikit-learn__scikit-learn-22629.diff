@@ -1,0 +1,33 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 38b5c3a..af7f613 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -225,11 +225,23 @@ def _encode(values, *, uniques, check_unknown=True):
+         except KeyError as e:
+             raise ValueError(f"y contains previously unseen labels: {str(e)}")
+     else:
+-        if check_unknown:
+-            diff = _check_unknown(values, uniques)
+-            if diff:
+-                raise ValueError(f"y contains previously unseen labels: {str(diff)}")
+-        return np.searchsorted(uniques, values)
++        # Check for NaN in values
++        if np.any(np.isnan(values)):
++            # Convert to object dtype to handle NaN via _map_to_integer
++            # This is safe because uniques is already of object dtype if it contains NaN?
++            # But uniques might be of float dtype. So we need to convert both.
++            values_obj = values.astype(object)
++            uniques_obj = uniques.astype(object)
++            try:
++                return _map_to_integer(values_obj, uniques_obj)
++            except KeyError as e:
++                raise ValueError(f"y contains previously unseen labels: {str(e)}")
++        else:
++            if check_unknown:
++                diff = _check_unknown(values, uniques)
++                if diff:
++                    raise ValueError(f"y contains previously unseen labels: {str(diff)}")
++            return np.searchsorted(uniques, values)
+ 
+ 
+ def _check_unknown(values, known_values, return_mask=False):

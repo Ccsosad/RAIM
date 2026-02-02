@@ -1,0 +1,68 @@
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..96bedcf
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,62 @@
++from astroid import nodes
++from pylint.checkers import BaseChecker
++from pylint.interfaces import IAstroidChecker, HIGH
++
++
++class PrivateImportChecker(BaseChecker):
++    """Checker that looks for imports of private names (prefixed with `_`)."""
++
++    __implements__ = IAstroidChecker
++
++    name = 'import-private-name'
++    msgs = {
++        'C8001': (
++            'Import of private name %r',
++            'import-private-name',
++            'Used when an external private name (prefixed with "_") is imported.'
++        ),
++    }
++    options = ()
++
++    def _is_inside_type_checking_block(self, node: nodes.NodeNG) -> bool:
++        """Check if the node is inside a TYPE_CHECKING block."""
++        current = node
++        while current:
++            if isinstance(current, nodes.If):
++                test = current.test
++                # Case 1: if TYPE_CHECKING:
++                if isinstance(test, nodes.Name) and test.name == 'TYPE_CHECKING':
++                    return True
++                # Case 2: if typing.TYPE_CHECKING:
++                if (isinstance(test, nodes.Attribute) and
++                    isinstance(test.expr, nodes.Name) and
++                    test.expr.name == 'typing' and
++                    test.attrname == 'TYPE_CHECKING'):
++                    return True
++            current = current.parent
++        return False
++
++    def visit_import(self, node: nodes.Import) -> None:
++        if self._is_inside_type_checking_block(node):
++            return
++        for name, _ in node.names:
++            for part in name.split('.'):
++                if part.startswith('_'):
++                    self.add_message('import-private-name', node=node, args=(part,), confidence=HIGH)
++
++    def visit_importfrom(self, node: nodes.ImportFrom) -> None:
++        if self._is_inside_type_checking_block(node):
++            return
++        # Check the module name
++        if node.modname:
++            for part in node.modname.split('.'):
++                if part != '' and part.startswith('_'):
++                    self.add_message('import-private-name', node=node, args=(part,), confidence=HIGH)
++        # Check the imported names
++        for name, _ in node.names:
++            if name.startswith('_'):
++                self.add_message('import-private-name', node=node, args=(name,), confidence=HIGH)
++
++
++def register(linter):
++    linter.register_checker(PrivateImportChecker(linter))

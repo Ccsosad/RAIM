@@ -1,0 +1,173 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..72f3f71 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -34,6 +34,37 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     _data: DataWithCoords
+     __slots__ = ("_data",)
+ 
++    def __init__(
++        self,
++        coords: Mapping[Any, Any] | None = None,
++        indexes: Mapping[Any, Any] | None = None,
++    ) -> None:
++        """Create a Coordinates object from coordinate variables and indexes.
++
++        Parameters
++        ----------
++        coords : mapping, optional
++            Mapping from coordinate names to arrays. The arrays may be
++            numpy arrays, DataArray objects, or pandas objects.
++        indexes : mapping, optional
++            Mapping from coordinate names to Index objects. If not provided,
++            indexes will be inferred from the coordinate data.
++
++        Returns
++        -------
++        Coordinates
++        """
++        from xarray.core.dataset import Dataset
++
++        if coords is None:
++            coords = {}
++        if indexes is None:
++            indexes = {}
++
++        # Create a Dataset to handle the merging of coords and indexes
++        ds = Dataset(coords, indexes=indexes)
++        self._data = ds
++
+     def __getitem__(self, key: Hashable) -> T_DataArray:
+         raise NotImplementedError()
+ 
+@@ -82,9 +113,95 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     def __contains__(self, key: Hashable) -> bool:
+         return key in self._names
+ 
++    @property
++    def sizes(self) -> Mapping[Hashable, int]:
++        """Mapping from dimension names to lengths."""
++        return self._data.sizes
++
++    def copy(self, deep: bool = False) -> "Coordinates":
++        """Return a copy of the coordinates.
++
++        Parameters
++        ----------
++        deep : bool, default: False
++            If True, make a deep copy of the underlying data.
++
++        Returns
++        -------
++        Coordinates
++        """
++        from xarray.core.dataset import Dataset
++
++        ds = self.to_dataset()
++        if deep:
++            ds = ds.copy(deep=True)
++        return ds.coords
++
++    def equals(self, other: "Coordinates") -> bool:
++        """Two Coordinates objects are equal if they have matching variables
++        and indexes.
++
++        Parameters
++        ----------
++        other : Coordinates
++            The other Coordinates object to compare.
++
++        Returns
++        -------
++        bool
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        return self._data.equals(other._data)
++
++    def identical(self, other: "Coordinates") -> bool:
++        """Like equals, but also checks the coordinate names and types.
++
++        Parameters
++        ----------
++        other : Coordinates
++            The other Coordinates object to compare.
++
++        Returns
++        -------
++        bool
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        return self._data.identical(other._data)
++
+     def __repr__(self) -> str:
+         return formatting.coords_repr(self)
+ 
++    @classmethod
++    def from_pandas_multiindex(
++        cls,
++        midx: pd.MultiIndex,
++        dim: Hashable,
++        level_coords_dtype: Mapping[Hashable, np.dtype] | None = None,
++    ) -> "Coordinates":
++        """Create Coordinates from a pandas MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            The MultiIndex to convert.
++        dim : hashable
++            Name of the dimension indexed by the MultiIndex.
++        level_coords_dtype : mapping, optional
++            Mapping from level names to dtypes for the level coordinate
++            variables.
++
++        Returns
++        -------
++        Coordinates
++        """
++        from xarray.core.indexes import PandasMultiIndex
++
++        index = PandasMultiIndex(midx, dim, level_coords_dtype)
++        index_vars = index.create_variables()
++        return cls(coords=index_vars, indexes={dim: index})
++
+     def to_dataset(self) -> Dataset:
+         raise NotImplementedError()
+ 
+@@ -245,6 +362,34 @@ class DatasetCoordinates(Coordinates):
+     objects.
+     """
+ 
++    def __getitem__(self, key: Hashable) -> DataArray:
++        return self._data[key]
++
++    @property
++    def _names(self) -> set[Hashable]:
++        return self._data._coord_names
++
++    @property
++    def dims(self) -> Mapping[Hashable, int]:
++        return self._data.dims
++
++    @property
++    def dtypes(self) -> Frozen[Hashable, np.dtype]:
++        return self._data._coord_dtypes
++
++    @property
++    def variables(self):
++        return self._data._coord_variables
++
++    def _update_coords(self, coords, indexes):
++        self._data._update_coords(coords, indexes)
++
++    def _maybe_drop_multiindex_coords(self, coords):
++        self._data._maybe_drop_multiindex_coords(coords)
++
++    def to_dataset(self) -> Dataset:
++        return self._data.copy()
++
+     _data: Dataset
+ 
+     __slots__ = ("_data",)

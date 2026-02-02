@@ -1,0 +1,87 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..47ecba6 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,10 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -384,7 +384,7 @@ def join(left, right, keys=None, join_type='inner',
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+-                join_funcs)
++                join_funcs, keys_left, keys_right)
+ 
+     # Merge the column and table meta data. Table subclasses might override
+     # these methods for custom merge behavior.
+@@ -1047,7 +1047,7 @@ def _join(left, right, keys=None, join_type='inner',
+           uniq_col_name='{col_name}_{table_name}',
+           table_names=['1', '2'],
+           col_name_map=None, metadata_conflicts='warn',
+-          join_funcs=None):
++          join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left and right Tables on specified keys.
+ 
+@@ -1091,6 +1091,41 @@ def _join(left, right, keys=None, join_type='inner',
+     # Special column name for cartesian join, should never collide with real column
+     cartesian_index_name = '__table_cartesian_join_temp_index__'
+ 
++    # If keys_left and keys_right are provided, use them instead of keys
++    temp_key_names = []
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Cannot specify both keys and keys_left/keys_right')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both keys_left and keys_right')
++
++        # Convert to list of columns
++        def to_list(x):
++            return x if isinstance(x, list) else [x]
++        keys_left_list = to_list(keys_left)
++        keys_right_list = to_list(keys_right)
++
++        if len(keys_left_list) != len(keys_right_list):
++            raise ValueError('keys_left and keys_right must have the same number of elements')
++
++        # Create temporary tables
++        left = left.copy(copy_data=False)
++        right = right.copy(copy_data=False)
++
++        temp_key_names = []
++        for i, (kl, kr) in enumerate(zip(keys_left_list, keys_right_list)):
++            temp_name = f'__temp_key_{i}__'
++            temp_key_names.append(temp_name)
++            # If kl is a string, get the column from the table
++            if isinstance(kl, str):
++                kl = left[kl]
++            if isinstance(kr, str):
++                kr = right[kr]
++            left[temp_name] = kl
++            right[temp_name] = kr
++
++        keys = tuple(temp_key_names)
++
+     if join_type not in ('inner', 'outer', 'left', 'right', 'cartesian'):
+         raise ValueError("The 'join_type' argument should be in 'inner', "
+                          "'outer', 'left', 'right', or 'cartesian' "
+@@ -1143,6 +1178,9 @@ def _join(left, right, keys=None, join_type='inner',
+ 
+     # Joined array dtype as a list of descr (name, type_str, shape) tuples
+     col_name_map = get_col_name_map([left, right], keys, uniq_col_name, table_names)
++    # Remove temporary columns from col_name_map so they don't appear in output
++    for temp_name in temp_key_names:
++        col_name_map.pop(temp_name, None)
+     out_descrs = get_descrs([left, right], col_name_map)
+ 
+     try:

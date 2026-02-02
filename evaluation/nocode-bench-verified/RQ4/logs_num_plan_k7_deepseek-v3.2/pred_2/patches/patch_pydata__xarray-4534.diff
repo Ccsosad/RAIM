@@ -1,0 +1,112 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..175017b 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -271,6 +271,58 @@ class DatetimeAccessor(Properties):
+ 
+     """
+ 
++    def isocalendar(self):
++        """
++        Returns a Dataset with three components: year, week, and weekday
++        according to the ISO 8601 calendar.
++
++        Requires pandas version 1.1.0 or greater.
++
++        Returns
++        -------
++        Dataset with fields: year, week, weekday
++
++        Examples
++        --------
++        >>> import pandas as pd
++        >>> import xarray as xr
++        >>> dates = pd.date_range(start="2000-01-01", freq="D", periods=3)
++        >>> ts = xr.DataArray(dates, dims=("time"))
++        >>> ts.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 3)
++        Coordinates:
++          * time     (time) datetime64[ns] 2000-01-01 2000-01-02 2000-01-03
++        Data variables:
++            year     (time) int64 2000 2000 2000
++            week     (time) int64 52 52 52
++            weekday  (time) int64 6 7 1
++        """
++        from xarray.core.compat import PANDAS_GE_110
++
++        if not PANDAS_GE_110:
++            raise AttributeError(
++                "isocalendar requires pandas version 1.1.0 or greater."
++            )
++
++        obj_type = type(self._obj)
++        # Use pandas isocalendar method
++        result = self._obj.data.isocalendar()
++        # Convert to xarray Dataset
++        from xarray import Dataset
++        from xarray.core.variable import Variable
++
++        # Create a Dataset from the pandas DataFrame
++        # The result is a pandas DataFrame with columns: year, week, weekday
++        # We need to convert each column to a DataArray
++        coords = self._obj.coords
++        dims = self._obj.dims
++        data_vars = {}
++        for col in result.columns:
++            data_vars[col] = Variable(dims, result[col].values, attrs={})
++
++        return Dataset(data_vars, coords=coords)
++
+     def strftime(self, date_format):
+         """
+         Return an array of formatted strings specified by date_format, which
+@@ -326,10 +378,29 @@ class DatetimeAccessor(Properties):
+     nanosecond = Properties._tslib_field_accessor(
+         "nanosecond", "The nanoseconds of the datetime", np.int64
+     )
+-    weekofyear = Properties._tslib_field_accessor(
+-        "weekofyear", "The week ordinal of the year", np.int64
+-    )
+-    week = weekofyear
++    @property
++    def weekofyear(self):
++        import warnings
++        warnings.warn(
++            "weekofyear is deprecated. Use DataArray.dt.isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return Properties._tslib_field_accessor(
++            "weekofyear", "The week ordinal of the year", np.int64
++        ).fget(self)
++
++    @property
++    def week(self):
++        import warnings
++        warnings.warn(
++            "week is deprecated. Use DataArray.dt.isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return Properties._tslib_field_accessor(
++            "weekofyear", "The week ordinal of the year", np.int64
++        ).fget(self)
+     dayofweek = Properties._tslib_field_accessor(
+         "dayofweek", "The day of the week with Monday=0, Sunday=6", np.int64
+     )
+diff --git a/xarray/core/compat.py b/xarray/core/compat.py
+new file mode 100644
+index 0000000..2f4e701
+--- /dev/null
++++ b/xarray/core/compat.py
+@@ -0,0 +1,9 @@
++"""
++Compatibility module for handling version differences in dependencies.
++"""
++import pandas as pd
++from distutils.version import LooseVersion
++
++__all__ = ["PANDAS_GE_110"]
++
++PANDAS_GE_110 = LooseVersion(pd.__version__) >= LooseVersion("1.1.0")

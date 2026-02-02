@@ -1,0 +1,87 @@
+diff --git a/sklearn/datasets/_kddcup99.py b/sklearn/datasets/_kddcup99.py
+index 5405c9d..6b40119 100644
+--- a/sklearn/datasets/_kddcup99.py
++++ b/sklearn/datasets/_kddcup99.py
+@@ -48,7 +48,8 @@ logger = logging.getLogger(__name__)
+ @_deprecate_positional_args
+ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+                    random_state=None,
+-                   percent10=True, download_if_missing=True, return_X_y=False):
++                   percent10=True, download_if_missing=True, return_X_y=False,
++                   as_frame=False):
+     """Load the kddcup99 dataset (classification).
+ 
+     Download it if necessary.
+@@ -97,19 +98,35 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+ 
+         .. versionadded:: 0.20
+ 
++    as_frame : bool, default=False
++        If True, the data is a pandas DataFrame including columns with
++        appropriate dtypes (numeric). The target is a pandas DataFrame or
++        Series depending on the number of target columns. If `return_X_y` is
++        True, then (`data`, `target`) will be pandas DataFrames or Series as
++        described below.
++
++        .. versionadded:: 0.24
++
+     Returns
+     -------
+     data : :class:`~sklearn.utils.Bunch`
+         Dictionary-like object, with the following attributes.
+ 
+-        data : ndarray of shape (494021, 41)
+-            The data matrix to learn.
+-        target : ndarray of shape (494021,)
+-            The regression target for each sample.
++        data : {ndarray, dataframe} of shape (494021, 41)
++            The data matrix. If `as_frame=True`, `data` will be a pandas
++            DataFrame.
++        target : {ndarray, series} of shape (494021,)
++            The classification target. If `as_frame=True`, `target` will be
++            a pandas Series.
+         DESCR : str
+             The full description of the dataset.
++        frame : dataframe of shape (494021, 42)
++            Only present when `as_frame=True`. DataFrame with `data` and
++            `target`.
+ 
+     (data, target) : tuple if ``return_X_y`` is True
++        A tuple of two ndarrays if `as_frame=False` or a tuple of two
++        pandas objects (DataFrame, Series) if `as_frame=True`.
+ 
+         .. versionadded:: 0.20
+     """
+@@ -167,6 +184,20 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+     if shuffle:
+         data, target = shuffle_method(data, target, random_state=random_state)
+ 
++    if as_frame:
++        try:
++            import pandas as pd
++        except ImportError:
++            raise ImportError("as_frame=True requires pandas to be installed.")
++        # Generate feature names based on the number of columns in data
++        feature_names = [f"feature_{i}" for i in range(data.shape[1])]
++        data = pd.DataFrame(data, columns=feature_names)
++        target = pd.Series(target)
++        # Create a frame by concatenating data and target
++        frame = pd.concat([data, target], axis=1)
++        # The last column should be named 'target'
++        frame.columns = list(feature_names) + ['target']
++
+     module_path = dirname(__file__)
+     with open(join(module_path, 'descr', 'kddcup99.rst')) as rst_file:
+         fdescr = rst_file.read()
+@@ -174,7 +205,10 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+     if return_X_y:
+         return data, target
+ 
+-    return Bunch(data=data, target=target, DESCR=fdescr)
++    if as_frame:
++        return Bunch(data=data, target=target, frame=frame, DESCR=fdescr)
++    else:
++        return Bunch(data=data, target=target, DESCR=fdescr)
+ 
+ 
+ def _fetch_brute_kddcup99(data_home=None,

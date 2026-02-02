@@ -1,0 +1,14 @@
+diff --git a/astropy/units/core.py b/astropy/units/core.py
+index 2b12b30..359ff53 100644
+--- a/astropy/units/core.py
++++ b/astropy/units/core.py
+@@ -2413,6 +2413,9 @@ def _add_prefixes(u, excludes=[], namespace=None, prefixes=False):
+         prefixes = si_prefixes
+     elif prefixes is False:
+         prefixes = []
++    elif isinstance(prefixes, list):
++        # Allow custom prefix lists while maintaining default behavior
++        pass
+ 
+     for short, full, factor in prefixes:
+         names = []

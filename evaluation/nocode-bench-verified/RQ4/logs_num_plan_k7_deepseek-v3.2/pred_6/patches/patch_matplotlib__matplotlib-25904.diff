@@ -1,0 +1,23 @@
+diff --git a/lib/matplotlib/spines.py b/lib/matplotlib/spines.py
+index 915b34c..7254dc8 100644
+--- a/lib/matplotlib/spines.py
++++ b/lib/matplotlib/spines.py
+@@ -493,7 +493,7 @@ class SpinesProxy:
+     def __getattr__(self, name):
+         broadcast_targets = [spine for spine in self._spine_dict.values()
+                              if hasattr(spine, name)]
+-        if not name.startswith('set_') or not broadcast_targets:
++        if not (name.startswith('set_') or name == 'set') or not broadcast_targets:
+             raise AttributeError(
+                 f"'SpinesProxy' object has no attribute '{name}'")
+ 
+@@ -509,6 +509,9 @@ class SpinesProxy:
+         for spine in self._spine_dict.values():
+             names.extend(name
+                          for name in dir(spine) if name.startswith('set_'))
++        # Also include the generic 'set' method if any spine has it
++        if any(hasattr(spine, 'set') for spine in self._spine_dict.values()):
++            names.append('set')
+         return list(sorted(set(names)))
+ 
+ 

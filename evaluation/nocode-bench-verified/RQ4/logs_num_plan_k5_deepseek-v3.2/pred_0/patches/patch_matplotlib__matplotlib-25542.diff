@@ -1,0 +1,57 @@
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index b79bffd..0db5f23 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -1835,13 +1835,17 @@ class MultipleLocator(Locator):
+     interval.
+     """
+ 
+-    def __init__(self, base=1.0):
+-        self._edge = _Edge_integer(base, 0)
++    def __init__(self, base=1.0, offset=0.0):
++        self._edge = _Edge_integer(base, offset)
+ 
+-    def set_params(self, base):
++    def set_params(self, base=None, offset=None):
+         """Set parameters within this locator."""
+-        if base is not None:
+-            self._edge = _Edge_integer(base, 0)
++        if base is not None or offset is not None:
++            if base is None:
++                base = self._edge.step
++            if offset is None:
++                offset = self._edge._offset
++            self._edge = _Edge_integer(base, offset)
+ 
+     def __call__(self):
+         """Return the locations of the ticks."""
+@@ -1852,9 +1856,10 @@ class MultipleLocator(Locator):
+         if vmax < vmin:
+             vmin, vmax = vmax, vmin
+         step = self._edge.step
++        offset = self._edge._offset
+         vmin = self._edge.ge(vmin) * step
+         n = (vmax - vmin + 0.001 * step) // step
+-        locs = vmin - step + np.arange(n + 3) * step
++        locs = vmin - step + np.arange(n + 3) * step + offset
+         return self.raise_if_exceeds(locs)
+ 
+     def view_limits(self, dmin, dmax):
+@@ -1863,11 +1868,13 @@ class MultipleLocator(Locator):
+         contain the data.
+         """
+         if mpl.rcParams['axes.autolimit_mode'] == 'round_numbers':
+-            vmin = self._edge.le(dmin) * self._edge.step
+-            vmax = self._edge.ge(dmax) * self._edge.step
++            step = self._edge.step
++            offset = self._edge._offset
++            vmin = self._edge.le(dmin) * step + offset
++            vmax = self._edge.ge(dmax) * step + offset
+             if vmin == vmax:
+-                vmin -= 1
+-                vmax += 1
++                vmin -= step
++                vmax += step
+         else:
+             vmin = dmin
+             vmax = dmax

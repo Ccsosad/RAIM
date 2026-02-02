@@ -1,0 +1,62 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 4def383..9787617 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -90,6 +90,11 @@ def expand_modules(
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+     """
++    from pylint.lint.path_expander import expand_globs
++
++    # Expand any glob patterns in the input list
++    files_or_modules = expand_globs(files_or_modules)
++
+     result: dict[str, ModuleDescriptionDict] = {}
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
+@@ -179,4 +184,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors
+diff --git a/pylint/lint/path_expander.py b/pylint/lint/path_expander.py
+new file mode 100644
+index 0000000..39e12fc
+--- /dev/null
++++ b/pylint/lint/path_expander.py
+@@ -0,0 +1,34 @@
++"""Utilities for expanding glob patterns in file paths."""
++import glob
++import os
++from typing import Iterable, List
++
++
++def expand_globs(paths: Iterable[str]) -> List[str]:
++    """Expand any glob patterns in the given paths.
++
++    Parameters
++    ----------
++    paths : Iterable[str]
++        An iterable of file/directory paths, which may contain glob patterns.
++
++    Returns
++    -------
++    List[str]
++        A list of paths with glob patterns expanded. Non-glob paths are
++        included unchanged. If a glob pattern does not match any files,
++        it is included as is (so that it can be handled as a module name
++        later).
++    """
++    expanded = []
++    for path in paths:
++        # Only expand if it contains a wildcard character
++        if "*" in path or "?" in path or "[" in path:
++            matches = glob.glob(path, recursive=True)
++            if matches:
++                expanded.extend(matches)
++            else:
++                expanded.append(path)
++        else:
++            expanded.append(path)
++    return expanded

@@ -1,0 +1,66 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..c52f955 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -25,10 +25,12 @@ from astropy.utils.data import get_pkg_data_filename, clear_download_cache
+ from astropy.utils.compat import NUMPY_LT_1_17
+ from astropy import utils
+ from astropy.utils.exceptions import AstropyWarning
++from astropy.utils.state import ScienceState
+ 
+ __all__ = ['Conf', 'conf',
+            'IERS', 'IERS_B', 'IERS_A', 'IERS_Auto',
+            'FROM_IERS_B', 'FROM_IERS_A', 'FROM_IERS_A_PREDICTION',
++           'earth_orientation_table',
+            'TIME_BEFORE_IERS_RANGE', 'TIME_BEYOND_IERS_RANGE',
+            'IERS_A_FILE', 'IERS_A_URL', 'IERS_A_URL_MIRROR', 'IERS_A_README',
+            'IERS_B_FILE', 'IERS_B_URL', 'IERS_B_README',
+@@ -628,6 +630,11 @@ class IERS_Auto(IERS_A):
+         `~astropy.table.QTable` instance with IERS (Earth rotation) data columns
+ 
+         """
++        # First, check if the user has set a global earth orientation table.
++        # If so, return that.
++        if earth_orientation_table._value is not None:
++            return earth_orientation_table._value
++
+         if not conf.auto_download:
+             cls.iers_table = IERS_B.open()
+             return cls.iers_table
+@@ -801,4 +808,35 @@ class IERS_Auto(IERS_A):
+             table['dX_2000A_B'][:n_iers_b] = iers_b['dX_2000A']
+             table['dY_2000A_B'][:n_iers_b] = iers_b['dY_2000A']
+ 
+-        return table
++        return table
++
++
++class earth_orientation_table(ScienceState):
++    """
++    Global earth orientation table.
++
++    This is a `~astropy.utils.state.ScienceState` that can be set to an IERS
++    table (e.g., ``IERS_B`` or ``IERS_A``) to use for earth orientation
++    data in time and coordinate transformations.  When set to `None` (the
++    default), the automatic IERS-A table (with auto-download) is used.
++
++    Examples
++    --------
++    >>> from astropy.utils import iers
++    >>> iers.earth_orientation_table.set(iers.IERS_B.open())
++    >>> iers.earth_orientation_table.get()
++    <IERS_B length=...>
++    >>> iers.earth_orientation_table.set(None)
++    >>> iers.earth_orientation_table.get()
++    <IERS_Auto length=...>
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            return IERS_Auto.open()
++        elif isinstance(value, (IERS, QTable)):
++            return value
++        else:
++            raise TypeError("earth_orientation_table must be set to an IERS table or None")

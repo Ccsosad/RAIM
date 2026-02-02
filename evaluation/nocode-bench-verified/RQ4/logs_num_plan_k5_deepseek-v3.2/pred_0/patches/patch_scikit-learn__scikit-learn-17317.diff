@@ -1,0 +1,61 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..e70cab7 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -71,6 +71,44 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         # numpy arrays, sparse arrays
+         return X[:, feature_idx]
+ 
++    def _unique_object(self, Xi):
++        """Return unique values for object dtype, preserving None and np.nan."""
++        uniques = []
++        seen = set()
++        for val in Xi:
++            if val is None:
++                if 'None' not in seen:
++                    uniques.append(None)
++                    seen.add('None')
++            elif isinstance(val, float) and np.isnan(val):
++                if 'nan' not in seen:
++                    uniques.append(np.nan)
++                    seen.add('nan')
++            else:
++                if val not in seen:
++                    uniques.append(val)
++                    seen.add(val)
++        return np.array(uniques, dtype=object)
++
++    def _unique_object(self, Xi):
++        """Return unique values for object dtype, preserving None and np.nan."""
++        uniques = []
++        seen = set()
++        for val in Xi:
++            if val is None:
++                if 'None' not in seen:
++                    uniques.append(None)
++                    seen.add('None')
++            elif isinstance(val, float) and np.isnan(val):
++                if 'nan' not in seen:
++                    uniques.append(np.nan)
++                    seen.add('nan')
++            else:
++                if val not in seen:
++                    uniques.append(val)
++                    seen.add(val)
++        return np.array(uniques, dtype=object)
++
+     def _fit(self, X, handle_unknown='error'):
+         X_list, n_samples, n_features = self._check_X(X)
+ 
+@@ -84,7 +122,10 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         for i in range(n_features):
+             Xi = X_list[i]
+             if self.categories == 'auto':
+-                cats = _unique(Xi)
++                if Xi.dtype == object:
++                    cats = self._unique_object(Xi)
++                else:
++                    cats = _unique(Xi)
+             else:
+                 cats = np.array(self.categories[i], dtype=Xi.dtype)
+                 if Xi.dtype != object:

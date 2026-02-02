@@ -1,0 +1,79 @@
+diff --git a/lib/matplotlib/figure.py b/lib/matplotlib/figure.py
+index 6d7c2c5..9c146bf 100644
+--- a/lib/matplotlib/figure.py
++++ b/lib/matplotlib/figure.py
+@@ -386,6 +386,7 @@ default: %(va)s
+         info = {'name': '_suptitle', 'x0': 0.5, 'y0': 0.98,
+                 'ha': 'center', 'va': 'top', 'rotation': 0,
+                 'size': 'figure.titlesize', 'weight': 'figure.titleweight'}
++        self._suptitle = t
+         return self._suplabels(t, info, **kwargs)
+ 
+     @_docstring.Substitution(x0=0.5, y0=0.01, name='supxlabel', ha='center',
+@@ -393,9 +394,10 @@ default: %(va)s
+     @_docstring.copy(_suplabels)
+     def supxlabel(self, t, **kwargs):
+         # docstring from _suplabels...
+-        info = {'name': '_supxlabel', 'x0': 0.5, 'y0': 0.01,
++        info = {'name': '_supxlabel', 'x0': 0.5, 'y0: 0.01,
+                 'ha': 'center', 'va': 'bottom', 'rotation': 0,
+                 'size': 'figure.labelsize', 'weight': 'figure.labelweight'}
++        self._supxlabel = t
+         return self._suplabels(t, info, **kwargs)
+ 
+     @_docstring.Substitution(x0=0.02, y0=0.5, name='supylabel', ha='left',
+@@ -407,12 +409,25 @@ default: %(va)s
+                 'ha': 'left', 'va': 'center', 'rotation': 'vertical',
+                 'rotation_mode': 'anchor', 'size': 'figure.labelsize',
+                 'weight': 'figure.labelweight'}
++        self._supylabel = t
+         return self._suplabels(t, info, **kwargs)
+ 
+     def get_edgecolor(self):
+         """Get the edge color of the Figure rectangle."""
+         return self.patch.get_edgecolor()
+ 
++    def get_suptitle(self):
++        """Return the suptitle text string."""
++        return self._suptitle
++
++    def get_supxlabel(self):
++        """Return the supxlabel text string."""
++        return self._supxlabel
++
++    def get_supylabel(self):
++        """Return the supylabel text string."""
++        return self._supylabel
++
+     def get_facecolor(self):
+         """Get the face color of the Figure rectangle."""
+         return self.patch.get_facecolor()
+@@ -2454,6 +2469,9 @@ None}, default: None
+             %(Figure:kwdoc)s
+         """
+         super().__init__(**kwargs)
++        self._suptitle = ''
++        self._supxlabel = ''
++        self._supylabel = ''
+         self._layout_engine = None
+ 
+         if layout is not None:
+@@ -3517,6 +3535,18 @@ None}, default: None
+         finally:
+             self.set_layout_engine('none')
+ 
++    def get_suptitle(self):
++        """Return the suptitle text string."""
++        return self._suptitle
++
++    def get_supxlabel(self):
++        """Return the supxlabel text string."""
++        return self._supxlabel
++
++    def get_supylabel(self):
++        """Return the supylabel text string."""
++        return self._supylabel
++
+ 
+ def figaspect(arg):
+     """

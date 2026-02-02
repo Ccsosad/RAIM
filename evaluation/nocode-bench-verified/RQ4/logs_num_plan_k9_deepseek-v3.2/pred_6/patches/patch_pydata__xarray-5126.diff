@@ -1,0 +1,119 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..ebacdf5 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -507,7 +507,9 @@ def array_repr(arr):
+             summary.append(unindexed_dims_str)
+ 
+     if arr.attrs:
+-        summary.append(attrs_repr(arr.attrs))
++        max_rows_attrs = get_expand_max_rows(OPTIONS["display_expand_attrs"], len(arr.attrs))
++        if max_rows_attrs != 0:
++            summary.append(attrs_repr(arr.attrs, max_rows=max_rows_attrs))
+ 
+     return "\n".join(summary)
+ 
+@@ -521,16 +523,22 @@ def dataset_repr(ds):
+     summary.append("{}({})".format(dims_start, dim_summary(ds)))
+ 
+     if ds.coords:
+-        summary.append(coords_repr(ds.coords, col_width=col_width))
++        max_rows = get_expand_max_rows(OPTIONS["display_expand_coords"], len(ds.coords))
++        if max_rows != 0:
++            summary.append(coords_repr(ds.coords, col_width=col_width, max_rows=max_rows))
+ 
+     unindexed_dims_str = unindexed_dims_repr(ds.dims, ds.coords)
+     if unindexed_dims_str:
+         summary.append(unindexed_dims_str)
+ 
+-    summary.append(data_vars_repr(ds.data_vars, col_width=col_width))
++    max_rows_data_vars = get_expand_max_rows(OPTIONS["display_expand_data_vars"], len(ds.data_vars))
++    if max_rows_data_vars != 0:
++        summary.append(data_vars_repr(ds.data_vars, col_width=col_width, max_rows=max_rows_data_vars))
+ 
+     if ds.attrs:
+-        summary.append(attrs_repr(ds.attrs))
++        max_rows_attrs = get_expand_max_rows(OPTIONS["display_expand_attrs"], len(ds.attrs))
++        if max_rows_attrs != 0:
++            summary.append(attrs_repr(ds.attrs, max_rows=max_rows_attrs))
+ 
+     return "\n".join(summary)
+ 
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..c13f03c 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -78,6 +78,10 @@ def _get_keep_attrs(default):
+         )
+ 
+ 
++def _validate_expand_option(value):
++    return value in [True, False, "default"]
++
++
+ class set_options:
+     """Set options for xarray in a controlled context.
+ 
+@@ -108,6 +112,15 @@ class set_options:
+       Default: ``'default'``.
+     - ``display_style``: display style to use in jupyter for xarray objects.
+       Default: ``'text'``. Other options are ``'html'``.
++    - ``display_expand_attrs``: control expansion of attributes section. One of
++      ``True`` (always expand), ``False`` (always collapse), or ``'default'``
++      (expand unless over the limit set by ``display_max_rows``). Default: ``'default'``.
++    - ``display_expand_coords``: control expansion of coordinates section.
++      Same values as above. Default: ``'default'``.
++    - ``display_expand_data``: control expansion of data section for DataArray.
++      Same values as above. Default: ``'default'``.
++    - ``display_expand_data_vars``: control expansion of data variables section for Dataset.
++      Same values as above. Default: ``'default'``.
+ 
+ 
+     You can use ``set_options`` either as a context manager:
+@@ -160,4 +173,4 @@ class set_options:
+         return
+ 
+     def __exit__(self, type, value, traceback):
+-        self._apply_update(self.old)
++        self._apply_update(self.old)
+diff --git a/xarray/core/expansion_state.py b/xarray/core/expansion_state.py
+new file mode 100644
+index 0000000..95e6156
+--- /dev/null
++++ b/xarray/core/expansion_state.py
+@@ -0,0 +1,35 @@
++"""
++Helper functions for controlling expansion state in display.
++"""
++
++from xarray.core.options import OPTIONS
++
++
++def get_expand_max_rows(option_value, mapping_len):
++    """
++    Return the effective max_rows for a section given the option value.
++
++    Parameters
++    ----------
++    option_value : bool or str
++        One of True, False, or 'default'.
++    mapping_len : int
++        The number of items in the mapping.
++
++    Returns
++    -------
++    max_rows : int or None
++        The maximum number of rows to display. None means no limit.
++        If 0, the section should be collapsed (not shown).
++    """
++    if option_value is False:
++        # Always collapse: return 0 to indicate no items should be shown.
++        return 0
++    elif option_value is True:
++        # Always expand: no limit.
++        return None
++    elif option_value == "default":
++        # Use the default behavior: limit by display_max_rows.
++        return OPTIONS.get("display_max_rows", 12)
++    else:
++        raise ValueError(f"Invalid option value: {option_value}")

@@ -1,0 +1,199 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..b77c49c 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3788,6 +3788,42 @@ class DataArray(AbstractArray, DataWithCoords):
+             dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov
+         )
+ 
++    def query(self, expr, parser=None, engine=None):
++        """
++        Return a new DataArray with data filtered by the query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        parser : callable, optional
++            A function that parses the query string. Defaults to using pandas.eval.
++        engine : str, optional
++            The engine to use for evaluation. Defaults to 'numexpr' if installed,
++            otherwise 'python'.
++
++        Returns
++        -------
++        DataArray
++            A new DataArray with the same coordinates and attributes, but with
++            data filtered by the query.
++
++        Examples
++        --------
++        >>> da = xr.DataArray([1, 2, 3, 4], dims='x')
++        >>> da.query('x > 2')
++        <xarray.DataArray (x: 2)>
++        array([3, 4])
++        Dimensions without coordinates: x
++        """
++        from .query_engine import QueryEngine
++        # Convert to dataset with a single variable
++        ds = self._to_temp_dataset()
++        # Use the dataset's query method
++        result_ds = ds.query(expr, parser=parser, engine=engine)
++        # Convert back to DataArray
++        return self._from_temp_dataset(result_ds)
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,
+@@ -4360,4 +4396,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..f6d4d4a 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6334,6 +6334,42 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+ 
+         return map_blocks(func, self, args, kwargs, template)
+ 
++    def query(self, expr, parser=None, engine=None):
++        """
++        Return a new Dataset with data filtered by the query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        parser : callable, optional
++            A function that parses the query string. Defaults to using pandas.eval.
++        engine : str, optional
++            The engine to use for evaluation. Defaults to 'numexpr' if installed,
++            otherwise 'python'.
++
++        Returns
++        -------
++        Dataset
++            A new Dataset with the same coordinates and attributes, but with
++            data filtered by the query.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({'a': ('x', [1, 2, 3, 4])})
++        >>> ds.query('a > 2')
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Dimensions without coordinates: x
++        Data variables:
++            a        (x) int64 3 4
++        """
++        from .query_engine import QueryEngine
++        engine_obj = QueryEngine(self, parser=parser, engine=engine)
++        mask = engine_obj(expr)
++        # Apply the mask to the dataset
++        return self.where(mask, drop=True)
++
+     def polyfit(
+         self,
+         dim: Hashable,
+@@ -7002,4 +7038,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query_engine.py b/xarray/core/query_engine.py
+new file mode 100644
+index 0000000..6824e46
+--- /dev/null
++++ b/xarray/core/query_engine.py
+@@ -0,0 +1,87 @@
++"""
++Query engine for evaluating expressions on xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from .utils import is_scalar
++
++class QueryEngine:
++    """
++    Engine for evaluating query expressions on xarray objects.
++
++    Parameters
++    ----------
++    dataset : xarray.Dataset
++        The dataset to query.
++    parser : callable, optional
++        A function that parses the query string. Defaults to using pandas.eval.
++    engine : str, optional
++        The engine to use for evaluation. Defaults to 'numexpr' if installed,
++        otherwise 'python'.
++    """
++    def __init__(self, dataset, parser=None, engine=None):
++        self.dataset = dataset
++        self.parser = parser
++        self.engine = engine
++
++    def evaluate(self, expr):
++        """
++        Evaluate a query expression on the dataset.
++
++        Parameters
++        ----------
++        expr : str
++            The query expression.
++
++        Returns
++        -------
++        mask : xarray.DataArray
++            A boolean DataArray with the same dimensions as the dataset,
++            indicating which points satisfy the query.
++        """
++        # If no parser is provided, use pandas.eval
++        if self.parser is None:
++            try:
++                import numexpr
++                engine = self.engine or 'numexpr'
++            except ImportError:
++                engine = self.engine or 'python'
++
++            # We'll use pandas.eval for simplicity, but we need to prepare the environment
++            import pandas as pd
++            # Collect variables from the dataset
++            local_dict = {}
++            for name, var in self.dataset.data_vars.items():
++                # For multi-dimensional variables, we need to broadcast to the same dimensions
++                # For simplicity, we only allow expressions with 1D variables for now.
++                if var.ndim == 1:
++                    local_dict[name] = var.values
++                else:
++                    # For multi-dimensional variables, we flatten them and then reshape later?
++                    # This is a limitation for now.
++                    raise NotImplementedError(
++                        "Query expressions with multi-dimensional variables are not yet supported."
++                    )
++            # Also include coordinates that are 1D
++            for name, var in self.dataset.coords.items():
++                if name not in local_dict and var.ndim == 1:
++                    local_dict[name] = var.values
++
++            # Evaluate the expression
++            result = pd.eval(expr, engine=engine, local_dict=local_dict, global_dict={})
++            # Convert to a boolean array
++            if is_scalar(result):
++                result = np.array([result])
++            else:
++                result = np.asarray(result, dtype=bool)
++            # Create a DataArray with the same dimensions as the dataset's indexers
++            # For now, we assume the expression returns a 1D array with the same length as the first dimension.
++            # This is a simplification.
++            dim = next(iter(self.dataset.dims))
++            from .dataarray import DataArray
++            return DataArray(result, dims=[dim], coords={dim: self.dataset[dim]})
++        else:
++            return self.parser(expr, self.dataset)
++
++    def __call__(self, expr):
++        return self.evaluate(expr)

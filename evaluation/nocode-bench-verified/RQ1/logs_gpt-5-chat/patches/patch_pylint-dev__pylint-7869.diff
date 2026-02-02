@@ -1,0 +1,34 @@
+diff --git a/pylint/config/callback_actions.py b/pylint/config/callback_actions.py
+index f418f1a..a35f388 100644
+--- a/pylint/config/callback_actions.py
++++ b/pylint/config/callback_actions.py
+@@ -446,7 +446,14 @@ class _OutputFormatAction(_AccessLinterObjectAction):
+         assert isinstance(
+             values[0], str
+         ), "'output-format' should be a comma separated string of reporters"
+-        self.linter._load_reporters(values[0])
++        output_format = values[0]
++        # Handle the new 'no-header' output format
++        if output_format == "no-header":
++            from pylint.reporters.no_header_reporter import NoHeaderReporter
++            reporter = NoHeaderReporter()
++            self.linter.set_reporter(reporter)
++        else:
++            self.linter._load_reporters(output_format)
+ 
+ 
+ class _AccessParserAction(_CallbackAction):
+diff --git a/pylint/reporters/no_header_reporter.py b/pylint/reporters/no_header_reporter.py
+new file mode 100644
+index 0000000..79074d2
+--- /dev/null
++++ b/pylint/reporters/no_header_reporter.py
+@@ -0,0 +1,8 @@
++from pylint.reporters.text import TextReporter
++
++class NoHeaderReporter(TextReporter):
++    """Reporter that does not include the module header in the output."""
++
++    def write_module_header(self, module_name, modpath):
++        # Override to skip writing the header
++        return

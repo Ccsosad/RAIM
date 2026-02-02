@@ -1,0 +1,28 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..840649b 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -95,11 +95,21 @@ _PATTERNS = [_BASIC_PATTERN, _EXTENDED_PATTERN]
+ 
+ 
+ def parse_iso8601(datetime_string):
+-    for pattern in _PATTERNS:
++    # Define patterns for all supported formats
++    patterns = [
++        # Basic ISO 8601: YYYYMMDDhhmmss
++        r'(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})(?P<hour>\d{2})?(?P<minute>\d{2})?(?P<second>\d{2})?',
++        # Extended ISO 8601: YYYY-MM-DDThh:mm:ss
++        r'(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})T(?P<hour>\d{2})?:(?P<minute>\d{2})?:(?P<second>\d{2})?',
++        # cftime default format: YYYY-MM-DD hh:mm:ss
++        r'(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2}) (?P<hour>\d{2})?:(?P<minute>\d{2})?:(?P<second>\d{2})?',
++    ]
++    
++    for pattern in patterns:
+         match = re.match(pattern, datetime_string)
+         if match:
+             return match.groupdict()
+-    raise ValueError("no ISO-8601 match for string: %s" % datetime_string)
++    raise ValueError("no ISO-8601 or cftime format match for string: %s" % datetime_string)
+ 
+ 
+ def _parse_iso8601_with_reso(date_type, timestr):

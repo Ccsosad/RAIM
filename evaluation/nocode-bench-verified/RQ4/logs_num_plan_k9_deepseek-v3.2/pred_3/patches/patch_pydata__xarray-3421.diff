@@ -1,0 +1,63 @@
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 873be99..fa4ca10 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -490,6 +490,39 @@ class Variable(
+             )
+         return dims
+ 
++    @staticmethod
++    def infix_dims(dims, given_dims):
++        """
++        Expand ellipsis (...) in given_dims to the appropriate dimensions.
++
++        Parameters
++        ----------
++        dims : tuple
++            Original dimensions of the variable.
++        given_dims : tuple
++            Dimensions passed to transpose, possibly containing an ellipsis.
++
++        Returns
++        -------
++        tuple
++            Expanded dimensions.
++        """
++        if ... not in given_dims:
++            return given_dims
++        if given_dims.count(...) > 1:
++            raise ValueError("Only one ellipsis may be used.")
++        # Find the position of the ellipsis
++        ellipsis_pos = given_dims.index(...)
++        # Dimensions before the ellipsis
++        before = given_dims[:ellipsis_pos]
++        # Dimensions after the ellipsis
++        after = given_dims[ellipsis_pos+1:]
++        # The remaining dimensions are those not in before or after
++        remaining = [d for d in dims if d not in before and d not in after]
++        # Combine: before + remaining + after
++        result = before + tuple(remaining) + after
++        return result
++
+     def _item_key_to_tuple(self, key):
+         if utils.is_dict_like(key):
+             return tuple(key.get(dim, slice(None)) for dim in self.dims)
+@@ -1209,7 +1242,8 @@ class Variable(
+         ----------
+         *dims : str, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+ 
+         Returns
+         -------
+@@ -1228,6 +1262,8 @@ class Variable(
+         """
+         if len(dims) == 0:
+             dims = self.dims[::-1]
++        else:
++            dims = self.infix_dims(self.dims, dims)
+         axes = self.get_axis_num(dims)
+         if len(dims) < 2:  # no need to transpose if only one dimension
+             return self.copy(deep=False)

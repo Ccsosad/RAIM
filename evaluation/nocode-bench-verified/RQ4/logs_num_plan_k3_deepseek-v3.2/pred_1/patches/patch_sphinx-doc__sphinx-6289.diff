@@ -1,0 +1,32 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..13b8f83 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -502,9 +502,11 @@ class Documenter:
+         members given by *self.options.members* (which may also be none).
+         """
+         members = get_object_members(self.object, self.objpath, self.get_attr, self.analyzer)
++        # If imported_members is True, we don't need to check the module for members.
++        members_check_module = not self.options.imported_members
+         if not want_all:
+             if not self.options.members:
+-                return False, []
++                return members_check_module, []
+             # specific members given
+             selected = []
+             for name in self.options.members:
+@@ -513,11 +515,11 @@ class Documenter:
+                 else:
+                     logger.warning(__('missing attribute %s in object %s') %
+                                    (name, self.fullname), type='autodoc')
+-            return False, sorted(selected)
++            return members_check_module, sorted(selected)
+         elif self.options.inherited_members:
+-            return False, sorted((m.name, m.value) for m in members.values())
++            return members_check_module, sorted((m.name, m.value) for m in members.values())
+         else:
+-            return False, sorted((m.name, m.value) for m in members.values()
++            return members_check_module, sorted((m.name, m.value) for m in members.values()
+                                  if m.directly_defined)
+ 
+     def filter_members(self, members, want_all):

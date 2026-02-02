@@ -1,0 +1,50 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 3d4fbde..80d39f0 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -242,6 +242,11 @@ class DatasetCoordinates(Coordinates):
+     def dims(self) -> Mapping[Hashable, int]:
+         return self._data.dims
+ 
++    @property
++    def dtypes(self) -> Mapping[Hashable, np.dtype]:
++        """Mapping from coordinate names to dtypes."""
++        return Frozen({k: v.dtype for k, v in self.variables.items()})
++
+     @property
+     def variables(self) -> Mapping[Hashable, Variable]:
+         return Frozen(
+@@ -338,6 +343,11 @@ class DataArrayCoordinates(Coordinates):
+         original_indexes.update(indexes)
+         self._data._indexes = original_indexes
+ 
++    @property
++    def dtypes(self) -> Mapping[Hashable, np.dtype]:
++        """Mapping from coordinate names to dtypes."""
++        return Frozen({k: v.dtype for k, v in self.variables.items()})
++
+     @property
+     def variables(self):
+         return Frozen(self._data._coords)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 15487c2..3c312b7 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -1629,6 +1629,11 @@ class Dataset(
+         """
+         return DatasetCoordinates(self)
+ 
++    @property
++    def dtypes(self) -> Frozen[Hashable, np.dtype]:
++        """Mapping from variable names to dtypes for data variables."""
++        return Frozen({k: v.dtype for k, v in self.data_vars.items()})
++
+     @property
+     def data_vars(self) -> DataVariables:
+         """Dictionary of DataArray objects corresponding to data variables"""
+@@ -8516,4 +8521,4 @@ class Dataset(
+         DataArray
+             The source interpolated on the decimal years of target,
+         """
+-        return interp_calendar(self, target, dim=dim)
++        return interp_calendar(self, target, dim=dim)

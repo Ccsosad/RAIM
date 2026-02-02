@@ -1,0 +1,54 @@
+diff --git a/astropy/utils/iers/__init__.py b/astropy/utils/iers/__init__.py
+index c88b0b3..e5cc147 100644
+--- a/astropy/utils/iers/__init__.py
++++ b/astropy/utils/iers/__init__.py
+@@ -1,2 +1,4 @@
+ 
+-from .iers import *
++
++from .iers import *
++from .iers import earth_orientation_table
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..7dca728 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -590,6 +590,8 @@ class IERS_B(IERS):
+         """Set UT1-UTC source flag for entries in IERS table"""
+         return np.ones_like(i) * FROM_IERS_B
+ 
++from astropy.utils.state import ScienceState
++
+     def dcip_source(self, i):
+         """Set CIP correction source flag for entries in IERS table"""
+         return np.ones_like(i) * FROM_IERS_B
+@@ -599,6 +601,24 @@ class IERS_B(IERS):
+         return np.ones_like(i) * FROM_IERS_B
+ 
+ 
++class earth_orientation_table(ScienceState):
++    """
++    IERS Earth Orientation Table science state.
++
++    This is used to set the IERS table that is used for time and coordinate
++    transformations. The default is to use `IERS_Auto.open()`.
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError('earth_orientation_table must be an IERS instance')
++        return value
++
++
+ class IERS_Auto(IERS_A):
+     """
+     Provide most-recent IERS data and automatically handle downloading
+@@ -801,4 +821,4 @@ class IERS_Auto(IERS_A):
+             table['dX_2000A_B'][:n_iers_b] = iers_b['dX_2000A']
+             table['dY_2000A_B'][:n_iers_b] = iers_b['dY_2000A']
+ 
+-        return table
++        return table

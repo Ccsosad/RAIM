@@ -1,0 +1,34 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..30fa8bc 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -720,14 +720,26 @@ class Legend(Artist):
+     def _get_loc(self):
+         return self._loc_real
+ 
+-    _loc = property(_get_loc, _set_loc)
++    loc = property(_get_loc, _set_loc)
++
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++
++        Parameters
++        ----------
++        loc : str or int or tuple of float
++            The location of the legend. Can be either a string, an integer,
++            or a tuple of coordinates.
++        """
++        self._set_loc(loc)
+ 
+     def _findoffset(self, width, height, xdescent, ydescent, renderer):
+         """Helper function to locate the legend."""
+ 
+-        if self._loc == 0:  # "best".
++        if self.loc == 0:  # "best".
+             x, y = self._find_best_position(width, height, renderer)
+-        elif self._loc in Legend.codes.values():  # Fixed location.
++        elif self.loc in Legend.codes.values():  # Fixed location.
+             bbox = Bbox.from_bounds(0, 0, width, height)
+             x, y = self._get_anchored_bbox(self._loc, bbox,
+                                            self.get_bbox_to_anchor(),

@@ -1,0 +1,123 @@
+diff --git a/sklearn/datasets/_kddcup99.py b/sklearn/datasets/_kddcup99.py
+index 5405c9d..1920c64 100644
+--- a/sklearn/datasets/_kddcup99.py
++++ b/sklearn/datasets/_kddcup99.py
+@@ -36,6 +36,7 @@ ARCHIVE = RemoteFileMetadata(
+ 
+ # The original data can be found at:
+ # https://archive.ics.uci.edu/ml/machine-learning-databases/kddcup99-mld/kddcup.data_10_percent.gz
++from ._frame_mixin import _convert_data_dataframe
+ ARCHIVE_10_PERCENT = RemoteFileMetadata(
+     filename='kddcup99_10_data',
+     url='https://ndownloader.figshare.com/files/5976042',
+@@ -48,7 +49,8 @@ logger = logging.getLogger(__name__)
+ @_deprecate_positional_args
+ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+                    random_state=None,
+-                   percent10=True, download_if_missing=True, return_X_y=False):
++                   percent10=True, download_if_missing=True, return_X_y=False,
++                   as_frame=False):
+     """Load the kddcup99 dataset (classification).
+ 
+     Download it if necessary.
+@@ -97,19 +99,32 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+ 
+         .. versionadded:: 0.20
+ 
++    as_frame : bool, default=False
++        If True, the data is a pandas DataFrame including columns with
++        appropriate dtypes (numeric). The target is a pandas DataFrame or
++        Series depending on the number of target columns. If `as_frame` is
++        False, the data and target are returned as numpy arrays.
++        .. versionadded:: 0.24
++
+     Returns
+     -------
+     data : :class:`~sklearn.utils.Bunch`
+         Dictionary-like object, with the following attributes.
+ 
+-        data : ndarray of shape (494021, 41)
+-            The data matrix to learn.
+-        target : ndarray of shape (494021,)
+-            The regression target for each sample.
++        data : {ndarray, dataframe} of shape (494021, 41)
++            The data matrix. If `as_frame=True`, `data` will be a pandas
++            DataFrame.
++        target : {ndarray, series} of shape (494021,)
++            The classification target. If `as_frame=True`, `target` will be
++            a pandas Series.
++        frame : pandas DataFrame of shape (494021, 42)
++            Only present when `as_frame=True`. Contains `data` and `target`.
+         DESCR : str
+             The full description of the dataset.
+ 
+     (data, target) : tuple if ``return_X_y`` is True
++        A tuple of two elements: the data and the target. If `as_frame=True`,
++        the data and target are returned as pandas DataFrame and Series.
+ 
+         .. versionadded:: 0.20
+     """
+@@ -171,10 +186,18 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+     with open(join(module_path, 'descr', 'kddcup99.rst')) as rst_file:
+         fdescr = rst_file.read()
+ 
++    if as_frame:
++        data, target, frame = _convert_data_dataframe(data, target)
++    else:
++        frame = None
++
+     if return_X_y:
+-        return data, target
++        if as_frame:
++            return data, target
++        else:
++            return data, target
+ 
+-    return Bunch(data=data, target=target, DESCR=fdescr)
++    return Bunch(data=data, target=target, frame=frame, DESCR=fdescr)
+ 
+ 
+ def _fetch_brute_kddcup99(data_home=None,
+diff --git a/sklearn/datasets/_frame_mixin.py b/sklearn/datasets/_frame_mixin.py
+new file mode 100644
+index 0000000..d12cef6
+--- /dev/null
++++ b/sklearn/datasets/_frame_mixin.py
+@@ -0,0 +1,37 @@
++"""Mixin class for returning pandas DataFrames."""
++import pandas as pd
++
++
++def _convert_data_dataframe(data, target, feature_names=None, target_names=None):
++    """Convert dataset to pandas DataFrame.
++
++    Parameters
++    ----------
++    data : ndarray
++        The data matrix.
++    target : ndarray
++        The target array.
++    feature_names : list of str, default=None
++        The names of the features. If None, generic names are generated.
++    target_names : list of str, default=None
++        The name of the target. If None, generic name is generated.
++
++    Returns
++    -------
++    data : pandas DataFrame
++        The data as DataFrame.
++    target : pandas Series
++        The target as Series.
++    frame : pandas DataFrame
++        The combined data and target as DataFrame.
++    """
++    if feature_names is None:
++        feature_names = [f"feature_{i}" for i in range(data.shape[1])]
++    data = pd.DataFrame(data, columns=feature_names)
++
++    if target_names is None:
++        target_names = "target"
++    target = pd.Series(target, name=target_names)
++
++    frame = pd.concat([data, target], axis=1)
++    return data, target, frame

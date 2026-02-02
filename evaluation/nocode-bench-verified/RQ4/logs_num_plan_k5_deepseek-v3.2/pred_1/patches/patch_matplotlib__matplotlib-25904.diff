@@ -1,0 +1,24 @@
+diff --git a/lib/matplotlib/spines.py b/lib/matplotlib/spines.py
+new file mode 100644
+index 0000000..47973ee
+--- /dev/null
++++ b/lib/matplotlib/spines.py
+@@ -0,0 +1,18 @@
++class SpinesProxy:
++    def __init__(self, spines, keys):
++        self._spines = spines
++        self._keys = keys
++
++    def __getitem__(self, key):
++        return self._spines[self._keys[key]]
++
++    def __len__(self):
++        return len(self._keys)
++
++    def set(self, **kwargs):
++        """
++        Set properties on all spines in the proxy.
++        """
++        for key in self._keys:
++            spine = self._spines[key]
++            spine.set(**kwargs)

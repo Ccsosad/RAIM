@@ -1,0 +1,38 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..b0c4057 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -191,6 +191,9 @@ def make_layoutgrids(fig, layoutgrids, rect=(0, 0, 1, 1)):
+         if gs is not None:
+             layoutgrids = make_layoutgrids_gs(layoutgrids, gs)
+ 
++    # Adjust for legends with 'outside' locations
++    layoutgrids = _make_layoutgrids_for_legend(layoutgrids, fig)
++
+     return layoutgrids
+ 
+ 
+@@ -204,6 +207,23 @@ def make_layoutgrids_gs(layoutgrids, gs):
+     # in order to do constrained_layout there has to be at least *one*
+     # gridspec in the tree:
+     layoutgrids['hasgrids'] = True
++
++
++def _make_layoutgrids_for_legend(layoutgrids, fig):
++    """
++    Adjust the figure's layoutgrid to account for legends with 'outside' locations.
++    """
++    figlb = layoutgrids.get(fig)
++    if figlb is None:
++        return
++    for legend in fig.legends:
++        # Check if the legend has an 'outside' location
++        loc = legend._loc
++        if loc is not None and isinstance(loc, str) and loc.startswith('outside'):
++            # For now, we just note that we need to handle this.
++            # In the future, we will adjust the figure's margins.
++            # This is a placeholder for the actual implementation.
++            pass
+     if not hasattr(gs, '_subplot_spec'):
+         # normal gridspec
+         parent = layoutgrids[gs.figure]

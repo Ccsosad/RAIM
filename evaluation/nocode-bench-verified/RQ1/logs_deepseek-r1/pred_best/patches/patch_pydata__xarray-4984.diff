@@ -1,0 +1,86 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..8eb4257 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -2388,6 +2388,32 @@ class DataArray(AbstractArray, DataWithCoords):
+         out = ops.fillna(self, value)
+         return out
+ 
++    def query(self, expr, engine=None, **kwargs):
++        """Query the DataArray with a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            Boolean expression to evaluate. The expression can refer to
++            the DataArray's values as 'value'.
++        engine : {"python", "numexpr", None}, default: None
++            The engine used to evaluate the expression. Supported engines are:
++            - "python": Use Python's eval function
++            - "numexpr": Use the numexpr library for faster evaluation
++            - None: Use default engine (numexpr if installed, otherwise python)
++        **kwargs
++            Additional keyword arguments passed to pandas.eval()
++
++        Returns
++        -------
++        queried : DataArray
++            New DataArray with selected values
++        """
++        # Convert to Dataset with variable named 'value'
++        ds = self._to_temp_dataset().rename({self.name: 'value'})
++        queried_ds = ds.query(f"value {expr}", engine=engine, **kwargs)
++        return self._from_temp_dataset(queried_ds)
++
+     def interpolate_na(
+         self,
+         dim: Hashable = None,
+@@ -4360,4 +4386,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..8828f09 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -4448,6 +4448,32 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         out = ops.fillna(self, value)
+         return out
+ 
++    def query(self, expr, engine=None, **kwargs):
++        """Query the Dataset with a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            Boolean expression to evaluate against data variables
++        engine : {"python", "numexpr", None}, default: None
++            The engine used to evaluate the expression. Supported engines are:
++            - "python": Use Python's eval function
++            - "numexpr": Use the numexpr library for faster evaluation
++            - None: Use default engine (numexpr if installed, otherwise python)
++        **kwargs
++            Additional keyword arguments passed to pandas.eval()
++
++        Returns
++        -------
++        queried : Dataset
++            New Dataset with selected values
++        """
++        # Convert to DataFrame and evaluate query
++        df = self.to_dataframe()
++        mask = df.eval(expr, engine=engine, **kwargs)
++        queried_df = df[mask]
++        return queried_df.to_xarray()
++
+     def interpolate_na(
+         self,
+         dim: Hashable = None,
+@@ -7002,4 +7028,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

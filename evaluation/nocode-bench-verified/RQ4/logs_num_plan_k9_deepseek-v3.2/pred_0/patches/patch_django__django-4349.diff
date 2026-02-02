@@ -1,0 +1,40 @@
+diff --git a/django/db/models/expressions.py b/django/db/models/expressions.py
+index bf6e882..8adffe8 100644
+--- a/django/db/models/expressions.py
++++ b/django/db/models/expressions.py
+@@ -430,6 +430,35 @@ class DurationExpression(CombinedExpression):
+         return expression_wrapper % sql, expression_params
+ 
+ 
++class ExpressionWrapper(Expression):
++    """
++    An expression that wraps another expression and provides an output_field.
++    """
++    def __init__(self, expression, output_field):
++        super(ExpressionWrapper, self).__init__(output_field=output_field)
++        self.expression = expression
++
++    def __repr__(self):
++        return "<ExpressionWrapper: %s>" % self.expression
++
++    def get_source_expressions(self):
++        return [self.expression]
++
++    def set_source_expressions(self, exprs):
++        self.expression, = exprs
++
++    def as_sql(self, compiler, connection):
++        return self.expression.as_sql(compiler, connection)
++
++    def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
++        resolved = self.expression.resolve_expression(query, allow_joins, reuse, summarize, for_save)
++        # If the resolved expression is already an ExpressionWrapper with the same output_field,
++        # we can avoid double-wrapping.
++        if isinstance(resolved, ExpressionWrapper) and resolved.output_field == self.output_field:
++            return resolved
++        return ExpressionWrapper(resolved, self.output_field)
++
++
+ class F(Combinable):
+     """
+     An object capable of resolving references to existing query objects.

@@ -1,0 +1,69 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..0ef60c7 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3075,7 +3075,7 @@ class Axes(_AxesBase):
+             autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
+             startangle=0, radius=1, counterclock=True,
+             wedgeprops=None, textprops=None, center=(0, 0),
+-            frame=False, rotatelabels=False, *, normalize=True):
++            frame=False, rotatelabels=False, *, normalize=True, hatch=None):
+         """
+         Plot a pie chart.
+ 
+@@ -3153,6 +3153,12 @@ class Axes(_AxesBase):
+         rotatelabels : bool, default: False
+             Rotate each label to the angle of the corresponding slice if true.
+ 
++        hatch : str or list of str, default: None
++            Hatch pattern to use for the wedges. If a string, the same hatch
++            is used for all wedges. If a list, it must be the same length as
++            *x* and specify the hatch for each wedge individually.
++            See also :doc:`/gallery/shapes_and_collections/hatch_style_reference`.
++
+         data : indexable object, optional
+             DATA_PARAMETER_PLACEHOLDER
+ 
+@@ -3207,6 +3213,18 @@ class Axes(_AxesBase):
+             def get_next_color():
+                 return next(color_cycle)
+ 
++        # Process hatch: if it's a string, make it a list of that string repeated.
++        # If it's a list, check length and cycle if necessary.
++        if hatch is not None:
++            if isinstance(hatch, str):
++                hatch = [hatch] * len(x)
++            elif len(hatch) != len(x):
++                # If the list is too short, cycle it.
++                hatch_cycle = itertools.cycle(hatch)
++                hatch = [next(hatch_cycle) for _ in range(len(x))]
++        else:
++            hatch = [None] * len(x)
++
+         _api.check_isinstance(Number, radius=radius, startangle=startangle)
+         if radius <= 0:
+             raise ValueError(f'radius must be a positive number, not {radius}')
+@@ -3223,7 +3241,7 @@ class Axes(_AxesBase):
+         slices = []
+         autotexts = []
+ 
+-        for frac, label, expl in zip(x, labels, explode):
++        for frac, label, expl, htch in zip(x, labels, explode, hatch):
+             x, y = center
+             theta2 = (theta1 + frac) if counterclock else (theta1 - frac)
+             thetam = 2 * np.pi * 0.5 * (theta1 + theta2)
+@@ -3236,6 +3254,8 @@ class Axes(_AxesBase):
+                                clip_on=False,
+                                label=label)
+             w.set(**wedgeprops)
++            if htch is not None:
++                w.set_hatch(htch)
+             slices.append(w)
+             self.add_patch(w)
+ 
+@@ -8280,4 +8300,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

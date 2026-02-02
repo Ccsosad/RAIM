@@ -1,0 +1,20 @@
+diff --git a/pylint/config/arguments_manager.py b/pylint/config/arguments_manager.py
+index 82e8074..e430af3 100644
+--- a/pylint/config/arguments_manager.py
++++ b/pylint/config/arguments_manager.py
+@@ -129,6 +129,9 @@ class _ArgumentsManager:
+     ) -> None:
+         """Add an argument."""
+         if isinstance(argument, _StoreArgument):
++            # Handle show-stdlib flag similar to show-builtin
++            if '--show-stdlib' in argument.flags or '-L' in argument.flags:
++                argument.help += " (similar to --show-builtin but for stdlib modules)"
+             section_group.add_argument(
+                 *argument.flags,
+                 action=argument.action,
+@@ -396,4 +399,4 @@ class _ArgumentsManager:
+         self.config = self._arg_parser.parse_known_args(
+             [f"--{optname.replace('_', '-')}", _parse_rich_type_value(value)],
+             self.config,
+-        )[0]
++        )[0]

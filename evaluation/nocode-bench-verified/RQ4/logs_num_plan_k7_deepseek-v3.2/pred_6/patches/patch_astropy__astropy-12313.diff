@@ -1,0 +1,93 @@
+diff --git a/astropy/cosmology/io/row.py b/astropy/cosmology/io/row.py
+new file mode 100644
+index 0000000..e86e87f
+--- /dev/null
++++ b/astropy/cosmology/io/row.py
+@@ -0,0 +1,87 @@
++from astropy.cosmology.io.mapping import from_mapping
++from astropy.table import Row, Table
++
++__all__ = []  # nothing is publicly scoped
++
++
++def from_row(row, *, move_to_meta=False, cosmology=None):
++    """Load `~astropy.cosmology.Cosmology` from `~astropy.table.Row`.
++
++    Parameters
++    ----------
++    row : `~astropy.table.Row`
++        The row to parse.
++    move_to_meta : bool (optional, keyword-only)
++        Whether to move keyword arguments that are not in the Cosmology class'
++        signature to the Cosmology's metadata. This will only be applied if the
++        Cosmology does NOT have a keyword-only argument (e.g. ``**kwargs``).
++        Arguments moved to the metadata will be merged with existing metadata,
++        preferring specified metadata in the case of a merge conflict
++        (e.g. for ``Cosmology(meta={'key':10}, key=42)``, the ``Cosmology.meta``
++        will be ``{'key': 10}``).
++    cosmology : str, `~astropy.cosmology.Cosmology` class, or None (optional, keyword-only)
++        The cosmology class (or string name thereof) to use when constructing
++        the cosmology instance. The class also provides default parameter values,
++        filling in any non-mandatory arguments missing in 'row'.
++
++    Returns
++    -------
++    `~astropy.cosmology.Cosmology` subclass instance
++    """
++    # Convert row to dictionary
++    mapping = dict(row)
++    # Get metadata from the row
++    meta = row.meta if hasattr(row, 'meta') else {}
++    # The cosmology class might be in the metadata
++    if cosmology is None:
++        cosmology = meta.pop("cosmology", None)
++    # If cosmology is still None, it might be in the mapping (for backward compatibility)
++    if cosmology is None and "cosmology" in mapping:
++        cosmology = mapping.pop("cosmology")
++    # Update the mapping with the metadata
++    mapping.setdefault("meta", {}).update(meta)
++    # Now use the mapping format
++    return from_mapping(mapping, move_to_meta=move_to_meta, cosmology=cosmology)
++
++
++def to_row(cosmology, *args):
++    """Return the cosmology as an `~astropy.table.Row`.
++
++    Parameters
++    ----------
++    cosmology : `~astropy.cosmology.Cosmology` subclass instance
++    *args
++        Not used. Needed for compatibility with
++
++    Returns
++    -------
++    `~astropy.table.Row`
++        The row representation of the cosmology.
++    """
++    # First convert to a table with one row
++    table = cosmology.to_format("astropy.table")
++    # Return the first row
++    return table[0]
++
++
++def row_identify(origin, format, *args, **kwargs):
++    """Identify if object uses the Row format.
++
++    Parameters
++    ----------
++    origin : str
++        "read" or "write".
++    format : str or None
++        The format string.
++    *args, **kwargs
++        Arguments passed to the reader/writer.
++
++    Returns
++    -------
++    bool
++        True if the format is Row.
++    """
++    if origin == "read":
++        # Check if the second argument is a Row and format is None or "astropy.row"
++        return isinstance(args[1], Row) and (format in (None, "astropy.row"))
++    return False

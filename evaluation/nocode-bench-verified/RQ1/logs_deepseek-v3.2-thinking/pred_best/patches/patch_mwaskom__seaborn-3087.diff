@@ -1,0 +1,46 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index b0a0822..396d642 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -428,6 +428,7 @@ class Continuous(ContinuousBase):
+     # outside: Literal["keep", "drop", "clip"] = "keep"
+ 
+     _priority: ClassVar[int] = 1
++    _BASE_SENTINEL = object()  # Sentinel to distinguish "no base" from "base=None"
+ 
+     def tick(
+         self,
+@@ -494,7 +495,7 @@ class Continuous(ContinuousBase):
+         self,
+         formatter: Formatter | None = None, *,
+         like: str | Callable | None = None,
+-        base: int | None = None,
++        base: int | None = _BASE_SENTINEL,
+         unit: str | None = None,
+     ) -> Continuous:
+         """
+@@ -510,6 +511,7 @@ class Continuous(ContinuousBase):
+             and returns a string.
+         base : number
+             Use log formatter (with scientific notation) having this value as the base.
++            If None, override the default formatter (e.g., from a log transform).
+         unit : str or (str, str) tuple
+             Use  SI prefixes with these units (e.g., with `unit="g"`, a tick value
+             of 5000 will appear as `5 kg`). When a tuple, the first element gives the
+@@ -613,10 +615,15 @@ class Continuous(ContinuousBase):
+     def _get_formatter(self, locator, formatter, like, base, unit):
+ 
+         log_base, symlog_thresh = self._parse_for_log_params(self.trans)
+-        if base is None:
++        
++        # Check if base was explicitly provided (even if None)
++        # The sentinel indicates the parameter was not provided by the user
++        if base is self._BASE_SENTINEL:
++            # User did not provide base, so use transform's base if available
+             if symlog_thresh:
+                 log_base = 10
+             base = log_base
++        # else: base is either a number or None (explicitly provided)
+ 
+         if formatter is not None:
+             return formatter

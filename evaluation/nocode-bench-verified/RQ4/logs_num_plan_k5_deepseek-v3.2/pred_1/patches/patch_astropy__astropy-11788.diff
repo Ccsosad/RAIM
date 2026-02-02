@@ -1,0 +1,27 @@
+diff --git a/astropy/units/core.py b/astropy/units/core.py
+index 2b12b30..aeac32b 100644
+--- a/astropy/units/core.py
++++ b/astropy/units/core.py
+@@ -2414,6 +2414,10 @@ def _add_prefixes(u, excludes=[], namespace=None, prefixes=False):
+     elif prefixes is False:
+         prefixes = []
+ 
++    # Special case: add milli- prefix to Angstrom even if prefixes is False
++    if u.name == 'Angstrom' and not prefixes:
++        prefixes = [(['m'], ['milli'], 1e-3)]
++
+     for short, full, factor in prefixes:
+         names = []
+         format = {}
+@@ -2448,6 +2452,11 @@ def _add_prefixes(u, excludes=[], namespace=None, prefixes=False):
+ 
+ def def_unit(s, represents=None, doc=None, format=None, prefixes=False,
+              exclude_prefixes=[], namespace=None):
++    # Special case: add milli- prefix to Angstrom
++    if isinstance(s, list) and 'Angstrom' in s:
++        # If prefixes is False, change it to only include milli-
++        if prefixes is False:
++            prefixes = [(['m'], ['milli'], 1e-3)]
+     """
+     Factory function for defining new units.
+ 

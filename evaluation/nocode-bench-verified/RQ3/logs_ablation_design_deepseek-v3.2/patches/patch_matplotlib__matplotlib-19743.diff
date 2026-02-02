@@ -1,0 +1,34 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..dfd5cff 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -457,6 +457,29 @@ def make_margin_suptitles(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
+             bbox = inv_trans_fig(fig._supylabel.get_tightbbox(renderer))
+             layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
+ 
++    # Process figure legend if it has an outside location
++    if fig.legend is not None and fig.legend.get_in_layout():
++        leg = fig.legend
++        loc = leg._loc
++        if isinstance(loc, str) and loc.startswith('outside'):
++            # Parse the location string to determine the boundary
++            # Format: "outside <primary> <secondary>"
++            parts = loc.split()
++            if len(parts) >= 2:
++                primary = parts[1]  # 'upper', 'lower', 'left', 'right'
++                # Map primary to margin side
++                side_map = {'upper': 'top', 'lower': 'bottom', 'left': 'left', 'right': 'right'}
++                if primary in side_map:
++                    side = side_map[primary]
++                    # Get the legend's tight bounding box in figure coordinates
++                    bbox = inv_trans_fig(leg.get_tightbbox(renderer))
++                    if side in ['top', 'bottom']:
++                        # Add vertical padding
++                        margin = bbox.height + 2 * h_pad
++                    else:  # left or right
++                        margin = bbox.width + 2 * w_pad
++                    layoutgrids[fig].edit_margin_min(side, margin)
++
+ 
+ def match_submerged_margins(layoutgrids, fig):
+     """

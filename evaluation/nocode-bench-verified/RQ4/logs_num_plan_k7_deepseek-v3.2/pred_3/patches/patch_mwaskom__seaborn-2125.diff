@@ -1,0 +1,146 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..27a5c17 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -82,7 +82,140 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def __init__(self, data=None, variables={}, **kwargs):
++        super().__init__(data=data, variables=variables, **kwargs)
++        self.bin_kws = {}
++        self.stat = "count"
++        self.common_bins = True
++        self.common_norm = True
++        self.multiple = "layer"
++        self.element = "bars"
++        self.fill = True
++        self.shrink = 1
++        self.kde = False
++        self.kde_kws = {}
++        self.line_kws = {}
++        self.thresh = 0
++        self.pthresh = None
++        self.pmax = None
++        self.cbar = False
++        self.cbar_kws = None
++        self.cbar_ax = None
++
++    def define_bin_edges(self, data, bins, binwidth, binrange, scale):
++        """Compute bin edges for given data and parameters."""
++        if binrange is None:
++            start = data.min()
++            stop = data.max()
++        else:
++            start, stop = binrange
++
++        if bins is None:
++            if binwidth is not None:
++                bins = int(np.ceil((stop - start) / binwidth))
++            else:
++                bins = "auto"
++
++        if isinstance(bins, str):
++            edges = np.histogram_bin_edges(data, bins=bins, range=(start, stop))
++        elif np.ndim(bins) == 0:
++            edges = np.linspace(start, stop, bins + 1)
++        else:
++            edges = np.asarray(bins)
++
++        if scale is not None:
++            edges = scale.transform(edges)
++
++        return edges
++
++    def compute_bins(self, x_data, y_data, bins, binwidth, binrange, log_scale):
++        """Compute bin edges for x and y."""
++        x_scale = y_scale = None
++        if log_scale:
++            if isinstance(log_scale, bool):
++                x_scale = y_scale = mpl.scale.LogScale()
++            else:
++                if log_scale[0]:
++                    x_scale = mpl.scale.LogScale()
++                if log_scale[1]:
++                    y_scale = mpl.scale.LogScale()
++
++        x_bins = self.define_bin_edges(x_data, bins[0] if hasattr(bins, '__len__') else bins,
++                                        binwidth[0] if hasattr(binwidth, '__len__') else binwidth,
++                                        binrange[0] if hasattr(binrange, '__len__') else binrange,
++                                        x_scale)
++        if y_data is not None:
++            y_bins = self.define_bin_edges(y_data, bins[1] if hasattr(bins, '__len__') else bins,
++                                           binwidth[1] if hasattr(binwidth, '__len__') else binwidth,
++                                           binrange[1] if hasattr(binrange, '__len__') else binrange,
++                                           y_scale)
++        else:
++            y_bins = None
++
++        return x_bins, y_bins
++
++    def plot_univariate(self, multiple, common_norm, fill, legend, estimate_kws, plot_kws, ax):
++        """Plot univariate histogram."""
++        # Group the data by hue
++        groups = self.groupby("hue")
++        colors = self._hue_map(self.variables["hue"])
++
++        # Compute global bin edges if common_bins is True
++        if self.common_bins:
++            all_data = np.concatenate([g["x"] for g in groups])
++            bin_edges = self.define_bin_edges(all_data, self.bin_kws.get("bins"),
++                                              self.bin_kws.get("binwidth"),
++                                              self.bin_kws.get("binrange"),
++                                              None)
++        else:
++            bin_edges = None
++
++        # Plot each group
++        for i, (hue_val, group) in enumerate(groups):
++            color = colors[i]
++            data = group["x"]
++            if bin_edges is None:
++                edges = self.define_bin_edges(data, self.bin_kws.get("bins"),
++                                              self.bin_kws.get("binwidth"),
++                                              self.bin_kws.get("binrange"),
++                                              None)
++            else:
++                edges = bin_edges
++
++            # Compute histogram
++            heights, edges = np.histogram(data, bins=edges, weights=group.get("weights"))
++
++            # Normalize if needed
++            if self.stat == "density":
++                heights = heights / (heights.sum() * np.diff(edges))
++            elif self.stat == "probability":
++                heights = heights / heights.sum()
++
++            # Plot
++            if self.element == "bars":
++                ax.bar(edges[:-1], heights, width=np.diff(edges), align="edge",
++                       color=color, **plot_kws)
++            elif self.element == "step":
++                ax.step(edges, np.append(heights, heights[-1]), where="post",
++                        color=color, **plot_kws)
++            elif self.element == "poly":
++                # For polygon, we need to close the shape
++                x = np.repeat(edges, 2)[1:-1]
++                y = np.repeat(heights, 2)
++                ax.fill_between(x, 0, y, color=color, **plot_kws)
++
++        # Add labels
++        self._add_axis_labels(ax, default_x=self.variables.get("x"), default_y=self.stat)
++
++        if "hue" in self.variables and legend:
++            self._add_legend(ax, mpl.patches.Patch, fill, multiple, self.alpha, plot_kws, {})
++
++    def plot_bivariate(self, common_norm, fill, levels, thresh, ax):
++        """Plot bivariate histogram."""
++        # This is a simplified implementation.
++        pass
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):

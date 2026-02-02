@@ -1,0 +1,62 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d9aca35..75b7c66 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -313,6 +313,7 @@ class PyObject(ObjectDescription):
+         'noindex': directives.flag,
+         'module': directives.unchanged,
+         'annotation': directives.unchanged,
++        'canonical': directives.unchanged,
+     }
+ 
+     doc_field_types = [
+@@ -453,6 +454,17 @@ class PyObject(ObjectDescription):
+         domain = cast(PythonDomain, self.env.get_domain('py'))
+         domain.note_object(fullname, self.objtype, node_id, location=signode)
+ 
++        if 'canonical' in self.options:
++            canonical_name = self.options['canonical']
++            if canonical_name in domain.objects:
++                other = domain.objects[canonical_name]
++                if other != domain.objects[fullname]:
++                    logger.warning(__('canonical name %s of %s is already described in %s'),
++                                   canonical_name, fullname, other.docname,
++                                   location=signode)
++            else:
++                domain.objects[canonical_name] = domain.objects[fullname]
++
+         indextext = self.get_index_text(modname, name_cls)
+         if indextext:
+             self.indexnode['entries'].append(('single', indextext, node_id, '', None))
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index af22566..0186ebd 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -227,7 +227,10 @@ class Documenter:
+     #: true if the generated content may contain titles
+     titles_allowed = False
+ 
+-    option_spec = {'noindex': bool_option}  # type: Dict[str, Callable]
++    option_spec = {
++        'noindex': bool_option,
++        'canonical': str,
++    }  # type: Dict[str, Callable]
+ 
+     def get_attr(self, obj: Any, name: str, *defargs: Any) -> Any:
+         """getattr() override for types such as Zope interfaces."""
+@@ -428,6 +431,15 @@ class Documenter:
+             # etc. don't support a prepended module name
+             self.add_line('   :module: %s' % self.modname, sourcename)
+ 
++        # add canonical path for imported objects
++        if self.options.canonical:
++            self.add_line('   :canonical: %s' % self.options.canonical, sourcename)
++        else:
++            real_modname = self.get_real_modname()
++            if real_modname != self.modname:
++                objpath = '.'.join(self.objpath)
++                self.add_line('   :canonical: %s.%s' % (real_modname, objpath), sourcename)
++
+     def get_doc(self, ignore: int = None) -> List[List[str]]:
+         """Decode and return lines of the docstring(s) for the object."""
+         if ignore is not None:

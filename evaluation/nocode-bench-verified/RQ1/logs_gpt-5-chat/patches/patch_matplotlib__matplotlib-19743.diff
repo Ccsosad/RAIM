@@ -1,0 +1,35 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index a9083df..a506e1b 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -630,7 +630,11 @@ class Legend(Artist):
+         # _legend_box will draw itself at the location of the return
+         # value of the find_offset.
+         self._loc_used_default = False
+-        self._loc_real = loc
++        # handle "outside..." for figure legends with constrained_layout
++        if (not self.isaxes and isinstance(loc, str) and loc.lower().startswith("outside")):
++            self._loc_real = loc
++        else:
++            self._loc_real = loc
+         self.stale = True
+         self._legend_box.set_offset(self._findoffset)
+ 
+@@ -646,7 +650,16 @@ class Legend(Artist):
+     def _findoffset(self, width, height, xdescent, ydescent, renderer):
+         """Helper function to locate the legend."""
+ 
+-        if self._loc == 0:  # "best".
++        # Support for figure legends with loc starting with "outside"
++        if (not self.isaxes and isinstance(self._loc_real, str)
++                and self._loc_real.lower().startswith("outside")):
++            from matplotlib._constrained_layout import _loc_to_outside_bbox
++            bbox = Bbox.from_bounds(0, 0, width, height)
++            x, y = _loc_to_outside_bbox(self._loc_real, bbox,
++                                        self.get_bbox_to_anchor(),
++                                        renderer,
++                                        borderpad=self.borderaxespad * renderer.points_to_pixels(self._fontsize))
++        elif self._loc == 0:  # "best".
+             x, y = self._find_best_position(width, height, renderer)
+         elif self._loc in Legend.codes.values():  # Fixed location.
+             bbox = Bbox.from_bounds(0, 0, width, height)

@@ -1,0 +1,631 @@
+diff --git a/seaborn/_statistics.py b/seaborn/_statistics.py
+index 82d1ff9..d2d14ea 100644
+--- a/seaborn/_statistics.py
++++ b/seaborn/_statistics.py
+@@ -1,3 +1,4 @@
++
+ from distutils.version import LooseVersion
+ import numpy as np
+ import scipy as sp
+@@ -49,6 +50,96 @@ class KDE:
+ 
+         self.support = None
+ 
++
++class Histogram:
++    """Univariate and bivariate histogram estimator."""
++    def __init__(
++        self,
++        *,
++        bins="auto",
++        binwidth=None,
++        binrange=None,
++        discrete=False,
++        cumulative=False,
++        common_bins=True,
++        common_norm=True,
++    ):
++        """Initialize the estimator with its parameters.
++
++        Parameters
++        ----------
++        bins : int, list, str, or pair of such values, optional
++            Generic bin parameter that can be the number of bins, a reference
++            to a rule to choose the bins, or the explicit bin edges.
++        binwidth : number or pair of numbers, optional
++            Width of each bin; overrides `bins` but can be used with
++            `binrange`.
++        binrange : pair of numbers or pair of pairs, optional
++            Lowest and highest value for bin edges; can be used either
++            with `bins` or `binwidth`.
++        discrete : bool or pair of bools, optional
++            If True, set the bin edges to integer positions.
++        cumulative : bool, optional
++            If True, return the cumulative histogram.
++        common_bins : bool, optional
++            If True, use the same bins for all subsets.
++        common_norm : bool, optional
++            If True, normalize the histogram across all subsets.
++
++        """
++        self.bins = bins
++        self.binwidth = binwidth
++        self.binrange = binrange
++        self.discrete = discrete
++        self.cumulative = cumulative
++        self.common_bins = common_bins
++        self.common_norm = common_norm
++
++        self.bin_edges = None
++
++    def _define_bin_edges(self, x, weights=None):
++        """Compute bin edges for univariate data."""
++        from seaborn.utils import _normalize_hist
++        bin_edges = _normalize_hist(
++            x, bins=self.bins, binrange=self.binrange,
++            binwidth=self.binwidth, discrete=self.discrete,
++        )
++        return bin_edges
++
++    def _define_bin_edges_bivariate(self, x, y, weights=None):
++        """Compute bin edges for bivariate data."""
++        from seaborn.utils import _normalize_hist
++        x_edges = _normalize_hist(
++            x, bins=self.bins[0] if isinstance(self.bins, (list, tuple)) else self.bins,
++            binrange=self.binrange[0] if isinstance(self.binrange, (list, tuple)) else self.binrange,
++            binwidth=self.binwidth[0] if isinstance(self.binwidth, (list, tuple)) else self.binwidth,
++            discrete=self.discrete[0] if isinstance(self.discrete, (list, tuple)) else self.discrete,
++        )
++        y_edges = _normalize_hist(
++            y, bins=self.bins[1] if isinstance(self.bins, (list, tuple)) else self.bins,
++            binrange=self.binrange[1] if isinstance(self.binrange, (list, tuple)) else self.binrange,
++            binwidth=self.binwidth[1] if isinstance(self.binwidth, (list, tuple)) else self.binwidth,
++            discrete=self.discrete[1] if isinstance(self.discrete, (list, tuple)) else self.discrete,
++        )
++        return x_edges, y_edges
++
++    def __call__(self, x, y=None, weights=None):
++        """Compute histogram on univariate or bivariate data."""
++        if y is None:
++            bin_edges = self._define_bin_edges(x, weights)
++            heights, bin_edges = np.histogram(x, bins=bin_edges, weights=weights)
++            if self.cumulative:
++                heights = heights.cumsum()
++            return heights, bin_edges
++        else:
++            x_edges, y_edges = self._define_bin_edges_bivariate(x, y, weights)
++            heights, x_edges, y_edges = np.histogram2d(
++                x, y, bins=[x_edges, y_edges], weights=weights
++            )
++            if self.cumulative:
++                heights = heights.cumsum()
++            return heights, x_edges, y_edges
++
+     def _define_support_grid(self, x, bw, cut, clip, gridsize):
+         """Create the grid of evaluation points depending for vector x."""
+         clip_lo = -np.inf if clip[0] is None else clip[0]
+@@ -157,4 +248,4 @@ class KDE:
+         if x2 is None:
+             return self._eval_univariate(x1, weights)
+         else:
+-            return self._eval_bivariate(x1, x2, weights)
++            return self._eval_bivariate(x1, x2, weights)
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..3f58631 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -27,7 +27,7 @@ from ._docstrings import (
+ )
+ 
+ 
+-__all__ = ["distplot", "kdeplot", "rugplot"]
++__all__ = ["distplot", "histplot", "kdeplot", "rugplot"]
+ 
+ 
+ _param_docs = DocstringComponents.from_nested_components(
+@@ -82,7 +82,341 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def plot_univariate(
++        self,
++        multiple,
++        common_bins,
++        common_norm,
++        shrink,
++        kde,
++        kde_kws,
++        line_kws,
++        fill,
++        legend,
++        estimate_kws,
++        plot_kws,
++        ax,
++    ):
++
++        # Preprocess the matplotlib keyword dictionaries
++        if fill:
++            artist = mpl.collections.PolyCollection
++        else:
++            artist = mpl.lines.Line2D
++        plot_kws = _normalize_kwargs(plot_kws, artist)
++
++        # Input checking
++        multiple_options = ["layer", "stack", "dodge", "fill"]
++        if multiple not in multiple_options:
++            msg = (
++                f"multiple must be one of {multiple_options}, "
++                f"but {multiple} was passed."
++            )
++            raise ValueError(msg)
++
++        # Identify the axis with the data values
++        data_variable = {"x", "y"}.intersection(self.variables).pop()
++
++        # Check for log scaling on the data axis
++        data_axis = getattr(ax, f"{data_variable}axis")
++        log_scale = data_axis.get_scale() == "log"
++
++        # Initialize the estimator object
++        estimator = Histogram(**estimate_kws)
++
++        if "hue" in self.variables:
++
++            # Access and clean the data
++            all_observations = remove_na(self.plot_data[data_variable])
++
++            # Always share the evaluation grid when stacking
++            if multiple in ("stack", "fill"):
++                common_bins = True
++
++            # Define a single grid of support for the PDFs
++            if common_bins:
++                if log_scale:
++                    all_observations = np.log10(all_observations)
++                estimator.bin_edges = estimator._define_bin_edges(all_observations)
++
++        else:
++            common_norm = False
++
++        # We will do two loops through the semantic subsets
++        # The first is to estimate the density of observations in each subset
++        heights = {}
++        bin_edges = {}
++
++        for sub_vars, sub_data in self._semantic_subsets("hue"):
++
++            # Extract the data points from this sub set and remove nulls
++            observations = remove_na(sub_data[data_variable])
++
++            # Extract the weights for this subset of observations
++            if "weights" in self.variables:
++                weights = sub_data["weights"]
++            else:
++                weights = None
++
++            # If data axis is log scaled, fit the histogram in logspace
++            if log_scale:
++                observations = np.log10(observations)
++
++            # Estimate the histogram of observations at this level
++            height, edges = estimator(observations, weights=weights)
++
++            if log_scale:
++                edges = np.power(10, edges)
++
++            # Apply a scaling factor so that the integral over all subsets is 1
++            if common_norm:
++                height *= len(sub_data) / len(self.plot_data)
++
++            # Store the height for this level
++            key = tuple(sub_vars.items())
++            heights[key] = pd.Series(height, index=edges[:-1])
++            bin_edges[key] = edges
++
++        # Modify the height data structure to handle multiple histograms
++        if multiple in ("stack", "fill"):
++
++            # The heights share a support grid, so we can make a dataframe
++            heights = pd.DataFrame(heights).iloc[:, ::-1]
++            norm_constant = heights.sum(axis="columns")
++
++            # Take the cumulative sum to stack
++            heights = heights.cumsum(axis="columns")
++
++            # Normalize by row sum to fill
++            if multiple == "fill":
++                heights = heights.div(norm_constant, axis="index")
++
++            # Define where each segment starts
++            baselines = heights.shift(1, axis=1).fillna(0)
++
++        else:
++
++            # All heights will start at 0
++            baselines = {k: np.zeros_like(v) for k, v in heights.items()}
++
++        # Handle default visual attributes
++        if "hue" not in self.variables:
++            if fill:
++                scout = ax.fill_between([], [], **plot_kws)
++                default_color = tuple(scout.get_facecolor().squeeze())
++                plot_kws.pop("color", None)
++            else:
++                scout, = ax.plot([], [], **plot_kws)
++                default_color = scout.get_color()
++            scout.remove()
++
++        default_alpha = .25 if multiple == "layer" else .75
++        alpha = plot_kws.pop("alpha", default_alpha)
++
++        # Now iterate through again and draw the histograms
++        # We go backwards so stacked histograms read from top-to-bottom
++        for sub_vars, _ in self._semantic_subsets("hue", reverse=True):
++
++            # Extract the bin edges and height curve for this level
++            key = tuple(sub_vars.items())
++            try:
++                height = heights[key]
++            except KeyError:
++                continue
++            edges = bin_edges[key]
++            fill_from = baselines[key]
++
++            # Modify the matplotlib attributes from semantic mapping
++            if "hue" in self.variables:
++                color = self._hue_map(sub_vars["hue"])
++            else:
++                color = default_color
++
++            artist_kws = self._artist_kws(
++                plot_kws, fill, multiple, color, alpha
++            )
++
++            # Plot a histogram with observation values on the x axis
++            if "x" in self.variables:
++
++                if fill:
++                    artist = ax.fill_between(
++                        edges[:-1], fill_from, height, **artist_kws
++                    )
++                else:
++                    artist, = ax.plot(edges[:-1], height, **artist_kws)
++
++            # Plot a histogram with observation values on the y axis
++            else:
++                if fill:
++                    artist = ax.fill_betweenx(
++                        edges[:-1], fill_from, height, **artist_kws
++                    )
++                else:
++                    artist, = ax.plot(height, edges[:-1], **artist_kws)
++
++        # --- Finalize the plot ----
++        default_x = default_y = ""
++        if data_variable == "x":
++            default_y = "Count"
++        if data_variable == "y":
++            default_x = "Count"
++        self._add_axis_labels(ax, default_x, default_y)
++
++        if "hue" in self.variables and legend:
++
++            if fill:
++                artist = partial(mpl.patches.Patch)
++            else:
++                artist = partial(mpl.lines.Line2D, [], [])
++
++            self._add_legend(
++                ax, artist, fill, multiple, alpha, plot_kws, {},
++            )
++
++    def plot_bivariate(
++        self,
++        common_bins,
++        common_norm,
++        fill,
++        legend,
++        log_scale,
++        color,
++        cbar,
++        cbar_ax,
++        cbar_kws,
++        estimate_kws,
++        plot_kws,
++        ax,
++    ):
++
++        plot_kws = plot_kws.copy()
++
++        estimator = Histogram(**estimate_kws)
++
++        if "hue" not in self.variables:
++            common_norm = False
++
++        # Loop through the subsets and estimate the histograms
++        heights = {}
++        x_edges = {}
++        y_edges = {}
++
++        for sub_vars, sub_data in self._semantic_subsets("hue"):
++
++            # Extract the data points from this sub set and remove nulls
++            observations = remove_na(sub_data[["x", "y"]])
++
++            # Extract the weights for this subset of observations
++            if "weights" in self.variables:
++                weights = sub_data["weights"]
++            else:
++                weights = None
++
++            # If data axis is log scaled, fit the histogram in logspace
++            if log_scale is not None:
++                if log_scale[0]:
++                    observations["x"] = np.log10(observations["x"])
++                if log_scale[1]:
++                    observations["y"] = np.log10(observations["y"])
++
++            # Estimate the histogram of observations at this level
++            height, x_edge, y_edge = estimator(
++                observations["x"], observations["y"], weights=weights
++            )
++
++            # Transform the bin edges back to the original scale
++            if log_scale is not None:
++                if log_scale[0]:
++                    x_edge = np.power(10, x_edge)
++                if log_scale[1]:
++                    y_edge = np.power(10, y_edge)
++
++            # Apply a scaling factor so that the integral over all subsets is 1
++            if common_norm:
++                height *= len(sub_data) / len(self.plot_data)
++
++            key = tuple(sub_vars.items())
++            heights[key] = height
++            x_edges[key] = x_edge
++            y_edges[key] = y_edge
++
++        # Get a default single color from the attribute cycle
++        scout, = ax.plot([], color=color)
++        default_color = scout.get_color()
++        scout.remove()
++
++        # Apply a common color-mapping to single color specificiations
++        color_map = partial(light_palette, reverse=True, as_cmap=True)
++
++        # Define the coloring of the contours
++        if "hue" in self.variables:
++            for param in ["cmap", "colors"]:
++                if param in plot_kws:
++                    msg = f"{param} parameter ignored when using hue mapping."
++                    warnings.warn(msg, UserWarning)
++                    plot_kws.pop(param)
++        else:
++            coloring_given = set(plot_kws) & {"cmap", "colors"}
++            if fill and not coloring_given:
++                cmap = color_map(default_color)
++                plot_kws["cmap"] = cmap
++            if not fill and not coloring_given:
++                plot_kws["colors"] = [default_color]
++
++        # Choose the function to plot with
++        if fill:
++            plot_func = ax.pcolormesh
++        else:
++            plot_func = ax.contour
++
++        # Loop through the subsets again and plot the data
++        for sub_vars, _ in self._semantic_subsets("hue"):
++
++            if "hue" in sub_vars:
++                color = self._hue_map(sub_vars["hue"])
++                if fill:
++                    plot_kws["cmap"] = color_map(color)
++                else:
++                    plot_kws["colors"] = [color]
++
++            key = tuple(sub_vars.items())
++            if key not in heights:
++                continue
++            height = heights[key]
++            xx, yy = x_edges[key], y_edges[key]
++
++            label = plot_kws.pop("label", None)
++
++            if fill:
++                mesh = plot_func(xx, yy, height, **plot_kws)
++            else:
++                mesh = plot_func(xx, yy, height, **plot_kws)
++
++            if "hue" not in self.variables:
++                mesh.collections[0].set_label(label)
++
++        # Add a color bar representing the heights
++        if cbar:
++            cbar_kws = {} if cbar_kws is None else cbar_kws
++            ax.figure.colorbar(mesh, cbar_ax, ax, **cbar_kws)
++
++        # --- Finalize the plot
++        self._add_axis_labels(ax)
++
++        if "hue" in self.variables and legend:
++
++            artist_kws = {}
++            if fill:
++                artist = partial(mpl.patches.Patch)
++            else:
++                artist = partial(mpl.lines.Line2D, [], [])
++
++            self._add_legend(
++                ax, artist, fill, "layer", 1, artist_kws, {},
++            )
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):
+@@ -493,6 +827,162 @@ class _KDEPlotter(_DistributionPlotter):
+         return levels
+ 
+ 
++@_deprecate_positional_args
++def histplot(
++    data=None, *,
++    x=None, y=None, hue=None, weights=None,
++    stat="count", bins="auto", binwidth=None, binrange=None,
++    discrete=None, cumulative=False, common_bins=True, common_norm=True,
++    multiple="layer", element="bars", fill=True, shrink=1,
++    kde=False, kde_kws=None, line_kws=None,
++    palette=None, hue_order=None, hue_norm=None,
++    color=None, log_scale=None,
++    legend=True, ax=None,
++    **kwargs,
++):
++
++    # Check for deprecated parameters
++    # No deprecations in initial release
++
++    # Pack the kwargs for statistics.Histogram
++    estimate_kws = dict(
++        bins=bins,
++        binwidth=binwidth,
++        binrange=binrange,
++        discrete=discrete,
++        cumulative=cumulative,
++        common_bins=common_bins,
++        common_norm=common_norm,
++    )
++
++    # Set up the plotter
++    p = _HistPlotter(
++        data=data,
++        variables=_HistPlotter.get_semantics(locals()),
++    )
++
++    p.map_hue(palette=palette, order=hue_order, norm=hue_norm)
++
++    if ax is None:
++        ax = plt.gca()
++
++    # Check for a specification that lacks x/y data and return early
++    any_data = bool({"x", "y"} & set(p.variables))
++    if not any_data:
++        return ax
++
++    # Determine the kind of plot to use
++    univariate = bool({"x", "y"} - set(p.variables))
++
++    if univariate:
++
++        data_variable = (set(p.variables) & {"x", "y"}).pop()
++
++        # Catch some inputs we cannot do anything with
++        data_var_type = p.var_types[data_variable]
++        if data_var_type not in ("numeric", "categorical", "datetime"):
++            msg = (
++                f"histplot requires a numeric, categorical, or datetime "
++                f"'{data_variable}' variable, but a {data_var_type} was passed."
++            )
++            raise TypeError(msg)
++
++        # Possibly log scale the data axis
++        if log_scale is not None:
++            set_scale = getattr(ax, f"set_{data_variable}scale")
++            if log_scale is True:
++                set_scale("log")
++            else:
++                set_scale("log", **{f"base{data_variable}": log_scale})
++
++        # Set defaults that depend on other parameters
++        if fill is None:
++            fill = multiple in ("stack", "fill")
++
++        plot_kws = kwargs.copy()
++        if color is not None:
++            plot_kws["color"] = color
++
++        p.plot_univariate(
++            multiple=multiple,
++            common_bins=common_bins,
++            common_norm=common_norm,
++            shrink=shrink,
++            kde=kde,
++            kde_kws=kde_kws or {},
++            line_kws=line_kws or {},
++            fill=fill,
++            legend=legend,
++            estimate_kws=estimate_kws,
++            plot_kws=plot_kws,
++            ax=ax
++        )
++
++    else:
++
++        # Check input types
++        for var in "xy":
++            var_type = p.var_types[var]
++            if var_type not in ("numeric", "categorical", "datetime"):
++                msg = (
++                    f"histplot requires a numeric, categorical, or datetime "
++                    f"'{var}' variable, but a {var_type} was passed."
++                )
++                raise TypeError(msg)
++
++        # Possibly log-scale one or both axes
++        if log_scale is not None:
++            # Allow single value or x, y tuple
++            try:
++                scalex, scaley = log_scale
++            except TypeError:
++                scalex = scaley = log_scale
++                log_scale = scalex, scaley  # Tupelize for downstream
++
++            for axis, scale in zip("xy", (scalex, scaley)):
++                if scale:
++                    set_scale = getattr(ax, f"set_{axis}scale")
++                    if scale is True:
++                        set_scale("log")
++                    else:
++                        set_scale("log", **{f"base{axis}": scale})
++
++        p.plot_bivariate(
++            common_bins=common_bins,
++            common_norm=common_norm,
++            fill=fill,
++            legend=legend,
++            log_scale=log_scale,
++            color=color,
++            cbar=False,  # TODO: implement cbar for bivariate hist
++            cbar_ax=None,
++            cbar_kws=None,
++            estimate_kws=estimate_kws,
++            plot_kws=kwargs,
++            ax=ax,
++        )
++
++    return ax
++
++
++histplot.__doc__ = """\
++Plot univariate or bivariate histograms.
++
++A histogram is a classic visualization tool that represents the distribution
++of one or more variables by counting the number of observations that fall within
++discrete bins.
++
++...
++
++.. include:: ../docstrings/histplot.rst
++
++""".format(
++    params=_param_docs,
++    returns=_core_docs["returns"],
++    seealso=_core_docs["seealso"],
++)
++
++
+ @_deprecate_positional_args
+ def kdeplot(
+     x=None,  # Allow positional x, because behavior will not change with reorg

@@ -1,0 +1,30 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..f9ae19a 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -72,6 +72,9 @@ class Conf(_config.ConfigNamespace):
+         'Time to wait for remote data queries (in seconds). Set this to zero '
+         'to prevent any attempt to download anything.',
+         aliases=['astropy.coordinates.name_resolve.name_resolve_timeout'])
++    allow_internet = _config.ConfigItem(
++        True,
++        'If False, prevent any attempt to download any file from the Internet.')
+     compute_hash_block_size = _config.ConfigItem(
+         2 ** 16,  # 64K
+         'Block size for computing file hashes.')
+@@ -995,11 +998,11 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+                                http_headers=None, ftp_tls=None):
+     from astropy.utils.console import ProgressBarOrSpinner
+ 
+-    if timeout == 0:
++    if timeout == 0 or not conf.allow_internet:
+         raise urllib.error.URLError(
+-            f"URL {remote_url} was supposed to be downloaded but timeout was set to 0; "
+-            f"if this is unexpected check the astropy config file for the option "
+-            f"remote_timeout")
++            f"URL {remote_url} was supposed to be downloaded but downloads are disabled; "
++            f"if this is unexpected check the astropy config file for the options "
++            f"remote_timeout and allow_internet")
+ 
+     if remote_url is None:
+         remote_url = source_url

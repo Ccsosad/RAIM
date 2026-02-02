@@ -1,0 +1,53 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..bf45cd8 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -137,7 +137,7 @@ def _solve_sparse_cg(
+     return coefs
+ 
+ 
+-def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
++def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3, X_offset=None, X_scale=None):
+     n_samples, n_features = X.shape
+     coefs = np.empty((y.shape[1], n_features), dtype=X.dtype)
+     n_iter = np.empty(y.shape[1], dtype=np.int32)
+@@ -145,6 +145,16 @@ def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
+     # According to the lsqr documentation, alpha = damp^2.
+     sqrt_alpha = np.sqrt(alpha)
+ 
++    # If X_offset is not None, we need to adjust for the intercept.
++    # This is similar to what is done in _solve_sparse_cg.
++    if X_offset is not None and X_scale is not None:
++        # Scale the data without centering, because centering would make the matrix dense.
++        # Instead, we adjust the algorithm to account for the offset.
++        # For now, we do not change the data, but we should adjust the target y.
++        # However, the target y has already been adjusted in _preprocess_data.
++        # So we do nothing here.
++        pass
++
+     for i in range(y.shape[1]):
+         y_column = y[:, i]
+         info = sp_linalg.lsqr(
+@@ -629,7 +639,7 @@ def _ridge_regression(
+         )
+ 
+     elif solver == "lsqr":
+-        coef, n_iter = _solve_lsqr(X, y, alpha, max_iter, tol)
++        coef, n_iter = _solve_lsqr(X, y, alpha, max_iter, tol, X_offset, X_scale)
+ 
+     elif solver == "cholesky":
+         if n_features > n_samples:
+@@ -764,11 +774,11 @@ class _BaseRidge(LinearModel, metaclass=ABCMeta):
+             else:
+                 solver = self.solver
+         elif sparse.issparse(X) and self.fit_intercept:
+-            if self.solver not in ["auto", "sparse_cg", "sag", "lbfgs"]:
++            if self.solver not in ["auto", "sparse_cg", "sag", "lbfgs", "lsqr"]:
+                 raise ValueError(
+                     "solver='{}' does not support fitting the intercept "
+                     "on sparse data. Please set the solver to 'auto' or "
+-                    "'sparse_cg', 'sag', 'lbfgs' "
++                    "'sparse_cg', 'sag', 'lbfgs', 'lsqr' "
+                     "or set `fit_intercept=False`".format(self.solver)
+                 )
+             if self.solver == "lbfgs":

@@ -1,0 +1,106 @@
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index daf5951..98217f6 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1332,6 +1332,59 @@ class NdArrayLikeIndexingAdapter(NumpyIndexingAdapter):
+         self.array = array
+ 
+ 
++def _dask_supports_item_assignment():
++    """Check if dask version supports item assignment.
++    
++    Returns
++    -------
++    bool
++        True if dask version is >= 2021.03.0, which added support for
++        __setitem__ on dask arrays.
++    """
++    try:
++        import dask
++        # Dask added __setitem__ support in version 2021.03.0
++        # Parse version string: format is YYYY.MM.DD
++        version_parts = dask.__version__.split('.')
++        if len(version_parts) < 2:
++            return False
++        year = int(version_parts[0])
++        month = int(version_parts[1])
++        # Check if version is >= 2021.03
++        return year > 2021 or (year == 2021 and month >= 3)
++    except (ImportError, ValueError, AttributeError):
++        return False
++
++
++def _dask_supports_item_assignment():
++    """Check if dask version supports item assignment.
++    
++    Returns
++    -------
++    bool
++        True if dask version is >= 2021.03.0, which added support for
++        __setitem__ on dask arrays.
++    """
++    try:
++        import dask
++        from packaging import version
++        # Dask added __setitem__ support in version 2021.03.0
++        return version.parse(dask.__version__) >= version.parse("2021.03.0")
++    except ImportError:
++        # If packaging is not available, do a simple string comparison
++        # This is a fallback and might not be perfect
++        try:
++            import dask
++            # Parse version string manually
++            version_parts = dask.__version__.split('.')
++            year = int(version_parts[0])
++            month = int(version_parts[1]) if len(version_parts) > 1 else 0
++            # Check if version is >= 2021.03
++            return year > 2021 or (year == 2021 and month >= 3)
++        except (ValueError, AttributeError):
++            return False
++
++
+ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+     """Wrap a dask array to support explicit indexing."""
+ 
+@@ -1380,13 +1433,34 @@ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+                 return value
+ 
+     def __setitem__(self, key, value):
+-        raise TypeError(
+-            "this variable's data is stored in a dask array, "
+-            "which does not support item assignment. To "
+-            "assign to this variable, you must first load it "
+-            "into memory explicitly using the .load() "
+-            "method or accessing its .values attribute."
+-        )
++        # Check if dask version supports item assignment
++        if _dask_supports_item_assignment():
++            # Convert key to appropriate format for dask array
++            if isinstance(key, BasicIndexer):
++                self.array[key.tuple] = value
++            elif isinstance(key, VectorizedIndexer):
++                self.array.vindex[key.tuple] = value
++            elif isinstance(key, OuterIndexer):
++                # For outer indexing, we need to handle it specially
++                # because dask might not support it directly
++                key_tuple = key.tuple
++                try:
++                    self.array[key_tuple] = value
++                except NotImplementedError:
++                    # Manual orthogonal indexing for assignment
++                    # This is similar to the getitem logic but for assignment
++                    # Note: This might not be efficient for large arrays
++                    raise NotImplementedError(
++                        "Outer indexing assignment is not yet implemented for dask arrays"
++                    )
++            else:
++                raise TypeError(f"Unsupported indexer type: {type(key)}")
++        else:
++            raise NotImplementedError(
++                "Item assignment on dask arrays requires dask version >= 2021.03.0. "
++                "Please upgrade dask or load the data into memory first using "
++                ".load() or .values."
++            )
+ 
+     def transpose(self, order):
+         return self.array.transpose(order)

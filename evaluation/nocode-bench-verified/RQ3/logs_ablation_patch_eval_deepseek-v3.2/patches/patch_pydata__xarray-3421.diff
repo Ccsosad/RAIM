@@ -1,0 +1,49 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..6f7108e 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1862,6 +1863,18 @@ class DataArray(AbstractArray, DataWithCoords):
+         numpy.transpose
+         Dataset.transpose
+         """
++        # Expand ellipsis
++        if dims and ... in dims:
++            # Replace ... with the remaining dimensions
++            dims_list = list(dims)
++            ellipsis_index = dims_list.index(...)
++            # Remove the ellipsis
++            dims_list.pop(ellipsis_index)
++            # Insert the remaining dimensions in their original order
++            remaining = [d for d in self.dims if d not in dims_list]
++            dims_list[ellipsis_index:ellipsis_index] = remaining
++            dims = tuple(dims_list)
++
+         if dims:
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+@@ -3122,4 +3135,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..55ac0bc 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5449,4 +5449,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

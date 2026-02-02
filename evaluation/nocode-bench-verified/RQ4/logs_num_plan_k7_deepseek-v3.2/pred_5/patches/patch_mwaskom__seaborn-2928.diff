@@ -1,0 +1,199 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..3916d45 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -1113,6 +1113,64 @@ class FacetGrid(Grid):
+                     axes.append(ax)
+             return np.array(axes, object).flat
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++
++        This method is intended for method chaining in a fluent style.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes the grid object as its first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of applying the function.
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the grid object.
++
++        This method is intended for method chaining in a fluent style.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes the grid object as its first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def tight_layout(self, **kwargs):
++        """
++        Call fig.tight_layout on the grid's figure and return self.
++
++        Parameters
++        ----------
++        **kwargs
++            Keyword arguments passed to fig.tight_layout.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++        """
++        self._figure.tight_layout(**kwargs)
++        return self
++
+ 
+ class PairGrid(Grid):
+     """Subplot grid for plotting pairwise relationships in a dataset.
+@@ -1618,6 +1676,64 @@ class PairGrid(Grid):
+                 numeric_cols.append(col)
+         return numeric_cols
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++
++        This method is intended for method chaining in a fluent style.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes the grid object as its first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of applying the function.
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the grid object.
++
++        This method is intended for method chaining in a fluent style.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes the grid object as its first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def tight_layout(self, **kwargs):
++        """
++        Call fig.tight_layout on the grid's figure and return self.
++
++        Parameters
++        ----------
++        **kwargs
++            Keyword arguments passed to fig.tight_layout.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++        """
++        self._figure.tight_layout(**kwargs)
++        return self
++
+ 
+ class JointGrid(_BaseGrid):
+     """Grid for drawing a bivariate plot with marginal univariate plots.
+@@ -1906,6 +2022,64 @@ class JointGrid(_BaseGrid):
+         self.ax_joint.set_ylabel(ylabel, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the result.
++
++        This method is intended for method chaining in a fluent style.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes the grid object as its first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of applying the function.
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the grid object.
++
++        This method is intended for method chaining in a fluent style.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes the grid object as its first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def tight_layout(self, **kwargs):
++        """
++        Call fig.tight_layout on the grid's figure and return self.
++
++        Parameters
++        ----------
++        **kwargs
++            Keyword arguments passed to fig.tight_layout.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++        """
++        self._figure.tight_layout(**kwargs)
++        return self
++
+ 
+ JointGrid.__init__.__doc__ = """\
+ Set up the grid of subplots and store data internally for easy plotting.

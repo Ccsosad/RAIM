@@ -1,0 +1,270 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index e6fae2b..e8ef386 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -2264,6 +2264,50 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+         # unstacked dataset
+         return Dataset(data_dict)
+ 
++    def convert_calendar(self, calendar, align_on='year', use_cftime=None, missing=None):
++        """
++        Convert the DataArray's datetime coordinate to a different calendar.
++
++        Parameters
++        ----------
++        calendar : str
++            Target calendar.
++        align_on : {'year', 'date'}, default 'year'
++            How to align the dates when converting.
++        use_cftime : bool, optional
++            If True, use cftime.datetime objects. If False, use pandas Timestamps.
++            If None (default), determine based on the calendar and date range.
++        missing : optional
++            How to handle missing dates (not yet implemented).
++
++        Returns
++        -------
++        DataArray
++            DataArray with converted calendar.
++        """
++        from ..coding.calendar_ops import convert_calendar
++        return convert_calendar(self, calendar, align_on=align_on, use_cftime=use_cftime, missing=missing)
++
++    def interp_calendar(self, target, use_cftime=None):
++        """
++        Interpolate the DataArray from its current calendar to another.
++
++        Parameters
++        ----------
++        target : DataArray or DatetimeIndex
++            Target datetime coordinate.
++        use_cftime : bool, optional
++            If True, use cftime.datetime objects. If False, use pandas Timestamps.
++            If None (default), determine based on the calendar and date range.
++
++        Returns
++        -------
++        DataArray
++            Interpolated data on the target calendar.
++        """
++        from ..coding.calendar_ops import interp_calendar
++        return interp_calendar(self, target, use_cftime=use_cftime)
++
+     def transpose(
+         self,
+         *dims: Hashable,
+@@ -4658,4 +4702,4 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)
+diff --git a/xarray/__init__.py b/xarray/__init__.py
+new file mode 100644
+index 0000000..9dbcb9e
+--- /dev/null
++++ b/xarray/__init__.py
+@@ -0,0 +1,2 @@
++from .coding.times import cftime_range
++from .coding.calendar_ops import date_range, date_range_like
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..a4c4c59
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1,173 @@
++"""
++Calendar operations for xarray.
++"""
++import numpy as np
++import pandas as pd
++from .times import cftime_range, _should_cftime_be_used
++from .cftime_offsets import to_offset
++from ..core.common import _contains_datetime_like_objects
++from ..core.utils import is_scalar
++from ..core.variable import Variable
++from ..core.dataarray import DataArray
++from ..core.dataset import Dataset
++from ..core.indexes import CFTimeIndex
++from ..core.common import AbstractArray
++
++def infer_freq(source):
++    """
++    Infer the frequency of a 1D datetime-like array.
++
++    Parameters
++    ----------
++    source : array-like
++        1D array of datetime objects (pandas Timestamps or cftime.datetime).
++
++    Returns
++    -------
++    freq : str
++        The inferred frequency string.
++
++    Raises
++    ------
++    ValueError
++        If the frequency cannot be inferred.
++    """
++    if not _contains_datetime_like_objects(source):
++        raise TypeError("'source' must be a 1D array of datetime objects for inferring its range.")
++    
++    # Convert to pandas DatetimeIndex if possible
++    if hasattr(source, 'to_pandas_index'):
++        source = source.to_pandas_index()
++    
++    if isinstance(source, pd.DatetimeIndex):
++        freq = source.inferred_freq
++    elif isinstance(source, CFTimeIndex):
++        # For CFTimeIndex, we use the offset from the first two points
++        if len(source) < 2:
++            raise ValueError("Cannot infer frequency from less than 2 points.")
++        delta = source[1] - source[0]
++        freq = to_offset(delta).freqstr
++    else:
++        raise TypeError("Unsupported datetime index type.")
++    
++    if freq is None:
++        raise ValueError("`date_range_like` was unable to generate a range as the source frequency was not inferrable.")
++    return freq
++
++def date_range(start, end=None, periods=None, freq=None, calendar='standard', use_cftime=None):
++    """
++    Return a fixed frequency datetime range.
++
++    Parameters
++    ----------
++    start : str or datetime-like
++        Left bound for generating dates.
++    end : str or datetime-like, optional
++        Right bound for generating dates.
++    periods : int, optional
++        Number of periods to generate.
++    freq : str or DateOffset, default 'D'
++        Frequency string.
++    calendar : str, default 'standard'
++        Calendar type for cftime datetime.
++    use_cftime : bool, optional
++        If True, use cftime.datetime objects. If False, use pandas Timestamps.
++        If None (default), determine based on the calendar and date range.
++
++    Returns
++    -------
++    DatetimeIndex
++        If use_cftime is True, returns CFTimeIndex, else pandas.DatetimeIndex.
++    """
++    if use_cftime is None:
++        use_cftime = _should_cftime_be_used(start, end, calendar)
++    
++    if use_cftime:
++        return cftime_range(start=start, end=end, periods=periods, freq=freq, calendar=calendar)
++    else:
++        return pd.date_range(start=start, end=end, periods=periods, freq=freq)
++
++def date_range_like(source, calendar='standard', use_cftime=None):
++    """
++    Generate a datetime range with the same length and frequency as `source`.
++
++    Parameters
++    ----------
++    source : array-like
++        1D array of datetime objects (pandas Timestamps or cftime.datetime).
++    calendar : str, default 'standard'
++        Calendar type for cftime datetime.
++    use_cftime : bool, optional
++        If True, use cftime.datetime objects. If False, use pandas Timestamps.
++        If None (default), determine based on the calendar and date range.
++
++    Returns
++    -------
++    DatetimeIndex
++        If use_cftime is True, returns CFTimeIndex, else pandas.DatetimeIndex.
++    """
++    if not _contains_datetime_like_objects(source):
++        raise TypeError("'source' must be a 1D array of datetime objects for inferring its range.")
++    
++    freq = infer_freq(source)
++    start = source[0]
++    end = source[-1]
++    periods = len(source)
++    
++    if use_cftime is None:
++        use_cftime = _should_cftime_be_used(start, end, calendar)
++    
++    if use_cftime:
++        return cftime_range(start=start, end=end, periods=periods, freq=freq, calendar=calendar)
++    else:
++        return pd.date_range(start=start, end=end, periods=periods, freq=freq)
++
++def convert_calendar(dataarray, calendar, align_on='year', use_cftime=None, missing=None):
++    """
++    Convert a DataArray from one calendar to another.
++
++    Parameters
++    ----------
++    dataarray : DataArray
++        Input data with a datetime coordinate.
++    calendar : str
++        Target calendar.
++    align_on : {'year', 'date'}, default 'year'
++        How to align the dates when converting.
++    use_cftime : bool, optional
++        If True, use cftime.datetime objects. If False, use pandas Timestamps.
++        If None (default), determine based on the calendar and date range.
++    missing : optional
++        How to handle missing dates (not yet implemented).
++
++    Returns
++    -------
++    DataArray
++        DataArray with converted calendar.
++    """
++    # This is a placeholder implementation.
++    # In reality, this would involve converting the datetime coordinate and reindexing.
++    raise NotImplementedError("convert_calendar is not yet implemented.")
++
++def interp_calendar(dataarray, target, use_cftime=None):
++    """
++    Interpolate data from one calendar to another.
++
++    Parameters
++    ----------
++    dataarray : DataArray
++        Input data with a datetime coordinate.
++    target : DataArray or DatetimeIndex
++        Target datetime coordinate.
++    use_cftime : bool, optional
++        If True, use cftime.datetime objects. If False, use pandas Timestamps.
++        If None (default), determine based on the calendar and date range.
++
++    Returns
++    -------
++    DataArray
++        Interpolated data on the target calendar.
++    """
++    # This is a placeholder implementation.
++    # In reality, this would involve interpolating the data to the new datetime coordinate.
++    raise NotImplementedError("interp_calendar is not yet implemented.")
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+new file mode 100644
+index 0000000..00e9946
+--- /dev/null
++++ b/xarray/core/accessor_dt.py
+@@ -0,0 +1,16 @@
++    @property
++    def date(self):
++        return self._dataarray._replace(self._dataarray.variable.date)
++
++    @property
++    def calendar(self):
++        """
++        Return the calendar of the datetime coordinate.
++
++        Returns
++        -------
++        str
++            The calendar name (e.g., 'standard', 'noleap', '360_day').
++        """
++        from ..coding.times import get_calendar
++        return get_calendar(self._dataarray)

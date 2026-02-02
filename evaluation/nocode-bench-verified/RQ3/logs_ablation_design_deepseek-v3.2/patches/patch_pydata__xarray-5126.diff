@@ -1,0 +1,138 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..a5de16e 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -371,15 +371,65 @@ def _calculate_col_width(col_items):
+     return col_width
+ 
+ 
+-def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
++def _should_expand(section_name, mapping_length, max_rows):
++    """Determine whether to expand a section based on configuration.
++    
++    Parameters
++    ----------
++    section_name : str
++        One of 'attrs', 'coords', 'data', 'data_vars'
++    mapping_length : int
++        Number of items in the mapping
++    max_rows : int
++        Maximum rows to display before truncation
++    
++    Returns
++    -------
++    bool
++        True if the section should be expanded (not truncated), False otherwise
++    """
++    from xarray.core.options import OPTIONS
++    
++    # Get the configuration for this section
++    option_name = f"display_expand_{section_name}"
++    setting = OPTIONS.get(option_name, "default")
++    
++    if setting is True:
++        return True
++    elif setting is False:
++        return False
++    else:  # "default" or any other value
++        # Use the existing logic: expand unless exceeding max_rows
++        return mapping_length <= max_rows
++
++
++def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None, section_name=None):
+     if col_width is None:
+         col_width = _calculate_col_width(mapping)
+     if max_rows is None:
+         max_rows = OPTIONS["display_max_rows"]
++    
++    # Determine section name from title if not provided
++    if section_name is None:
++        # Map title to section name
++        title_to_section = {
++            "Attributes": "attrs",
++            "Coordinates": "coords",
++            "Data variables": "data_vars"
++        }
++        section_name = title_to_section.get(title, title.lower())
++    
+     summary = [f"{title}:"]
+     if mapping:
+         len_mapping = len(mapping)
+-        if len_mapping > max_rows:
++        # Check if we should expand this section
++        expand = _should_expand(section_name, len_mapping, max_rows)
++        
++        if not expand:
++            # Always collapse: show only the count
++            summary = [f"{summary[0]} ({len_mapping})"]
++        elif len_mapping > max_rows:
++            # Truncate because it's too long (and we're in "default" mode)
+             summary = [f"{summary[0]} ({max_rows}/{len_mapping})"]
+             first_rows = max_rows // 2 + max_rows % 2
+             items = list(mapping.items())
+@@ -389,6 +439,7 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+                 summary += [pretty_print("    ...", col_width) + " ..."]
+                 summary += [summarizer(k, v, col_width) for k, v in items[-last_rows:]]
+         else:
++            # Expand fully
+             summary += [summarizer(k, v, col_width) for k, v in mapping.items()]
+     else:
+         summary += [EMPTY_REPR]
+@@ -396,12 +447,12 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+ 
+ 
+ data_vars_repr = functools.partial(
+-    _mapping_repr, title="Data variables", summarizer=summarize_datavar
++    _mapping_repr, title="Data variables", summarizer=summarize_datavar, section_name="data_vars"
+ )
+ 
+ 
+ attrs_repr = functools.partial(
+-    _mapping_repr, title="Attributes", summarizer=summarize_attr
++    _mapping_repr, title="Attributes", summarizer=summarize_attr, section_name="attrs"
+ )
+ 
+ 
+@@ -409,7 +460,7 @@ def coords_repr(coords, col_width=None):
+     if col_width is None:
+         col_width = _calculate_col_width(_get_col_items(coords))
+     return _mapping_repr(
+-        coords, title="Coordinates", summarizer=summarize_coord, col_width=col_width
++        coords, title="Coordinates", summarizer=summarize_coord, col_width=col_width, section_name="coords"
+     )
+ 
+ 
+@@ -495,8 +546,20 @@ def array_repr(arr):
+ 
+     summary = [
+         "<xarray.{} {}({})>".format(type(arr).__name__, name_str, dim_summary(arr)),
+-        short_data_repr(arr),
+     ]
++    
++    # Check if we should display the data
++    from xarray.core.options import OPTIONS
++    display_expand_data = OPTIONS.get("display_expand_data", "default")
++    
++    if display_expand_data is not False:
++        # Only show data if not forced to collapse
++        summary.append(short_data_repr(arr))
++    elif display_expand_data is True:
++        # Always expand - but we need to handle this differently
++        # For now, just show the data (which is the default behavior)
++        summary.append(short_data_repr(arr))
++    # else: "default" - show data (which is already handled above)
+ 
+     if hasattr(arr, "coords"):
+         if arr.coords:
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+new file mode 100644
+index 0000000..1f909ab
+--- /dev/null
++++ b/xarray/core/options.py
+@@ -0,0 +1,6 @@
++    "display_max_rows": 12,
++    "display_width": 80,
++    "display_expand_attrs": "default",
++    "display_expand_coords": "default",
++    "display_expand_data": "default",
++    "display_expand_data_vars": "default",

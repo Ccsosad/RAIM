@@ -1,0 +1,75 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..9a59f7a 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1260,6 +1260,64 @@ class DataArray(AbstractArray, DataWithCoords):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def query(
++        self,
++        expr: str,
++        engine: str = None,
++        parser: str = "pandas",
++        **kwargs,
++    ) -> "DataArray":
++        """Query the DataArray using a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            A boolean expression to evaluate on the DataArray's data.
++            The expression can refer to the DataArray's name as a variable.
++        engine : str, optional
++            The engine used to evaluate the expression. Supported engines:
++            - None: tries to use 'numexpr' if installed, otherwise 'python'
++            - 'numexpr': evaluates expressions using numexpr
++            - 'python': evaluates expressions using Python's eval
++        parser : str, optional
++            The parser to use. Currently only 'pandas' is supported.
++        **kwargs
++            Additional keyword arguments passed to the evaluation engine.
++
++        Returns
++        -------
++        queried : DataArray
++            A new DataArray with the same coordinates as the original, but
++            with data selected by the query.
++
++        See Also
++        --------
++        Dataset.query
++        """
++        import pandas as pd
++        import numpy as np
++
++        if self.name is None:
++            raise ValueError(
++                "Cannot query an unnamed DataArray. Assign a name first."
++            )
++        # For multi-dimensional arrays, we flatten the data and then index.
++        # This is not efficient, but works for now.
++        local_dict = {self.name: self.values.ravel()}
++        try:
++            mask = pd.eval(expr, engine=engine, parser=parser, local_dict=local_dict, **kwargs)
++        except Exception as e:
++            raise ValueError(f"Failed to evaluate query {expr!r}") from e
++        mask = np.asarray(mask, dtype=bool)
++        # Get the indices where mask is True
++        indices = np.where(mask)[0]
++        # Unravel the indices to multi-dimensional indices
++        coords = np.unravel_index(indices, self.shape)
++        # Create a new DataArray by indexing
++        # This is not efficient, but works.
++        result = self.isel({dim: idx for dim, idx in zip(self.dims, coords)})
++        return result
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -4360,4 +4418,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)

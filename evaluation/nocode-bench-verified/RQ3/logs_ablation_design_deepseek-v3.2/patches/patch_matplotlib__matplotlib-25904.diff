@@ -1,0 +1,9 @@
+diff --git a/lib/matplotlib/spines.py b/lib/matplotlib/spines.py
+index 915b34c..ef74601 100644
+--- a/lib/matplotlib/spines.py
++++ b/lib/matplotlib/spines.py
+@@ -1,3 +1,4 @@
++
+ from collections.abc import MutableMapping
+ import functools
+ 

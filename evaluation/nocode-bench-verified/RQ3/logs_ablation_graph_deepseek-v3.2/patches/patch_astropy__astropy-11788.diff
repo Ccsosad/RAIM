@@ -1,0 +1,21 @@
+diff --git a/astropy/units/format/generic.py b/astropy/units/format/generic.py
+index 25c69c1..0653735 100644
+--- a/astropy/units/format/generic.py
++++ b/astropy/units/format/generic.py
+@@ -457,6 +457,10 @@ class Generic(Base):
+             elif s[-1] == '\N{LATIN CAPITAL LETTER A WITH RING ABOVE}':
+                 s = s[:-1] + 'Angstrom'
+ 
++        # Handle milli-Angstrom aliases
++        if s in ('mAngstrom', 'mangstrom'):
++            return registry['Angstrom'] * 1e-3
++
+         if s in registry:
+             return registry[s]
+ 
+@@ -583,4 +587,4 @@ class Unscaled(Generic):
+ 
+     This is used in some error messages where the scale is irrelevant.
+     """
+-    _show_scale = False
++    _show_scale = False

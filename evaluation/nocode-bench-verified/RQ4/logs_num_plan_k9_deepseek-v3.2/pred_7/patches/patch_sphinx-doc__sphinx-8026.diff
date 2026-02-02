@@ -1,0 +1,46 @@
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+index 796b7ad..12bc2a7 100644
+--- a/sphinx/builders/__init__.py
++++ b/sphinx/builders/__init__.py
+@@ -178,7 +178,10 @@ class Builder:
+ 
+     def post_process_images(self, doctree: Node) -> None:
+         """Pick the best candidate for all image URIs."""
+-        images = ImageAdapter(self.env)
++        # Get the current document name from the doctree
++        docname = self.env.docname
++        docpath = self.get_docpath(docname) if docname else ''
++        images = ImageAdapter(self.env, docpath=docpath)
+         for node in doctree.traverse(nodes.image):
+             if '?' in node['candidates']:
+                 # don't rewrite nonlocal image URIs
+@@ -603,6 +606,23 @@ class Builder:
+         """
+         pass
+ 
++    def get_docpath(self, docname: str) -> str:
++        """Return the directory path for the given document name, with a trailing slash if non-empty."""
++        import os
++        dirname = os.path.dirname(docname)
++        if dirname:
++            return dirname + '/'
++        else:
++            return ''
++
++    def get_docpath(self, docname: str) -> str:
++        """Return the directory path for the given document name, with a trailing slash if non-empty."""
++        dirname = os.path.dirname(docname)
++        if dirname:
++            return dirname + '/'
++        else:
++            return ''
++
+     def get_builder_config(self, option: str, default: str) -> Any:
+         """Return a builder specific option.
+ 
+@@ -617,4 +637,4 @@ class Builder:
+             return getattr(self.config, optname)
+         except AttributeError:
+             optname = '%s_%s' % (default, option)
+-            return getattr(self.config, optname)
++            return getattr(self.config, optname)

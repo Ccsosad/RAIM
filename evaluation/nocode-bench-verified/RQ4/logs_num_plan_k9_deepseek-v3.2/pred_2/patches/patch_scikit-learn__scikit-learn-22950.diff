@@ -1,0 +1,39 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..95dfdc1 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -137,7 +137,7 @@ def _solve_sparse_cg(
+     return coefs
+ 
+ 
+-def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
++def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3, X_offset=None, X_scale=None, sample_weight_sqrt=None):
+     n_samples, n_features = X.shape
+     coefs = np.empty((y.shape[1], n_features), dtype=X.dtype)
+     n_iter = np.empty(y.shape[1], dtype=np.int32)
+@@ -145,10 +145,24 @@ def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
+     # According to the lsqr documentation, alpha = damp^2.
+     sqrt_alpha = np.sqrt(alpha)
+ 
++    if sample_weight_sqrt is None:
++        sample_weight_sqrt = np.ones(X.shape[0], dtype=X.dtype)
++
++    # Center the data if required
++    if X_offset is not None and X_scale is not None:
++        X_offset_scale = X_offset / X_scale
++        def matvec(b):
++            return X.dot(b) - sample_weight_sqrt * b.dot(X_offset_scale)
++        def rmatvec(b):
++            return X.T.dot(b) - X_offset_scale * b.dot(sample_weight_sqrt)
++        X_operator = sparse.linalg.LinearOperator(shape=X.shape, matvec=matvec, rmatvec=rmatvec)
++    else:
++        X_operator = X
++
+     for i in range(y.shape[1]):
+         y_column = y[:, i]
+         info = sp_linalg.lsqr(
+-            X, y_column, damp=sqrt_alpha[i], atol=tol, btol=tol, iter_lim=max_iter
++            X_operator, y_column, damp=sqrt_alpha[i], atol=tol, btol=tol, iter_lim=max_iter
+         )
+         coefs[i] = info[0]
+         n_iter[i] = info[2]

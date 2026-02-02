@@ -1,0 +1,55 @@
+diff --git a/sklearn/cluster/_kmeans.py b/sklearn/cluster/_kmeans.py
+index 89ad263..8b7b60a 100644
+--- a/sklearn/cluster/_kmeans.py
++++ b/sklearn/cluster/_kmeans.py
+@@ -803,7 +803,7 @@ class _BaseKMeans(
+     _parameter_constraints = {
+         "n_clusters": [Interval(Integral, 1, None, closed="left")],
+         "init": [StrOptions({"k-means++", "random"}), callable, "array-like"],
+-        "n_init": [Interval(Integral, 1, None, closed="left")],
++        "n_init": [Interval(Integral, 1, None, closed="left"), StrOptions({"auto"})],
+         "max_iter": [Interval(Integral, 1, None, closed="left")],
+         "tol": [Interval(Real, 0, None, closed="left")],
+         "verbose": [Interval(Integral, 0, None, closed="left"), bool],
+@@ -840,7 +840,10 @@ class _BaseKMeans(
+         self._tol = _tolerance(X, self.tol)
+ 
+         # init
+-        self._n_init = self.n_init
++        if self.n_init == "auto":
++            self._n_init = 1
++        else:
++            self._n_init = self.n_init
+         if _is_arraylike_not_scalar(self.init) and self._n_init != 1:
+             warnings.warn(
+                 "Explicit initial center position passed: performing only"
+@@ -1150,11 +1153,13 @@ class KMeans(_BaseKMeans):
+         If a callable is passed, it should take arguments X, n_clusters and a
+         random state and return an initialization.
+ 
+-    n_init : int, default=10
++    n_init : 'auto' or int, default=10
+         Number of time the k-means algorithm will be run with different
+         centroid seeds. The final results will be the best output of
+         n_init consecutive runs in terms of inertia.
+ 
++        When `n_init='auto'`, the number of runs will be 1.
++
+     max_iter : int, default=300
+         Maximum number of iterations of the k-means algorithm for a
+         single run.
+@@ -1667,11 +1672,13 @@ class MiniBatchKMeans(_BaseKMeans):
+         If `None`, the heuristic is `init_size = 3 * batch_size` if
+         `3 * batch_size < n_clusters`, else `init_size = 3 * n_clusters`.
+ 
+-    n_init : int, default=3
++    n_init : 'auto' or int, default=3
+         Number of random initializations that are tried.
+         In contrast to KMeans, the algorithm is only run once, using the
+         best of the ``n_init`` initializations as measured by inertia.
+ 
++        When `n_init='auto'`, the number of runs will be 1.
++
+     reassignment_ratio : float, default=0.01
+         Control the fraction of the maximum number of counts for a center to
+         be reassigned. A higher value means that low count centers are more

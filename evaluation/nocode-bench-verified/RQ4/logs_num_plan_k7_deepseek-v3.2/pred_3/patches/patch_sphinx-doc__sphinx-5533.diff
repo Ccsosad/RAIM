@@ -1,0 +1,10 @@
+diff --git a/sphinx/ext/autodoc/directive.py b/sphinx/ext/autodoc/directive.py
+index 02803ef..e831cab 100644
+--- a/sphinx/ext/autodoc/directive.py
++++ b/sphinx/ext/autodoc/directive.py
+@@ -140,4 +140,4 @@ class AutodocDirective(SphinxDirective):
+             self.state.document.settings.record_dependencies.add(fn)
+ 
+         result = parse_generated_content(self.state, params.result, documenter)
+-        return result
++        return result

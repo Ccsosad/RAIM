@@ -1,0 +1,14 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..340f43a 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -816,7 +816,8 @@ class ModuleDocumenter(Documenter):
+         # type: (bool) -> Tuple[bool, List[Tuple[str, object]]]
+         if want_all:
+             if (self.options.ignore_module_all or not
+-                    hasattr(self.object, '__all__')):
++                    hasattr(self.object, '__all__') or
++                    self.options.imported_members):
+                 # for implicit module members, check __module__ to avoid
+                 # documenting imported objects
+                 return True, safe_getmembers(self.object)

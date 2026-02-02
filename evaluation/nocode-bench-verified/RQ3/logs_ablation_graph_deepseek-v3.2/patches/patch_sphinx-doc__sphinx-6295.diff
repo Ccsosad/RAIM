@@ -1,0 +1,79 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index 612ff28..ec58ab0 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -438,10 +438,22 @@ class PyModulelevel(PyObject):
+ class PyFunction(PyObject):
+     """Description of a function."""
+ 
++    option_spec = PyObject.option_spec.copy()
++    option_spec.update({
++        'async': directives.flag,
++    })
++
+     def needs_arglist(self):
+         # type: () -> bool
+         return True
+ 
++    def get_signature_prefix(self, sig):
++        # type: (str) -> str
++        if 'async' in self.options:
++            return 'async '
++        else:
++            return ''
++
+     def get_index_text(self, modname, name_cls):
+         # type: (str, Tuple[str, str]) -> str
+         name, cls = name_cls
+@@ -573,6 +585,7 @@ class PyMethod(PyObject):
+ 
+     option_spec = PyObject.option_spec.copy()
+     option_spec.update({
++        'async': directives.flag,
+         'classmethod': directives.flag,
+         'staticmethod': directives.flag,
+     })
+@@ -583,10 +596,15 @@ class PyMethod(PyObject):
+ 
+     def get_signature_prefix(self, sig):
+         # type: (str) -> str
++        prefix = []
++        if 'async' in self.options:
++            prefix.append('async')
+         if 'staticmethod' in self.options:
+-            return 'static '
++            prefix.append('static')
+         elif 'classmethod' in self.options:
+-            return 'classmethod '
++            prefix.append('classmethod')
++        if prefix:
++            return ' '.join(prefix) + ' '
+         else:
+             return ''
+ 
+@@ -603,12 +621,20 @@ class PyMethod(PyObject):
+             else:
+                 return '%s()' % name
+ 
+-        if 'staticmethod' in self.options:
+-            return _('%s() (%s static method)') % (methname, clsname)
+-        elif 'classmethod' in self.options:
+-            return _('%s() (%s class method)') % (methname, clsname)
++        if 'async' in self.options:
++            if 'staticmethod' in self.options:
++                return _('%s() (%s async static method)') % (methname, clsname)
++            elif 'classmethod' in self.options:
++                return _('%s() (%s async class method)') % (methname, clsname)
++            else:
++                return _('%s() (%s async method)') % (methname, clsname)
+         else:
+-            return _('%s() (%s method)') % (methname, clsname)
++            if 'staticmethod' in self.options:
++                return _('%s() (%s static method)') % (methname, clsname)
++            elif 'classmethod' in self.options:
++                return _('%s() (%s class method)') % (methname, clsname)
++            else:
++                return _('%s() (%s method)') % (methname, clsname)
+ 
+ 
+ class PyClassMethod(PyMethod):

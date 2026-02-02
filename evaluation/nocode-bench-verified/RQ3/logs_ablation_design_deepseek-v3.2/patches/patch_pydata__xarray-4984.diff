@@ -1,0 +1,57 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..2d03e73 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1260,6 +1260,36 @@ class DataArray(AbstractArray, DataWithCoords):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def query(self, expr, engine=None):
++        """Return a new DataArray indexed by the boolean array resulting from
++        the given query expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression string to evaluate against the DataArray's
++            values and coordinates.
++        engine : str, optional
++            Engine to use for evaluating the expression. Currently only
++            the default 'python' engine is supported.
++
++        Returns
++        -------
++        queried : DataArray
++            A new DataArray with the same coordinates, but with only the
++            elements that satisfy the query.
++
++        Examples
++        --------
++        >>> da = xr.DataArray([1, 2, 3], dims='x')
++        >>> da.query('x > 1')
++        <xarray.DataArray (x: 2)>
++        array([2, 3])
++        Dimensions without coordinates: x
++        """
++        ds = self._to_temp_dataset().query(expr, engine=engine)
++        return self._from_temp_dataset(ds)
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -4360,4 +4390,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..d76d136 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -7002,4 +7002,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

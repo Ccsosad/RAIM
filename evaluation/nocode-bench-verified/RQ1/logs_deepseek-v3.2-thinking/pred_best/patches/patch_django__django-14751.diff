@@ -1,0 +1,67 @@
+diff --git a/django/core/management/commands/makemigrations.py b/django/core/management/commands/makemigrations.py
+index 66985c1..a834b4d 100644
+--- a/django/core/management/commands/makemigrations.py
++++ b/django/core/management/commands/makemigrations.py
+@@ -57,9 +57,17 @@ class Command(BaseCommand):
+             '--check', action='store_true', dest='check_changes',
+             help='Exit with a non-zero status if model changes are missing migrations.',
+         )
++        parser.add_argument(
++            '--scriptable', action='store_true',
++            help='Diverts log output and input prompts to stderr, writing only paths of '
++                 'generated migration files to stdout.',
++        )
+ 
+     def log(self, msg):
+-        self.stdout.write(msg)
++        if self.scriptable:
++            self.stderr.write(msg)
++        else:
++            self.stdout.write(msg)
+ 
+     @no_translations
+     def handle(self, *app_labels, **options):
+@@ -69,6 +77,7 @@ class Command(BaseCommand):
+         self.merge = options['merge']
+         self.empty = options['empty']
+         self.migration_name = options['name']
++        self.scriptable = options['scriptable']
+         if self.migration_name and not self.migration_name.isidentifier():
+             raise CommandError('The migration name must be a valid Python identifier.')
+         self.include_header = options['include_header']
+@@ -147,7 +156,7 @@ class Command(BaseCommand):
+             questioner = InteractiveMigrationQuestioner(
+                 specified_apps=app_labels,
+                 dry_run=self.dry_run,
+-                prompt_output=self.stdout,
++                prompt_output=self.stderr if self.scriptable else self.stdout,
+             )
+         else:
+             questioner = NonInteractiveMigrationQuestioner(
+@@ -239,6 +248,9 @@ class Command(BaseCommand):
+                     migration_string = writer.as_string()
+                     with open(writer.path, "w", encoding='utf-8') as fh:
+                         fh.write(migration_string)
++                    # In scriptable mode, write the path to stdout
++                    if self.scriptable:
++                        self.stdout.write(writer.path + '\n')
+                 elif self.verbosity == 3:
+                     # Alternatively, makemigrations --dry-run --verbosity 3
+                     # will log the migrations rather than saving the file to
+@@ -254,7 +266,9 @@ class Command(BaseCommand):
+         if it's safe; otherwise, advises on how to fix it.
+         """
+         if self.interactive:
+-            questioner = InteractiveMigrationQuestioner(prompt_output=self.stdout)
++            questioner = InteractiveMigrationQuestioner(
++                prompt_output=self.stderr if self.scriptable else self.stdout
++            )
+         else:
+             questioner = MigrationQuestioner(defaults={'ask_merge': True})
+ 
+@@ -334,4 +348,4 @@ class Command(BaseCommand):
+                     self.log(self.style.MIGRATE_HEADING(
+                         "Full merge migrations file '%s':" % writer.filename
+                     ))
+-                    self.log(writer.as_string())
++                    self.log(writer.as_string())

@@ -1,0 +1,22 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index b0a0822..606511a 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -613,10 +613,15 @@ class Continuous(ContinuousBase):
+     def _get_formatter(self, locator, formatter, like, base, unit):
+ 
+         log_base, symlog_thresh = self._parse_for_log_params(self.trans)
++        # If base is None, we want to use a log formatter with base 10.
++        # But if there is a log transform, we should use that base.
+         if base is None:
+             if symlog_thresh:
+-                log_base = 10
+-            base = log_base
++                base = 10
++            elif log_base is not None:
++                base = log_base
++            else:
++                base = 10  # This is the new feature: base=None forces log formatter with base 10
+ 
+         if formatter is not None:
+             return formatter

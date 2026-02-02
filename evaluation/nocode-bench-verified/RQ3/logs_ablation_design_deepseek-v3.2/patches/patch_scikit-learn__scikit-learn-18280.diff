@@ -1,0 +1,10 @@
+diff --git a/sklearn/datasets/_kddcup99.py b/sklearn/datasets/_kddcup99.py
+new file mode 100644
+index 0000000..e33f6f3
+--- /dev/null
++++ b/sklearn/datasets/_kddcup99.py
+@@ -0,0 +1,4 @@
++def fetch_kddcup99(subset=None, data_home=None, shuffle=False,
++                   random_state=None,
++                   percent10=True, download_if_missing=True,
++                   as_frame=False):

@@ -1,0 +1,117 @@
+diff --git a/sklearn/datasets/_kddcup99.py b/sklearn/datasets/_kddcup99.py
+index 5405c9d..17c5816 100644
+--- a/sklearn/datasets/_kddcup99.py
++++ b/sklearn/datasets/_kddcup99.py
+@@ -48,7 +48,8 @@ logger = logging.getLogger(__name__)
+ @_deprecate_positional_args
+ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+                    random_state=None,
+-                   percent10=True, download_if_missing=True, return_X_y=False):
++                   percent10=True, download_if_missing=True, return_X_y=False,
++                   as_frame=False):
+     """Load the kddcup99 dataset (classification).
+ 
+     Download it if necessary.
+@@ -97,19 +98,34 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+ 
+         .. versionadded:: 0.20
+ 
++    as_frame : bool, default=False
++        If True, the data is a pandas DataFrame including columns with
++        appropriate dtypes (numeric). The target is a pandas Series.
++        The `frame` attribute of the returned Bunch will be the concatenation
++        of the data and target.
++
++        .. versionadded:: 0.24
++
+     Returns
+     -------
+     data : :class:`~sklearn.utils.Bunch`
+         Dictionary-like object, with the following attributes.
+ 
+-        data : ndarray of shape (494021, 41)
+-            The data matrix to learn.
+-        target : ndarray of shape (494021,)
+-            The regression target for each sample.
++        data : {ndarray, dataframe} of shape (494021, 41)
++            The data matrix to learn. If `as_frame=True`, `data` is a pandas
++            DataFrame.
++        target : {ndarray, series} of shape (494021,)
++            The regression target for each sample. If `as_frame=True`,
++            `target` is a pandas Series.
++        frame : pandas DataFrame of shape (494021, 42)
++            Only present when `as_frame=True`. The concatenation of the
++            data and target.
+         DESCR : str
+             The full description of the dataset.
+ 
+     (data, target) : tuple if ``return_X_y`` is True
++        A tuple of the data and target. If `as_frame=True`, the data and
++        target are pandas DataFrame and Series.
+ 
+         .. versionadded:: 0.20
+     """
+@@ -171,10 +187,26 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+     with open(join(module_path, 'descr', 'kddcup99.rst')) as rst_file:
+         fdescr = rst_file.read()
+ 
++    if as_frame:
++        try:
++            import pandas as pd
++        except ImportError:
++            raise ImportError(
++                "as_frame=True requires pandas to be installed."
++            )
++        # Create feature names for the 41 features
++        feature_names = [str(i) for i in range(data.shape[1])]
++        target_name = 'target'
++        data = pd.DataFrame(data, columns=feature_names)
++        target = pd.Series(target, name=target_name)
++        frame = pd.concat([data, target], axis=1)
++    else:
++        frame = None
++
+     if return_X_y:
+         return data, target
+ 
+-    return Bunch(data=data, target=target, DESCR=fdescr)
++    return Bunch(data=data, target=target, frame=frame, DESCR=fdescr)
+ 
+ 
+ def _fetch_brute_kddcup99(data_home=None,
+diff --git a/sklearn/datasets/_lazy_frame.py b/sklearn/datasets/_lazy_frame.py
+new file mode 100644
+index 0000000..7147951
+--- /dev/null
++++ b/sklearn/datasets/_lazy_frame.py
+@@ -0,0 +1,30 @@
++"""
++Helper functions to convert datasets to pandas DataFrame.
++"""
++
++def _convert_data_dataframe(bunch, feature_names, target_name):
++    """Convert a Bunch object to have pandas DataFrame and Series.
++
++    Parameters
++    ----------
++    bunch : Bunch
++        The Bunch object with data and target as numpy arrays.
++    feature_names : list of str
++        The names of the features.
++    target_name : str
++        The name of the target.
++
++    Returns
++    -------
++    data : pandas DataFrame
++        The data as a DataFrame.
++    target : pandas Series
++        The target as a Series.
++    frame : pandas DataFrame
++        The concatenation of data and target.
++    """
++    import pandas as pd
++    data = pd.DataFrame(bunch.data, columns=feature_names)
++    target = pd.Series(bunch.target, name=target_name)
++    frame = pd.concat([data, target], axis=1)
++    return data, target, frame

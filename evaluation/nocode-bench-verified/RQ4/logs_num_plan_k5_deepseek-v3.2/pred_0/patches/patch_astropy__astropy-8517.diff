@@ -1,0 +1,157 @@
+diff --git a/astropy/__init__.py b/astropy/__init__.py
+index 9e1bf3a..8869deb 100644
+--- a/astropy/__init__.py
++++ b/astropy/__init__.py
+@@ -124,6 +124,9 @@ _check_numpy()
+ 
+ from . import config as _config
+ 
++# Import the constants science state classes
++from .constants.config import physical_constants, astronomical_constants
++
+ 
+ class Conf(_config.ConfigNamespace):
+     """
+@@ -320,7 +323,8 @@ def online_help(query):
+ 
+ __dir_inc__ = ['__version__', '__githash__', '__minimum_numpy_version__',
+                '__bibtex__', 'test', 'log', 'find_api_page', 'online_help',
+-               'online_docs_root', 'conf']
++               'online_docs_root', 'conf',
++               'physical_constants', 'astronomical_constants']
+ 
+ 
+ from types import ModuleType as __module_type__
+@@ -340,4 +344,4 @@ for varname in dir():
+         # the cleanup to keep any public submodules of the astropy package
+         del locals()[varname]
+ 
+-del varname, __module_type__
++del varname, __module_type__
+diff --git a/astropy/constants/__init__.py b/astropy/constants/__init__.py
+index b9b3036..69b3415 100644
+--- a/astropy/constants/__init__.py
++++ b/astropy/constants/__init__.py
+@@ -42,6 +42,54 @@ _lines = [
+ _utils._set_c(codata2014, iau2015, find_current_module(),
+               not_in_module_only=True, doclines=_lines, set_class=True)
+ 
++# Import the science state
++from .config import physical_constants, astronomical_constants
++
++# Determine which version to load
++_phys_version = physical_constants.get()
++_astro_version = astronomical_constants.get()
++
++# Map to module names (including combined versions)
++if _phys_version == 'astropyconst13':
++    _phys_module = 'codata2010'
++elif _phys_version == 'astropyconst20':
++    _phys_module = 'codata2018'
++else:
++    _phys_module = _phys_version
++
++if _astro_version == 'astropyconst13':
++    _astro_module = 'iau2012'
++elif _astro_version == 'astropyconst20':
++    _astro_module = 'iau2015'
++else:
++    _astro_module = _astro_version
++
++# Load the physical constants
++if _phys_module == 'codata2018':
++    from .codata2018 import (h, k_B, c, G, e, m_e, m_p, m_n, sigma_sb, 
++                             alpha, Ryd, a0, muB, mu0, eps0, kappa, 
++                             GM_earth, GM_jup)
++elif _phys_module == 'codata2014':
++    from .codata2014 import (h, k_B, c, G, e, m_e, m_p, m_n, sigma_sb, 
++                             alpha, Ryd, a0, muB, mu0, eps0, kappa, 
++                             GM_earth, GM_jup)
++elif _phys_module == 'codata2010':
++    from .codata2010 import (h, k_B, c, G, e, m_e, m_p, m_n, sigma_sb, 
++                             alpha, Ryd, a0, muB, mu0, eps0, kappa, 
++                             GM_earth, GM_jup)
++else:
++    raise ValueError(f"Unknown physical constants module: {_phys_module}")
++
++# Load the astronomical constants
++if _astro_module == 'iau2015':
++    from .iau2015 import (M_sun, R_sun, L_sun, M_earth, R_earth, M_jup, 
++                          R_jup, S_sun, pc, au, kpc, light_year)
++elif _astro_module == 'iau2012':
++    from .iau2012 import (M_sun, R_sun, L_sun, M_earth, R_earth, M_jup, 
++                          R_jup, S_sun, pc, au, kpc, light_year)
++else:
++    raise ValueError(f"Unknown astronomical constants module: {_astro_module}")
++
+ _lines.append(_lines[1])
+ 
+ if __doc__ is not None:
+@@ -99,4 +147,4 @@ def set_enabled_constants(modname):
+ del find_current_module
+ del contextmanager
+ del _utils
+-del _lines
++del _lines
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..aa55f93
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,56 @@
++"""
++Configuration for astropy.constants.
++"""
++
++import sys
++from astropy.config import ScienceState
++
++__all__ = ['physical_constants', 'astronomical_constants']
++
++
++class _ConstantsScienceState(ScienceState):
++    """
++    Base class for constants science state.
++    """
++    _value = None
++    _versions = {}
++
++    @classmethod
++    def validate(cls, value):
++        if value not in cls._versions:
++            raise ValueError(f"Invalid version: {value}. Must be one of {list(cls._versions.keys())}")
++        # Check if astropy.units is already imported
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError("astropy.units is already imported")
++        return value
++
++
++class physical_constants(_ConstantsScienceState):
++    """
++    ScienceState for physical constants version.
++
++    The default is 'codata2018'.
++    """
++    _value = 'codata2018'
++    _versions = {
++        'codata2018': ('codata2018', 'codata2018'),
++        'codata2014': ('codata2014', 'codata2014'),
++        'codata2010': ('codata2010', 'codata2010'),
++        'astropyconst13': ('codata2010', 'codata2010'),
++        'astropyconst20': ('codata2018', 'codata2018'),
++    }
++
++
++class astronomical_constants(_ConstantsScienceState):
++    """
++    ScienceState for astronomical constants version.
++
++    The default is 'iau2015'.
++    """
++    _value = 'iau2015'
++    _versions = {
++        'iau2015': ('iau2015', 'iau2015'),
++        'iau2012': ('iau2012', 'iau2012'),
++        'astropyconst13': ('iau2012', 'iau2012'),
++        'astropyconst20': ('iau2015', 'iau2015'),
++    }

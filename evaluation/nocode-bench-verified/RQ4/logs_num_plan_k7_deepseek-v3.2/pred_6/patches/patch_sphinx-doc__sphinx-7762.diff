@@ -1,0 +1,80 @@
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index 31d7f5b..7d9adf2 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -84,6 +84,20 @@ class CheckExternalLinksBuilder(Builder):
+                                for x in self.app.config.linkcheck_anchors_ignore]
+         self.auth = [(re.compile(pattern), auth_info) for pattern, auth_info
+                      in self.app.config.linkcheck_auth]
++        # process linkcheck_request_headers
++        self.request_headers = []
++        for pattern, headers in (self.app.config.linkcheck_request_headers or {}).items():
++            if pattern == '*':
++                # This is a special wildcard pattern that matches any host
++                # We'll handle it separately in get_request_headers
++                self.request_headers.append(('*', headers))
++            else:
++                # We want to match the base URL. We'll compile a regex that matches the pattern at the beginning of the URI.
++                # The pattern is a base URL, so we escape it and then add '.*'?
++                # Actually, we want to match any URI that starts with the pattern.
++                # So we can compile a regex that matches the pattern literally at the start.
++                # But note: the pattern might be a URL with a trailing slash? We'll leave it as is.
++                self.request_headers.append((re.compile(re.escape(pattern)), headers))
+         self.good = set()       # type: Set[str]
+         self.broken = {}        # type: Dict[str, str]
+         self.redirected = {}    # type: Dict[str, Tuple[str, int]]
+@@ -104,17 +118,43 @@ class CheckExternalLinksBuilder(Builder):
+             thread.start()
+             self.workers.append(thread)
+ 
++    def get_request_headers(self, uri: str) -> Dict[str, str]:
++        """Return the request headers for the given URI."""
++        # Start with the default headers
++        headers = {
++            'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
++        }
++        # Then update with the matched headers
++        matched_headers = None
++        for pattern, pattern_headers in self.request_headers:
++            if pattern == '*':
++                # Wildcard pattern: match only if no other pattern matched
++                if matched_headers is None:
++                    matched_headers = pattern_headers
++            else:
++                # Regex pattern
++                if pattern.match(uri):
++                    matched_headers = pattern_headers
++                    break
++        if matched_headers:
++            headers.update(matched_headers)
++        return headers
++
+     def check_thread(self) -> None:
+         kwargs = {
+             'allow_redirects': True,
+-            'headers': {
+-                'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+-            },
+         }
+         if self.app.config.linkcheck_timeout:
+             kwargs['timeout'] = self.app.config.linkcheck_timeout
+ 
+         def check_uri() -> Tuple[str, str, int]:
++            # Get the headers for this URI
++            headers = self.get_request_headers(uri)
++            kwargs['headers'] = headers
++            # Get the headers for this URI
++            headers = self.get_request_headers(uri)
++            kwargs['headers'] = headers
++
+             # split off anchor
+             if '#' in uri:
+                 req_url, anchor = uri.split('#', 1)
+@@ -337,6 +377,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+ 
+     app.add_config_value('linkcheck_ignore', [], None)
+     app.add_config_value('linkcheck_auth', [], None)
++    app.add_config_value('linkcheck_request_headers', {}, None)
+     app.add_config_value('linkcheck_retries', 1, None)
+     app.add_config_value('linkcheck_timeout', None, None, [int])
+     app.add_config_value('linkcheck_workers', 5, None)

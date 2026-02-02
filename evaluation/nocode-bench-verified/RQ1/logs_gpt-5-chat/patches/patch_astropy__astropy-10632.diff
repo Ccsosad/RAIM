@@ -1,0 +1,18 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..fc44938 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -1164,6 +1164,13 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+     `clear_download_cache` before you actually open the file, leaving
+     you with a filename that no longer points to a usable file.
+     """
++    # Check allow_internet policy before attempting download
++    if hasattr(conf, 'allow_internet') and not conf.allow_internet:
++        raise urllib.error.URLError(
++            f"Internet access is disabled by configuration (allow_internet=False), "
++            f"cannot download '{remote_url}'"
++        )
++
+     if timeout is None:
+         timeout = conf.remote_timeout
+     if sources is None:

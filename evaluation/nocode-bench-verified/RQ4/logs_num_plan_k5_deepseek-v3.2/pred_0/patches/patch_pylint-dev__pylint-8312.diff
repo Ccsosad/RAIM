@@ -1,0 +1,30 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 4def383..a9b544d 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -94,7 +94,19 @@ def expand_modules(
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
+ 
++    import glob
++    expanded_items = []
+     for something in files_or_modules:
++        if any(wildcard in something for wildcard in ('*', '?', '[')):
++            matches = glob.glob(something, recursive=True)
++            if matches:
++                expanded_items.extend(matches)
++            else:
++                expanded_items.append(something)
++        else:
++            expanded_items.append(something)
++
++    for something in expanded_items:
+         basename = os.path.basename(something)
+         if _is_ignored_file(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+@@ -179,4 +191,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors

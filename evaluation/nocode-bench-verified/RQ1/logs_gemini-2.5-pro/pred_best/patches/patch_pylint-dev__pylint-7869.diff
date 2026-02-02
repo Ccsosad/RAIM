@@ -1,0 +1,47 @@
+diff --git a/pylint/lint/base_options.py b/pylint/lint/base_options.py
+index 055eb4f..ce6799c 100644
+--- a/pylint/lint/base_options.py
++++ b/pylint/lint/base_options.py
+@@ -103,7 +103,7 @@ def _make_linter_options(linter: PyLinter) -> Options:
+                 "short": "f",
+                 "group": "Reports",
+                 "help": "Set the output format. Available formats are text,"
+-                " parseable, colorized, json and msvs (visual studio)."
++                " parseable, colorized, json, msvs (visual studio) and no-header."
+                 " You can also give a reporter class, e.g. mypackage.mymodule."
+                 "MyReporterClass.",
+                 "kwargs": {"linter": linter},
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 4f6d68f..ccf43a2 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -447,6 +447,10 @@ class PyLinter(
+ 
+     def _load_reporter_by_name(self, reporter_name: str) -> reporters.BaseReporter:
+         name = reporter_name.lower()
++        if name == "no-header":
++            reporter = self._reporters["text"]()
++            reporter.display_header = False
++            return reporter
+         if name in self._reporters:
+             return self._reporters[name]()
+ 
+@@ -1366,4 +1370,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 4db1264..b1e5967 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -198,7 +198,7 @@ class TextReporter(BaseReporter):
+ 
+     def handle_message(self, msg: Message) -> None:
+         """Manage message of different type and in the context of path."""
+-        if msg.module not in self._modules:
++        if getattr(self, "display_header", True) and msg.module not in self._modules:
+             if msg.module:
+                 self.writeln(f"************* Module {msg.module}")
+                 self._modules.add(msg.module)

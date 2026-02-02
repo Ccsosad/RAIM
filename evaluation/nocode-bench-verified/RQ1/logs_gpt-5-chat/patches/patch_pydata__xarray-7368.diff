@@ -1,0 +1,54 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..82fd964 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -236,6 +236,49 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+             variables=coords, coord_names=coord_names, indexes=indexes
+         )
+ 
++    @classmethod
++    def from_pandas_multiindex(cls, midx, dim: Hashable = None):
++        """Construct Coordinates from a pandas.MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            The MultiIndex to convert into coordinate variables.
++        dim : Hashable, optional
++            Optional explicit dimension name; if not given, taken from `midx.name`.
++
++        Returns
++        -------
++        Coordinates
++            Coordinates object with variables created from MultiIndex levels.
++        """
++        import pandas as pd
++        from .variable import IndexVariable
++
++        if not isinstance(midx, pd.MultiIndex):
++            raise TypeError(f"Expected pandas.MultiIndex, got {type(midx)}")
++        if dim is None:
++            dim = midx.name or "_midx_dim"
++
++        # sizes: length of the MultiIndex
++        sizes = {dim: len(midx)}
++
++        # Create variables for each level of the MultiIndex
++        create_variables = {}
++        for i, name in enumerate(midx.names):
++            level_vals = midx.get_level_values(i)
++            var_name = name if name is not None else f"{dim}_level_{i}"
++            create_variables[var_name] = IndexVariable((dim,), level_vals)
++
++        # Also create an index variable for the MultiIndex itself
++        idx = IndexVariable((dim,), midx)
++
++        from .indexes import PandasIndex
++        index_type = PandasIndex(midx, dim)
++        indexes = {dim: index_type}
++
++        return cls(Dataset(coords=create_variables, indexes=indexes))
++
+ 
+ class DatasetCoordinates(Coordinates):
+     """Dictionary like container for Dataset coordinates.

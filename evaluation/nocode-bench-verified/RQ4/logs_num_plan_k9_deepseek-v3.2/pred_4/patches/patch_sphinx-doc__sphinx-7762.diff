@@ -1,0 +1,99 @@
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index 31d7f5b..db0aa4b 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -105,15 +105,18 @@ class CheckExternalLinksBuilder(Builder):
+             self.workers.append(thread)
+ 
+     def check_thread(self) -> None:
++        from sphinx.util._request_wrapper import get_request_headers
++
+         kwargs = {
+             'allow_redirects': True,
+-            'headers': {
+-                'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+-            },
+         }
+         if self.app.config.linkcheck_timeout:
+             kwargs['timeout'] = self.app.config.linkcheck_timeout
+ 
++        default_headers = {
++            'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
++        }
++
+         def check_uri() -> Tuple[str, str, int]:
+             # split off anchor
+             if '#' in uri:
+@@ -132,6 +135,12 @@ class CheckExternalLinksBuilder(Builder):
+             except UnicodeError:
+                 req_url = encode_uri(req_url)
+ 
++            # Get the headers for this URL
++            config_headers = self.app.config.linkcheck_request_headers or {}
++            headers = get_request_headers(req_url, config_headers, default_headers)
++            request_kwargs = kwargs.copy()
++            request_kwargs['headers'] = headers
++
+             # Get auth info, if any
+             for pattern, auth_info in self.auth:
+                 if pattern.match(uri):
+@@ -143,7 +152,7 @@ class CheckExternalLinksBuilder(Builder):
+                 if anchor and self.app.config.linkcheck_anchors:
+                     # Read the whole document and see if #anchor exists
+                     response = requests.get(req_url, stream=True, config=self.app.config,
+-                                            auth=auth_info, **kwargs)
++                                            auth=auth_info, **request_kwargs)
+                     found = check_anchor(response, unquote(anchor))
+ 
+                     if not found:
+@@ -153,13 +162,13 @@ class CheckExternalLinksBuilder(Builder):
+                         # try a HEAD request first, which should be easier on
+                         # the server and the network
+                         response = requests.head(req_url, config=self.app.config,
+-                                                 auth=auth_info, **kwargs)
++                                                 auth=auth_info, **request_kwargs)
+                         response.raise_for_status()
+                     except HTTPError:
+                         # retry with GET request if that fails, some servers
+                         # don't like HEAD requests.
+                         response = requests.get(req_url, stream=True, config=self.app.config,
+-                                                auth=auth_info, **kwargs)
++                                                auth=auth_info, **request_kwargs)
+                         response.raise_for_status()
+             except HTTPError as err:
+                 if err.response.status_code == 401:
+diff --git a/sphinx/util/_request_wrapper.py b/sphinx/util/_request_wrapper.py
+new file mode 100644
+index 0000000..5788f8d
+--- /dev/null
++++ b/sphinx/util/_request_wrapper.py
+@@ -0,0 +1,29 @@
++"""
++A wrapper for HTTP requests with configurable headers.
++"""
++
++from typing import Dict
++
++
++def get_request_headers(url: str, config_headers: Dict[str, Dict[str, str]],
++                        default_headers: Dict[str, str]) -> Dict[str, str]:
++    """Return request headers for the given URL.
++
++    :param url: The URL to be checked.
++    :param config_headers: The linkcheck_request_headers configuration.
++    :param default_headers: The default headers to use.
++    :return: A dictionary of headers to use.
++    """
++    headers = default_headers.copy()
++    # Update with the config headers for the URL
++    for base_url, extra_headers in config_headers.items():
++        if base_url == "*":
++            continue
++        if url.startswith(base_url):
++            headers.update(extra_headers)
++            break
++    else:
++        # If no specific match, use the wildcard if present
++        if "*" in config_headers:
++            headers.update(config_headers["*"])
++    return headers

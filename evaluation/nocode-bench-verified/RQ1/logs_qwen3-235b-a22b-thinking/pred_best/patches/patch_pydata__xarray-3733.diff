@@ -1,0 +1,355 @@
+diff --git a/xarray/__init__.py b/xarray/__init__.py
+index b35ae4c..34a5cfb 100644
+--- a/xarray/__init__.py
++++ b/xarray/__init__.py
+@@ -10,6 +10,7 @@ from .backends.api import (
+     save_mfdataset,
+ )
+ from .backends.rasterio_ import open_rasterio
++from .core.computation import polyval
+ from .backends.zarr import open_zarr
+ from .coding.cftime_offsets import cftime_range
+ from .coding.cftimeindex import CFTimeIndex
+diff --git a/xarray/core/computation.py b/xarray/core/computation.py
+index 15b4590..130de3d 100644
+--- a/xarray/core/computation.py
++++ b/xarray/core/computation.py
+@@ -1215,9 +1215,49 @@ def dot(*arrays, dims=None, **kwargs):
+     return result.transpose(*[d for d in all_dims if d in result.dims])
+ 
+ 
++def polyval(coord, coeffs):
++    """Evaluate a polynomial at specific values.
++
++    Parameters
++    ----------
++    coord : array_like
++        Points at which to evaluate the polynomial.
++    coeffs : array_like
++        Coefficients of the polynomial, highest power first.
++
++    Returns
++    -------
++    values : DataArray
++        Polynomial evaluated at the points in `coord`.
++
++    See Also
++    --------
++    numpy.polyval
++    """
++    from .dataarray import DataArray
++    from .variable import as_variable
++    from .least_squares import polyval as _polyval
++
++    # Convert inputs to DataArray if they aren't already
++    if not isinstance(coord, DataArray):
++        coord = DataArray(coord)
++    if not isinstance(coeffs, DataArray):
++        coeffs = DataArray(coeffs)
++
++    # Use the least squares implementation
++    values = _polyval(coord.values, coeffs.values)
++
++    # Create a new DataArray with the results
++    return DataArray(
++        values,
++        coords=coord.coords,
++        dims=coord.dims,
++        name="polyval",
++    )
++
++
+ def where(cond, x, y):
+     """Return elements from `x` or `y` depending on `cond`.
+-
+     Performs xarray-like broadcasting across input arguments.
+ 
+     Parameters
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..0d83aa4 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3202,9 +3202,120 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().integrate(dim, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        rcond: float = None,
++        cov: bool = False,
++    ) -> "Dataset":
++        """Perform a polynomial fit by minimizing the sum of the squared
++        residuals.
++
++        Parameters
++        ----------
++        dim : hashable
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        full : bool, optional
++            Switch determining nature of return value. When it is False (the default)
++            just the coefficients are returned, when True diagnostic information
++            from the singular value decomposition is also returned.
++        rcond : float, optional
++            Cutoff for small singular values for the least-squares solution.
++        cov : bool, optional
++            If given and not False, return the estimate and optionally the covariance
++            matrix of the polynomial coefficient estimates.
++
++        Returns
++        -------
++        result : Dataset
++            If `full=False` and `cov=False`, the result is a DataArray containing
++            the polynomial coefficients. If `full=True`, the result is a Dataset
++            containing the coefficients and diagnostic information. If `cov=True`,
++            the result is a Dataset containing the coefficients and the covariance
++            matrix.
++
++        See Also
++        --------
++        numpy.polyfit
++        """
++        from .least_squares import polyfit
++
++        # Get the coordinate values
++        coord = self[dim].values
++
++        # Prepare the data for fitting
++        data = self.transpose(..., dim).values
++
++        # Reshape data to 2D (all dimensions except dim, dim)
++        original_shape = data.shape[:-1]
++        data_2d = data.reshape(-1, data.shape[-1])
++
++        # Perform the polynomial fit for each element
++        results = []
++        for d in data_2d:
++            result = polyfit(coord, d, deg, full=full, rcond=rcond, cov=cov)
++            results.append(result)
++
++        # Reshape results back to original shape
++        if full or cov:
++            # For full or cov, results is a tuple of arrays
++            # We need to handle each part separately
++            if full:
++                coeffs, residuals, rank, singular_values = zip(*results)
++                coeffs = np.array(coeffs).reshape(original_shape + (deg + 1,))
++                residuals = np.array(residuals).reshape(original_shape + (1,))
++                rank = np.array(rank).reshape(original_shape)
++                singular_values = np.array(singular_values).reshape(
++                    original_shape + (min(len(coord), deg + 1),)
++                )
++            else:
++                coeffs, cov_mat = zip(*results)
++                coeffs = np.array(coeffs).reshape(original_shape + (deg + 1,))
++                cov_mat = np.array(cov_mat).reshape(
++                    original_shape + (deg + 1, deg + 1)
++                )
++        else:
++            coeffs = np.array(results).reshape(original_shape + (deg + 1,))
++
++        # Create the result dataset
++        if full:
++            result = Dataset(
++                {
++                    "polyfit_coefficients": (self.dims + ("degree",), coeffs),
++                    "polyfit_residuals": (self.dims, residuals.squeeze(-1)),
++                    "polyfit_rank": (self.dims, rank),
++                    "polyfit_singular_values": (
++                        self.dims + ("singular_value",),
++                        singular_values,
++                    ),
++                }
++            )
++        elif cov:
++            result = Dataset(
++                {
++                    "polyfit_coefficients": (self.dims + ("degree",), coeffs),
++                    "polyfit_covariance": (
++                        self.dims + ("degree_0", "degree_1"),
++                        cov_mat,
++                    ),
++                }
++            )
++        else:
++            result = Dataset(
++                {"polyfit_coefficients": (self.dims + ("degree",), coeffs)}
++            )
++
++        # Add degree coordinate
++        result = result.assign_coords(degree=range(deg, -1, -1))
++
++        return result
++
+     def unify_chunks(self) -> "DataArray":
+         """ Unify chunk size along all chunked dimensions of this DataArray.
+-
+         Returns
+         -------
+ 
+@@ -3449,4 +3560,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 16f0e97..6f96e4f 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5915,4 +5915,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self._replace_vars_and_dims(variables)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/least_squares.py b/xarray/core/least_squares.py
+new file mode 100644
+index 0000000..09387dc
+--- /dev/null
++++ b/xarray/core/least_squares.py
+@@ -0,0 +1,140 @@
++import numpy as np
++from xarray.core import utils
++
++def least_squares(lhs, rhs, rcond=None):
++    """
++    Solve a linear least-squares problem.
++
++    Parameters
++    ----------
++    lhs : array_like
++        "Left hand side" matrix (2-D).
++    rhs : array_like
++        "Right hand side" matrix or vector.
++    rcond : float, optional
++        Cut-off ratio for small singular values of a.
++        For the purposes of rank determination, singular values are treated
++        as zero if they are smaller than rcond times the largest singular
++        value of a.
++
++    Returns
++    -------
++    x : ndarray
++        Least-squares solution. If the equations are under-determined
++        (the rank of a is less than the number of rows or columns of a),
++        this is the minimum norm solution.
++    residuals : ndarray
++        Sums of residuals; squared Euclidean 2-norm for each column in
++        rhs - lhs @ x.
++    rank : int
++        Rank of matrix lhs.
++    s : ndarray
++        Singular values of lhs.
++    """
++    lhs = np.asarray(lhs)
++    rhs = np.asarray(rhs)
++
++    if lhs.ndim != 2:
++        raise ValueError("lhs must be a 2-D array")
++
++    if rhs.ndim == 1:
++        rhs = rhs[:, np.newaxis]
++    elif rhs.ndim != 2:
++        raise ValueError("rhs must be a 1-D or 2-D array")
++
++    if lhs.shape[0] != rhs.shape[0]:
++        raise ValueError("Incompatible dimensions for lhs and rhs")
++
++    # Use numpy's lstsq to solve the least squares problem
++    x, residuals, rank, s = np.linalg.lstsq(lhs, rhs, rcond=rcond)
++
++    return x, residuals, rank, s
++
++def polyfit(coord, data, deg, full=False, rcond=None, cov=False):
++    """
++    Fit a polynomial of degree `deg` to the data.
++
++    Parameters
++    ----------
++    coord : array_like
++        x-coordinates of the sample points.
++    data : array_like
++        y-coordinates of the sample points.
++    deg : int
++        Degree of the fitting polynomial.
++    full : bool, optional
++        Switch determining nature of return value. When it is False (the default)
++        just the coefficients are returned, when True diagnostic information
++        from the singular value decomposition is also returned.
++    rcond : float, optional
++        Cutoff for small singular values for the least-squares solution.
++    cov : bool, optional
++        If given and not False, return the estimate and optionally the covariance
++        matrix of the polynomial coefficient estimates.
++
++    Returns
++    -------
++    coeffs : ndarray
++        Polynomial coefficients, highest power first.
++    residuals, rank, singular_values, rcond : present only if `full` = True
++        Residuals of the least-squares fit, the effective rank of the scaled
++        Vandermonde coefficient matrix, its singular values, and the specified
++        value of `rcond`.
++    cov : ndarray
++        Present only if `cov` = True. The covariance matrix of the polynomial
++        coefficient estimates.
++    """
++    coord = np.asarray(coord)
++    data = np.asarray(data)
++
++    if coord.ndim != 1:
++        raise ValueError("coord must be a 1-D array")
++
++    if coord.shape[0] != data.shape[0]:
++        raise ValueError("Incompatible dimensions for coord and data")
++
++    # Create the Vandermonde matrix
++    lhs = np.vander(coord, deg + 1)
++
++    # Solve the least squares problem
++    coeffs, residuals, rank, singular_values = least_squares(lhs, data, rcond=rcond)
++
++    if full:
++        return coeffs, residuals, rank, singular_values
++    elif cov:
++        # Calculate the covariance matrix
++        if rank != lhs.shape[1]:
++            raise ValueError("The coefficient matrix is rank-deficient, cannot compute covariance")
++        # Estimate the variance of the residuals
++        if residuals.size == 0:
++            # No residuals, use a default value
++            var_resid = 1.0
++        else:
++            var_resid = residuals[0] / (lhs.shape[0] - rank)
++        # Calculate the covariance matrix
++        cov_mat = var_resid * np.linalg.inv(np.dot(lhs.T, lhs))
++        return coeffs, cov_mat
++    else:
++        return coeffs
++
++def polyval(coord, coeffs):
++    """
++    Evaluate a polynomial at specific values.
++
++    Parameters
++    ----------
++    coord : array_like
++        Points at which to evaluate the polynomial.
++    coeffs : array_like
++        Coefficients of the polynomial, highest power first.
++
++    Returns
++    -------
++    values : ndarray
++        Polynomial evaluated at the points in `coord`.
++    """
++    coord = np.asarray(coord)
++    coeffs = np.asarray(coeffs)
++
++    # Use numpy's polyval to evaluate the polynomial
++    return np.polyval(coeffs, coord)

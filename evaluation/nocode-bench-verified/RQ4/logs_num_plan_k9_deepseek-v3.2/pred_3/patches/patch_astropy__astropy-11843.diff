@@ -1,0 +1,76 @@
+diff --git a/astropy/io/fits/connect.py b/astropy/io/fits/connect.py
+index 8c70ca8..d173f04 100644
+--- a/astropy/io/fits/connect.py
++++ b/astropy/io/fits/connect.py
+@@ -112,7 +112,7 @@ def _decode_mixins(tbl):
+ 
+ 
+ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+-                    character_as_bytes=True):
++                    character_as_bytes=True, unit_parse_strict=None):
+     """
+     Read a Table object from an FITS file
+ 
+@@ -152,8 +152,17 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+         ``U``) internally, you should set this to `False`, but note that this
+         will use more memory. If set to `False`, string columns will not be
+         memory-mapped even if ``memmap`` is `True`.
++    unit_parse_strict : str, optional
++        How to handle invalid unit strings in FITS headers. Can be ``"silent"``,
++        ``"warn"``, or ``"raise"``. If `None` (default), the value from the
++        configuration item ``astropy.io.fits.conf.unit_parse_strict`` is used,
++        which defaults to ``"warn"``.
+     """
+ 
++    if unit_parse_strict is None:
++        from .conf import conf
++        unit_parse_strict = conf.unit_parse_strict
++
+     if isinstance(input, HDUList):
+ 
+         # Parse all table objects
+@@ -212,7 +221,8 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+ 
+         try:
+             return read_table_fits(hdulist, hdu=hdu,
+-                                   astropy_native=astropy_native)
++                                   astropy_native=astropy_native,
++                                   unit_parse_strict=unit_parse_strict)
+         finally:
+             hdulist.close()
+ 
+@@ -249,7 +259,7 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+ 
+         # Copy over units
+         if col.unit is not None:
+-            column.unit = u.Unit(col.unit, format='fits', parse_strict='silent')
++            column.unit = u.Unit(col.unit, format='fits', parse_strict=unit_parse_strict)
+ 
+         # Copy over display format
+         if col.disp is not None:
+diff --git a/astropy/io/fits/conf.py b/astropy/io/fits/conf.py
+new file mode 100644
+index 0000000..e36eb5d
+--- /dev/null
++++ b/astropy/io/fits/conf.py
+@@ -0,0 +1,20 @@
++"""
++Configuration parameters for `astropy.io.fits`.
++"""
++
++from astropy.config import ConfigNamespace, ConfigItem
++
++__all__ = ['conf']
++
++
++class Conf(ConfigNamespace):
++    """
++    Configuration parameters for `astropy.io.fits`.
++    """
++    unit_parse_strict = ConfigItem(
++        'warn',
++        'How to handle invalid unit strings in FITS headers. Can be "silent", '
++        '"warn", or "raise".'
++    )
++
++conf = Conf()

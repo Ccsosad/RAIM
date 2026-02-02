@@ -1,0 +1,90 @@
+diff --git a/xarray/core/common.py b/xarray/core/common.py
+index 6878d7a..a890a0a 100644
+--- a/xarray/core/common.py
++++ b/xarray/core/common.py
+@@ -334,6 +334,25 @@ def get_squeeze_dims(
+     return dim
+ 
+ 
++def infix_dims(dims, all_dims):
++    """Expand an ellipsis in a list of dimensions."""
++    if ... not in dims:
++        return dims
++
++    if dims.count(...) > 1:
++        raise ValueError("an ellipsis must appear at most once")
++
++    other_dims = [d for d in all_dims if d not in dims]
++
++    new_dims = []
++    for d in dims:
++        if d is ...:
++            new_dims.extend(other_dims)
++        else:
++            new_dims.append(d)
++    return tuple(new_dims)
++
++
+ class DataWithCoords(SupportsArithmetic, AttrAccessMixin):
+     """Shared base class for Dataset and DataArray."""
+ 
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..0b66b49 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1863,6 +1864,9 @@ class DataArray(AbstractArray, DataWithCoords):
+         Dataset.transpose
+         """
+         if dims:
++            from .common import infix_dims
++
++            dims = infix_dims(dims, self.dims)
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+@@ -3122,4 +3126,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..4e6306a 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3692,7 +3692,8 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         ----------
+         *dims : Hashable, optional
+             By default, reverse the dimensions on each array. Otherwise,
+-            reorder the dimensions to this order.
++            reorder the dimensions to this order. An ellipsis (`...`) can be
++            used to represent all other dimensions.
+ 
+         Returns
+         -------
+@@ -3712,6 +3713,9 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         DataArray.transpose
+         """
+         if dims:
++            from .common import infix_dims
++
++            dims = infix_dims(dims, self.dims)
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+@@ -5449,4 +5453,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

@@ -1,0 +1,77 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..131a9d4 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1644,6 +1644,22 @@ class Ellipse(Patch):
+ 
+     angle = property(get_angle, set_angle)
+ 
++    def get_vertices(self):
++        """
++        Return the vertices of the ellipse.
++
++        The vertices are the endpoints of the major axis.
++        """
++        return self.get_patch_transform().transform([(1, 0), (-1, 0)])
++
++    def get_co_vertices(self):
++        """
++        Return the co-vertices of the ellipse.
++
++        The co-vertices are the endpoints of the minor axis.
++        """
++        return self.get_patch_transform().transform([(0, 1), (0, -1)])
++
+     def get_corners(self):
+         """
+         Return the corners of the ellipse bounding box.
+diff --git a/galleries/examples/shapes_and_collections/ellipse_arrow.py b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+new file mode 100644
+index 0000000..b635ec9
+--- /dev/null
++++ b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+@@ -0,0 +1,44 @@
++"""
++===================================
++Adding an arrow to an ellipse patch
++===================================
++
++This example shows how to add an arrow to an ellipse to indicate a rotation
++direction (clockwise or counter-clockwise). The arrow is placed exactly on the
++ellipse by using the coordinates of the vertices returned by
++`Ellipse.get_vertices()`.
++"""
++
++import matplotlib.pyplot as plt
++import matplotlib.patches as mpatches
++
++# Create an ellipse
++ellipse = mpatches.Ellipse(xy=(0.5, 0.5), width=0.4, height=0.2, angle=30,
++                           edgecolor='blue', facecolor='none', linewidth=2)
++
++fig, ax = plt.subplots()
++ax.add_patch(ellipse)
++
++# Get the vertices (endpoints of the major axis)
++vertices = ellipse.get_vertices()
++# Choose the vertex for the arrow start (first vertex)
++arrow_start = vertices[0]
++# The arrow will point along the ellipse boundary. We can use the co-vertices
++# to determine the direction.
++co_vertices = ellipse.get_co_vertices()
++# Compute a point slightly offset along the ellipse for the arrow direction.
++# Here we use the co-vertex to create a tangential direction.
++# For a counter-clockwise arrow, we go from the vertex towards the co-vertex.
++arrow_direction = co_vertices[0] - arrow_start
++
++# Add an arrow
++arrow = mpatches.FancyArrowPatch(arrow_start, arrow_start + 0.2 * arrow_direction,
++                                 arrowstyle='->', mutation_scale=20, color='red')
++ax.add_patch(arrow)
++
++# Set limits and aspect
++ax.set_xlim(0, 1)
++ax.set_ylim(0, 1)
++ax.set_aspect('equal')
++plt.title("Ellipse with arrow indicating rotation")
++plt.show()

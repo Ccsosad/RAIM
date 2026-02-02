@@ -1,0 +1,56 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..a951bba 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3071,7 +3071,7 @@ class Axes(_AxesBase):
+         return stem_container
+ 
+     @_preprocess_data(replace_names=["x", "explode", "labels", "colors"])
+-    def pie(self, x, explode=None, labels=None, colors=None,
++    def pie(self, x, explode=None, labels=None, colors=None, hatch=None,
+             autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
+             startangle=0, radius=1, counterclock=True,
+             wedgeprops=None, textprops=None, center=(0, 0),
+@@ -3207,6 +3207,16 @@ class Axes(_AxesBase):
+             def get_next_color():
+                 return next(color_cycle)
+ 
++        if hatch is None:
++            get_next_hatch = None
++        else:
++            if isinstance(hatch, str):
++                hatch_cycle = itertools.repeat(hatch)
++            else:
++                hatch_cycle = itertools.cycle(hatch)
++            def get_next_hatch():
++                return next(hatch_cycle)
++
+         _api.check_isinstance(Number, radius=radius, startangle=startangle)
+         if radius <= 0:
+             raise ValueError(f'radius must be a positive number, not {radius}')
+@@ -3230,12 +3240,15 @@ class Axes(_AxesBase):
+             x += expl * math.cos(thetam)
+             y += expl * math.sin(thetam)
+ 
++            current_hatch = get_next_hatch() if get_next_hatch is not None else None
++            wedge_kwargs = wedgeprops.copy()
++            wedge_kwargs.update(facecolor=get_next_color(),
++                                clip_on=False,
++                                label=label,
++                                hatch=current_hatch)
+             w = mpatches.Wedge((x, y), radius, 360. * min(theta1, theta2),
+                                360. * max(theta1, theta2),
+-                               facecolor=get_next_color(),
+-                               clip_on=False,
+-                               label=label)
+-            w.set(**wedgeprops)
++                               **wedge_kwargs)
+             slices.append(w)
+             self.add_patch(w)
+ 
+@@ -8280,4 +8293,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

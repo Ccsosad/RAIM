@@ -1,0 +1,64 @@
+diff --git a/astropy/constants/utils.py b/astropy/constants/utils.py
+index a25b3dc..546b8f3 100644
+--- a/astropy/constants/utils.py
++++ b/astropy/constants/utils.py
+@@ -64,6 +64,12 @@ def _set_c(codata, iaudata, module, not_in_module_only=True, doclines=None,
+         instead of just ``_c`` from :func:`_get_c`.
+ 
+     """
++    import sys
++    from .config import physical_constants, astronomical_constants
++    
++    # Check if we're using default versions or ScienceState-set versions
++    current_physical = physical_constants.get()
++    current_astronomical = astronomical_constants.get()
+     for _c in _get_c(codata, iaudata, module,
+                      not_in_module_only=not_in_module_only):
+         if set_class:
+@@ -77,4 +83,4 @@ def _set_c(codata, iaudata, module, not_in_module_only=True, doclines=None,
+ 
+         if doclines is not None:
+             doclines.append('{0:^10} {1:^14.9g} {2:^16} {3}'.format(
+-                _c.abbrev, _c.value, _c._unit_string, _c.name))
++                _c.abbrev, _c.value, _c._unit_string, _c.name))
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..57d11a3
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,35 @@
++from astropy.config import ScienceState
++
++class physical_constants(ScienceState):
++    """
++    ScienceState for setting the physical constants version.
++    """
++    _value = 'codata2018'  # default value
++    
++    @classmethod
++    def validate(cls, value):
++        if 'astropy.constants' in sys.modules or 'astropy.units' in sys.modules:
++            raise RuntimeError("astropy.constants or astropy.units is already imported")
++        
++        if value.startswith('astropyconst'):
++            return value.replace('astropyconst', 'codata')
++        return value
++
++class astronomical_constants(ScienceState):
++    """
++    ScienceState for setting the astronomical constants version.
++    """
++    _value = 'iau2015'  # default value
++    
++    @classmethod
++    def validate(cls, value):
++        if 'astropy.constants' in sys.modules or 'astropy.units' in sys.modules:
++            raise RuntimeError("astropy.constants or astropy.units is already imported")
++            
++        if value.startswith('astropyconst'):
++            return value.replace('astropyconst', 'iau')
++        return value
++
++# Create instances for top-level access
++physical_constants = physical_constants()
++astronomical_constants = astronomical_constants()

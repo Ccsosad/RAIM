@@ -1,0 +1,42 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..8149cfb 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -84,6 +84,7 @@ class Grid(_BaseGrid):
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+         self._figure.tight_layout(*args, **kwargs)
++        return self
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -306,7 +307,9 @@ _facet_docs = dict(
+ )
+ 
+ 
+-class FacetGrid(Grid):
++from ._grid_fluent_mixin import _GridFluentMixin
++
++class FacetGrid(Grid, _GridFluentMixin):
+     """Multi-plot grid for plotting conditional relationships."""
+ 
+     def __init__(
+diff --git a/seaborn/_grid_fluent_mixin.py b/seaborn/_grid_fluent_mixin.py
+new file mode 100644
+index 0000000..57844ed
+--- /dev/null
++++ b/seaborn/_grid_fluent_mixin.py
+@@ -0,0 +1,13 @@
++"""Mixin providing fluent (method-chained) operations for seaborn grids."""
++
++class _GridFluentMixin:
++    """Provides `apply` and `pipe` for Fluent-style Grid customization."""
++
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to `self` and return self for chaining."""
++        func(self, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to `self` and return its result."""
++        return func(self, *args, **kwargs)

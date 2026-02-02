@@ -1,0 +1,201 @@
+diff --git a/sklearn/random_projection.py b/sklearn/random_projection.py
+index d06dfcd..8016daa 100644
+--- a/sklearn/random_projection.py
++++ b/sklearn/random_projection.py
+@@ -302,12 +302,19 @@ class BaseRandomProjection(
+ 
+     @abstractmethod
+     def __init__(
+-        self, n_components="auto", *, eps=0.1, dense_output=False, random_state=None
++        self,
++        n_components="auto",
++        *,
++        eps=0.1,
++        dense_output=False,
++        random_state=None,
++        compute_inverse_components=False,
+     ):
+         self.n_components = n_components
+         self.eps = eps
+         self.dense_output = dense_output
+         self.random_state = random_state
++        self.compute_inverse_components = compute_inverse_components
+ 
+     @abstractmethod
+     def _make_random_matrix(self, n_components, n_features):
+@@ -399,6 +406,16 @@ class BaseRandomProjection(
+             " not the proper shape."
+         )
+ 
++        # Compute inverse components if requested
++        if self.compute_inverse_components:
++            # Compute the pseudo-inverse of components_
++            # Note: components_ is of shape (n_components_, n_features)
++            # We want inverse_components_ of shape (n_features, n_components_)
++            # We use pinv for the pseudo-inverse
++            self.inverse_components_ = np.linalg.pinv(self.components_.T)
++        else:
++            self.inverse_components_ = None
++
+         return self
+ 
+     def transform(self, X):
+@@ -437,6 +454,48 @@ class BaseRandomProjection(
+         """
+         return self.n_components
+ 
++    def inverse_transform(self, X):
++        """Project data back to its original space.
++
++        Parameters
++        ----------
++        X : {ndarray, sparse matrix} of shape (n_samples, n_components)
++            Data to be transformed back.
++
++        Returns
++        -------
++        X_original : ndarray of shape (n_samples, n_features)
++            Data in the original space. It is always a dense array.
++        """
++        check_is_fitted(self)
++        X = self._validate_data(
++            X, accept_sparse=["csr", "csc"], reset=False, dtype=[np.float64, np.float32]
++        )
++
++        if X.shape[1] != self.n_components_:
++            raise ValueError(
++                "Impossible to perform inverse transformation:"
++                "X has a different number of components than during fit. "
++                "(%s != %s)" % (X.shape[1], self.n_components_)
++            )
++
++        # Compute inverse components if not already computed
++        if self.inverse_components_ is None:
++            # Compute the pseudo-inverse on the fly
++            inv_components = np.linalg.pinv(self.components_.T)
++        else:
++            inv_components = self.inverse_components_
++
++        # Project back: X @ inv_components.T
++        # Note: inv_components is of shape (n_features, n_components)
++        # So we need to compute X @ inv_components.T
++        # But actually, we want to compute X @ inv_components.T, which is the same as (inv_components @ X.T).T
++        # However, it's easier to do X @ inv_components.T.
++        # Since inv_components is dense, the result will be dense.
++        X_original = X @ inv_components.T
++
++        return X_original
++
+     def _more_tags(self):
+         return {
+             "preserves_dtype": [np.float64, np.float32],
+@@ -452,6 +511,109 @@ class GaussianRandomProjection(BaseRandomProjection):
+ 
+     .. versionadded:: 0.13
+ 
++    Parameters
++    ----------
++    n_components : int or 'auto', default='auto'
++        Dimensionality of the target projection space.
++
++        n_components can be automatically adjusted according to the
++        number of samples in the dataset and the bound given by the
++        Johnson-Lindenstrauss lemma. In that case the quality of the
++        embedding is controlled by the ``eps`` parameter.
++
++        It should be noted that Johnson-Lindenstrauss lemma can yield
++        very conservative estimated of the required number of components
++        as it makes no assumption on the structure of the dataset.
++
++    eps : float, default=0.1
++        Parameter to control the quality of the embedding according to
++        the Johnson-Lindenstrauss lemma when n_components is set to
++        'auto'. The value should be strictly positive.
++
++        Smaller values lead to better embedding and higher number of
++        dimensions (n_components) in the target projection space.
++
++    dense_output : bool, default=False
++        If True, ensure that the output of the random projection is a dense
++        numpy array even if the input is sparse. In practice, if the
++        number of components is small the number of zero components in
++        the projected data will be very small and will be stored as a
++        dense array.
++
++        If False, the projected data uses a sparse representation if
++        the input is sparse.
++
++    random_state : int, RandomState instance or None, default=None
++        Controls the pseudo random number generator used to generate the
++        projection matrix at fit time.
++        Pass an int for reproducible output across multiple function calls.
++        See :term:`Glossary <random_state>`.
++
++    compute_inverse_components : bool, default=False
++        If True, compute the pseudo-inverse of the components during fit
++        and store it as `inverse_components_` for use in `inverse_transform`.
++        This can increase memory usage but will make `inverse_transform`
++        faster.
++
++    Attributes
++    ----------
++    n_components_ : int
++        Concrete number of components computed when n_components="auto".
++
++    components_ : ndarray of shape (n_components, n_features)
++        Random matrix used for the projection.
++
++    inverse_components_ : ndarray of shape (n_features, n_components) or None
++        Pseudo-inverse of the components, computed only if
++        `compute_inverse_components` is True.
++
++    Examples
++    --------
++    >>> import numpy as np
++    >>> from sklearn.random_projection import GaussianRandomProjection
++    >>> rng = np.random.RandomState(42)
++    >>> X = rng.rand(100, 10000)
++    >>> transformer = GaussianRandomProjection(random_state=rng)
++    >>> X_new = transformer.fit_transform(X)
++    >>> X_new.shape
++    (100, 3947)
++
++    See Also
++    --------
++    SparseRandomProjection : Reduce dimensionality through sparse
++        random projection.
++
++    References
++    ----------
++    .. [1] Sanjoy Dasgupta. 2000. Experiments with random projection.
++           In Proceedings of the Sixteenth conference on Uncertainty in
++           artificial intelligence (UAI'00), Craig Boutilier and Moisés
++           Goldszmidt (Eds.). Morgan Kaufmann Publishers Inc., San
++           Francisco, CA, USA, 143-151.
++
++    .. [2] Ella Bingham and Heikki Mannila. 2001. Random projection in
++           dimensionality reduction: applications to image and text data.
++           In Proceedings of the seventh ACM SIGKDD international conference
++           on Knowledge discovery and data mining (KDD '01). ACM, New
++           York, NY, USA, 245-250.
++    """
++    def __init__(
++        self,
++        n_components="auto",
++        *,
++        eps=0.1,
++        dense_output=False,
++        random_state=None,
++        compute_inverse_components=False,
++    ):
++        super().__init__(
++            n_components=n_components,
++            eps=eps,
++            dense_output=dense_output,
++            random_state=random_state,
++            compute_inverse_components=compute_inverse_components,
++        )
++
+     Parameters
+     ----------
+     n_components : int or 'auto', default='auto'

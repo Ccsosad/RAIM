@@ -1,0 +1,16 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index b0a0822..b110758 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -615,8 +615,9 @@ class Continuous(ContinuousBase):
+         log_base, symlog_thresh = self._parse_for_log_params(self.trans)
+         if base is None:
+             if symlog_thresh:
+-                log_base = 10
+-            base = log_base
++                base = 10
++            # If base is None and there's a log transform, do not use log formatter
++            # This allows the user to override the default log formatter by passing base=None
+ 
+         if formatter is not None:
+             return formatter

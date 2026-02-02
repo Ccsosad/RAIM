@@ -1,0 +1,14 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 0981994..c8d442e 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -149,7 +149,8 @@ class TextReporter(BaseReporter):
+         """
+         self_dict = asdict(msg)
+         for key in ("end_line", "end_column"):
+-            self_dict[key] = self_dict[key] or ""
++            if self_dict[key] is None:
++                self_dict[key] = ""
+ 
+         self.writeln(self._fixed_template.format(**self_dict))
+ 

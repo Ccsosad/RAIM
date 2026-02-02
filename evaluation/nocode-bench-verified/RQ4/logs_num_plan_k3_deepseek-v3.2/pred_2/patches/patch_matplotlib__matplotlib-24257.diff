@@ -1,0 +1,161 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..fbaeb9d 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -226,12 +226,156 @@ def update_nested_dict(main_dict, new_dict):
+     return main_dict
+ 
+ 
++def _load_style_from_package(name):
++    """
++    Load a style sheet from a package.
++
++    Parameters
++    ----------
++    name : str
++        Dotted name of the style sheet (e.g., "mypackage.presentation").
++
++    Returns
++    -------
++    dict
++        The style dictionary.
++
++    Raises
++    ------
++    KeyError
++        If the style sheet cannot be found.
++    """
++    # Split the name into package and style name.
++    parts = name.split('.')
++    if len(parts) < 2:
++        raise KeyError(f"Invalid style name {name!r}: expected a dotted name.")
++    package_name = '.'.join(parts[:-1])
++    style_name = parts[-1]
++
++    # Use importlib.resources to access the package.
++    try:
++        # For Python>=3.9, we can use importlib.resources.files.
++        # For older Python, we use importlib_resources.
++        if sys.version_info >= (3, 9):
++            import importlib.resources as resources
++        else:
++            import importlib_resources as resources
++    except ImportError:
++        raise KeyError(
++            f"Cannot load style {name!r}: importlib-resources is not installed. "
++            "It is required for Python < 3.10."
++        ) from None
++
++    try:
++        package = resources.files(package_name)
++    except Exception as e:
++        raise KeyError(
++            f"Cannot find package {package_name!r} for style {name!r}."
++        ) from e
++
++    # Look for the style file.
++    # We try with .mplstyle extension.
++    style_file = package / f"{style_name}.mplstyle"
++    if not style_file.is_file():
++        # Also try without extension? The standard is with .mplstyle.
++        raise KeyError(
++            f"Cannot find style file {style_name}.mplstyle in package {package_name!r}."
++        )
++
++    # Read the style file.
++    try:
++        with resources.as_file(style_file) as f:
++            return read_style_file(f)
++    except Exception as e:
++        raise KeyError(
++            f"Error reading style file {style_file} from package {package_name!r}."
++        ) from e
++
++
++def _load_style_from_package(name):
++    """
++    Load a style sheet from a package.
++
++    Parameters
++    ----------
++    name : str
++        Dotted name of the style sheet (e.g., "mypackage.presentation").
++
++    Returns
++    -------
++    dict
++        The style dictionary.
++
++    Raises
++    ------
++    KeyError
++        If the style sheet cannot be found.
++    """
++    # Split the name into package and style name.
++    parts = name.split('.')
++    if len(parts) < 2:
++        raise KeyError(f"Invalid style name {name!r}: expected a dotted name.")
++    package_name = '.'.join(parts[:-1])
++    style_name = parts[-1]
++
++    # Use importlib.resources to access the package.
++    try:
++        # For Python>=3.9, we can use importlib.resources.files.
++        # For older Python, we use importlib_resources.
++        import sys
++        if sys.version_info >= (3, 9):
++            import importlib.resources as resources
++        else:
++            import importlib_resources as resources
++    except ImportError:
++        raise KeyError(
++            f"Cannot load style {name!r}: importlib-resources is not installed. "
++            "It is required for Python < 3.10."
++        ) from None
++
++    try:
++        package = resources.files(package_name)
++    except Exception as e:
++        raise KeyError(
++            f"Cannot find package {package_name!r} for style {name!r}."
++        ) from e
++
++    # Look for the style file.
++    # We try with .mplstyle extension.
++    style_file = package / f"{style_name}.mplstyle"
++    if not style_file.is_file():
++        # Also try without extension? The standard is with .mplstyle.
++        raise KeyError(
++            f"Cannot find style file {style_name}.mplstyle in package {package_name!r}."
++        )
++
++    # Read the style file.
++    try:
++        with resources.as_file(style_file) as f:
++            return read_style_file(f)
++    except Exception as e:
++        raise KeyError(
++            f"Error reading style file {style_file} from package {package_name!r}."
++        ) from e
++
++
+ class _StyleLibrary(dict):
+     def __getitem__(self, key):
+         if key in _DEPRECATED_SEABORN_STYLES:
+             _api.warn_deprecated("3.6", message=_DEPRECATED_SEABORN_MSG)
+             key = _DEPRECATED_SEABORN_STYLES[key]
+ 
++        # If the key is not found, it might be a dotted package style.
++        if key not in self:
++            # Check if it's a dotted name.
++            if '.' in key:
++                # Try to load from a package.
++                self[key] = _load_style_from_package(key)
++                return self[key]
++            else:
++                # If not, let the dict raise the KeyError.
++                pass
++
+         return dict.__getitem__(self, key)
+ 
+ 

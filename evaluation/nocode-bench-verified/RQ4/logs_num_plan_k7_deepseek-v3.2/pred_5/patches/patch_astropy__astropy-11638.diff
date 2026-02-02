@@ -1,0 +1,32 @@
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 836039e..6c4ee3b 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -1484,26 +1484,7 @@ class Time(TimeBase):
+                 precision=None, in_subfmt=None, out_subfmt=None,
+                 location=None, copy=False):
+ 
+-        # Because of import problems, this can only be done on
+-        # first call of Time. The initialization is complicated because
+-        # update_leap_seconds uses Time.
+-        # In principle, this may cause wrong leap seconds in
+-        # update_leap_seconds itself, but since expiration is in
+-        # units of days, that is fine.
+-        global _LEAP_SECONDS_CHECK
+-        if _LEAP_SECONDS_CHECK != _LeapSecondsCheck.DONE:
+-            with _LEAP_SECONDS_LOCK:
+-                # There are three ways we can get here:
+-                # 1. First call (NOT_STARTED).
+-                # 2. Re-entrant call (RUNNING). We skip the initialisation
+-                #    and don't worry about leap second errors.
+-                # 3. Another thread which raced with the first call
+-                #    (RUNNING). The first thread has relinquished the
+-                #    lock to us, so initialization is complete.
+-                if _LEAP_SECONDS_CHECK == _LeapSecondsCheck.NOT_STARTED:
+-                    _LEAP_SECONDS_CHECK = _LeapSecondsCheck.RUNNING
+-                    update_leap_seconds()
+-                    _LEAP_SECONDS_CHECK = _LeapSecondsCheck.DONE
++        # Leap second update is now done only when a UTC transformation is performed.
+ 
+         if isinstance(val, Time):
+             self = val.replicate(format=format, copy=copy, cls=cls)

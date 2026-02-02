@@ -1,0 +1,59 @@
+diff --git a/django/forms/forms.py b/django/forms/forms.py
+index 3ebacee..b9982a0 100644
+--- a/django/forms/forms.py
++++ b/django/forms/forms.py
+@@ -66,7 +66,8 @@ class BaseForm(RenderableFormMixin):
+     prefix = None
+     use_required_attribute = True
+ 
+-    template_name = "django/forms/default.html"
++    # template_name is now a property that returns the renderer's form_template_name
++    # unless overridden by a string at the class or instance level.
+     template_name_p = "django/forms/p.html"
+     template_name_table = "django/forms/table.html"
+     template_name_ul = "django/forms/ul.html"
+@@ -127,6 +128,8 @@ class BaseForm(RenderableFormMixin):
+                 if isinstance(self.default_renderer, type):
+                     renderer = renderer()
+         self.renderer = renderer
++        # Initialize per-instance template name override.
++        self._template_name = None
+ 
+     def order_fields(self, field_order):
+         """
+@@ -484,6 +487,29 @@ class BaseForm(RenderableFormMixin):
+         return [name for name, bf in self._bound_items() if bf._has_changed()]
+ 
+     @property
++    @property
++    def template_name(self):
++        """
++        Return the template name to use for rendering the form.
++        If an instance-specific template name has been set, return that.
++        Otherwise, if the class has a string template_name, return that.
++        Otherwise, return the renderer's form_template_name.
++        """
++        if self._template_name is not None:
++            return self._template_name
++        # Check if the class has a string template_name (which overrides the property)
++        if isinstance(self.__class__.template_name, str):
++            return self.__class__.template_name
++        # Otherwise, return the renderer's form_template_name
++        if self.renderer is not None:
++            return self.renderer.form_template_name
++        # Fallback for safety (should not happen in normal use)
++        return "django/forms/default.html"
++
++    @template_name.setter
++    def template_name(self, value):
++        self._template_name = value
++
+     def media(self):
+         """Return all media required to render the widgets on this form."""
+         media = Media()
+@@ -536,4 +562,4 @@ class Form(BaseForm, metaclass=DeclarativeFieldsMetaclass):
+     # self.fields is specified. This class (Form) is the one that does the
+     # fancy metaclass stuff purely for the semantic sugar -- it allows one
+     # to define a form using declarative syntax.
+-    # BaseForm itself has no way of designating self.fields.
++    # BaseForm itself has no way of designating self.fields.

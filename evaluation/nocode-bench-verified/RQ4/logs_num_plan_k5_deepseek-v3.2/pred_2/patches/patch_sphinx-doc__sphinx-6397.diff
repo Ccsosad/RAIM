@@ -1,0 +1,18 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..d89009f 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -416,6 +416,13 @@ class Documenter:
+         if result:
+             args, retann = result
+ 
++        # If the config says to not show typehints, then don't show the return annotation
++        # and also don't show the argument annotations (if possible)
++        if self.env.config.autodoc_typehints == 'none':
++            retann = None
++            # We cannot change args here because it's already formatted with annotations.
++            # So we leave it as is. This is a limitation.
++
+         if args is not None:
+             return args + (retann and (' -> %s' % retann) or '')
+         else:

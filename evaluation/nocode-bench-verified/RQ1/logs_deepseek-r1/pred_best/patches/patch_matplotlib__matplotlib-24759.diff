@@ -1,0 +1,16 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index 7d25be3..7982c56 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -1290,4 +1290,10 @@ def _parse_legend_args(axs, *args, handles=None, labels=None, **kwargs):
+     else:
+         raise TypeError('Invalid arguments to legend.')
+ 
+-    return handles, labels, extra_args, kwargs
++    # If reverse is True, reverse the lists
++    reverse = kwargs.pop('reverse', False)
++    if reverse:
++        handles = handles[::-1]
++        labels = labels[::-1]
++
++    return handles, labels, extra_args, kwargs

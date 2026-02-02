@@ -1,0 +1,36 @@
+diff --git a/seaborn/_core/plot.py b/seaborn/_core/plot.py
+index 5b43615..e9f7c6e 100644
+--- a/seaborn/_core/plot.py
++++ b/seaborn/_core/plot.py
+@@ -1167,6 +1167,16 @@ class Plotter:
+ 
+         return seed_values
+ 
++    def _style_nominal_axis(self, ax, axis):
++        """Apply seaborn-like categorical axis styling for Nominal scales."""
++        if axis == "x":
++            ax.set_xmargin(0)
++            ax.xaxis.grid(False)
++        else:
++            ax.set_ymargin(0)
++            ax.yaxis.grid(False)
++            ax.invert_yaxis()
++
+     def _setup_scales(
+         self, p: Plot,
+         common: PlotData,
+@@ -1174,6 +1184,8 @@ class Plotter:
+         variables: list[str] | None = None,
+     ) -> None:
+ 
++        from seaborn._core.scales import Nominal
++
+         if variables is None:
+             # Add variables that have data but not a scale, which happens
+             # because this method can be called multiple time, to handle
+@@ -1646,4 +1658,4 @@ class Plotter:
+ 
+         engine_default = None if p._target is not None else "tight"
+         layout_engine = p._layout_spec.get("engine", engine_default)
+-        set_layout_engine(self._figure, layout_engine)
++        set_layout_engine(self._figure, layout_engine)

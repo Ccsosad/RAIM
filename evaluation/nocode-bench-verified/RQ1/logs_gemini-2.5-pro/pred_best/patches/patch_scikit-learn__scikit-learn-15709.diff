@@ -1,0 +1,46 @@
+diff --git a/sklearn/datasets/_samples_generator.py b/sklearn/datasets/_samples_generator.py
+index 3e148f7..5afa1e0 100644
+--- a/sklearn/datasets/_samples_generator.py
++++ b/sklearn/datasets/_samples_generator.py
+@@ -731,7 +731,8 @@ def make_moons(n_samples=100, shuffle=True, noise=None, random_state=None):
+ 
+ 
+ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+-               center_box=(-10.0, 10.0), shuffle=True, random_state=None):
++               center_box=(-10.0, 10.0), shuffle=True, return_centers=False,
++               random_state=None):
+     """Generate isotropic Gaussian blobs for clustering.
+ 
+     Read more in the :ref:`User Guide <sample_generators>`.
+@@ -764,6 +765,9 @@ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+     shuffle : boolean, optional (default=True)
+         Shuffle the samples.
+ 
++    return_centers : bool, default=False
++        If True, then return the centers of each cluster.
++
+     random_state : int, RandomState instance, default=None
+         Determines random number generation for dataset creation. Pass an int
+         for reproducible output across multiple function calls.
+@@ -777,6 +781,9 @@ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+     y : array of shape [n_samples]
+         The integer labels for cluster membership of each sample.
+ 
++    centers : array, shape [n_centers, n_features]
++        The centers of each cluster. Only returned if ``return_centers=True``.
++
+     Examples
+     --------
+     >>> from sklearn.datasets import make_blobs
+@@ -869,7 +876,10 @@ def make_blobs(n_samples=100, n_features=2, centers=None, cluster_std=1.0,
+         X = X[indices]
+         y = y[indices]
+ 
+-    return X, y
++    if return_centers:
++        return X, y, centers
++    else:
++        return X, y
+ 
+ 
+ def make_friedman1(n_samples=100, n_features=10, noise=0.0, random_state=None):

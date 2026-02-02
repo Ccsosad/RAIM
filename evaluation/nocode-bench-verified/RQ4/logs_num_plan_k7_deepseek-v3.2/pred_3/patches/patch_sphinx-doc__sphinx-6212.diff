@@ -1,0 +1,33 @@
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index d43c130..9819ae1 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -92,6 +92,18 @@ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
+                               warn=_simple_warn, info=_simple_info,
+                               base_path=None, builder=None, template_dir=None,
+                               imported_members=False, app=None):
++    # If app is provided and imported_members is not explicitly set (i.e., it's the default),
++    # use the app's config value.
++    if app is not None and imported_members is False:
++        imported_members = app.config.autosummary_imported_members
++    # If app is provided and imported_members is not explicitly set (i.e., it's the default),
++    # use the app's config value.
++    if app is not None and not imported_members:
++        try:
++            imported_members = app.config.autosummary_imported_members
++        except AttributeError:
++            # config value not set
++            pass
+     # type: (List[str], str, str, Callable, Callable, str, Builder, str, bool, Any) -> None
+ 
+     showed_sources = list(sorted(sources))
+@@ -230,7 +242,8 @@ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
+         generate_autosummary_docs(new_files, output_dir=output_dir,
+                                   suffix=suffix, warn=warn, info=info,
+                                   base_path=base_path, builder=builder,
+-                                  template_dir=template_dir, app=app)
++                                  template_dir=template_dir,
++                                  imported_members=imported_members, app=app)
+ 
+ 
+ # -- Finding documented entries in files ---------------------------------------

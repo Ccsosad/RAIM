@@ -1,0 +1,61 @@
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 38580cf..4b72208 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -123,6 +123,18 @@ def _listify_validator(scalar_validator, allow_stringlist=False, *,
+     return f
+ 
+ 
++def validate_auto_or_int(s):
++    """
++    Return *s* if s is the string 'auto', return an int if s is an int,
++    or raise a ValueError.
++    """
++    if s == 'auto':
++        return s
++    try:
++        return int(s)
++    except (TypeError, ValueError):
++        raise ValueError(f'{s!r} must be "auto" or an integer')
++
+ def validate_any(s):
+     return s
+ validate_anylist = _listify_validator(validate_any)
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..d7e6443 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2891,13 +2891,21 @@ class AutoMinorLocator(Locator):
+             return []
+ 
+         if self.ndivs is None:
+-
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
++            # Check the appropriate rcParam for the axis
++            if self.axis.axis_name == 'x':
++                ndivs = mpl.rcParams['xtick.minor.ndivs']
++            else:  # 'y'
++                ndivs = mpl.rcParams['ytick.minor.ndivs']
++            if ndivs == 'auto':
++                # Use the existing dynamic behavior
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+             else:
+-                ndivs = 4
++                # ndivs should be an integer
++                ndivs = int(ndivs)
+         else:
+             ndivs = self.ndivs
+ 
+@@ -2916,4 +2924,4 @@ class AutoMinorLocator(Locator):
+ 
+     def tick_values(self, vmin, vmax):
+         raise NotImplementedError('Cannot get tick locations for a '
+-                                  '%s type.' % type(self))
++                                  '%s type.' % type(self))

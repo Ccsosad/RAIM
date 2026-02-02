@@ -1,0 +1,151 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..b967460 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -511,51 +511,7 @@ class Legend(Artist):
+             loc = mpl.rcParams["legend.loc"]
+             if not self.isaxes and loc in [0, 'best']:
+                 loc = 'upper right'
+-
+-        type_err_message = ("loc must be string, coordinate tuple, or"
+-                            f" an integer 0-10, not {loc!r}")
+-
+-        # handle outside legends:
+-        self._outside_loc = None
+-        if isinstance(loc, str):
+-            if loc.split()[0] == 'outside':
+-                # strip outside:
+-                loc = loc.split('outside ')[1]
+-                # strip "center" at the beginning
+-                self._outside_loc = loc.replace('center ', '')
+-                # strip first
+-                self._outside_loc = self._outside_loc.split()[0]
+-                locs = loc.split()
+-                if len(locs) > 1 and locs[0] in ('right', 'left'):
+-                    # locs doesn't accept "left upper", etc, so swap
+-                    if locs[0] != 'center':
+-                        locs = locs[::-1]
+-                    loc = locs[0] + ' ' + locs[1]
+-            # check that loc is in acceptable strings
+-            loc = _api.check_getitem(self.codes, loc=loc)
+-        elif np.iterable(loc):
+-            # coerce iterable into tuple
+-            loc = tuple(loc)
+-            # validate the tuple represents Real coordinates
+-            if len(loc) != 2 or not all(isinstance(e, numbers.Real) for e in loc):
+-                raise ValueError(type_err_message)
+-        elif isinstance(loc, int):
+-            # validate the integer represents a string numeric value
+-            if loc < 0 or loc > 10:
+-                raise ValueError(type_err_message)
+-        else:
+-            # all other cases are invalid values of loc
+-            raise ValueError(type_err_message)
+-
+-        if self.isaxes and self._outside_loc:
+-            raise ValueError(
+-                f"'outside' option for loc='{loc0}' keyword argument only "
+-                "works for figure legends")
+-
+-        if not self.isaxes and loc == 0:
+-            raise ValueError(
+-                "Automatic legend placement (loc='best') not implemented for "
+-                "figure legend")
++        loc = self._parse_loc(loc, loc0)
+ 
+         self._mode = mode
+         self.set_bbox_to_anchor(bbox_to_anchor, bbox_transform)
+@@ -693,6 +649,93 @@ class Legend(Artist):
+     legendHandles = _api.deprecated('3.7', alternative="legend_handles")(
+         property(lambda self: self.legend_handles))
+ 
++    def _parse_loc(self, loc, loc0=None):
++        """
++        Validate and convert a location specification.
++
++        Parameters
++        ----------
++        loc : str, tuple, or int
++            The location specifier.
++        loc0 : str, tuple, or int, optional
++            The original location specifier before any modifications, used for
++            error messages.
++
++        Returns
++        -------
++        validated_loc : int, tuple, or str
++            The validated location.
++        """
++        if loc0 is None:
++            loc0 = loc
++        type_err_message = ("loc must be string, coordinate tuple, or"
++                            f" an integer 0-10, not {loc!r}")
++
++        # handle outside legends:
++        self._outside_loc = None
++        if isinstance(loc, str):
++            if loc.split()[0] == 'outside':
++                # strip outside:
++                loc = loc.split('outside ')[1]
++                # strip "center" at the beginning
++                self._outside_loc = loc.replace('center ', '')
++                # strip first
++                self._outside_loc = self._outside_loc.split()[0]
++                locs = loc.split()
++                if len(locs) > 1 and locs[0] in ('right', 'left'):
++                    # locs doesn't accept "left upper", etc, so swap
++                    if locs[0] != 'center':
++                        locs = locs[::-1]
++                    loc = locs[0] + ' ' + locs[1]
++            # check that loc is in acceptable strings
++            loc = _api.check_getitem(self.codes, loc=loc)
++        elif np.iterable(loc):
++            # coerce iterable into tuple
++            loc = tuple(loc)
++            # validate the tuple represents Real coordinates
++            if len(loc) != 2 or not all(isinstance(e, numbers.Real) for e in loc):
++                raise ValueError(type_err_message)
++        elif isinstance(loc, int):
++            # validate the integer represents a string numeric value
++            if loc < 0 or loc > 10:
++                raise ValueError(type_err_message)
++        else:
++            # all other cases are invalid values of loc
++            raise ValueError(type_err_message)
++
++        if self.isaxes and self._outside_loc:
++            raise ValueError(
++                f"'outside' option for loc='{loc0}' keyword argument only "
++                "works for figure legends")
++
++        if not self.isaxes and loc == 0:
++            raise ValueError(
++                "Automatic legend placement (loc='best') not implemented for "
++                "figure legend")
++        return loc
++
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++
++        Parameters
++        ----------
++        loc : str or tuple or int
++            The location of the legend. Can be a string, a tuple of coordinates,
++            or an integer.
++
++        Examples
++        --------
++        >>> legend.set_loc("upper right")
++        >>> legend.set_loc((0.5, 0.5))
++        >>> legend.set_loc(2)  # 'upper left'
++        """
++        # We don't allow None in set_loc because it would reset to default.
++        if loc is None:
++            raise ValueError("loc cannot be None in set_loc")
++        validated_loc = self._parse_loc(loc)
++        self._set_loc(validated_loc)
++
+     def _set_artist_props(self, a):
+         """
+         Set the boilerplate props for artists added to axes.

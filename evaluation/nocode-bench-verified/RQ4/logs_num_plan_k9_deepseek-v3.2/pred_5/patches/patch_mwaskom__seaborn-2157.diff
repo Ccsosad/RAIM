@@ -1,0 +1,157 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..7582efd 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -2069,6 +2069,136 @@ Examples
+ # =========================================================================== #
+ 
+ 
++@_deprecate_positional_args
++def displot(
++    data=None, *,
++    x=None, y=None, hue=None, row=None, col=None,
++    weights=None,
++    kind="hist",
++    rug=False,
++    rug_kws=None,
++    hue_order=None, hue_norm=None,
++    row_order=None, col_order=None,
++    row_wrap=None,
++    height=5, aspect=1,
++    facet_kws=None,
++    **kwargs
++):
++    """
++    Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distribution of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    `kind` parameter selects the approach to use:
++
++    - `hist` for histogram
++    - `kde` for kernel density estimate
++    - `ecdf` for empirical cumulative distribution function
++
++    Additionally, a `rug` plot can be added to any of these kinds of plots.
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure. If `x` and `y` are both absent, this is
++        interpreted as wide-form. Otherwise it is expected to be long-form.
++    x, y : vectors or keys in `data`
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in `data`
++        Variables that define subsets to plot on different facets.
++    weights : vector or key in `data`
++        If provided, weight the contribution of the corresponding data points
++        to the density estimate.
++    kind : {"hist", "kde", "ecdf"}
++        The kind of plot to draw.
++    rug : bool
++        If True, show each observation with marginal ticks (like `rugplot`).
++    rug_kws : dict
++        Keyword arguments for `rugplot`.
++    hue_order : list of strings
++        Specify the order of processing and plotting for categorical levels of `hue`.
++    hue_norm : tuple or :class:`matplotlib.colors.Normalize`
++        Either a pair of values that set the normalization range in data units
++        or an object that will map from data units into a [0, 1] interval.
++    row_order, col_order : lists of strings
++        Specify the order in which the rows and columns are plotted and organized.
++    row_wrap : int
++        Number of facets at which to wrap the row variable.
++    height : scalar
++        Height (in inches) of each facet.
++    aspect : scalar
++        Aspect ratio of each facet, so that `aspect * height` gives the width
++        of each facet in inches.
++    facet_kws : dict
++        Additional keyword arguments passed to :class:`FacetGrid`.
++    **kwargs : key, value pairings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    :class:`FacetGrid`
++        Returns the :class:`FacetGrid` object with the plot on it for further
++        tweaking.
++
++    See Also
++    --------
++    histplot : Draw a histogram using binning and smoothing.
++    kdeplot : Draw a kernel density estimate using smoothing.
++    ecdfplot : Draw an empirical cumulative distribution function.
++    rugplot : Draw a rug plot for univariate or bivariate data.
++
++    Examples
++    --------
++
++    .. include:: ../docstrings/displot.rst
++
++    """
++    # Avoid circular import
++    from seaborn.axisgrid import FacetGrid
++
++    # Handle defaults
++    if rug_kws is None:
++        rug_kws = {}
++
++    # Determine the plotting function
++    if kind == "hist":
++        plot_func = histplot
++    elif kind == "kde":
++        plot_func = kdeplot
++    elif kind == "ecdf":
++        plot_func = ecdfplot
++    else:
++        raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind}.")
++
++    # Set up the FacetGrid
++    facet_kws = {} if facet_kws is None else facet_kws
++    g = FacetGrid(
++        data=data,
++        row=row, col=col,
++        hue=hue, hue_order=hue_order, hue_norm=hue_norm,
++        row_order=row_order, col_order=col_order,
++        row_wrap=row_wrap,
++        height=height, aspect=aspect,
++        **facet_kws,
++    )
++
++    # Map the plotting function
++    g.map_dataframe(plot_func, x=x, y=y, weights=weights, **kwargs)
++
++    # Add a rug plot if requested
++    if rug:
++        g.map_dataframe(rugplot, x=x, y=y, **rug_kws)
++
++    # Add the legend
++    if hue is not None:
++        g.add_legend()
++
++    return g
++
++
+ def _freedman_diaconis_bins(a):
+     """Calculate number of hist bins using Freedman-Diaconis rule."""
+     # From https://stats.stackexchange.com/questions/798/
+@@ -2216,6 +2346,15 @@ def distplot(
+         ...                             "alpha": 1, "color": "g"})
+ 
+     """
++    # Issue deprecation warning
++    warnings.warn(
++        "distplot is a deprecated function and will be removed in a future "
++        "version. Please adapt your code to use either `displot` (a figure-"
++        "level function with similar flexibility) or `histplot` (an axes-"
++        "level function for histograms).",
++        FutureWarning, stacklevel=2
++    )
++
+     # Handle deprecation of ``a```
+     if a is not None:
+         msg = "The `a` parameter is now called `x`. Please update your code."

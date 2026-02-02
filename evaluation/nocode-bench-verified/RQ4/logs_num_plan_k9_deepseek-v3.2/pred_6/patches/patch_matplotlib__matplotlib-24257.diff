@@ -1,0 +1,61 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..28ea89a 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -212,6 +212,56 @@ def read_style_directory(style_dir):
+     return styles
+ 
+ 
++def read_style_from_package(package_style_name):
++    """Return a style dictionary from a style in a package.
++
++    Parameters
++    ----------
++    package_style_name : str
++        The style name in the form "package.style".
++
++    Returns
++    -------
++    dict
++        The style parameters.
++
++    Raises
++    ------
++    OSError
++        If the style file cannot be read.
++    """
++    # Split the package_style_name into package and style name.
++    parts = package_style_name.rsplit('.', 1)
++    if len(parts) != 2:
++        raise ValueError(
++            f"Invalid package style name '{package_style_name}'. "
++            "Expected 'package.style'.")
++    package, style_name = parts
++
++    # Use importlib.resources to get the resource.
++    try:
++        from importlib.resources import files
++    except ImportError:
++        from importlib_resources import files
++
++    package_module = files(package)
++    style_file = package_module.joinpath(f"{style_name}.{STYLE_EXTENSION}")
++
++    with warnings.catch_warnings(record=True) as warns:
++        try:
++            with style_file.open('r') as f:
++                style = rc_params_from_file(f, use_default_template=False)
++        except FileNotFoundError:
++            raise OSError(
++                f"Cannot read style file '{style_file}' from package "
++                f"'{package}'.")
++
++    for w in warns:
++        _log.warning('In %s: %s', package_style_name, w.message)
++
++    return style
++
++
+ def update_nested_dict(main_dict, new_dict):
+     """
+     Update nested dict (only level of nesting) with new values.

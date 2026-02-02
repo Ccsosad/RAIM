@@ -1,0 +1,72 @@
+diff --git a/astropy/visualization/wcsaxes/core.py b/astropy/visualization/wcsaxes/core.py
+index 573033c..d9414f6 100644
+--- a/astropy/visualization/wcsaxes/core.py
++++ b/astropy/visualization/wcsaxes/core.py
+@@ -75,18 +75,21 @@ class WCSAxes(Axes):
+     transData : `~matplotlib.transforms.Transform`, optional
+         Can be used to override the default data -> pixel mapping.
+     slices : tuple, optional
+-        For WCS transformations with more than two dimensions, we need to
+-        choose which dimensions are being shown in the 2D image. The slice
++        For WCS transformations with more dimensions than the plot, we need to
++        choose which dimensions are being shown. For a 2D plot, the slice
+         should contain one ``x`` entry, one ``y`` entry, and the rest of the
+-        values should be integers indicating the slice through the data. The
+-        order of the items in the slice should be the same as the order of the
++        values should be integers indicating the slice through the data. For a 1D
++        plot, the slice should contain one ``x`` entry and the rest integers.
++        The order of the items in the slice should be the same as the order of the
+         dimensions in the :class:`~astropy.wcs.WCS`, and the opposite of the
+         order of the dimensions in Numpy. For example, ``(50, 'x', 'y')`` means
+         that the first WCS dimension (last Numpy dimension) will be sliced at
+         an index of 50, the second WCS and Numpy dimension will be shown on the
+         x axis, and the final WCS dimension (first Numpy dimension) will be
+         shown on the y-axis (and therefore the data will be plotted using
+-        ``data[:, :, 50].transpose()``)
++        ``data[:, :, 50].transpose()``). For a 1D plot, ``(50, 50, 'x')`` means
++        that the first two WCS dimensions are sliced at 50 and the third is
++        shown on the x axis.
+     frame_class : type, optional
+         The class for the frame, which should be a subclass of
+         :class:`~astropy.visualization.wcsaxes.frame.BaseFrame`. The default is to use a
+@@ -370,8 +373,12 @@ class WCSAxes(Axes):
+         self._all_coords = [self.coords]
+ 
+         # Common default settings for Rectangular Frame
+-        for ind, pos in enumerate(coord_meta.get('default_axislabel_position', ['b', 'l'])):
++        n_coords = len(self.coords)
++        default_axislabel_position = coord_meta.get('default_axislabel_position', ['b', 'l'][:n_coords])
++        default_ticklabel_position = coord_meta.get('default_ticklabel_position', ['b', 'l'][:n_coords])
++        default_ticks_position = coord_meta.get('default_ticks_position', ['bltr', 'bltr'][:n_coords])
+ 
++        for ind, pos in enumerate(default_axislabel_position):
+             self.coords[ind].set_axislabel_position(pos)
+ 
+             # If we want to auto-label axes in the future:
+@@ -381,10 +388,10 @@ class WCSAxes(Axes):
+             # else:
+             #     self.coords[ind].set_axislabel(f"{coord_meta['name'][ind]} [{coord_meta['unit'][ind]:latex}]")
+ 
+-        for ind, pos in enumerate(coord_meta.get('default_ticklabel_position', ['b', 'l'])):
++        for ind, pos in enumerate(default_ticklabel_position):
+             self.coords[ind].set_ticklabel_position(pos)
+ 
+-        for ind, pos in enumerate(coord_meta.get('default_ticks_position', ['bltr', 'bltr'])):
++        for ind, pos in enumerate(default_ticks_position):
+             self.coords[ind].set_ticks_position(pos)
+ 
+         if rcParams['axes.grid']:
+@@ -635,9 +642,11 @@ class WCSAxes(Axes):
+         if axis == 'both':
+             self.coords.grid(draw_grid=b, **kwargs)
+         elif axis == 'x':
+-            self.coords[0].grid(draw_grid=b, **kwargs)
++            if len(self.coords) > 0:
++                self.coords[0].grid(draw_grid=b, **kwargs)
+         elif axis == 'y':
+-            self.coords[1].grid(draw_grid=b, **kwargs)
++            if len(self.coords) > 1:
++                self.coords[1].grid(draw_grid=b, **kwargs)
+         else:
+             raise ValueError('axis should be one of x/y/both')
+ 

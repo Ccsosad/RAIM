@@ -1,0 +1,23 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 0981994..2fb130e 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -112,6 +112,7 @@ class TextReporter(BaseReporter):
+     name = "text"
+     extension = "txt"
+     line_format = "{path}:{line}:{column}: {msg_id}: {msg} ({symbol})"
++    # Note: end_line and end_column are available but not included in the default format
+ 
+     def __init__(self, output: TextIO | None = None) -> None:
+         super().__init__(output)
+@@ -134,7 +135,9 @@ class TextReporter(BaseReporter):
+         # Check to see if all parameters in the template are attributes of the Message
+         arguments = re.findall(r"\{(\w+?)(:.*)?\}", template)
+         for argument in arguments:
+-            if argument[0] not in MESSAGE_FIELDS:
++            # Add end_line and end_column to the recognized fields
++            valid_fields = set(MESSAGE_FIELDS) | {"end_line", "end_column"}
++            if argument[0] not in valid_fields:
+                 warnings.warn(
+                     f"Don't recognize the argument '{argument[0]}' in the --msg-template. "
+                     "Are you sure it is supported on the current version of pylint?",

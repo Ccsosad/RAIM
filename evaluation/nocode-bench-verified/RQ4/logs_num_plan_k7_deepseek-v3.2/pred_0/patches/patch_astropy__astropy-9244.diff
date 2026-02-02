@@ -1,0 +1,35 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..da9b2ae 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -108,6 +108,30 @@ class Conf(_config.ConfigNamespace):
+ 
+ conf = Conf()
+ 
++from astropy.utils.state import ScienceState
++
++class earth_orientation_table(ScienceState):
++    """Global setting for the Earth orientation table (IERS)."""
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            return value
++        from .iers import IERS
++        if not isinstance(value, IERS):
++            raise ValueError('earth_orientation_table must be an IERS instance')
++        return value
++
++    @classmethod
++    def get(cls):
++        """Get the current Earth orientation table."""
++        value = super().get()
++        if value is None:
++            from .iers import IERS_Auto
++            value = IERS_Auto.open()
++        return value
++
+ 
+ class IERSRangeError(IndexError):
+     """

@@ -1,0 +1,75 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..c4073e1 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,10 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -381,11 +381,57 @@ def join(left, right, keys=None, join_type='inner',
+     if not isinstance(right, Table):
+         right = Table(right)
+ 
++    # If keys_left and keys_right are provided, they override keys
++    temp_keys = None
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Cannot specify both "keys" and "keys_left"/"keys_right"')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both "keys_left" and "keys_right"')
++        # Create temporary tables with a common key column
++        left = left.copy(copy_data=False)
++        right = right.copy(copy_data=False)
++        # We'll create a temporary column for each key
++        # If keys_left is a string, make it a list
++        if isinstance(keys_left, str):
++            keys_left = [keys_left]
++        if isinstance(keys_right, str):
++            keys_right = [keys_right]
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same length')
++        # Generate a unique temporary column name for each key
++        temp_keys = []
++        for i in range(len(keys_left)):
++            temp_key = f'__temp_key_{i}__'
++            # Ensure the temporary column name is unique in both tables
++            j = 0
++            while temp_key in left.colnames or temp_key in right.colnames:
++                temp_key = f'__temp_key_{i}_{j}__'
++                j += 1
++                if j > 1000:
++                    raise RuntimeError('Unable to find a unique temporary column name')
++            temp_keys.append(temp_key)
++            # Add the temporary column to left and right
++            try:
++                left[temp_key] = left[keys_left[i]]
++            except (KeyError, ValueError):
++                left[temp_key] = keys_left[i]
++            try:
++                right[temp_key] = right[keys_right[i]]
++            except (KeyError, ValueError):
++                right[temp_key] = keys_right[i]
++        keys = tuple(temp_keys)
++
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+                 join_funcs)
+ 
++    # Remove temporary columns if they were added
++    if temp_keys is not None:
++        for temp_key in temp_keys:
++            del out[temp_key]
++
+     # Merge the column and table meta data. Table subclasses might override
+     # these methods for custom merge behavior.
+     _merge_table_meta(out, [left, right], metadata_conflicts=metadata_conflicts)

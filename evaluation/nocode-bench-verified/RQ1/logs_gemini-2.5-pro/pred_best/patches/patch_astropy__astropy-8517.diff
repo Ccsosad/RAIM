@@ -1,0 +1,111 @@
+diff --git a/astropy/__init__.py b/astropy/__init__.py
+index 9e1bf3a..81a9364 100644
+--- a/astropy/__init__.py
++++ b/astropy/__init__.py
+@@ -157,6 +157,9 @@ class Conf(_config.ConfigNamespace):
+ 
+ conf = Conf()
+ 
++# These need to be imported before constants and units.
++from .constants.config import physical_constants, astronomical_constants
++
+ # Create the test() function
+ from .tests.runner import TestRunner
+ test = TestRunner.make_test_runner_in(__path__[0])
+diff --git a/astropy/constants/__init__.py b/astropy/constants/__init__.py
+index b9b3036..ae50926 100644
+--- a/astropy/constants/__init__.py
++++ b/astropy/constants/__init__.py
+@@ -27,9 +27,25 @@ except ImportError:
+ from .constant import Constant, EMConstant  # noqa
+ from . import si  # noqa
+ from . import cgs  # noqa
+-from . import codata2014, iau2015  # noqa
++# The default constants modules for this version of astropy.
++from . import codata2014 as _default_codata2014
++from . import iau2015 as _default_iau2015
+ from . import utils as _utils
+ 
++# Get configuration for physical and astronomical constants
++from .config import physical_constants, astronomical_constants
++
++# Set up the chosen constants.
++if physical_constants.get() == 'codata2014':
++    codata2014 = _default_codata2014
++else:  # 'codata2010'
++    from .astropyconst13 import codata2010 as codata2014
++
++if astronomical_constants.get() == 'iau2015':
++    iau2015 = _default_iau2015
++else:  # 'iau2012'
++    from .astropyconst13 import iau2012 as iau2015
++
+ # for updating the constants module docstring
+ _lines = [
+     'The following constants are available:\n',
+@@ -91,7 +107,7 @@ def set_enabled_constants(modname):
+         with warnings.catch_warnings():
+             warnings.simplefilter('ignore')
+             # NOTE: Update this when default changes.
+-            _utils._set_c(codata2014, iau2015, module,
++            _utils._set_c(_default_codata2014, _default_iau2015, module,
+                           not_in_module_only=False, set_class=True)
+ 
+ 
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..49eb845
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,51 @@
++import sys
++
++from astropy.utils.state import ScienceState
++
++
++class PhysicalConstants(ScienceState):
++    """
++    Controls the version of physical constants used.
++    """
++    _value = 'codata2014'
++    _aliases = {'astropyconst13': 'codata2010'}
++
++    def validate(self, value):
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError("astropy.units is already imported")
++        if 'astropy.constants' in sys.modules:
++            raise RuntimeError("astropy.constants is already imported")
++
++        if value in self._aliases:
++            value = self._aliases[value]
++
++        if value not in ('codata2014', 'codata2010'):
++            raise ValueError(f"Unsupported physical constants version '{value}'")
++
++        return value
++
++
++class AstronomicalConstants(ScienceState):
++    """
++    Controls the version of astronomical constants used.
++    """
++    _value = 'iau2015'
++    _aliases = {'astropyconst13': 'iau2012'}
++
++    def validate(self, value):
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError("astropy.units is already imported")
++        if 'astropy.constants' in sys.modules:
++            raise RuntimeError("astropy.constants is already imported")
++
++        if value in self._aliases:
++            value = self._aliases[value]
++
++        if value not in ('iau2015', 'iau2012'):
++            raise ValueError(f"Unsupported astronomical constants version '{value}'")
++
++        return value
++
++
++physical_constants = PhysicalConstants()
++astronomical_constants = AstronomicalConstants()

@@ -1,0 +1,133 @@
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..adefd57 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -122,6 +122,7 @@ class FacetGrid:
+     def __init__(
+         self,
+         data: DataArray,
++        *,
+         col: Hashable | None = None,
+         row: Hashable | None = None,
+         col_wrap: int | None = None,
+@@ -278,7 +279,12 @@ class FacetGrid:
+         return self.axes[-1, :]
+ 
+     def map_dataarray(
+-        self, func: Callable, x: Hashable | None, y: Hashable | None, **kwargs: Any
++        self,
++        func: Callable,
++        *,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs: Any,
+     ) -> FacetGrid:
+         """
+         Apply a plotting function to a 2d facet's subset of the data.
+@@ -347,7 +353,12 @@ class FacetGrid:
+         return self
+ 
+     def map_plot1d(
+-        self, func: Callable, x: Hashable, y: Hashable, **kwargs: Any
++        self,
++        func: Callable,
++        *,
++        x: Hashable,
++        y: Hashable,
++        **kwargs: Any,
+     ) -> Self:
+         """
+         Apply a plotting function to a 1d facet's subset of the data.
+@@ -503,9 +514,10 @@ class FacetGrid:
+     def map_dataarray_line(
+         self,
+         func: Callable,
+-        x: Hashable | None,
+-        y: Hashable | None,
+-        hue: Hashable | None,
++        *,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        hue: Hashable | None = None,
+         add_legend: bool = True,
+         _labels=None,
+         **kwargs: Any,
+@@ -545,6 +557,7 @@ class FacetGrid:
+     def map_dataset(
+         self,
+         func: Callable,
++        *,
+         x: Hashable | None = None,
+         y: Hashable | None = None,
+         hue: Hashable | None = None,
+@@ -900,6 +913,8 @@ class FacetGrid:
+                 tick.label1.set_fontsize(fontsize)
+ 
+     def map(self, func: Callable, *args: Any, **kwargs: Any) -> FacetGrid:
++        # Note: map method is kept as is because it's a generic method
++        # that takes variable positional arguments
+         """
+         Apply a plotting function to each facet's subset of the data.
+ 
+diff --git a/xarray/plot/validation.py b/xarray/plot/validation.py
+new file mode 100644
+index 0000000..a408278
+--- /dev/null
++++ b/xarray/plot/validation.py
+@@ -0,0 +1,56 @@
++"""
++Validation utilities for plot methods.
++"""
++from __future__ import annotations
++
++from typing import TYPE_CHECKING, Any, Callable, Hashable, Literal, TypeVar
++
++import numpy as np
++
++if TYPE_CHECKING:
++    from xarray import DataArray, Dataset
++
++    from .dataarray_plot import DataArrayPlotAccessor
++    from .dataset_plot import DatasetPlotAccessor
++
++F = TypeVar("F", bound=Callable[..., Any])
++
++
++def _check_positional_args(func: F, args: tuple[Any, ...]) -> None:
++    """Check if positional arguments are used and warn if they are."""
++    if args:
++        import warnings
++
++        warnings.warn(
++            f"Positional arguments for {func.__name__} are deprecated. "
++            "Use keyword arguments instead.",
++            FutureWarning,
++            stacklevel=3,
++        )
++
++
++def _validate_plot_args(
++    darray: DataArray | None = None,
++    dataset: Dataset | None = None,
++    x: Hashable | None = None,
++    y: Hashable | None = None,
++    **kwargs: Any,
++) -> None:
++    """Validate common plotting arguments."""
++    if darray is not None and dataset is not None:
++        raise ValueError("Cannot specify both darray and dataset")
++    
++    # Add more validation as needed
++    pass
++
++
++def _ensure_keyword_only(func: F) -> F:
++    """Decorator to ensure all arguments are passed as keyword arguments."""
++    from functools import wraps
++
++    @wraps(func)
++    def wrapper(*args: Any, **kwargs: Any) -> Any:
++        _check_positional_args(func, args)
++        return func(**kwargs)
++    
++    return wrapper  # type: ignore

@@ -1,0 +1,47 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..849980f 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -136,7 +136,9 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         if _num_samples(y) == 0:
+             return np.array([])
+ 
+-        return _encode(y, uniques=self.classes_)
++        # Use check_unknown=False to handle NaN values consistently
++        # NaN values will be encoded as -1
++        return _encode(y, uniques=self.classes_, check_unknown=False)
+ 
+     def inverse_transform(self, y):
+         """Transform labels back to original encoding.
+diff --git a/sklearn/utils/validation.py b/sklearn/utils/validation.py
+index 5a024da..05374ce 100644
+--- a/sklearn/utils/validation.py
++++ b/sklearn/utils/validation.py
+@@ -1140,7 +1140,7 @@ def _check_y(y, multi_output=False, y_numeric=False, estimator=None):
+     return y
+ 
+ 
+-def column_or_1d(y, *, warn=False):
++def column_or_1d(y, *, warn=False, dtype=None):
+     """Ravel column or 1d numpy array, else raises an error.
+ 
+     Parameters
+@@ -1151,6 +1151,9 @@ def column_or_1d(y, *, warn=False):
+     warn : bool, default=False
+        To control display of warnings.
+ 
++    dtype : data-type, default=None
++       Data type for the output array. If None, the dtype is inferred.
++
+     Returns
+     -------
+     y : ndarray
+@@ -1162,7 +1165,7 @@ def column_or_1d(y, *, warn=False):
+         If `y` is not a 1D array or a 2D array with a single row or column.
+     """
+     xp, _ = get_namespace(y)
+-    y = xp.asarray(y)
++    y = xp.asarray(y, dtype=dtype)
+     shape = y.shape
+     if len(shape) == 1:
+         return _asarray_with_order(xp.reshape(y, -1), order="C", xp=xp)

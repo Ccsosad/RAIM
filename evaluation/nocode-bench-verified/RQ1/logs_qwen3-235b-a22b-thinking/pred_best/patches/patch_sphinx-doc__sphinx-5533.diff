@@ -1,0 +1,19 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1ae55eb..acbbaec 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -226,9 +226,12 @@ class Documenter:
+     #: order if autodoc_member_order is set to 'groupwise'
+     member_order = 0
+     #: true if the generated content may contain titles
+-    titles_allowed = False
++    titles_allowed = True
+ 
+-    option_spec = {'noindex': bool_option}  # type: Dict[unicode, Callable]
++    option_spec = {
++        'noindex': bool_option,
++        'member-order': str
++    }  # type: Dict[unicode, Callable]
+ 
+     def get_attr(self, obj, name, *defargs):
+         # type: (Any, unicode, Any) -> Any

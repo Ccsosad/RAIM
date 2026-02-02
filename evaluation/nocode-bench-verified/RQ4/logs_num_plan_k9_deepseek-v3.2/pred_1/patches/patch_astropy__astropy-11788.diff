@@ -1,0 +1,37 @@
+diff --git a/astropy/units/core.py b/astropy/units/core.py
+index 2b12b30..9ef9927 100644
+--- a/astropy/units/core.py
++++ b/astropy/units/core.py
+@@ -2387,6 +2387,15 @@ binary_prefixes = [
+     (['Ei'], ['exbi'], 2. ** 60)
+ ]
+ 
++def _add_milli_angstrom(namespace):
++    """
++    Add milli- prefix to Angstrom unit.
++    """
++    # Get the Angstrom unit from the namespace
++    Angstrom = namespace.get('Angstrom')
++    if Angstrom is not None:
++        _add_prefixes(Angstrom, prefixes=[(['m'], ['milli'], 0.001)], namespace=namespace)
++
+ 
+ def _add_prefixes(u, excludes=[], namespace=None, prefixes=False):
+     """
+diff --git a/astropy/units/__init__.py b/astropy/units/__init__.py
+new file mode 100644
+index 0000000..76b46b7
+--- /dev/null
++++ b/astropy/units/__init__.py
+@@ -0,0 +1,4 @@
++    _add_unit(Angstrom, namespace)
++    # Add milli- prefix to Angstrom
++    from .core import _add_prefixes
++    _add_prefixes(Angstrom, prefixes=[(['m'], ['milli'], 0.001)])
+diff --git a/astropy/units/astrophys.py b/astropy/units/astrophys.py
+new file mode 100644
+index 0000000..c606142
+--- /dev/null
++++ b/astropy/units/astrophys.py
+@@ -0,0 +1 @@
++    Angstrom = def_unit(['Angstrom', 'AA'], namespace=namespace, doc="Angstrom: 10**-10 m", prefixes=[(['m'], ['milli'], 0.001)])

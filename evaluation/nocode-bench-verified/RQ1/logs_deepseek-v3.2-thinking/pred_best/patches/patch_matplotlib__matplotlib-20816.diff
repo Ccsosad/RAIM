@@ -1,0 +1,100 @@
+diff --git a/lib/matplotlib/cbook/__init__.py b/lib/matplotlib/cbook/__init__.py
+index 5c3e852..585b26c 100644
+--- a/lib/matplotlib/cbook/__init__.py
++++ b/lib/matplotlib/cbook/__init__.py
+@@ -175,10 +175,13 @@ class CallbackRegistry:
+         self._func_cid_map = {}
+         # A hidden variable that marks cids that need to be pickled.
+         self._pickled_cids = set()
++        self._blocked_counts = {}
+ 
+     def __getstate__(self):
+-        return {
+-            **vars(self),
++        state = vars(self).copy()
++        # _blocked_counts is a runtime state and should not be pickled
++        state.pop('_blocked_counts', None)
++        state.update({
+             # In general, callbacks may not be pickled, so we just drop them,
+             # unless directed otherwise by self._pickled_cids.
+             "callbacks": {s: {cid: proxy() for cid, proxy in d.items()
+@@ -186,7 +189,8 @@ class CallbackRegistry:
+                           for s, d in self.callbacks.items()},
+             # It is simpler to reconstruct this from callbacks in __setstate__.
+             "_func_cid_map": None,
+-        }
++        })
++        return state
+ 
+     def __setstate__(self, state):
+         vars(self).update(state)
+@@ -197,6 +201,7 @@ class CallbackRegistry:
+         self._func_cid_map = {
+             s: {proxy: cid for cid, proxy in d.items()}
+             for s, d in self.callbacks.items()}
++        self._blocked_counts = {}
+ 
+     @_api.rename_parameter("3.4", "s", "signal")
+     def connect(self, signal, func):
+@@ -267,6 +272,11 @@ class CallbackRegistry:
+         All of the functions registered to receive callbacks on *s* will be
+         called with ``*args`` and ``**kwargs``.
+         """
++        # Check if we are blocking all signals or this specific signal.
++        if None in self._blocked_counts and self._blocked_counts[None] > 0:
++            return
++        if s in self._blocked_counts and self._blocked_counts[s] > 0:
++            return
+         for cid, ref in list(self.callbacks.get(s, {}).items()):
+             func = ref()
+             if func is not None:
+@@ -280,6 +290,49 @@ class CallbackRegistry:
+                     else:
+                         raise
+ 
++    def blocked(self, signal=None):
++        """
++        Return a context manager that temporarily blocks callback signals.
++
++        Parameters
++        ----------
++        signal : str, optional
++            The signal to block. If None, all signals are blocked.
++
++        Returns
++        -------
++        contextmanager
++            A context manager that, when entered, blocks the specified signal
++            (or all signals if None) and, when exited, unblocks it.
++
++        Examples
++        --------
++        >>> with callbacks.blocked():
++        ...     # All signals are blocked
++        ...     pass
++        >>> with callbacks.blocked(signal="key_press_event"):
++        ...     # Only the key_press_event signal is blocked
++        ...     pass
++        """
++        class _BlockedContext:
++            def __init__(self, registry, sig):
++                self.registry = registry
++                self.signal = sig
++
++            def __enter__(self):
++                registry = self.registry
++                signal = self.signal
++                registry._blocked_counts[signal] = registry._blocked_counts.get(signal, 0) + 1
++
++            def __exit__(self, *args):
++                registry = self.registry
++                signal = self.signal
++                registry._blocked_counts[signal] -= 1
++                if registry._blocked_counts[signal] == 0:
++                    del registry._blocked_counts[signal]
++
++        return _BlockedContext(self, signal)
++
+ 
+ class silent_list(list):
+     """

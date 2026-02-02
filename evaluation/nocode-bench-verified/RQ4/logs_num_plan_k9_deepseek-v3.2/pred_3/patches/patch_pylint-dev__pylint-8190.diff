@@ -1,0 +1,83 @@
+diff --git a/pylint/pyreverse/inspector.py b/pylint/pyreverse/inspector.py
+index 9996e5d..84fdec9 100644
+--- a/pylint/pyreverse/inspector.py
++++ b/pylint/pyreverse/inspector.py
+@@ -338,11 +338,28 @@ class OtherAssociationsHandler(AbstractAssociationHandler):
+         parent.associations_type[node.attrname] = list(current | utils.infer_node(node))
+ 
+ 
++def _is_stdlib_module(file_path: str) -> bool:
++    """Return True if the module is in the standard library."""
++    import sys
++    import os
++    # Check if the file is in the standard library directory.
++    stdlib_path = getattr(sys, 'stdlib_path', None)
++    if stdlib_path is None:
++        try:
++            import distutils.sysconfig
++            stdlib_path = distutils.sysconfig.get_python_lib(standard_lib=True)
++        except ImportError:
++            # Fallback for Python 3.12+ where distutils is removed
++            import sysconfig
++            stdlib_path = sysconfig.get_path('stdlib')
++    return file_path.startswith(stdlib_path)
++
+ def project_from_files(
+     files: list[str],
+     func_wrapper: _WrapperFuncT = _astroid_wrapper,
+     project_name: str = "no name",
+     black_list: tuple[str, ...] = constants.DEFAULT_IGNORE_LIST,
++    show_stdlib: bool = False,
+ ) -> Project:
+     """Return a Project from a list of files or modules."""
+     # build the project representation
+@@ -358,6 +375,9 @@ def project_from_files(
+         ast = func_wrapper(astroid_manager.ast_from_file, fpath)
+         if ast is None:
+             continue
++        # Skip standard library modules if show_stdlib is False
++        if not show_stdlib and _is_stdlib_module(ast.file):
++            continue
+         project.path = project.path or ast.file
+         project.add_module(ast)
+         base_name = ast.name
+@@ -371,4 +391,4 @@ def project_from_files(
+                 if ast is None or ast.name == base_name:
+                     continue
+                 project.add_module(ast)
+-    return project
++    return project
+diff --git a/pylint/pyreverse/main.py b/pylint/pyreverse/main.py
+index 946d88c..fa5fa8c 100644
+--- a/pylint/pyreverse/main.py
++++ b/pylint/pyreverse/main.py
+@@ -245,6 +245,15 @@ OPTIONS: Options = (
+             "source root is an absolute path or a path relative to the current working directory "
+             "used to determine a package namespace for modules located under the source root.",
+         },
++        (
++            "show-stdlib",
++            {
++                "short": "L",
++                "action": "store_true",
++                "default": False,
++                "help": "Include standard library modules in the diagram.",
++            },
++        ),
+     ),
+ )
+ 
+@@ -292,6 +301,7 @@ class Run(_ArgumentsManager, _ArgumentsProvider):
+                 args,
+                 project_name=self.config.project,
+                 black_list=self.config.ignore_list,
++                show_stdlib=self.config.show_stdlib,
+             )
+             linker = Linker(project, tag=True)
+             handler = DiadefsHandler(self.config)
+@@ -301,4 +311,4 @@ class Run(_ArgumentsManager, _ArgumentsProvider):
+ 
+ 
+ if __name__ == "__main__":
+-    Run(sys.argv[1:])
++    Run(sys.argv[1:])

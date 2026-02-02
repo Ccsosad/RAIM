@@ -1,0 +1,80 @@
+diff --git a/sphinx/config.py b/sphinx/config.py
+index 654fbeb..d19371e 100644
+--- a/sphinx/config.py
++++ b/sphinx/config.py
+@@ -149,6 +149,7 @@ class Config:
+         'tls_verify': (True, 'env', []),
+         'tls_cacerts': (None, 'env', []),
+         'user_agent': (None, 'env', [str]),
++        'linkcheck_auth': ([], 'env', []),
+         'smartquotes': (True, 'env', []),
+         'smartquotes_action': ('qDe', 'env', []),
+         'smartquotes_excludes': ({'languages': ['ja'],
+diff --git a/sphinx/util/requests.py b/sphinx/util/requests.py
+index 09c5895..f8cb740 100644
+--- a/sphinx/util/requests.py
++++ b/sphinx/util/requests.py
+@@ -85,6 +85,39 @@ def ignore_insecure_warning(**kwargs) -> Generator[None, None, None]:
+         yield
+ 
+ 
++def _get_auth_info(url: str, config: Config) -> Optional[Any]:
++    """Get authentication information for a specific URL.
++    
++    Returns the first matching auth_info from linkcheck_auth configuration.
++    """
++    import re
++    auth_list = getattr(config, 'linkcheck_auth', [])
++    for pattern, auth_info in auth_list:
++        try:
++            if re.search(pattern, url):
++                return auth_info
++        except re.error:
++            # Invalid regex pattern, skip it
++            continue
++    return None
++
++
++def _get_auth_info(url: str, config: Config) -> Optional[Any]:
++    """Get authentication information for a specific URL.
++    
++    Returns the first matching auth_info from linkcheck_auth configuration.
++    """
++    auth_list = getattr(config, 'linkcheck_auth', [])
++    for pattern, auth_info in auth_list:
++        try:
++            if re.search(pattern, url):
++                return auth_info
++        except re.error:
++            # Invalid regex pattern, skip it
++            continue
++    return None
++
++
+ def _get_tls_cacert(url: str, config: Config) -> Union[str, bool]:
+     """Get additional CA cert for a specific URL.
+ 
+@@ -131,7 +164,7 @@ def get(url: str, **kwargs) -> requests.Response:
+         headers.setdefault('User-Agent', useragent_header[0][1])
+ 
+     with ignore_insecure_warning(**kwargs):
+-        return requests.get(url, **kwargs)
++        return requests.head(url, **kwargs)
+ 
+ 
+ def head(url: str, **kwargs) -> requests.Response:
+@@ -143,8 +176,13 @@ def head(url: str, **kwargs) -> requests.Response:
+     if config:
+         kwargs.setdefault('verify', _get_tls_cacert(url, config))
+         headers.setdefault('User-Agent', _get_user_agent(config))
++        # Get authentication info if not already provided
++        if 'auth' not in kwargs:
++            auth_info = _get_auth_info(url, config)
++            if auth_info is not None:
++                kwargs['auth'] = auth_info
+     else:
+         headers.setdefault('User-Agent', useragent_header[0][1])
+ 
+     with ignore_insecure_warning(**kwargs):
+-        return requests.get(url, **kwargs)
++        return requests.head(url, **kwargs)

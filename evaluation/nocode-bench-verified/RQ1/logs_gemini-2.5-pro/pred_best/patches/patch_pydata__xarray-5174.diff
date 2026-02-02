@@ -1,0 +1,25 @@
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index f371bcd..9f48819 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -868,8 +868,18 @@ class Variable(AbstractArray, NdimSizeLenMixin, VariableArithmetic):
+             value = value[(len(dims) - value.ndim) * (np.newaxis,) + (Ellipsis,)]
+             value = duck_array_ops.moveaxis(value, new_order, range(len(new_order)))
+ 
+-        indexable = as_indexable(self._data)
+-        indexable[index_tuple] = value
++        if is_duck_dask_array(self._data):
++            import dask
++            from distutils.version import LooseVersion
++
++            if LooseVersion(dask.__version__) < "2.0.0":
++                raise TypeError("item assignment does not work with dask arrays")
++            from dask.array import setitem
++
++            self._data = setitem(self._data, index_tuple, value)
++        else:
++            indexable = as_indexable(self._data)
++            indexable[index_tuple] = value
+ 
+     @property
+     def attrs(self) -> Dict[Hashable, Any]:

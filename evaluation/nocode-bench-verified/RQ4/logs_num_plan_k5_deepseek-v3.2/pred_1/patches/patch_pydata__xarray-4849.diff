@@ -1,0 +1,405 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 17fe6af..314cff5 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3788,6 +3788,67 @@ class DataArray(AbstractArray, DataWithCoords):
+             dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov
+         )
+ 
++    def curvefit(
++        self,
++        coords: Union[Hashable, DataArray, Sequence[DataArray], Mapping[Hashable, DataArray]],
++        func: Callable,
++        reduce_dims: Optional[Union[Hashable, Sequence[Hashable]]] = None,
++        skipna: bool = True,
++        p0: Optional[Union[Sequence[float], Mapping[str, float]]] = None,
++        bounds: Optional[Union[Tuple, Mapping[str, Tuple]]] = None,
++        param_names: Optional[Sequence[str]] = None,
++        **kwargs,
++    ) -> "Dataset":
++        """
++        Curve fitting using scipy.optimize.curve_fit.
++
++        Parameters
++        ----------
++        coords : hashable, DataArray, sequence of DataArray, or mapping
++            The independent variable(s) for the curve fitting.
++            If a hashable, it is interpreted as a coordinate name in this DataArray.
++        func : callable
++            The model function, f(x, ...). It must take the independent variable
++            (coords) as the first argument and the parameters to fit as separate
++            remaining arguments.
++        reduce_dims : hashable or sequence of hashable, optional
++            Dimensions to reduce. If not provided, all dimensions are reduced.
++        skipna : bool, default: True
++            Whether to skip missing values when fitting.
++        p0 : sequence or mapping, optional
++            Initial guess for the parameters.
++        bounds : tuple or mapping, optional
++            Lower and upper bounds on parameters.
++        param_names : sequence of str, optional
++            Names of the parameters. If not provided, they are inferred from the
++            function signature.
++        **kwargs
++            Additional keyword arguments passed to scipy.optimize.curve_fit.
++
++        Returns
++        -------
++        result : Dataset
++            A dataset containing the fitted parameters.
++
++        See Also
++        --------
++        scipy.optimize.curve_fit
++        DataArray.polyfit
++        """
++        from .fitting import _curvefit
++
++        return _curvefit(
++            self,
++            coords=coords,
++            func=func,
++            reduce_dims=reduce_dims,
++            skipna=skipna,
++            p0=p0,
++            bounds=bounds,
++            param_names=param_names,
++            **kwargs,
++        )
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,
+@@ -4424,4 +4485,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/fitting.py b/xarray/core/fitting.py
+new file mode 100644
+index 0000000..5f2bf8b
+--- /dev/null
++++ b/xarray/core/fitting.py
+@@ -0,0 +1,321 @@
++"""
++Curve fitting for xarray objects using scipy.optimize.curve_fit.
++"""
++
++import warnings
++from typing import Any, Callable, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple, Union
++
++import numpy as np
++import pandas as pd
++from scipy.optimize import curve_fit
++
++from . import duck_array_ops
++from .common import _contains_datetime_like_objects
++from .dataarray import DataArray
++from .dataset import Dataset
++from .duck_array_ops import array_notnull_equiv
++from .utils import is_duck_dask_array
++
++
++def _get_func_args(
++    func: Callable,
++    coords: Union[DataArray, Sequence[DataArray], Mapping[Hashable, DataArray]],
++    param_names: Optional[Sequence[str]] = None,
++) -> Tuple[Tuple, Dict]:
++    """
++    Prepare arguments for the curve fitting function.
++
++    Parameters
++    ----------
++    func : callable
++        The model function, f(x, ...). It must take the independent variable
++        (coords) as the first argument and the parameters to fit as separate
++        remaining arguments.
++    coords : DataArray, sequence of DataArray, or mapping
++        The independent variable(s) for the curve fitting.
++    param_names : sequence of str, optional
++        Names of the parameters. If not provided, they are inferred from the
++        function signature.
++
++    Returns
++    -------
++    args : tuple
++        The arguments to pass to the curve fitting function.
++    kwargs : dict
++        The keyword arguments to pass to the curve fitting function.
++    """
++    # If coords is a single DataArray, wrap it in a tuple.
++    if isinstance(coords, DataArray):
++        coords = (coords,)
++    elif isinstance(coords, Mapping):
++        coords = tuple(coords.values())
++    elif isinstance(coords, Sequence):
++        coords = tuple(coords)
++    else:
++        raise TypeError("coords must be a DataArray, sequence of DataArray, or mapping")
++
++    # Determine parameter names from function signature if not provided.
++    if param_names is None:
++        import inspect
++        sig = inspect.signature(func)
++        param_names = list(sig.parameters.keys())[1:]  # skip the first argument (coords)
++        # If there are *args, we cannot infer names.
++        if any(param.kind == param.VAR_POSITIONAL for param in sig.parameters.values()):
++            raise ValueError(
++                "Cannot infer parameter names for function with *args. "
++                "Please provide param_names."
++            )
++
++    return coords, {"param_names": param_names}
++
++
++def _initialize_curvefit_params(
++    param_names: Sequence[str],
++    p0: Optional[Union[Sequence[float], Mapping[str, float]]] = None,
++    bounds: Optional[Union[Tuple, Mapping[str, Tuple]]] = None,
++) -> Tuple[np.ndarray, Tuple, Tuple]:
++    """
++    Initialize parameters and bounds for curve_fit.
++
++    Parameters
++    ----------
++    param_names : sequence of str
++        Names of the parameters.
++    p0 : sequence or mapping, optional
++        Initial guess for the parameters.
++    bounds : tuple or mapping, optional
++        Lower and upper bounds on parameters.
++
++    Returns
++    -------
++    p0_array : np.ndarray
++        Initial guess as array.
++    bounds_lower : tuple
++        Lower bounds.
++    bounds_upper : tuple
++        Upper bounds.
++    """
++    n_params = len(param_names)
++
++    # Default initial guess is 1.0 for all parameters.
++    if p0 is None:
++        p0_array = np.ones(n_params, dtype=np.float64)
++    elif isinstance(p0, Mapping):
++        p0_array = np.array([p0.get(name, 1.0) for name in param_names], dtype=np.float64)
++    else:
++        p0_array = np.asarray(p0, dtype=np.float64)
++        if p0_array.shape != (n_params,):
++            raise ValueError(f"p0 must have length {n_params}")
++
++    # Default bounds are (-inf, inf) for each parameter.
++    inf = np.inf
++    bounds_defaults = (-inf, inf)
++    if bounds is None:
++        bounds_lower = tuple(-inf for _ in range(n_params))
++        bounds_upper = tuple(inf for _ in range(n_params))
++    elif isinstance(bounds, Mapping):
++        bounds_lower = []
++        bounds_upper = []
++        for name in param_names:
++            if name in bounds:
++                lower, upper = bounds[name]
++            else:
++                lower, upper = bounds_defaults
++            bounds_lower.append(lower)
++            bounds_upper.append(upper)
++        bounds_lower = tuple(bounds_lower)
++        bounds_upper = tuple(bounds_upper)
++    else:
++        # bounds is a tuple (lower, upper)
++        lower, upper = bounds
++        if isinstance(lower, (int, float)):
++            lower = (lower,) * n_params
++        if isinstance(upper, (int, float)):
++            upper = (upper,) * n_params
++        bounds_lower = lower
++        bounds_upper = upper
++
++    return p0_array, bounds_lower, bounds_upper
++
++
++def _curvefit(
++    obj: Union[DataArray, Dataset],
++    coords: Union[Hashable, DataArray, Sequence[DataArray], Mapping[Hashable, DataArray]],
++    func: Callable,
++    reduce_dims: Optional[Union[Hashable, Sequence[Hashable]]] = None,
++    skipna: bool = True,
++    p0: Optional[Union[Sequence[float], Mapping[str, float]]] = None,
++    bounds: Optional[Union[Tuple, Mapping[str, Tuple]]] = None,
++    param_names: Optional[Sequence[str]] = None,
++    **kwargs,
++) -> Dataset:
++    """
++    Perform curve fitting using scipy.optimize.curve_fit.
++
++    This is a helper function for DataArray.curvefit and Dataset.curvefit.
++
++    Parameters
++    ----------
++    obj : DataArray or Dataset
++        The object to fit.
++    coords : hashable, DataArray, sequence of DataArray, or mapping
++        The independent variable(s) for the curve fitting.
++        If a hashable, it is interpreted as a coordinate name in the object.
++    func : callable
++        The model function, f(x, ...). It must take the independent variable
++        (coords) as the first argument and the parameters to fit as separate
++        remaining arguments.
++    reduce_dims : hashable or sequence of hashable, optional
++        Dimensions to reduce. If not provided, all dimensions are reduced.
++    skipna : bool, default: True
++        Whether to skip missing values when fitting.
++    p0 : sequence or mapping, optional
++        Initial guess for the parameters.
++    bounds : tuple or mapping, optional
++        Lower and upper bounds on parameters.
++    param_names : sequence of str, optional
++        Names of the parameters. If not provided, they are inferred from the
++        function signature.
++    **kwargs
++        Additional keyword arguments passed to scipy.optimize.curve_fit.
++
++    Returns
++    -------
++    result : Dataset
++        A dataset containing the fitted parameters and optionally the covariance
++        matrix.
++    """
++    # Import scipy.optimize here to avoid requiring scipy at import time.
++    from scipy.optimize import curve_fit
++
++    # If coords is a hashable (coordinate name), get the DataArray.
++    if isinstance(coords, Hashable) and not isinstance(coords, DataArray):
++        coords = obj.coords[coords]
++
++    # Prepare the independent variable(s).
++    coords_tuple, func_args = _get_func_args(func, coords, param_names)
++    param_names = func_args["param_names"]
++
++    # Determine dimensions to reduce.
++    if reduce_dims is None:
++        reduce_dims = list(obj.dims)
++    elif isinstance(reduce_dims, Hashable):
++        reduce_dims = [reduce_dims]
++
++    # We will iterate over the remaining dimensions.
++    keep_dims = [dim for dim in obj.dims if dim not in reduce_dims]
++
++    # Prepare the data for fitting.
++    # We'll stack the reduce_dims into a single dimension for iteration.
++    if keep_dims:
++        # Reshape the data to (keep_dims, reduce_dims)
++        # We'll use stack to combine reduce_dims.
++        stacked = obj.stack(_stacked_dim=reduce_dims)
++        # Also stack the coords.
++        stacked_coords = []
++        for c in coords_tuple:
++            stacked_coords.append(c.stack(_stacked_dim=reduce_dims))
++    else:
++        # No dimensions to keep: we have a single curve.
++        stacked = obj.expand_dims(_stacked_dim=[0])
++        stacked_coords = [c.expand_dims(_stacked_dim=[0]) for c in coords_tuple]
++
++    # Initialize the parameter arrays.
++    n_params = len(param_names)
++    param_arrays = []
++    for i in range(n_params):
++        param_arrays.append(np.full(stacked.shape, np.nan, dtype=np.float64))
++
++    # Also store the covariance if requested.
++    calc_covariance = kwargs.get("return_covariance", False)
++    if calc_covariance:
++        cov_arrays = []
++        for i in range(n_params):
++            cov_arrays.append(np.full((n_params,) + stacked.shape, np.nan, dtype=np.float64))
++
++    # Iterate over the stacked dimension.
++    for idx in range(stacked.shape[0]):
++        # Get the data for this curve.
++        ydata = stacked.isel(_stacked_dim=idx).values
++        # Get the independent variables for this curve.
++        xdata = [c.isel(_stacked_dim=idx).values for c in stacked_coords]
++
++        # Skip if all NaN and skipna is True.
++        if skipna and np.all(np.isnan(ydata)):
++            continue
++
++        # Remove NaN values if skipna is True.
++        if skipna:
++            mask = ~np.isnan(ydata)
++            ydata = ydata[mask]
++            xdata = [x[mask] for x in xdata]
++
++        # Check if there are enough data points.
++        if len(ydata) < n_params:
++            continue
++
++        # Prepare initial guess and bounds.
++        p0_array, bounds_lower, bounds_upper = _initialize_curvefit_params(
++            param_names, p0, bounds
++        )
++
++        # Perform the curve fit.
++        try:
++            popt, pcov = curve_fit(
++                func,
++                xdata,
++                ydata,
++                p0=p0_array,
++                bounds=(bounds_lower, bounds_upper),
++                **kwargs,
++            )
++        except (RuntimeError, ValueError):
++            # If the fit fails, leave the parameters as NaN.
++            popt = np.full(n_params, np.nan)
++            pcov = np.full((n_params, n_params), np.nan)
++
++        # Store the fitted parameters.
++        for i in range(n_params):
++            param_arrays[i][idx] = popt[i]
++
++        # Store the covariance if requested.
++        if calc_covariance:
++            for i in range(n_params):
++                for j in range(n_params):
++                    cov_arrays[i][j, idx] = pcov[i, j]
++
++    # Reshape the parameter arrays back to the original dimensions.
++    result_vars = {}
++    for i, name in enumerate(param_names):
++        param_array = param_arrays[i]
++        if keep_dims:
++            # Unstack the stacked dimension.
++            param_da = DataArray(
++                param_array.reshape(stacked.shape),
++                dims=stacked.dims,
++                coords=stacked.coords,
++            ).unstack("_stacked_dim")
++        else:
++            # We have a single value.
++            param_da = DataArray(param_array[0])
++        result_vars[name] = param_da
++
++    # Similarly for covariance if requested.
++    if calc_covariance:
++        for i in range(n_params):
++            for j in range(n_params):
++                name = f"cov_{param_names[i]}_{param_names[j]}"
++                cov_array = cov_arrays[i][j]
++                if keep_dims:
++                    cov_da = DataArray(
++                        cov_array.reshape(stacked.shape),
++                        dims=stacked.dims,
++                        coords=stacked.coords,
++                    ).unstack("_stacked_dim")
++                else:
++                    cov_da = DataArray(cov_array[0])
++                result_vars[name] = cov_da
++
++    # Create a dataset with the results.
++    result = Dataset(result_vars)
++    return result

@@ -1,0 +1,13 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..9f431c2 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -87,7 +87,7 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+                 cats = _unique(Xi)
+             else:
+                 cats = np.array(self.categories[i], dtype=Xi.dtype)
+-                if Xi.dtype != object:
++                if cats.dtype.kind in ('i', 'u'):
+                     if not np.all(np.sort(cats) == cats):
+                         raise ValueError("Unsorted categories are not "
+                                          "supported for numerical categories")

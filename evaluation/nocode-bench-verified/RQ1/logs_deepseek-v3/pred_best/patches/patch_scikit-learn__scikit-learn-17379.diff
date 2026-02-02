@@ -1,0 +1,33 @@
+diff --git a/sklearn/isotonic.py b/sklearn/isotonic.py
+index 6d02e92..ccdd695 100644
+--- a/sklearn/isotonic.py
++++ b/sklearn/isotonic.py
+@@ -295,7 +295,7 @@ class IsotonicRegression(RegressorMixin, TransformerMixin, BaseEstimator):
+ 
+         Parameters
+         ----------
+-        X : array-like of shape (n_samples,)
++        X : array-like of shape (n_samples,) or (n_samples, 1)
+             Training data.
+ 
+         y : array-like of shape (n_samples,)
+@@ -318,6 +318,10 @@ class IsotonicRegression(RegressorMixin, TransformerMixin, BaseEstimator):
+         check_params = dict(accept_sparse=False, ensure_2d=False)
+         X = check_array(X, dtype=[np.float64, np.float32], **check_params)
+         y = check_array(y, dtype=X.dtype, **check_params)
++        
++        # Handle 2D array with single feature
++        if X.ndim == 2 and X.shape[1] == 1:
++            X = X.ravel()
+         check_consistent_length(X, y, sample_weight)
+ 
+         # Transform y by running the isotonic regression algorithm and
+@@ -339,7 +343,7 @@ class IsotonicRegression(RegressorMixin, TransformerMixin, BaseEstimator):
+ 
+         Parameters
+         ----------
+-        T : array-like of shape (n_samples,)
++        T : array-like of shape (n_samples,) or (n_samples, 1)
+             Data to transform.
+ 
+         Returns

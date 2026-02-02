@@ -1,0 +1,19 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 21c0562..aa538d4 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -2144,6 +2144,14 @@ def pairplot(
+ 
+     grid.tight_layout()
+ 
++    # Fix for corner plot with no diagonal: ensure top-left y-axis label is visible
++    if corner and diag_kind is None and hasattr(grid, 'axes') and grid.axes is not None:
++        try:
++            ax = grid.axes[0, 0]
++            ax.yaxis.set_visible(True)
++        except (IndexError, AttributeError):
++            pass
++
+     return grid
+ 
+ 

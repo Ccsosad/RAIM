@@ -1,0 +1,320 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..070d417 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -27,7 +27,7 @@ from ._docstrings import (
+ )
+ 
+ 
+-__all__ = ["distplot", "kdeplot", "rugplot"]
++__all__ = ["distplot", "kdeplot", "rugplot", "histplot"]
+ 
+ 
+ _param_docs = DocstringComponents.from_nested_components(
+@@ -82,7 +82,90 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def plot_univariate(
++        self,
++        binwidth=None,
++        bins=None,
++        binrange=None,
++        discrete=False,
++        cumulative=False,
++        common_bins=True,
++        common_norm=True,
++        stat="count",
++        multiple="layer",
++        element="bars",
++        fill=True,
++        shrink=1,
++        kde=False,
++        kde_kws=None,
++        line_kws=None,
++        legend=True,
++        ax=None,
++    ):
++        """Draw a univariate histogram."""
++        # This is a placeholder for the actual implementation.
++        # We'll just draw a simple histogram for now.
++        data_variable = {"x", "y"}.intersection(self.variables).pop()
++        data = self.plot_data[data_variable]
++        data = remove_na(data)
++
++        # Compute histogram
++        histogram = Histogram(binwidth=binwidth, bins=bins, binrange=binrange)
++        count, bin_edges = histogram(data)
++
++        # Plot
++        if data_variable == "x":
++            ax.bar(bin_edges[:-1], count, width=np.diff(bin_edges), align='edge')
++        else:
++            ax.barh(bin_edges[:-1], count, height=np.diff(bin_edges), align='edge')
++
++        self._add_axis_labels(ax)
++
++    def plot_bivariate(
++        self,
++        binwidth=None,
++        bins=None,
++        binrange=None,
++        discrete=None,
++        cumulative=False,
++        common_bins=True,
++        common_norm=True,
++        stat="count",
++        multiple="layer",
++        element="bars",
++        fill=True,
++        shrink=1,
++        kde=False,
++        kde_kws=None,
++        line_kws=None,
++        legend=True,
++        ax=None,
++    ):
++        """Draw a bivariate histogram."""
++        # This is a placeholder for the actual implementation.
++        x = remove_na(self.plot_data["x"])
++        y = remove_na(self.plot_data["y"])
++
++        # Compute 2D histogram
++        if isinstance(bins, tuple):
++            x_bins, y_bins = bins
++        else:
++            x_bins = y_bins = bins
++
++        x_histogram = Histogram(binwidth=binwidth, bins=x_bins, binrange=binrange)
++        y_histogram = Histogram(binwidth=binwidth, bins=y_bins, binrange=binrange)
++
++        x_edges = x_histogram.define_bin_edges(x)
++        y_edges = y_histogram.define_bin_edges(y)
++
++        count, _, _ = np.histogram2d(x, y, bins=[x_edges, y_edges])
++
++        # Plot as heatmap
++        ax.pcolormesh(x_edges, y_edges, count.T)
++
++        self._add_axis_labels(ax)
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):
+@@ -1083,6 +1166,214 @@ def _freedman_diaconis_bins(a):
+         return int(np.ceil((a.max() - a.min()) / h))
+ 
+ 
++class Histogram:
++    """Compute histogram bins and counts."""
++    def __init__(self, binwidth=None, bins=None, binrange=None):
++        self.binwidth = binwidth
++        self.bins = bins
++        self.binrange = binrange
++
++    def define_bin_edges(self, data, weights=None):
++        """Compute bin edges for given data."""
++        if self.binrange is None:
++            start = data.min()
++            stop = data.max()
++        else:
++            start, stop = self.binrange
++
++        if self.bins is not None:
++            if isinstance(self.bins, str):
++                # Use a named method to compute bins
++                if self.bins == 'auto':
++                    # Use FD rule
++                    bins = _freedman_diaconis_bins(data)
++                else:
++                    raise ValueError(f"Unknown bin method: {self.bins}")
++            else:
++                bins = self.bins
++            bin_edges = np.linspace(start, stop, bins + 1)
++        elif self.binwidth is not None:
++            bin_edges = np.arange(start, stop + self.binwidth, self.binwidth)
++        else:
++            # Default to FD rule
++            bins = _freedman_diaconis_bins(data)
++            bin_edges = np.linspace(start, stop, bins + 1)
++
++        return bin_edges
++
++    def __call__(self, data, weights=None):
++        """Compute histogram counts and edges."""
++        bin_edges = self.define_bin_edges(data, weights)
++        count, _ = np.histogram(data, bins=bin_edges, weights=weights)
++        return count, bin_edges
++
++
++@_deprecate_positional_args
++def histplot(
++    x=None,
++    y=None,
++    hue=None,
++    data=None,
++    weights=None,
++    stat="count",
++    bins=None,
++    binwidth=None,
++    binrange=None,
++    discrete=False,
++    cumulative=False,
++    common_bins=True,
++    common_norm=True,
++    multiple="layer",
++    element="bars",
++    fill=True,
++    shrink=1,
++    kde=False,
++    kde_kws=None,
++    line_kws=None,
++    color=None,
++    palette=None,
++    hue_order=None,
++    hue_norm=None,
++    log_scale=None,
++    legend=True,
++    ax=None,
++    **kwargs,
++):
++    """Plot univariate or bivariate histograms.
++
++    This function provides a high-level interface to plot histograms, including
++    support for hue mapping, stacking, and normalization.
++
++    Parameters
++    ----------
++    x, y : vectors or keys in `data`
++        Variables to plot on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    data : DataFrame, array, or list of arrays
++        Input data structure.
++    weights : vector or key in `data`
++        Weight variable for weighted histograms.
++    stat : {"count", "frequency", "density", "probability"}
++        Statistical transformation to use on the data.
++    bins : int, tuple, or str
++        Specification for the binning.
++    binwidth : float or tuple
++        Width of each bin.
++    binrange : pair of floats or pair of pairs
++        Lowest and highest value for bins.
++    discrete : bool or pair of bools
++        If True, treat data as discrete.
++    cumulative : bool
++        If True, plot a cumulative histogram.
++    common_bins : bool
++        If True, use the same bins for all hue groups.
++    common_norm : bool
++        If True, normalize across all hue groups.
++    multiple : {"layer", "stack", "fill", "dodge"}
++    element : {"bars", "step", "poly"}
++    fill : bool
++        If True, fill in the area under the histogram.
++    shrink : float
++        Scale the width of each bar.
++    kde : bool
++        If True, fit and plot a kernel density estimate.
++    kde_kws : dict
++        Keyword arguments for `kdeplot`.
++    line_kws : dict
++        Keyword arguments for line elements.
++    color : matplotlib color
++        Single color for the histogram.
++    palette : string, list, dict, or matplotlib colormap
++        Colors to use for hue mapping.
++    hue_order : list
++        Order for hue levels.
++    hue_norm : tuple or Normalize object
++        Normalization for hue mapping.
++    log_scale : bool or number, or pair of bools or numbers
++        Set a log scale on the data axis.
++    legend : bool
++        If True, add a legend.
++    ax : matplotlib Axes
++        Axes object to draw the plot onto.
++    kwargs : key, value mappings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    ax : matplotlib Axes
++        Returns the Axes object with the plot for further tweaking.
++
++    See Also
++    --------
++    kdeplot : Plot a kernel density estimate.
++    distplot : Plot a univariate distribution with histogram and kde.
++
++    Examples
++    --------
++    .. include:: ../docstrings/histplot.rst
++
++    """
++    # This is a placeholder for the actual implementation.
++    # We'll just call the plotter for now.
++
++    p = _HistPlotter(
++        data=data,
++        variables=_HistPlotter.get_semantics(locals()),
++    )
++
++    p.map_hue(palette=palette, order=hue_order, norm=hue_norm)
++
++    if ax is None:
++        ax = plt.gca()
++
++    # Determine if univariate or bivariate
++    univariate = bool({"x", "y"} - set(p.variables))
++
++    if univariate:
++        p.plot_univariate(
++            binwidth=binwidth,
++            bins=bins,
++            binrange=binrange,
++            discrete=discrete,
++            cumulative=cumulative,
++            common_bins=common_bins,
++            common_norm=common_norm,
++            stat=stat,
++            multiple=multiple,
++            element=element,
++            fill=fill,
++            shrink=shrink,
++            kde=kde,
++            kde_kws=kde_kws,
++            line_kws=line_kws,
++            legend=legend,
++            ax=ax,
++        )
++    else:
++        p.plot_bivariate(
++            binwidth=binwidth,
++            bins=bins,
++            binrange=binrange,
++            discrete=discrete,
++            cumulative=cumulative,
++            common_bins=common_bins,
++            common_norm=common_norm,
++            stat=stat,
++            multiple=multiple,
++            element=element,
++            fill=fill,
++            shrink=shrink,
++            kde=kde,
++            kde_kws=kde_kws,
++            line_kws=line_kws,
++            legend=legend,
++            ax=ax,
++        )
++
++    return ax
++
++
+ @_deprecate_positional_args
+ def distplot(
+     *,

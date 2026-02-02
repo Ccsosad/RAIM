@@ -1,0 +1,28 @@
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 836039e..a748778 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -2676,6 +2676,17 @@ def update_leap_seconds(files=None):
+         Number of items updated.
+ 
+     """
++    # Check if the leap second table is already up to date.
++    # If the ERFA table is not expired, then we don't need to update.
++    from astropy.utils.iers import LeapSeconds
++    today = LeapSeconds._today()
++    expires = Time('{0.year:04d}-{0.month:02d}-{0.day:02d}'
++                   .format(erfa.leap_seconds.expires),
++                   scale='tai')
++    if expires > today:
++        # The ERFA table is still valid, so no update is needed.
++        return 0
++
+     try:
+         from astropy.utils import iers
+ 
+@@ -2685,4 +2696,4 @@ def update_leap_seconds(files=None):
+     except Exception as exc:
+         warn("leap-second auto-update failed due to the following "
+              f"exception: {exc!r}", AstropyWarning)
+-        return 0
++        return 0

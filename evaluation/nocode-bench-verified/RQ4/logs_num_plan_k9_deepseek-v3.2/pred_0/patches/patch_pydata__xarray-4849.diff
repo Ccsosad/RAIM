@@ -1,0 +1,46 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 17fe6af..4b7f221 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1,3 +1,4 @@
++
+ import datetime
+ import functools
+ import warnings
+@@ -3788,6 +3789,36 @@ class DataArray(AbstractArray, DataWithCoords):
+             dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov
+         )
+ 
++    def curvefit(self, coords, func, reduce_dims=None, **kwargs):
++        """
++        Fit a function to the data array along the given dimensions.
++
++        Parameters
++        ----------
++        coords : DataArray or list of DataArray
++            The independent variable(s) for the fitting.
++        func : callable
++            The model function to fit. It must take the independent variable(s)
++            as the first argument(s) and the parameters to fit as separate
++            remaining arguments.
++        reduce_dims : str or list of str, optional
++            Dimensions to reduce by fitting. If None, fit over all dimensions.
++        **kwargs
++            Additional keyword arguments to pass to scipy.optimize.curve_fit.
++
++        Returns
++        -------
++        result : Dataset
++            A dataset containing the fitted parameters.
++
++        See Also
++        --------
++        Dataset.curvefit
++        """
++        ds = self._to_temp_dataset()
++        result = ds.curvefit(coords=coords, func=func, reduce_dims=reduce_dims, **kwargs)
++        return result
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,

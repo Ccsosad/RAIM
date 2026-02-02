@@ -1,0 +1,58 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..9c54f20 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,11 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None,
++         keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -375,6 +376,28 @@ def join(left, right, keys=None, join_type='inner',
+         New table containing the result of the join operation.
+     """
+ 
++    # Check for new keys_left/keys_right
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Cannot specify both "keys" and "keys_left"/"keys_right"')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both "keys_left" and "keys_right"')
++        # Create temporary tables with a common key column
++        left = left.copy(copy_data=False)
++        right = right.copy(copy_data=False)
++        # Create a temporary column name that does not conflict
++        temp_key = '__temp_key__'
++        while temp_key in left.colnames or temp_key in right.colnames:
++            temp_key = '_' + temp_key
++        # Add the temporary column to both tables
++        left[temp_key] = keys_left
++        right[temp_key] = keys_right
++        keys = temp_key
++        # We will remove the temporary column after the join
++        remove_temp = True
++    else:
++        remove_temp = False
++
+     # Try converting inputs to Table as needed
+     if not isinstance(left, Table):
+         left = Table(left)
+@@ -386,6 +409,10 @@ def join(left, right, keys=None, join_type='inner',
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+                 join_funcs)
+ 
++    # Remove the temporary column if it was added
++    if remove_temp:
++        del out[temp_key]
++
+     # Merge the column and table meta data. Table subclasses might override
+     # these methods for custom merge behavior.
+     _merge_table_meta(out, [left, right], metadata_conflicts=metadata_conflicts)

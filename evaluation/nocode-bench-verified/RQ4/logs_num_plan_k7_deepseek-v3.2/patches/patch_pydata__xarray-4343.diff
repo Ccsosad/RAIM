@@ -1,0 +1,146 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..9751f1b 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -742,6 +742,10 @@ class CFTimeIndex(pd.Index):
+         return self._round_via_method(freq, _round_to_nearest_half_even)
+ 
+ 
++def _parse_iso8601_with_reso(date_type, datetime_str):
++    from .cftime_parsing import parse_iso8601_like
++    return parse_iso8601_like(datetime_str)
++
+ def _parse_iso8601_without_reso(date_type, datetime_str):
+     date, _ = _parse_iso8601_with_reso(date_type, datetime_str)
+     return date
+diff --git a/xarray/coding/cftime_parsing.py b/xarray/coding/cftime_parsing.py
+new file mode 100644
+index 0000000..95f8b7b
+--- /dev/null
++++ b/xarray/coding/cftime_parsing.py
+@@ -0,0 +1,125 @@
++import re
++from typing import Tuple
++
++__all__ = ["parse_iso8601_like"]
++
++# Regular expressions for the three formats
++# 1. Basic ISO8601: YYYYMMDDhhmmss
++_BASIC_ISO8601_REGEX = re.compile(
++    r"""
++    ^
++    (?P<year>\d{4})                              # year
++    (?:(?P<month>\d{2})                          # month (optional)
++        (?:(?P<day>\d{2})                        # day (optional)
++            (?:(?P<hour>\d{2})                   # hour (optional)
++                (?:(?P<minute>\d{2})             # minute (optional)
++                    (?:(?P<second>\d{2})         # second (optional)
++                        (?:(?P<microsecond>\d{1,6})?)?)?
++                )?
++            )?
++        )?
++    )?
++    $
++    """,
++    re.VERBOSE,
++)
++
++# 2. Extended ISO8601: YYYY-MM-DDThh:mm:ss
++_EXTENDED_ISO8601_REGEX = re.compile(
++    r"""
++    ^
++    (?P<year>\d{4})                              # year
++    (?:(?:-(?P<month>\d{2})                      # month (optional)
++        (?:(?:-(?P<day>\d{2})                    # day (optional)
++            (?:(?:T(?P<hour>\d{2})               # hour (optional)
++                (?::(?P<minute>\d{2})            # minute (optional)
++                    (?::(?P<second>\d{2})        # second (optional)
++                        (?:\.(?P<microsecond>\d{1,6})?)?
++                    )?
++                )?
++            )?
++        )?
++    )?)?)
++    $
++    """,
++    re.VERBOSE,
++)
++
++# 3. Default cftime format: YYYY-MM-DD hh:mm:ss
++_DEFAULT_CFTIME_REGEX = re.compile(
++    r"""
++    ^
++    (?P<year>\d{4})                              # year
++    (?:(?:-(?P<month>\d{2})                      # month (optional)
++        (?:(?:-(?P<day>\d{2})                    # day (optional)
++            (?:(?: (?P<hour>\d{2})               # hour (optional)
++                (?::(?P<minute>\d{2})            # minute (optional)
++                    (?::(?P<second>\d{2})        # second (optional)
++                        (?:\.(?P<microsecond>\d{1,6})?)?
++                    )?
++                )?
++            )?
++        )?
++    )?)?)
++    $
++    """,
++    re.VERBOSE,
++)
++
++def parse_iso8601_like(datetime_str: str) -> Tuple[Tuple[int, ...], str]:
++    """Parse a datetime string in ISO 8601 basic or extended format,
++    or in the default cftime format (YYYY-MM-DD hh:mm:ss).
++
++    Parameters
++    ----------
++    datetime_str : str
++        The datetime string to parse.
++
++    Returns
++    -------
++    parsed : tuple
++        A tuple of (year, month, day, hour, minute, second, microsecond).
++        Missing components are set to 1 for month and day, and 0 for time.
++    resolution : str
++        The resolution of the parsed string (e.g., 'year', 'month', etc.).
++
++    Raises
++    ------
++    ValueError
++        If the string does not match any of the supported formats.
++    """
++    # Try each regex in order
++    for regex in (_BASIC_ISO8601_REGEX, _EXTENDED_ISO8601_REGEX, _DEFAULT_CFTIME_REGEX):
++        match = regex.match(datetime_str)
++        if match:
++            break
++    else:
++        raise ValueError(f"Unrecognized datetime string: {datetime_str}")
++
++    groups = match.groupdict()
++    year = int(groups["year"])
++    month = int(groups["month"]) if groups["month"] else 1
++    day = int(groups["day"]) if groups["day"] else 1
++    hour = int(groups["hour"]) if groups["hour"] else 0
++    minute = int(groups["minute"]) if groups["minute"] else 0
++    second = int(groups["second"]) if groups["second"] else 0
++    microsecond = int(groups["microsecond"]) if groups["microsecond"] else 0
++
++    # Determine resolution
++    if groups["microsecond"] is not None:
++        resolution = "microsecond"
++    elif groups["second"] is not None:
++        resolution = "second"
++    elif groups["minute"] is not None:
++        resolution = "minute"
++    elif groups["hour"] is not None:
++        resolution = "hour"
++    elif groups["day"] is not None:
++        resolution = "day"
++    elif groups["month"] is not None:
++        resolution = "month"
++    else:
++        resolution = "year"
++
++    parsed = (year, month, day, hour, minute, second, microsecond)
++    return parsed, resolution

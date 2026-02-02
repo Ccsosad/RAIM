@@ -1,0 +1,119 @@
+diff --git a/xarray/plot/accessor.py b/xarray/plot/accessor.py
+new file mode 100644
+index 0000000..3614447
+--- /dev/null
++++ b/xarray/plot/accessor.py
+@@ -0,0 +1,113 @@
++"""
++Plot accessors with static typing.
++"""
++from __future__ import annotations
++
++from typing import (
++    TYPE_CHECKING,
++    Any,
++    Callable,
++    Hashable,
++    Literal,
++    overload,
++)
++
++if TYPE_CHECKING:
++    import xarray as xr
++    from xarray.plot.dataarray_plot import DataArrayPlotMethods
++    from xarray.plot.dataset_plot import DatasetPlotMethods
++
++
++class DataArrayPlotAccessor:
++    """Plot accessor for DataArray objects with static typing."""
++
++    def __init__(self, da: xr.DataArray) -> None:
++        self._da = da
++
++    def __call__(self, **kwargs: Any) -> Any:
++        from xarray.plot.dataarray_plot import _plot1d, _plot2d
++
++        ndims = len(self._da.dims)
++        if ndims == 1:
++            return _plot1d(self._da, **kwargs)
++        elif ndims == 2:
++            return _plot2d(self._da, **kwargs)
++        else:
++            raise ValueError(
++                "Only 1D and 2D plots are supported. Use .plot.contourf or .plot.scatter for >2D."
++            )
++
++    @overload
++    def line(
++        self,
++        *,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        figsize: tuple[float, float] | None = None,
++        size: float | None = None,
++        aspect: float | None = None,
++        ax: Any | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        col_wrap: int | None = None,
++        xincrease: bool | None = None,
++        yincrease: bool | None = None,
++        add_legend: bool = False,
++        add_colorbar: bool | None = None,
++        add_labels: bool = True,
++        add_title: bool = True,
++        subplot_kws: dict[str, Any] | None = None,
++        xscale: Literal["linear", "log", "symlog", "logit"] | None = None,
++        yscale: Literal["linear", "log", "symlog", "logit"] | None = None,
++        xticks: Any | None = None,
++        yticks: Any | None = None,
++        xlim: tuple[float, float] | None = None,
++        ylim: tuple[float, float] | None = None,
++        cmap: str | None = None,
++        vmin: float | None = None,
++        vmax: float | None = None,
++        norm: Any | None = None,
++        extend: Literal["neither", "both", "min", "max"] | None = None,
++        levels: int | list[float] | None = None,
++        colors: str | list[str] | None = None,
++        **kwargs: Any,
++    ) -> Any:
++        ...
++
++    # Note: We're only showing one method signature for brevity.
++    # In practice, all plot methods should have similar overloads.
++    # The actual implementation would be in dataarray_plot.py
++
++    def __getattr__(self, name: str) -> Callable[..., Any]:
++        if name in _PLOT_METHODS:
++            from xarray.plot.dataarray_plot import _plot_methods
++
++            def method(**kwargs: Any) -> Any:
++                return _plot_methods[name](self._da, **kwargs)
++
++            return method
++        else:
++            raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
++
++
++class DatasetPlotAccessor:
++    """Plot accessor for Dataset objects with static typing."""
++
++    def __init__(self, ds: xr.Dataset) -> None:
++        self._ds = ds
++
++    def __getattr__(self, name: str) -> Callable[..., Any]:
++        if name in _DATASET_PLOT_METHODS:
++            from xarray.plot.dataset_plot import _dataset_plot_methods
++
++            def method(**kwargs: Any) -> Any:
++                return _dataset_plot_methods[name](self._ds, **kwargs)
++
++            return method
++        else:
++            raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
++
++
++# These would be defined in their respective modules
++_PLOT_METHODS: set[str] = set()
++_DATASET_PLOT_METHODS: set[str] = set()

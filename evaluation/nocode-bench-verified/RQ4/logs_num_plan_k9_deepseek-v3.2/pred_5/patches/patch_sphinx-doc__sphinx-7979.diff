@@ -1,0 +1,46 @@
+diff --git a/sphinx/util/nodes.py b/sphinx/util/nodes.py
+index da00971..e3a0193 100644
+--- a/sphinx/util/nodes.py
++++ b/sphinx/util/nodes.py
+@@ -250,19 +250,35 @@ META_TYPE_NODES = (
+ 
+ def extract_messages(doctree: Element) -> Iterable[Tuple[Element, str]]:
+     """Extract translatable messages from a document tree."""
++    # We need to handle image nodes specially to extract alt text by default
++    # First, collect all image nodes to avoid processing them twice
++    image_nodes = list(doctree.traverse(nodes.image))
++    
++    # Extract alt text from all image nodes (by default behavior)
++    for node in image_nodes:
++        if node.get('alt'):
++            alt_msg = node['alt']
++            if alt_msg:
++                # Yield just the alt text
++                yield node, alt_msg
++    
++    # Now process translatable nodes
+     for node in doctree.traverse(is_translatable):  # type: nodes.Element
+-        if isinstance(node, addnodes.translatable):
++        # Skip image nodes that we already processed for alt text
++        # unless 'image' is in gettext_additional_targets (in which case
++        # we need to extract the URI too)
++        if isinstance(node, nodes.image) and node in image_nodes:
++            # This node is translatable, which means 'image' is in gettext_additional_targets
++            # Extract just the URI part (alt was already extracted above)
++            msg = '.. image:: %s' % node['uri']
++        elif isinstance(node, addnodes.translatable):
+             for msg in node.extract_original_messages():
+                 yield node, msg
+             continue
+-        if isinstance(node, LITERAL_TYPE_NODES):
++        elif isinstance(node, LITERAL_TYPE_NODES):
+             msg = node.rawsource
+             if not msg:
+                 msg = node.astext()
+-        elif isinstance(node, IMAGE_TYPE_NODES):
+-            msg = '.. image:: %s' % node['uri']
+-            if node.get('alt'):
+-                msg += '\n   :alt: %s' % node['alt']
+         elif isinstance(node, META_TYPE_NODES):
+             msg = node.rawcontent
+         elif isinstance(node, nodes.pending) and is_pending_meta(node):

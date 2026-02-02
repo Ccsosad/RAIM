@@ -1,0 +1,131 @@
+diff --git a/astropy/visualization/wcsaxes/frame.py b/astropy/visualization/wcsaxes/frame.py
+index e6627e8..2ad1708 100644
+--- a/astropy/visualization/wcsaxes/frame.py
++++ b/astropy/visualization/wcsaxes/frame.py
+@@ -197,6 +197,39 @@ class BaseFrame(OrderedDict, metaclass=abc.ABCMeta):
+         raise NotImplementedError("")
+ 
+ 
++class RectangularFrame1D(BaseFrame):
++    """
++    A classic rectangular frame for 1D plots.
++    """
++
++    spine_names = 'brtl'
++
++    def update_spines(self):
++        xmin, xmax = self.parent_axes.get_xlim()
++        ymin, ymax = self.parent_axes.get_ylim()
++        # The same as RectangularFrame
++        self['b'].data = np.array([[xmin, ymin], [xmax, ymin]])
++        self['r'].data = np.array([[xmax, ymin], [xmax, ymax]])
++        self['t'].data = np.array([[xmax, ymax], [xmin, ymax]])
++        self['l'].data = np.array([[xmin, ymax], [xmin, ymin]])
++
++
++class RectangularFrame1D(BaseFrame):
++    """
++    A classic rectangular frame for 1D plots.
++    """
++
++    spine_names = 'brtl'
++
++    def update_spines(self):
++
++        xmin, xmax = self.parent_axes.get_xlim()
++        ymin, ymax = self.parent_axes.get_ylim()
++        # For 1D plots, we only need the bottom and left spines? Actually, we keep all four.
++        # But we don't change the behavior.
++        super().update_spines()
++
++
+ class RectangularFrame(BaseFrame):
+     """
+     A classic rectangular frame.
+diff --git a/astropy/visualization/wcsaxes/wcsapi.py b/astropy/visualization/wcsaxes/wcsapi.py
+index 18817a1..a7ec08d 100644
+--- a/astropy/visualization/wcsaxes/wcsapi.py
++++ b/astropy/visualization/wcsaxes/wcsapi.py
+@@ -33,10 +33,14 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+             raise ValueError("'slices' should have as many elements as WCS "
+                              "has pixel dimensions (should be {})"
+                              .format(wcs.pixel_n_dim))
+-    elif wcs.pixel_n_dim < 2:
+-        raise ValueError("WCS should have at least 2 pixel dimensions")
+-    elif slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
+-        raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    elif wcs.pixel_n_dim == 2:
++        if slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
++            raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    elif wcs.pixel_n_dim == 1:
++        # For 1D, we don't need to check slices because they are already handled.
++        pass
++    else:
++        raise ValueError("WCS should have at least 1 pixel dimension")
+ 
+     is_fits_wcs = isinstance(wcs, WCS)
+ 
+@@ -123,12 +127,31 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+ 
+     invert_xy = False
+     if slices is not None:
+-        wcs_slice = list(slices)
+-        wcs_slice[wcs_slice.index("x")] = slice(None)
+-        wcs_slice[wcs_slice.index("y")] = slice(None)
+-        wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
+-        invert_xy = slices.index('x') > slices.index('y')
+-        world_keep = wcs._world_keep
++        # Determine if we are dealing with a 1D or 2D plot
++        if 'x' in slices and 'y' in slices:
++            # 2D plot
++            wcs_slice = list(slices)
++            wcs_slice[wcs_slice.index("x")] = slice(None)
++            wcs_slice[wcs_slice.index("y")] = slice(None)
++            wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
++            invert_xy = slices.index('x') > slices.index('y')
++            world_keep = wcs._world_keep
++        elif 'x' in slices:
++            # 1D plot with x axis
++            wcs_slice = list(slices)
++            wcs_slice[wcs_slice.index("x")] = slice(None)
++            wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
++            invert_xy = False
++            world_keep = wcs._world_keep
++        elif 'y' in slices:
++            # 1D plot with y axis
++            wcs_slice = list(slices)
++            wcs_slice[wcs_slice.index("y")] = slice(None)
++            wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
++            invert_xy = False
++            world_keep = wcs._world_keep
++        else:
++            raise ValueError("slices should contain 'x' or 'y'")
+     else:
+         world_keep = list(range(wcs.world_n_dim))
+ 
+@@ -141,7 +164,24 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+     if invert_xy:
+         m = m[:, ::-1]
+ 
+-    if frame_class is RectangularFrame:
++    # Determine if we are in a 1D plot
++    is_1d = (slices is not None and (('x' in slices and 'y' not in slices) or ('y' in slices and 'x' not in slices)))
++
++    if is_1d:
++        frame_class = RectangularFrame1D
++    else:
++        frame_class = RectangularFrame
++
++    if frame_class is RectangularFrame1D:
++        # For 1D plots, we assign all coordinates to the bottom spine
++        for i in range(len(coord_meta['type'])):
++            if i in world_keep:
++                index = world_keep[i]
++                coord_meta['default_axislabel_position'][index] = 'b'
++                coord_meta['default_ticklabel_position'][index] = 'b'
++                coord_meta['default_ticks_position'][index] = 'b'
++
++    elif frame_class is RectangularFrame:
+ 
+         for i, spine_name in enumerate('bltr'):
+             pos = np.nonzero(m[:, i % 2])[0]

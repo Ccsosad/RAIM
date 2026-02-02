@@ -1,0 +1,137 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..b2f90cc 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -670,6 +670,62 @@ class DataArray(AbstractArray, DataWithCoords):
+         else:
+             key = indexing.expanded_indexer(key, self.ndim)
+             return dict(zip(self.dims, key))
++            
++    def query(self, expr, engine=None, parser=None, **kwargs):
++        """
++        Query the data array for elements satisfying a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            The query string to evaluate.
++        engine : str, optional
++            The engine to use for evaluating the expression.
++        parser : str, optional
++            The parser to use for the expression.
++        **kwargs
++            Additional keyword arguments to pass to the evaluation engine.
++
++        Returns
++        -------
++        DataArray
++            A new DataArray with the filtered data.
++
++        Examples
++        --------
++        >>> import xarray as xr
++        >>> da = xr.DataArray([1, 2, 3], dims="x")
++        >>> da.query("x > 1")
++        <xarray.DataArray (x: 2)>
++        array([2, 3])
++        Dimensions without coordinates: x
++        """
++        # Get coordinates and data as a dictionary
++        variables = {
++            **{name: self.coords[name].data for name in self.coords},
++            "data": self.data
++        }
++        
++        # Evaluate the expression to get a boolean mask
++        try:
++            import pandas as pd
++            mask_data = pd.eval(
++                expr, local_dict=variables, engine=engine, parser=parser, **kwargs
++            )
++        except ImportError:
++            raise ImportError("pandas is required for DataArray.query")
++        
++        # Create a boolean DataArray for the mask
++        mask = self._boolean_mask(mask_data)
++        
++        # Use the mask to filter the data array
++        return self.where(mask, drop=True)
++
++    def _boolean_mask(self, mask_data):
++        """Create a boolean DataArray from raw mask data."""
++        return self._new(
++            data=mask_data, coords=self.coords, dims=self.dims, name="mask"
++        )
+ 
+     @property
+     def _level_coords(self) -> Dict[Hashable, Hashable]:
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..6c663e3 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -1001,6 +1001,65 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         new = self.copy(deep=False)
+         return new._persist_inplace(**kwargs)
+ 
++    def query(self, expr, engine=None, parser=None, **kwargs):
++        """
++        Query the dataset for elements satisfying a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            The query string to evaluate.
++        engine : str, optional
++            The engine to use for evaluating the expression.
++        parser : str, optional
++            The parser to use for the expression.
++        **kwargs
++            Additional keyword arguments to pass to the evaluation engine.
++
++        Returns
++        -------
++        Dataset
++            A new Dataset with the filtered data.
++
++        Examples
++        --------
++        >>> import xarray as xr
++        >>> ds = xr.Dataset({"foo": [1, 2, 3], "bar": [4, 5, 6]})
++        >>> ds.query("foo > 1")
++        <xarray.Dataset>
++        Dimensions:  (dim_0: 2)
++        Dimensions without coordinates: dim_0
++        Data variables:
++            foo      (dim_0) int64 2 3
++            bar      (dim_0) int64 5 6
++        """
++        # Get data variables as a dictionary of arrays
++        variables = {name: self[name].data for name in self.data_vars}
++        
++        # Evaluate the expression to get a boolean mask
++        try:
++            import pandas as pd
++            mask_data = pd.eval(
++                expr, local_dict=variables, engine=engine, parser=parser, **kwargs
++            )
++        except ImportError:
++            raise ImportError("pandas is required for Dataset.query")
++        
++        # Create a boolean DataArray for the mask
++        mask = self._boolean_mask(mask_data)
++        
++        # Use the mask to filter the dataset
++        return self.where(mask, drop=True)
++
++    def _boolean_mask(self, mask_data):
++        """Create a boolean DataArray from raw mask data."""
++        from .dataarray import DataArray
++        
++        # Create mask with dataset's coordinates and dimensions
++        return DataArray(
++            mask_data, coords=self.coords, dims=self.dims, name="mask"
++        )
++
+     @classmethod
+     def _construct_direct(
+         cls,

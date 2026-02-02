@@ -1,0 +1,54 @@
+diff --git a/sklearn/cluster/_kmeans.py b/sklearn/cluster/_kmeans.py
+index 89ad263..18adbe9 100644
+--- a/sklearn/cluster/_kmeans.py
++++ b/sklearn/cluster/_kmeans.py
+@@ -1276,6 +1276,10 @@ class KMeans(_BaseKMeans):
+     _parameter_constraints = {
+         **_BaseKMeans._parameter_constraints,
+         "copy_x": [bool],
++        "n_init": [
++            Interval(Integral, 1, None, closed="left"),
++            StrOptions({"auto"}),
++        ],
+         "algorithm": [
+             StrOptions({"lloyd", "elkan", "auto", "full"}, deprecated={"auto", "full"})
+         ],
+@@ -1325,6 +1329,13 @@ class KMeans(_BaseKMeans):
+                 RuntimeWarning,
+             )
+             self._algorithm = "lloyd"
++        if isinstance(self.n_init, str) and self.n_init == "auto":
++            if self.init == "k-means++":
++                self._n_init = 1
++            else:
++                self._n_init = 10
++        else:
++            self._n_init = self.n_init
+ 
+     def _warn_mkl_vcomp(self, n_active_threads):
+         """Warn when vcomp and mkl are both present"""
+@@ -1764,6 +1775,10 @@ class MiniBatchKMeans(_BaseKMeans):
+         "max_no_improvement": [Interval(Integral, 0, None, closed="left"), None],
+         "init_size": [Interval(Integral, 1, None, closed="left"), None],
+         "reassignment_ratio": [Interval(Real, 0, None, closed="left")],
++        "n_init": [
++            Interval(Integral, 1, None, closed="left"),
++            StrOptions({"auto"}),
++        ],
+     }
+ 
+     def __init__(
+@@ -1827,6 +1842,13 @@ class MiniBatchKMeans(_BaseKMeans):
+                 "reassignment_ratio should be >= 0, got "
+                 f"{self.reassignment_ratio} instead."
+             )
++        if isinstance(self.n_init, str) and self.n_init == "auto":
++            if self.init == "k-means++":
++                self._n_init = 1
++            else:
++                self._n_init = 3
++        else:
++            self._n_init = self.n_init
+ 
+     def _warn_mkl_vcomp(self, n_active_threads):
+         """Warn when vcomp and mkl are both present"""

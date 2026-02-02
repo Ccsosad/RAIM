@@ -1,0 +1,32 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..9e7320d 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -996,6 +996,11 @@ class FacetGrid(Grid):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+         return self._fig
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._fig
++
+     @property
+     def axes(self):
+         """An array of the :class:`matplotlib.axes.Axes` objects in the grid."""
+@@ -1234,6 +1239,7 @@ class PairGrid(Grid):
+                 axes[i, j] = None
+ 
+         self.fig = fig
++        self.figure = fig
+         self.axes = axes
+         self.data = data
+ 
+@@ -1651,6 +1657,7 @@ class JointGrid(object):
+         ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint)
+ 
+         self.fig = f
++        self.figure = f
+         self.ax_joint = ax_joint
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y

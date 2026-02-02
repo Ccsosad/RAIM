@@ -1,0 +1,13 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..45f0970 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -730,7 +730,7 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+         Used to raise a consistent exception for any operation that is not
+         supported when a representation has differentials attached.
+         """
+-        if self.differentials:
++        if self.differentials and op_name not in ('neg', 'mul', 'truediv', 'div'):
+             raise TypeError("Operation '{}' is not supported when "
+                             "differentials are attached to a {}."
+                             .format(op_name, self.__class__.__name__))

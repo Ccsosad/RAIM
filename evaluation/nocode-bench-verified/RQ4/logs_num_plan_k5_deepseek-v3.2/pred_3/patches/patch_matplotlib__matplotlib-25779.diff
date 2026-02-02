@@ -1,0 +1,88 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..ed4a54a 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1654,6 +1654,22 @@ class Ellipse(Patch):
+         return self.get_patch_transform().transform(
+             [(-1, -1), (1, -1), (1, 1), (-1, 1)])
+ 
++    def get_vertices(self):
++        """
++        Return the vertices of the ellipse.
++
++        The vertices are the endpoints of the major axis.
++        """
++        return self.get_patch_transform().transform([(1, 0), (-1, 0)])
++
++    def get_co_vertices(self):
++        """
++        Return the co-vertices of the ellipse.
++
++        The co-vertices are the endpoints of the minor axis.
++        """
++        return self.get_patch_transform().transform([(0, 1), (0, -1)])
++
+ 
+ class Annulus(Patch):
+     """
+diff --git a/galleries/examples/shapes_and_collections/ellipse_arrow.py b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+new file mode 100644
+index 0000000..ecfdf45
+--- /dev/null
++++ b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+@@ -0,0 +1,55 @@
++"""
++===================================
++Ellipse with Arrow Indicating Rotation
++===================================
++
++This example demonstrates how to draw an ellipse and add an arrow to indicate
++the direction of rotation (clockwise or counter-clockwise). The arrow is placed
++exactly on the ellipse using the vertices obtained via `get_vertices()`.
++"""
++
++import matplotlib.pyplot as plt
++import matplotlib.patches as mpatches
++
++# Create a figure and axis
++fig, ax = plt.subplots(figsize=(6, 6))
++ax.set_aspect('equal')
++ax.set_xlim(-2, 2)
++ax.set_ylim(-2, 2)
++ax.grid(True, linestyle='--', alpha=0.7)
++ax.set_title("Ellipse with Rotation Arrow")
++
++# Create an ellipse
++ellipse = mpatches.Ellipse(xy=(0, 0), width=3, height=1.5, angle=30,
++                           edgecolor='blue', facecolor='lightblue', linewidth=2)
++ax.add_patch(ellipse)
++
++# Get the vertices (endpoints of major axis)
++vertices = ellipse.get_vertices()
++# Choose the vertex in the direction of the major axis (here we take the first one)
++arrow_start = vertices[0]
++# The arrow direction is along the major axis, but we want to show rotation.
++# We'll create a curved arrow along the ellipse boundary.
++# For simplicity, we use a straight arrow from the vertex to a point slightly rotated.
++# Alternatively, we can use an annotation with an arrow.
++
++# Add an arrow from the vertex to a point slightly offset along the ellipse.
++# We'll create a small offset in the direction of the ellipse's angle.
++import numpy as np
++angle_rad = np.deg2rad(ellipse.get_angle())
++# Offset along the ellipse boundary (approximately)
++offset = 0.3
++arrow_end = (arrow_start[0] + offset * np.cos(angle_rad + np.pi/2),
++             arrow_start[1] + offset * np.sin(angle_rad + np.pi/2))
++
++# Draw the arrow
++ax.annotate('', xy=arrow_end, xytext=arrow_start,
++            arrowprops=dict(arrowstyle='->', lw=2, color='red'))
++
++# Mark the vertices and co-vertices
++ax.plot(vertices[:, 0], vertices[:, 1], 'ro', label='Vertices')
++co_vertices = ellipse.get_co_vertices()
++ax.plot(co_vertices[:, 0], co_vertices[:, 1], 'go', label='Co-vertices')
++
++ax.legend()
++plt.show()

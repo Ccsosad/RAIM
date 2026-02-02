@@ -1,0 +1,61 @@
+diff --git a/astropy/visualization/wcsaxes/core.py b/astropy/visualization/wcsaxes/core.py
+index 573033c..9a56133 100644
+--- a/astropy/visualization/wcsaxes/core.py
++++ b/astropy/visualization/wcsaxes/core.py
+@@ -352,8 +352,11 @@ class WCSAxes(Axes):
+             previous_frame = {'path': None}
+ 
+         if self.wcs is not None:
+-
+             transform, coord_meta = transform_coord_meta_from_wcs(self.wcs, self.frame_class, slices=slices)
++            
++            # Use 1D frame if we have only one visible axis
++            if len([v for v in coord_meta['visible'] if v]) == 1:
++                self.frame_class = RectangularFrame1D
+ 
+         self.coords = CoordinatesMap(self,
+                                      transform=transform,
+diff --git a/astropy/visualization/wcsaxes/frame.py b/astropy/visualization/wcsaxes/frame.py
+index e6627e8..13043dd 100644
+--- a/astropy/visualization/wcsaxes/frame.py
++++ b/astropy/visualization/wcsaxes/frame.py
+@@ -197,6 +197,20 @@ class BaseFrame(OrderedDict, metaclass=abc.ABCMeta):
+         raise NotImplementedError("")
+ 
+ 
++class RectangularFrame1D(BaseFrame):
++    """
++    A classic rectangular frame for 1D plots.
++    """
++    
++    spine_names = 'b'
++
++    def update_spines(self):
++        xmin, xmax = self.parent_axes.get_xlim()
++        ymin, ymax = self.parent_axes.get_ylim()
++        
++        self['b'].data = np.array(([xmin, ymin], [xmax, ymin]))
++
++
+ class RectangularFrame(BaseFrame):
+     """
+     A classic rectangular frame.
+diff --git a/astropy/visualization/wcsaxes/wcsapi.py b/astropy/visualization/wcsaxes/wcsapi.py
+index 18817a1..b98caf0 100644
+--- a/astropy/visualization/wcsaxes/wcsapi.py
++++ b/astropy/visualization/wcsaxes/wcsapi.py
+@@ -33,10 +33,10 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+             raise ValueError("'slices' should have as many elements as WCS "
+                              "has pixel dimensions (should be {})"
+                              .format(wcs.pixel_n_dim))
+-    elif wcs.pixel_n_dim < 2:
+-        raise ValueError("WCS should have at least 2 pixel dimensions")
+-    elif slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
+-        raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    elif wcs.pixel_n_dim < 1:
++        raise ValueError("WCS should have at least 1 pixel dimension")
++    elif slices is not None and wcs.pixel_n_dim == 2 and slices != ('x', 'y') and slices != ('y', 'x'):
++        raise ValueError("For 2D WCS, slices must be ('x', 'y') or ('y', 'x')")
+ 
+     is_fits_wcs = isinstance(wcs, WCS)
+ 

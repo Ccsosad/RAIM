@@ -1,0 +1,28 @@
+diff --git a/sphinx/ext/autodoc/options.py b/sphinx/ext/autodoc/options.py
+new file mode 100644
+index 0000000..1a25760
+--- /dev/null
++++ b/sphinx/ext/autodoc/options.py
+@@ -0,0 +1,22 @@
++# -*- coding: utf-8 -*-
++"""
++    sphinx.ext.autodoc.options
++    ~~~~~~~~~~~~~~~~~~~~~~~~~~
++
++    Configuration options for autodoc extension.
++
++    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
++    :license: BSD, see LICENSE for details.
++"""
++
++AUTODOC_DEFAULT_OPTIONS = [
++    'members',
++    'member-order',
++    'undoc-members',
++    'private-members',
++    'special-members',
++    'inherited-members',
++    'show-inheritance',
++    'ignore-module-all',
++    'exclude-members',
++]

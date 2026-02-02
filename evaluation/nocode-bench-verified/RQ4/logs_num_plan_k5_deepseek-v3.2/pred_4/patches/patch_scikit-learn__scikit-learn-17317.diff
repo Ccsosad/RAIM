@@ -1,0 +1,56 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 24b047c..0223831 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -1,3 +1,4 @@
++
+ import numpy as np
+ 
+ 
+@@ -32,14 +33,38 @@ def _unique(values, *, return_inverse=False):
+ 
+ def _unique_python(values, *, return_inverse):
+     # Only used in `_uniques`, see docstring there for details
+-    try:
+-        uniques = sorted(set(values))
+-        uniques = np.array(uniques, dtype=values.dtype)
+-    except TypeError:
+-        types = sorted(t.__qualname__
+-                       for t in set(type(v) for v in values))
+-        raise TypeError("Encoders require their input to be uniformly "
+-                        f"strings or numbers. Got {types}")
++    # Handle missing values: np.nan and None are considered as distinct.
++    uniques = []
++    for v in values:
++        if isinstance(v, float) and np.isnan(v):
++            # Check if we already have a NaN in uniques
++            if not any(isinstance(u, float) and np.isnan(u) for u in uniques):
++                uniques.append(v)
++        elif v is None:
++            if None not in uniques:
++                uniques.append(v)
++        else:
++            if v not in uniques:
++                uniques.append(v)
++    # Sort the uniques. Non-missing values are sorted, missing values are at the end.
++    non_missing = [u for u in uniques if not (u is None or (isinstance(u, float) and np.isnan(u)))]
++    missing = [u for u in uniques if u is None or (isinstance(u, float) and np.isnan(u))]
++    non_missing.sort()
++    sorted_uniques = non_missing + missing
++    uniques = np.array(sorted_uniques, dtype=object)
++    if return_inverse:
++        inverse = []
++        for v in values:
++            if isinstance(v, float) and np.isnan(v):
++                idx = [i for i, u in enumerate(uniques) if isinstance(u, float) and np.isnan(u)][0]
++            elif v is None:
++                idx = [i for i, u in enumerate(uniques) if u is None][0]
++            else:
++                idx = [i for i, u in enumerate(uniques) if u == v][0]
++            inverse.append(idx)
++        inverse = np.array(inverse, dtype=int)
++        return uniques, inverse
++    return uniques
+ 
+     if return_inverse:
+         table = {val: i for i, val in enumerate(uniques)}

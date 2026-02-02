@@ -1,0 +1,19 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..8a9e67d 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -191,6 +191,14 @@ class Nominal(Scale):
+             # we use this to (A) set the padding we want for categorial plots
+             # and (B) allow the values parameter for a Coordinate to set xlim/ylim
+             axis.set_view_interval(0, len(units_seed) - 1)
++        else:
++            # This is a coordinate axis (matplotlib Axis)
++            # Set up categorical axis style: fixed margins, no grid, inverted y axis
++            if hasattr(axis, 'axes'):
++                axis.axes.margins(x=0, y=0)
++                axis.grid(False)
++                if axis.axis_name == 'y':
++                    axis.invert_yaxis()
+ 
+         new._matplotlib_scale = mpl_scale
+ 

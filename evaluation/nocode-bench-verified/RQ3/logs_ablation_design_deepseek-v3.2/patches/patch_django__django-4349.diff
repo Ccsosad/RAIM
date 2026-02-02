@@ -1,0 +1,86 @@
+diff --git a/django/db/models/expressions.py b/django/db/models/expressions.py
+index bf6e882..a9288d8 100644
+--- a/django/db/models/expressions.py
++++ b/django/db/models/expressions.py
+@@ -340,6 +340,37 @@ class BaseExpression(object):
+         return self
+ 
+ 
++class ExpressionWrapper(Expression):
++    """
++    An expression that wraps another expression, providing access to properties
++    such as `output_field` that may not be available on the wrapped expression.
++    """
++    def __init__(self, expression, output_field):
++        super(ExpressionWrapper, self).__init__(output_field=output_field)
++        self.expression = expression
++
++    def __repr__(self):
++        return "<{}: {!r}>".format(self.__class__.__name__, self.expression)
++
++    def __str__(self):
++        return str(self.expression)
++
++    def get_source_expressions(self):
++        return [self.expression]
++
++    def set_source_expressions(self, exprs):
++        self.expression, = exprs
++
++    def as_sql(self, compiler, connection):
++        return compiler.compile(self.expression)
++
++    def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
++        c = self.copy()
++        c.is_summary = summarize
++        c.expression = c.expression.resolve_expression(query, allow_joins, reuse, summarize, for_save)
++        return c
++
++
+ class Expression(BaseExpression, Combinable):
+     """
+     An expression that can be combined with other expressions.
+@@ -400,6 +431,32 @@ class CombinedExpression(Expression):
+         c.rhs = c.rhs.resolve_expression(query, allow_joins, reuse, summarize, for_save)
+         return c
+ 
++    def _resolve_output_field(self):
++        """
++        Try to infer the output field of the expression.
++        When combining two expressions with different output_field types,
++        we need to wrap the expression with ExpressionWrapper.
++        """
++        if self._output_field is None:
++            try:
++                lhs_field = self.lhs.output_field
++            except FieldError:
++                lhs_field = None
++            try:
++                rhs_field = self.rhs.output_field
++            except FieldError:
++                rhs_field = None
++            
++            if lhs_field and rhs_field and not isinstance(lhs_field, rhs_field.__class__):
++                raise FieldError(
++                    "Expression contains mixed types: %s and %s. "
++                    "You must set output_field." % (
++                        lhs_field.__class__.__name__,
++                        rhs_field.__class__.__name__
++                    )
++                )
++            super(CombinedExpression, self)._resolve_output_field()
++
+ 
+ class DurationExpression(CombinedExpression):
+     def compile(self, side, compiler, connection):
+diff --git a/django/db/models/__init__.py b/django/db/models/__init__.py
+new file mode 100644
+index 0000000..1a76c0d
+--- /dev/null
++++ b/django/db/models/__init__.py
+@@ -0,0 +1,5 @@
++__all__ = [
++    'Aggregate', 'Avg', 'Count', 'Max', 'Min', 'StdDev', 'Sum', 'Variance',
++    'Case', 'Exists', 'Expression', 'ExpressionList', 'ExpressionWrapper', 'F',
++    'Func', 'OrderBy', 'OuterRef', 'Q', 'Subquery', 'Value', 'When',
++]

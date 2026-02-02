@@ -1,0 +1,47 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d9aca35..59efa61 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -313,6 +313,7 @@ class PyObject(ObjectDescription):
+         'noindex': directives.flag,
+         'module': directives.unchanged,
+         'annotation': directives.unchanged,
++        'canonical': directives.unchanged,
+     }
+ 
+     doc_field_types = [
+@@ -430,6 +431,10 @@ class PyObject(ObjectDescription):
+         if anno:
+             signode += addnodes.desc_annotation(' ' + anno, ' ' + anno)
+ 
++        canonical = self.options.get('canonical')
++        if canonical:
++            signode['canonical'] = canonical
++
+         return fullname, prefix
+ 
+     def get_index_text(self, modname: str, name: Tuple[str, str]) -> str:
+@@ -1026,7 +1031,7 @@ class PythonDomain(Domain):
+         'obj':   PyXRefRole(),
+     }
+     initial_data = {
+-        'objects': {},  # fullname -> docname, objtype
++        'objects': {},  # fullname -> docname, objtype, canonical
+         'modules': {},  # modname -> docname, synopsis, platform, deprecated
+     }  # type: Dict[str, Dict[str, Tuple[Any]]]
+     indices = [
+@@ -1047,7 +1052,13 @@ class PythonDomain(Domain):
+             logger.warning(__('duplicate object description of %s, '
+                               'other instance in %s, use :noindex: for one of them'),
+                            name, other.docname, location=location)
+-        self.objects[name] = ObjectEntry(self.env.docname, node_id, objtype)
++        
++        # Get canonical information from the location node if available
++        canonical = None
++        if location and hasattr(location, 'get'):
++            canonical = location.get('canonical')
++        
++        self.objects[name] = ObjectEntry(self.env.docname, node_id, objtype, canonical)
+ 
+     @property
+     def modules(self) -> Dict[str, ModuleEntry]:

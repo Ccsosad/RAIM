@@ -1,0 +1,56 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index fb4476d..2c71504 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -38,6 +38,25 @@ class _BaseGrid:
+                 ax.set(**kwargs)
+         return self
+ 
++    def tick_params(self, **kwargs):
++        """Customize the appearance of ticks, tick labels, and gridlines.
++
++        Parameters
++        ----------
++        **kwargs
++            Keyword arguments to pass to :meth:`matplotlib.axes.Axes.tick_params`.
++
++        Returns
++        -------
++        self : object
++            Returns self for method chaining.
++
++        """
++        for ax in self.axes.flat:
++            if ax is not None:  # Handle removed axes
++                ax.tick_params(**kwargs)
++        return self
++
+     @property
+     def fig(self):
+         """DEPRECATED: prefer the `figure` property."""
+@@ -1642,6 +1661,25 @@ class PairGrid(Grid):
+         for ax, label in zip(self.axes[:, 0], self.y_vars):
+             ax.set_ylabel(label)
+ 
++    def tick_params(self, **kwargs):
++        """Customize the appearance of ticks, tick labels, and gridlines.
++
++        Parameters
++        ----------
++        **kwargs
++            Keyword arguments to pass to :meth:`matplotlib.axes.Axes.tick_params`.
++
++        Returns
++        -------
++        self : object
++            Returns self for method chaining.
++
++        """
++        for ax in self.axes.flat:
++            if ax is not None:  # Handle removed axes
++                ax.tick_params(**kwargs)
++        return self
++
+     def _find_numeric_cols(self, data):
+         """Find which variables in a DataFrame are numeric."""
+         numeric_cols = []

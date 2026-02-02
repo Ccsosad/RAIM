@@ -1,0 +1,30 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index dbde177..ba30626 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -814,9 +814,7 @@ class Table:
+         else:
+             names_from_data = sorted(names_from_data)
+ 
+-        # Note: if set(data[0].keys()) != names_from_data, this will give an
+-        # exception later, so NO need to catch here.
+-
++        # Build columns, allowing for missing keys by inserting a masked placeholder.
+         cols = {}
+         for name in names_from_data:
+             cols[name] = []
+@@ -824,8 +822,13 @@ class Table:
+                 try:
+                     cols[name].append(row[name])
+                 except KeyError:
+-                    raise ValueError(f'Row {i} has no value for column {name}')
++                    # Instead of raising an error, we append a masked placeholder.
++                    # We'll use None as a placeholder, which will be converted to a masked value.
++                    cols[name].append(None)
+ 
++        # If there are any None values (missing keys) then we need to create a masked table.
++        # But note: the table might already be masked if masked=True was set.
++        # We'll let the column conversion handle masking.
+         if all(name is None for name in names):
+             names = names_from_data
+ 

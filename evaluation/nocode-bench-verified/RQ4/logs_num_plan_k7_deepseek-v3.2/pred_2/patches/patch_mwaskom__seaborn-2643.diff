@@ -1,0 +1,141 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index c1f490d..e175e1a 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -248,6 +248,136 @@ class Grid(_BaseGrid):
+             return None
+ 
+ 
++def move_legend(obj, loc, **kwargs):
++    """Move an existing legend to a new location, or change its properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.Grid
++        The object with the legend.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid locations.
++    **kwargs
++        Additional keyword arguments are passed to :meth:`matplotlib.axes.Axes.legend`
++        or :meth:`matplotlib.figure.Figure.legend`, depending on the type of `obj`.
++
++    Returns
++    -------
++    legend : matplotlib.legend.Legend
++        The new legend object.
++
++    """
++    import matplotlib as mpl
++
++    # Find the existing legend
++    if hasattr(obj, "legend_") and obj.legend_ is not None:
++        legend = obj.legend_
++    elif hasattr(obj, "_legend") and obj._legend is not None:
++        legend = obj._legend
++    else:
++        raise ValueError("No legend found on the object.")
++
++    # Determine where to place the new legend
++    if isinstance(legend.parent, mpl.axes.Axes):
++        # The legend is attached to an axes
++        ax = legend.parent
++        fig = ax.figure
++        create_on_axes = True
++    else:
++        # The legend is attached to a figure
++        fig = legend.parent
++        ax = None
++        create_on_axes = False
++
++    # Get the current handles and labels
++    handles = legend.legendHandles
++    labels = [t.get_text() for t in legend.texts]
++
++    # Get the title
++    title = legend.get_title().get_text()
++
++    # Remove the old legend
++    legend.remove()
++
++    # Create a new legend
++    if create_on_axes:
++        new_legend = ax.legend(handles, labels, loc=loc, **kwargs)
++        ax.legend_ = new_legend
++    else:
++        new_legend = fig.legend(handles, labels, loc=loc, **kwargs)
++        # Update the grid's _legend if applicable
++        if hasattr(obj, "_legend"):
++            obj._legend = new_legend
++
++    # Set the title if it existed
++    if title:
++        new_legend.set_title(title)
++
++    return new_legend
++
++
++def move_legend(obj, loc, **kwargs):
++    """Move an existing legend to a new location, or change its properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.Grid
++        The object with the legend.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid locations.
++    **kwargs
++        Additional keyword arguments are passed to :meth:`matplotlib.axes.Axes.legend`
++        or :meth:`matplotlib.figure.Figure.legend`, depending on the type of `obj`.
++
++    Returns
++    -------
++    legend : matplotlib.legend.Legend
++        The new legend object.
++
++    """
++    # Find the existing legend
++    if hasattr(obj, "legend_") and obj.legend_ is not None:
++        legend = obj.legend_
++        ax = obj
++        fig = ax.figure
++    elif hasattr(obj, "_legend") and obj._legend is not None:
++        legend = obj._legend
++        # For Grid, we don't have a single axes
++        ax = None
++        fig = obj.figure if hasattr(obj, "figure") else legend.figure
++    else:
++        raise ValueError("No legend found on the object.")
++
++    # Get the current handles and labels
++    handles = legend.legendHandles
++    labels = [t.get_text() for t in legend.texts]
++
++    # Get the title
++    title = legend.get_title().get_text()
++
++    # Remove the old legend
++    legend.remove()
++
++    # Create a new legend
++    if ax is not None:
++        # For an Axes
++        new_legend = ax.legend(handles, labels, loc=loc, **kwargs)
++        ax.legend_ = new_legend
++    else:
++        # For a Grid or Figure
++        new_legend = fig.legend(handles, labels, loc=loc, **kwargs)
++        if hasattr(obj, "_legend"):
++            obj._legend = new_legend
++
++    # Set the title if it existed
++    if title:
++        new_legend.set_title(title)
++
++    return new_legend
++
++
+ _facet_docs = dict(
+ 
+     data=dedent("""\

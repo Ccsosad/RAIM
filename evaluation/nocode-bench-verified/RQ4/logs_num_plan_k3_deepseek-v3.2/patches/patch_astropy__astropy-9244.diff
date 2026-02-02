@@ -1,0 +1,53 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..8d0003c 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -416,6 +416,8 @@ class IERS(QTable):
+         return super()._convert_col_for_table(col)
+ 
+ 
++from .substitution import earth_orientation_table
++
+ class IERS_A(IERS):
+     """IERS Table class targeted to IERS A, provided by USNO.
+ 
+diff --git a/astropy/utils/iers/substitution.py b/astropy/utils/iers/substitution.py
+new file mode 100644
+index 0000000..19a3ca4
+--- /dev/null
++++ b/astropy/utils/iers/substitution.py
+@@ -0,0 +1,34 @@
++"""
++ScienceState for specifying the Earth orientation table.
++"""
++
++from astropy.utils.state import ScienceState
++from . import iers
++
++class earth_orientation_table(ScienceState):
++    """
++    Specify the Earth orientation table to use for time and coordinate transformations.
++
++    This ScienceState allows the user to set the IERS table that should be used
++    for Earth rotation data (UT1-UTC, polar motion, etc.). The default is to use
++    `iers.IERS_Auto.open()`, which automatically downloads the latest IERS data.
++
++    Examples
++    --------
++    >>> from astropy.utils import iers
++    >>> iers.earth_orientation_table.set(iers.IERS_B.open())
++    >>> iers.earth_orientation_table.get()
++    <IERS_B length=...>
++    >>> with iers.earth_orientation_table.set(iers.IERS_A.open(iers.IERS_A_URL)):
++    ...     # do something with IERS_A
++    ...     pass
++    >>> iers.earth_orientation_table.set(None)  # Reset to default
++    """
++
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = iers.IERS_Auto.open()
++        return value

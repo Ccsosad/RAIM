@@ -1,0 +1,64 @@
+diff --git a/astropy/cosmology/flrw.py b/astropy/cosmology/flrw.py
+index ecb617a..dac354d 100644
+--- a/astropy/cosmology/flrw.py
++++ b/astropy/cosmology/flrw.py
+@@ -504,6 +504,59 @@ class FLRW(Cosmology):
+         z = aszarr(z)
+         return self._Ogamma0 * (z + 1.0) ** 4 * self.inv_efunc(z) ** 2
+ 
++    def Otot(self, z):
++        """Return the total density parameter at redshift ``z``.
++
++        Parameters
++        ----------
++        z : Quantity-like ['redshift'], array-like, or `~numbers.Number`
++            Input redshift.
++
++        Returns
++        -------
++        Otot : ndarray or float
++            The total density parameter relative to the critical density at
++            each redshift.
++            Returns `float` if the input is scalar.
++
++        Notes
++        -----
++        The total density parameter is the sum of the matter (including
++        baryons and dark matter), radiation (photons and neutrinos), dark
++        energy, and curvature density parameters:
++
++        .. math::
++
++            \\Omega_{\\rm tot}(z) = \\Omega_m(z) + \\Omega_r(z) + \\Omega_\\Lambda(z) + \\Omega_k(z)
++
++        where :math:`\\Omega_r(z) = \\Omega_\\gamma(z) + \\Omega_\\nu(z)`.
++        """
++        z = aszarr(z)
++        return self.Om(z) + self.Ogamma(z) + self.Onu(z) + self.Ode(z) + self.Ok(z)
++
++    def Otot0(self):
++        """Return the total density parameter at redshift 0.
++
++        Returns
++        -------
++        Otot0 : float
++            The total density parameter relative to the critical density at
++            redshift 0.
++
++        Notes
++        -----
++        The total density parameter at the present day is the sum of the
++        present-day matter, radiation, dark energy, and curvature density
++        parameters:
++
++        .. math::
++
++            \\Omega_{\\rm tot,0} = \\Omega_{m,0} + \\Omega_{r,0} + \\Omega_{\\Lambda,0} + \\Omega_{k,0}
++
++        where :math:`\\Omega_{r,0} = \\Omega_{\\gamma,0} + \\Omega_{\\nu,0}`.
++        """
++        return self._Om0 + self._Ogamma0 + self._Onu0 + self._Ode0 + self._Ok0
++
+     def Onu(self, z):
+         r"""Return the density parameter for neutrinos at redshift ``z``.
+ 

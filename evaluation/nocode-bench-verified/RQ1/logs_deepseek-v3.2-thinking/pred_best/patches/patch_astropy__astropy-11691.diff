@@ -1,0 +1,67 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..33b2603 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -4,6 +4,7 @@
+ 
+ import numbers
+ import warnings
++import re
+ 
+ from . import core
+ from . import si
+@@ -476,6 +477,26 @@ def def_physical_type(unit, name):
+ 
+     for ptype_name in physical_type_names:
+         _name_physical_mapping[ptype_name] = physical_type
++        
++        # Also create attribute-friendly name
++        attr_name = _to_attribute_name(ptype_name)
++        if attr_name and attr_name not in _name_physical_mapping:
++            _attrname_physical_mapping[attr_name] = physical_type
++
++
++def _to_attribute_name(physical_type_name):
++    """Convert a physical type name to a valid Python attribute name."""
++    # Replace spaces and parentheses with underscores
++    name = physical_type_name.lower()
++    name = re.sub(r'[\s\(\)]+', '_', name)
++    # Remove any remaining non-alphanumeric/underscore characters
++    name = re.sub(r'[^a-z0-9_]', '', name)
++    # Remove leading/trailing underscores
++    name = name.strip('_')
++    # Ensure it's a valid Python identifier
++    if name and (name[0].isalpha() or name[0] == '_'):
++        return name
++    return None
+ 
+ 
+ def get_physical_type(obj):
+@@ -525,6 +546,9 @@ def get_physical_type(obj):
+         return obj
+ 
+     if isinstance(obj, str):
++        # First check if it's an attribute name
++        if obj in _attrname_physical_mapping:
++            return _attrname_physical_mapping[obj]
+         return _physical_type_from_str(obj)
+ 
+     try:
+@@ -542,9 +566,17 @@ def get_physical_type(obj):
+         return PhysicalType(unit, "unknown")
+ 
+ 
++# Initialize attribute name mapping
++_attrname_physical_mapping = {}
++
+ for unit, physical_type in _units_and_physical_types:
+     def_physical_type(unit, physical_type)
+ 
++# Set physical types as module attributes
++for attr_name, physical_type in _attrname_physical_mapping.items():
++    globals()[attr_name] = physical_type
++    __all__.append(attr_name)
++
+ 
+ # This generates a docstring addition for this module that describes all of the
+ # standard physical types defined here.

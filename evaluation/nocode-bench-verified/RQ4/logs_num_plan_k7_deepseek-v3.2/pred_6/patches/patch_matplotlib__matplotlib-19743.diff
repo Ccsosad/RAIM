@@ -1,0 +1,30 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..8132e03 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -415,6 +415,25 @@ def make_layout_margins(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0,
+                 if (cbp_rspan.start == ss.rowspan.start and
+                         cbbbox.y1 > bbox.y1):
+                     margin['top'] += cbbbox.y1 - bbox.y1
++        # Now check for legends that are placed outside the axes
++        legend = ax.get_legend()
++        if (legend is not None and hasattr(legend, '_loc') and
++                legend._loc is not None and
++                isinstance(legend._loc, str) and
++                legend._loc.startswith('outside')):
++            # Get the legend's bounding box in figure coordinates
++            legend_bbox = legend.get_window_extent(renderer)
++            legend_bbox = legend_bbox.transformed(fig.transFigure.inverted())
++            # Determine which side the legend is on relative to the axes
++            if legend_bbox.x1 < pos.x0:  # left
++                margin['left'] += pos.x0 - legend_bbox.x0
++            elif legend_bbox.x0 > pos.x1:  # right
++                margin['right'] += legend_bbox.x1 - pos.x1
++            if legend_bbox.y0 > pos.y1:  # top
++                margin['top'] += legend_bbox.y1 - pos.y1
++            elif legend_bbox.y1 < pos.y0:  # bottom
++                margin['bottom'] += pos.y0 - legend_bbox.y0
++
+         # pass the new margins down to the layout grid for the solution...
+         layoutgrids[gs].edit_outer_margin_mins(margin, ss)
+ 

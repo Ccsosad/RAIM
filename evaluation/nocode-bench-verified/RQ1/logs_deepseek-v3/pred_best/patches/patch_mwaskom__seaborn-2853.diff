@@ -1,0 +1,16 @@
+diff --git a/seaborn/regression.py b/seaborn/regression.py
+index 4430a99..a8fc23a 100644
+--- a/seaborn/regression.py
++++ b/seaborn/regression.py
+@@ -397,6 +397,11 @@ class _RegressionPlotter(_LinearPlotter):
+             # TODO abstraction
+             ci_kws = {"color": kws["color"]}
+             ci_kws["linewidth"] = mpl.rcParams["lines.linewidth"] * 1.75
++            # Inherit alpha from scatter points if available
++            if hasattr(kws['color'], 'shape') and kws['color'].shape[1] == 4:
++                ci_kws["alpha"] = kws['color'][0, 3]
++            elif "alpha" in kws:
++                ci_kws["alpha"] = kws["alpha"]
+             kws.setdefault("s", 50)
+ 
+             xs, ys, cis = self.estimate_data

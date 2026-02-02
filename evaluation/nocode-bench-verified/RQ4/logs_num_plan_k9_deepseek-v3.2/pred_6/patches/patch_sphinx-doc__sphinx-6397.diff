@@ -1,0 +1,15 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..54cac13 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -392,6 +392,10 @@ class Documenter:
+ 
+         Let the user process it via the ``autodoc-process-signature`` event.
+         """
++        # If autodoc_typehints is set to 'none', do not show any typehints
++        if self.env.config.autodoc_typehints == 'none':
++            return ''
++
+         if self.args is not None:
+             # signature given explicitly
+             args = "(%s)" % self.args

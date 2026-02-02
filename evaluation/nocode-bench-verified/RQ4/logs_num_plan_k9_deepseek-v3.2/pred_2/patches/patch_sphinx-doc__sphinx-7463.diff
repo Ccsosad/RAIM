@@ -1,0 +1,38 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d9aca35..f57d579 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -313,6 +313,7 @@ class PyObject(ObjectDescription):
+         'noindex': directives.flag,
+         'module': directives.unchanged,
+         'annotation': directives.unchanged,
++        'canonical': directives.unchanged,
+     }
+ 
+     doc_field_types = [
+@@ -388,6 +389,9 @@ class PyObject(ObjectDescription):
+                 classname = ''
+                 fullname = name
+ 
++        canonical = self.options.get('canonical')
++        if canonical:
++            signode['canonical'] = canonical
+         signode['module'] = modname
+         signode['class'] = classname
+         signode['fullname'] = fullname
+@@ -438,8 +442,13 @@ class PyObject(ObjectDescription):
+ 
+     def add_target_and_index(self, name_cls: Tuple[str, str], sig: str,
+                              signode: desc_signature) -> None:
+-        modname = self.options.get('module', self.env.ref_context.get('py:module'))
+-        fullname = (modname + '.' if modname else '') + name_cls[0]
++        # Use canonical fullname if provided
++        canonical = signode.get('canonical')
++        if canonical:
++            fullname = canonical
++        else:
++            modname = self.options.get('module', self.env.ref_context.get('py:module'))
++            fullname = (modname + '.' if modname else '') + name_cls[0]
+         node_id = make_id(self.env, self.state.document, '', fullname)
+         signode['ids'].append(node_id)
+ 

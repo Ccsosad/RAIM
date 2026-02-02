@@ -1,0 +1,64 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..49cce38 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -996,6 +996,11 @@ class FacetGrid(Grid):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+         return self._fig
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._fig
++
+     @property
+     def axes(self):
+         """An array of the :class:`matplotlib.axes.Axes` objects in the grid."""
+@@ -1237,6 +1242,11 @@ class PairGrid(Grid):
+         self.axes = axes
+         self.data = data
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+         # Save what we are going to do with the diagonal
+         self.diag_sharey = diag_sharey
+         self.diag_vars = None
+@@ -1301,6 +1311,11 @@ class PairGrid(Grid):
+             utils.despine(fig=fig)
+         self.tight_layout(pad=layout_pad)
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+     def map(self, func, **kwargs):
+         """Plot with the same function in every subplot.
+ 
+@@ -1655,6 +1670,11 @@ class JointGrid(object):
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+         # Turn off tick visibility for the measure axis on the marginal plots
+         plt.setp(ax_marg_x.get_xticklabels(), visible=False)
+         plt.setp(ax_marg_y.get_yticklabels(), visible=False)
+@@ -1716,6 +1736,11 @@ class JointGrid(object):
+         f.tight_layout()
+         f.subplots_adjust(hspace=space, wspace=space)
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+     def _inject_kwargs(self, func, kws, params):
+         """Add params to kws if they are accepted by func."""
+         func_params = signature(func).parameters

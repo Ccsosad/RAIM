@@ -1,0 +1,88 @@
+diff --git a/lib/matplotlib/style/loader.py b/lib/matplotlib/style/loader.py
+new file mode 100644
+index 0000000..06796b2
+--- /dev/null
++++ b/lib/matplotlib/style/loader.py
+@@ -0,0 +1,82 @@
++"""
++Load style files from packages without importing the package.
++"""
++
++import importlib.resources
++import sys
++import warnings
++
++from matplotlib import rc_params_from_file
++
++if sys.version_info < (3, 10):
++    import importlib_resources
++
++
++def load_package_style(dotted_name):
++    """
++    Load a style sheet from a package.
++
++    Parameters
++    ----------
++    dotted_name : str
++        The dotted name of the style, e.g., "mypackage.presentation".
++        The last component is the style name (without extension), and the
++        preceding components form the package name.
++
++    Returns
++    -------
++    dict
++        The rc parameters dictionary.
++
++    Raises
++    ------
++    ImportError
++        If the package cannot be found.
++    OSError
++        If the style file does not exist in the package.
++    """
++    # Split the dotted name into package and style name.
++    *package_parts, style_name = dotted_name.split('.')
++    if not package_parts:
++        raise ValueError(
++            f"Invalid dotted style name {dotted_name!r}: must contain at least one dot."
++        )
++    package_name = '.'.join(package_parts)
++
++    # Use importlib.resources (or importlib_resources for Python<3.10)
++    if sys.version_info >= (3, 10):
++        resources = importlib.resources
++    else:
++        resources = importlib_resources
++
++    # The style file is expected to be at
++    # `package_name/style_name.mplstyle` (using the package's resource system).
++    resource_path = f"{style_name}.mplstyle"
++    try:
++        with warnings.catch_warnings(record=True) as warns:
++            # We don't want to import the package, so we use files() to get a Traversable.
++            # This is safe because it doesn't import the package.
++            package = resources.files(package_name)
++        # Check if the resource exists.
++        if not (package / resource_path).is_file():
++            raise OSError(f"No style file {resource_path!r} in package {package_name!r}")
++        # Read the style file.
++        with (package / resource_path).open('r', encoding='utf-8') as f:
++            rc_params = rc_params_from_file(f, use_default_template=False)
++        for w in warns:
++            if w.message:
++                import logging
++                logging.getLogger(__name__).warning('In %s: %s', dotted_name, w.message)
++        return rc_params
++    except Exception as e:
++        # Improve error message.
++        if isinstance(e, ImportError):
++            raise ImportError(
++                f"Cannot find package {package_name!r} for style {dotted_name!r}."
++            ) from e
++        elif isinstance(e, OSError):
++            raise OSError(
++                f"Cannot load style file {resource_path!r} from package {package_name!r}."
++            ) from e
++        else:
++            raise

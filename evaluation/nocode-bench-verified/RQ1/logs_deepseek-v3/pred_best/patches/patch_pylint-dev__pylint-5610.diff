@@ -1,0 +1,48 @@
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..d9a2144
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,42 @@
++from typing import List, Optional, TYPE_CHECKING
++
++import astroid
++from pylint import interfaces
++from pylint.checkers import BaseChecker
++from pylint.interfaces import HIGH, IAstroidChecker
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++class PrivateImportChecker(BaseChecker):
++    """Check for imports of private names (prefixed with '_') from external packages."""
++
++    __implements__ = IAstroidChecker
++
++    name = 'private-import'
++    msgs = {
++        'E4701': (
++            'Import of private name %s',
++            'import-private-name',
++            'Used when importing private names (prefixed with "_") from external packages.',
++        ),
++    }
++    options = ()
++
++    def visit_importfrom(self, node: astroid.ImportFrom) -> None:
++        """Check imports from statements for private names."""
++        if not node.modname or node.level:  # Skip relative imports
++            return
++            
++        for name, alias in node.names:
++            if name.startswith('_'):
++                self.add_message(
++                    'import-private-name',
++                    node=node,
++                    args=name,
++                    confidence=HIGH,
++                )
++
++def register(linter: "PyLinter") -> None:
++    """Required method to auto register this checker."""
++    linter.register_checker(PrivateImportChecker(linter))

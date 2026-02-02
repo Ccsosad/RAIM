@@ -1,0 +1,73 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..ffda071 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -36,6 +36,51 @@ class _BaseGrid:
+                 ax.set(**kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object.
++
++        This method passes the grid object to the given function and returns the grid.
++        It is intended for functions that modify the grid in place.
++
++        Parameters
++        ----------
++        func : callable
++            Function that takes the grid object as its first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        self : _BaseGrid
++            Returns self for easy chaining.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the function's result.
++
++        This method passes the grid object to the given function and returns the
++        result of the function. It is intended for functions that return a value.
++
++        Parameters
++        ----------
++        func : callable
++            Function that takes the grid object as its first argument.
++        *args, **kwargs
++            Additional arguments passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of the function.
++
++        """
++        return func(self, *args, **kwargs)
++
+     @property
+     def fig(self):
+         """DEPRECATED: prefer the `figure` property."""
+@@ -84,6 +129,7 @@ class Grid(_BaseGrid):
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+         self._figure.tight_layout(*args, **kwargs)
++        return self
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -1006,6 +1052,8 @@ class FacetGrid(Grid):
+         if y is not None:
+             self.map(plt.axhline, y=y, **line_kws)
+ 
++        return self
++
+     # ------ Properties that are part of the public API and documented by Sphinx
+ 
+     @property

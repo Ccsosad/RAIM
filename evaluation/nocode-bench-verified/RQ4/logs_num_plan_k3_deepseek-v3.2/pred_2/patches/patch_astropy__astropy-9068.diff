@@ -1,0 +1,116 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..6bdaf4b 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,66 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise.
++
++        Parameters
++        ----------
++        other : Table, array, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A Table of booleans with the same shape as this table.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table with different column names.
++        """
++        from .mixins.compare import column_values_equal
++
++        if isinstance(other, Table):
++            # Check column names
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # Build result table
++            result = self.__class__(masked=self.masked)
++            for name in self.colnames:
++                col1 = self[name]
++                col2 = other[name]
++                eq = column_values_equal(col1, col2)
++                # Create a column of booleans with the same name.
++                # Use MaskedColumn if the table is masked.
++                if self.masked:
++                    from .column import MaskedColumn
++                    col = MaskedColumn(eq, name=name)
++                else:
++                    from .column import Column
++                    col = Column(eq, name=name)
++                result.add_column(col)
++            return result
++        else:
++            # other is an array or scalar.
++            # We compare column-wise: each column is compared to `other`.
++            # If other is an array, it should have the same length as the table.
++            result = self.__class__(masked=self.masked)
++            for name in self.colnames:
++                col1 = self[name]
++                # For array, we compare element-wise with broadcasting.
++                # For scalar, we compare each element.
++                eq = column_values_equal(col1, other)
++                if self.masked:
++                    from .column import MaskedColumn
++                    col = MaskedColumn(eq, name=name)
++                else:
++                    from .column import Column
++                    col = Column(eq, name=name)
++                result.add_column(col)
++            return result
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):
+diff --git a/astropy/table/mixins/compare.py b/astropy/table/mixins/compare.py
+new file mode 100644
+index 0000000..9b48faa
+--- /dev/null
++++ b/astropy/table/mixins/compare.py
+@@ -0,0 +1,39 @@
++"""
++Comparison utilities for table mixin columns.
++"""
++
++import numpy as np
++
++from astropy.utils import metadata
++
++__all__ = ['column_values_equal']
++
++
++def column_values_equal(col1, col2):
++    """
++    Compare two column objects element-wise.
++
++    Parameters
++    ----------
++    col1 : column-like
++        First column.
++    col2 : column-like
++        Second column, which may be a scalar or array.
++
++    Returns
++    -------
++    equal : ndarray
++        Boolean array of element-wise comparisons.
++    """
++    # If both columns are mixins, try to use their own comparison.
++    # Otherwise, fall back to numpy comparison.
++    if hasattr(col1, '__array__') and hasattr(col2, '__array__'):
++        # Both are array-like
++        try:
++            return np.array(col1 == col2, dtype=bool)
++        except Exception:
++            # If direct comparison fails, convert to array and compare.
++            return np.array(col1) == np.array(col2)
++    else:
++        # One might be a scalar or non-array.
++        return np.array(col1 == col2, dtype=bool)

@@ -1,0 +1,110 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..38bbe4d 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -62,6 +62,64 @@ class _BaseGrid:
+         kwargs.setdefault("bbox_inches", "tight")
+         self.figure.savefig(*args, **kwargs)
+ 
++    def tight_layout(self, *args, **kwargs):
++        """
++        Call fig.tight_layout within rect and optional pad.
++
++        Parameters
++        ----------
++        *args, **kwargs
++            Passed to :meth:`matplotlib.figure.Figure.tight_layout`.
++
++        Returns
++        -------
++        self : _BaseGrid instance
++            Returns self for easy method chaining.
++        """
++        self.figure.tight_layout(*args, **kwargs)
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to each subplot Axes.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes an Axes as its first argument and returns an Axes.
++            It must also accept any additional arguments passed to `apply`.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : _BaseGrid instance
++            Returns self for easy method chaining.
++        """
++        for ax in self.axes.flat:
++            if ax is not None:
++                func(ax, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes a grid as its first argument and returns a grid.
++            It must also accept any additional arguments passed to `pipe`.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : _BaseGrid instance
++            Returns self for easy method chaining.
++        """
++        return func(self, *args, **kwargs) or self
++
+ 
+ class Grid(_BaseGrid):
+     """A grid that can have multiple subplots and an external legend."""
+@@ -1603,6 +1661,40 @@ class PairGrid(Grid):
+ 
+         self._update_legend_data(ax)
+ 
++    def refline(self, *, x=None, y=None, color='.5', linestyle='--', **line_kws):
++        """
++        Add a reference line(s) to each facet.
++
++        Parameters
++        ----------
++        x, y : numeric
++            Value(s) to draw the line(s) at.
++        color : :mod:`matplotlib color <matplotlib.colors>`
++            Specifies the color of the reference line(s). Pass ``color=None`` to
++            use ``hue`` mapping.
++        linestyle : str
++            Specifies the style of the reference line(s).
++        line_kws : key, value mappings
++            Other keyword arguments are passed to :meth:`matplotlib.axes.Axes.axvline`
++            when ``x`` is not None and :meth:`matplotlib.axes.Axes.axhline` when ``y``
++            is not None.
++
++        Returns
++        -------
++        self : PairGrid instance
++            Returns self for easy method chaining.
++        """
++        line_kws['color'] = color
++        line_kws['linestyle'] = linestyle
++
++        if x is not None:
++            self.map(plt.axvline, x=x, **line_kws)
++
++        if y is not None:
++            self.map(plt.axhline, y=y, **line_kws)
++
++        return self
++
+     def _add_axis_labels(self):
+         """Add labels to the left and bottom Axes."""
+         for ax, label in zip(self.axes[-1, :], self.x_vars):

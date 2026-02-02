@@ -1,0 +1,143 @@
+diff --git a/astropy/__init__.py b/astropy/__init__.py
+index 9e1bf3a..6aa823b 100644
+--- a/astropy/__init__.py
++++ b/astropy/__init__.py
+@@ -161,6 +161,9 @@ conf = Conf()
+ from .tests.runner import TestRunner
+ test = TestRunner.make_test_runner_in(__path__[0])
+ 
++# Import the ScienceState instances for constants
++from .constants.config import physical_constants, astronomical_constants
++
+ 
+ # if we are *not* in setup mode, import the logger and possibly populate the
+ # configuration file with the defaults
+@@ -320,7 +323,8 @@ def online_help(query):
+ 
+ __dir_inc__ = ['__version__', '__githash__', '__minimum_numpy_version__',
+                '__bibtex__', 'test', 'log', 'find_api_page', 'online_help',
+-               'online_docs_root', 'conf']
++               'online_docs_root', 'conf',
++               'physical_constants', 'astronomical_constants']
+ 
+ 
+ from types import ModuleType as __module_type__
+@@ -340,4 +344,4 @@ for varname in dir():
+         # the cleanup to keep any public submodules of the astropy package
+         del locals()[varname]
+ 
+-del varname, __module_type__
++del varname, __module_type__
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..97eb0b9
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,107 @@
++"""
++Configuration for astropy.constants.
++"""
++
++import sys
++from astropy.config import ScienceState
++
++__all__ = ['physical_constants', 'astronomical_constants']
++
++
++class _ConstantsScienceState(ScienceState):
++    """
++    Base class for constants science state.
++    """
++    _value = None
++    _module_prefix = None  # e.g., 'codata' or 'iau'
++
++    def __init__(self):
++        self._check_imports()
++
++    def _check_imports(self):
++        """
++        Check if astropy.constants or astropy.units are already imported.
++        If so, raise a RuntimeError.
++        """
++        if 'astropy.constants' in sys.modules or 'astropy.units' in sys.modules:
++            raise RuntimeError(
++                "astropy.constants or astropy.units is already imported. "
++                "Constants version must be set before importing these modules."
++            )
++
++    @classmethod
++    def validate(cls, value):
++        """
++        Validate the value and convert to a standard form.
++
++        Parameters
++        ----------
++        value : str
++            The value to set. Can be a module name (e.g., 'astropyconst13') or
++            a constants set name (e.g., 'codata2010').
++
++        Returns
++        -------
++        str
++            The validated value in the form of the constants set name.
++        """
++        # Map from module names to constants set names
++        module_to_constants = {
++            'astropyconst13': ('codata2010', 'iau2012'),
++            'astropyconst20': ('codata2014', 'iau2015'),
++            # Add more as needed
++        }
++
++        # If value is a module name, map to the appropriate constants set
++        if value in module_to_constants:
++            if cls.__name__ == 'physical_constants':
++                return module_to_constants[value][0]
++            else:
++                return module_to_constants[value][1]
++
++        # Otherwise, assume it's a constants set name
++        # For now, just return it. Could add more validation.
++        return value
++
++    def set(self, value):
++        """
++        Set the constants version.
++
++        Parameters
++        ----------
++        value : str
++            The value to set.
++
++        Returns
++        -------
++        ScienceState
++            The instance of the ScienceState.
++        """
++        # Check if astropy.constants or astropy.units are already imported
++        self._check_imports()
++        # Validate and convert the value
++        validated_value = self.validate(value)
++        # Set the value
++        return super().set(validated_value)
++
++
++class physical_constants(_ConstantsScienceState):
++    """
++    ScienceState for physical constants.
++
++    The value should be a string indicating the version of the physical
++    constants to use (e.g., 'codata2010', 'codata2014').
++    """
++    _value = 'codata2014'  # default
++    _module_prefix = 'codata'
++
++
++class astronomical_constants(_ConstantsScienceState):
++    """
++    ScienceState for astronomical constants.
++
++    The value should be a string indicating the version of the astronomical
++    constants to use (e.g., 'iau2012', 'iau2015').
++    """
++    _value = 'iau2015'  # default
++    _module_prefix = 'iau'

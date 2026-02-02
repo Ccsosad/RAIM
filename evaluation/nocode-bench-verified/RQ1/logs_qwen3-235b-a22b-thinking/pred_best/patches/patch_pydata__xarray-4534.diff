@@ -1,0 +1,122 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..a94887a 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -297,19 +297,102 @@ class DatetimeAccessor(Properties):
+         array('January 01, 2000, 12:00:00 AM', dtype=object)
+         """
+         obj_type = type(self._obj)
+-
+         result = _strftime(self._obj.data, date_format)
+-
+         return obj_type(
+             result, name="strftime", coords=self._obj.coords, dims=self._obj.dims
+         )
+ 
++    def isocalendar(self):
++        """
++        Return a dataset containing ISO year, week number, and weekday.
++
++        Returns
++        -------
++        isocalendar : Dataset
++            A dataset with variables year, week, and weekday, where week and weekday
++            follow ISO 8601. Week 1 is the first week with at least 4 days in the new year.
++
++        Examples
++        --------
++        >>> import xarray as xr
++        >>> dates = xr.DataArray(
++        ...     ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05"],
++        ...     dims="time",
++        ...     name="dates",
++        ... )
++        >>> dates.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 5)
++        Coordinates:
++          * time     (time) object 2020-01-01 2020-01-02 ... 2020-01-04 2020-01-05
++        Data variables:
++            year     (time) int64 2019 2019 2019 2019 2020
++            week     (time) int64 1 1 1 1 1
++            weekday  (time) int64 3 4 5 6 7
++
++        Notes
++        -----
++        This method is available in pandas >= 1.1.0.
++        """
++        if not is_pandas_version_ge("1.1.0"):
++            raise NotImplementedError(
++                "isocalendar requires pandas version 1.1.0 or greater"
++            )
++
++        # Get the isocalendar values from pandas
++        iso_calendar = self._obj.to_series().dt.isocalendar()
++
++        # Convert to xarray Dataset
++        return xr.Dataset(
++            {
++                "year": (self._obj.dims, iso_calendar["year"].values),
++                "week": (self._obj.dims, iso_calendar["week"].values),
++                "weekday": (self._obj.dims, iso_calendar["weekday"].values),
++            },
++            coords=self._obj.coords,
++        )
++
+     year = Properties._tslib_field_accessor(
+         "year", "The year of the datetime", np.int64
+     )
+     month = Properties._tslib_field_accessor(
+         "month", "The month as January=1, December=12", np.int64
+     )
++
++    @property
++    def weekofyear(self):
++        """
++        The week ordinal of the year.
++
++        .. deprecated:: 0.16.2
++           Use ``.dt.isocalendar().week`` instead.
++        """
++        import warnings
++
++        warnings.warn(
++            "The 'weekofyear' property has been deprecated. Use '.dt.isocalendar().week' instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return self._obj.to_series().dt.weekofyear
++
++    @property
++    def week(self):
++        """
++        The week ordinal of the year.
++
++        .. deprecated:: 0.16.2
++           Use ``.dt.isocalendar().week`` instead.
++        """
++        import warnings
++
++        warnings.warn(
++            "The 'week' property has been deprecated. Use '.dt.isocalendar().week' instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return self._obj.to_series().dt.week
++
+     day = Properties._tslib_field_accessor("day", "The days of the datetime", np.int64)
+     hour = Properties._tslib_field_accessor(
+         "hour", "The hours of the datetime", np.int64
+diff --git a/xarray/core/version_utils.py b/xarray/core/version_utils.py
+new file mode 100644
+index 0000000..5704082
+--- /dev/null
++++ b/xarray/core/version_utils.py
+@@ -0,0 +1,7 @@
++from distutils.version import LooseVersion
++
++import pandas as pd
++
++def is_pandas_version_ge(version: str) -> bool:
++    """Check if pandas version is greater than or equal to the specified version."""
++    return LooseVersion(pd.__version__) >= LooseVersion(version)

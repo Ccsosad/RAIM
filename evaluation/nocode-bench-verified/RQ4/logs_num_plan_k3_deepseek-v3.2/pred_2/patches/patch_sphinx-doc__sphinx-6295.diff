@@ -1,0 +1,54 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index 612ff28..54f29c8 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -573,6 +573,7 @@ class PyMethod(PyObject):
+ 
+     option_spec = PyObject.option_spec.copy()
+     option_spec.update({
++        'async': directives.flag,
+         'classmethod': directives.flag,
+         'staticmethod': directives.flag,
+     })
+@@ -583,12 +584,14 @@ class PyMethod(PyObject):
+ 
+     def get_signature_prefix(self, sig):
+         # type: (str) -> str
++        prefix = ''
++        if 'async' in self.options:
++            prefix += 'async '
+         if 'staticmethod' in self.options:
+-            return 'static '
++            prefix += 'static '
+         elif 'classmethod' in self.options:
+-            return 'classmethod '
+-        else:
+-            return ''
++            prefix += 'classmethod '
++        return prefix
+ 
+     def get_index_text(self, modname, name_cls):
+         # type: (str, Tuple[str, str]) -> str
+@@ -603,10 +606,20 @@ class PyMethod(PyObject):
+             else:
+                 return '%s()' % name
+ 
++        method_type = ''
+         if 'staticmethod' in self.options:
+-            return _('%s() (%s static method)') % (methname, clsname)
++            method_type = 'static'
+         elif 'classmethod' in self.options:
+-            return _('%s() (%s class method)') % (methname, clsname)
++            method_type = 'class'
++
++        if 'async' in self.options:
++            if method_type:
++                method_type = 'async ' + method_type
++            else:
++                method_type = 'async'
++
++        if method_type:
++            return _('%s() (%s %s method)') % (methname, clsname, method_type)
+         else:
+             return _('%s() (%s method)') % (methname, clsname)
+ 

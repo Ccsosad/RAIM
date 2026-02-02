@@ -1,0 +1,69 @@
+diff --git a/pylint/pyreverse/main.py b/pylint/pyreverse/main.py
+index 946d88c..7d4c57b 100644
+--- a/pylint/pyreverse/main.py
++++ b/pylint/pyreverse/main.py
+@@ -246,6 +246,16 @@ OPTIONS: Options = (
+             "used to determine a package namespace for modules located under the source root.",
+         },
+     ),
++    (
++        "show-stdlib",
++        {
++            "short": "L",
++            "action": "store_true",
++            "dest": "show_stdlib",
++            "default": False,
++            "help": "Include standard library modules in the diagram.",
++        },
++    ),
+ )
+ 
+ 
+@@ -301,4 +311,4 @@ class Run(_ArgumentsManager, _ArgumentsProvider):
+ 
+ 
+ if __name__ == "__main__":
+-    Run(sys.argv[1:])
++    Run(sys.argv[1:])
+diff --git a/pylint/pyreverse/utils.py b/pylint/pyreverse/utils.py
+new file mode 100644
+index 0000000..ce49196
+--- /dev/null
++++ b/pylint/pyreverse/utils.py
+@@ -0,0 +1,36 @@
++import sys
++
++def is_stdlib_module(module_name: str) -> bool:
++    """Check if a module is part of the Python standard library.
++    
++    Args:
++        module_name: The name of the module to check
++        
++    Returns:
++        True if the module is in the standard library, False otherwise
++    """
++    if not module_name:
++        return False
++    
++    # Check if it's a built-in module
++    if module_name in sys.builtin_module_names:
++        return True
++    
++    # Check common standard library paths
++    stdlib_paths = [sys.prefix, sys.exec_prefix]
++    
++    # Try to import the module and check its location
++    try:
++        module = __import__(module_name)
++        if hasattr(module, '__file__') and module.__file__:
++            module_path = module.__file__
++            # Check if the module is in a standard library directory
++            for stdlib_path in stdlib_paths:
++                if module_path.startswith(stdlib_path):
++                    # Check for site-packages to avoid false positives
++                    if 'site-packages' not in module_path and 'dist-packages' not in module_path:
++                        return True
++    except ImportError:
++        pass
++    
++    return False

@@ -1,0 +1,59 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..518a166 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3075,7 +3075,7 @@ class Axes(_AxesBase):
+             autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
+             startangle=0, radius=1, counterclock=True,
+             wedgeprops=None, textprops=None, center=(0, 0),
+-            frame=False, rotatelabels=False, *, normalize=True):
++            frame=False, rotatelabels=False, *, normalize=True, hatch=None):
+         """
+         Plot a pie chart.
+ 
+@@ -3153,6 +3153,12 @@ class Axes(_AxesBase):
+         rotatelabels : bool, default: False
+             Rotate each label to the angle of the corresponding slice if true.
+ 
++        hatch : str or list of str, optional
++            Hatch pattern to use in the wedges. If a string, the same hatch
++            is used for all wedges. If a list, its length must be equal to
++            the number of wedges and each wedge will get the corresponding
++            hatch. See also :doc:`/gallery/shapes_and_collections/hatch_style_reference`.
++
+         data : indexable object, optional
+             DATA_PARAMETER_PLACEHOLDER
+ 
+@@ -3211,6 +3217,15 @@ class Axes(_AxesBase):
+         if radius <= 0:
+             raise ValueError(f'radius must be a positive number, not {radius}')
+ 
++        # Process hatch: convert to list and cycle if needed
++        if hatch is not None:
++            if isinstance(hatch, str):
++                hatch_cycle = itertools.cycle([hatch])
++            else:
++                hatch_cycle = itertools.cycle(hatch)
++        else:
++            hatch_cycle = itertools.cycle([None])
++
+         # Starting theta1 is the start fraction of the circle
+         theta1 = startangle / 360
+ 
+@@ -3236,6 +3251,10 @@ class Axes(_AxesBase):
+                                clip_on=False,
+                                label=label)
+             w.set(**wedgeprops)
++            # Apply hatch
++            hatch_pattern = next(hatch_cycle)
++            if hatch_pattern is not None:
++                w.set_hatch(hatch_pattern)
+             slices.append(w)
+             self.add_patch(w)
+ 
+@@ -8280,4 +8299,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

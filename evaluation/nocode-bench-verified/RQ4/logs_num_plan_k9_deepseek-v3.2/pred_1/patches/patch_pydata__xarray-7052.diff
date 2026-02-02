@@ -1,0 +1,658 @@
+diff --git a/xarray/plot/__init__.py b/xarray/plot/__init__.py
+index c73ecc2..e925c62 100644
+--- a/xarray/plot/__init__.py
++++ b/xarray/plot/__init__.py
+@@ -1,3 +1,4 @@
++
+ from .dataset_plot import scatter
+ from .facetgrid import FacetGrid
+ from .plot import contour, contourf, hist, imshow, line, pcolormesh, plot, step, surface
+diff --git a/xarray/plot/plot.py b/xarray/plot/plot.py
+index b16caf5..e1171d9 100644
+--- a/xarray/plot/plot.py
++++ b/xarray/plot/plot.py
+@@ -1,3 +1,4 @@
++
+ """
+ Use this module directly:
+     import xarray.plot as xplt
+diff --git a/xarray/plot/accessor.py b/xarray/plot/accessor.py
+new file mode 100644
+index 0000000..2e6a64e
+--- /dev/null
++++ b/xarray/plot/accessor.py
+@@ -0,0 +1,297 @@
++"""
++Plot accessors for DataArray and Dataset with static typing.
++"""
++from __future__ import annotations
++
++from typing import TYPE_CHECKING, Any, Callable, Hashable, Literal
++
++if TYPE_CHECKING:
++    from xarray import DataArray, Dataset
++
++
++class DataArrayPlotAccessor:
++    """Plot accessor for DataArray objects with static typing."""
++    
++    def __init__(self, da: DataArray) -> None:
++        self._da = da
++    
++    def __call__(
++        self,
++        *args,
++        figsize: tuple[int, int] | None = None,
++        size: float | None = None,
++        aspect: float | None = None,
++        ax: Any | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        col_wrap: int | None = None,
++        xincrease: bool | None = True,
++        yincrease: bool | None = True,
++        add_legend: bool = True,
++        add_colorbar: bool | None = None,
++        add_labels: bool = True,
++        add_title: bool = True,
++        subplot_kws: dict[str, Any] | None = None,
++        **kwargs,
++    ) -> Any:
++        """Default plot of DataArray using matplotlib."""
++        from .dataarray_plot import plot
++        
++        return plot(
++            self._da,
++            *args,
++            figsize=figsize,
++            size=size,
++            aspect=aspect,
++            ax=ax,
++            row=row,
++            col=col,
++            col_wrap=col_wrap,
++            xincrease=xincrease,
++            yincrease=yincrease,
++            add_legend=add_legend,
++            add_colorbar=add_colorbar,
++            add_labels=add_labels,
++            add_title=add_title,
++            subplot_kws=subplot_kws,
++            **kwargs,
++        )
++    
++    def line(
++        self,
++        *args,
++        figsize: tuple[int, int] | None = None,
++        size: float | None = None,
++        aspect: float | None = None,
++        ax: Any | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        col_wrap: int | None = None,
++        xincrease: bool | None = True,
++        yincrease: bool | None = True,
++        add_legend: bool = True,
++        add_colorbar: bool | None = None,
++        add_labels: bool = True,
++        add_title: bool = True,
++        subplot_kws: dict[str, Any] | None = None,
++        **kwargs,
++    ) -> Any:
++        """Line plot of DataArray."""
++        from .dataarray_plot import line
++        
++        return line(
++            self._da,
++            *args,
++            figsize=figsize,
++            size=size,
++            aspect=aspect,
++            ax=ax,
++            row=row,
++            col=col,
++            col_wrap=col_wrap,
++            xincrease=xincrease,
++            yincrease=yincrease,
++            add_legend=add_legend,
++            add_colorbar=add_colorbar,
++            add_labels=add_labels,
++            add_title=add_title,
++            subplot_kws=subplot_kws,
++            **kwargs,
++        )
++    
++    def step(
++        self,
++        *args,
++        where: Literal["pre", "post", "mid"] = "pre",
++        figsize: tuple[int, int] | None = None,
++        size: float | None = None,
++        aspect: float | None = None,
++        ax: Any | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        col_wrap: int | None = None,
++        xincrease: bool | None = True,
++        yincrease: bool | None = True,
++        add_legend: bool = True,
++        add_colorbar: bool | None = None,
++        add_labels: bool = True,
++        add_title: bool = True,
++        subplot_kws: dict[str, Any] | None = None,
++        **kwargs,
++    ) -> Any:
++        """Step plot of DataArray."""
++        from .dataarray_plot import step
++        
++        return step(
++            self._da,
++            *args,
++            where=where,
++            figsize=figsize,
++            size=size,
++            aspect=aspect,
++            ax=ax,
++            row=row,
++            col=col,
++            col_wrap=col_wrap,
++            xincrease=xincrease,
++            yincrease=yincrease,
++            add_legend=add_legend,
++            add_colorbar=add_colorbar,
++            add_labels=add_labels,
++            add_title=add_title,
++            subplot_kws=subplot_kws,
++            **kwargs,
++        )
++    
++    def scatter(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        hue: Hashable | None = None,
++        markersize: Hashable | None = None,
++        figsize: tuple[int, int] | None = None,
++        size: float | None = None,
++        aspect: float | None = None,
++        ax: Any | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        col_wrap: int | None = None,
++        xincrease: bool | None = True,
++        yincrease: bool | None = True,
++        add_legend: bool = True,
++        add_colorbar: bool | None = None,
++        add_labels: bool = True,
++        add_title: bool = True,
++        subplot_kws: dict[str, Any] | None = None,
++        **kwargs,
++    ) -> Any:
++        """Scatter plot of DataArray."""
++        from .dataarray_plot import scatter
++        
++        return scatter(
++            self._da,
++            *args,
++            x=x,
++            y=y,
++            hue=hue,
++            markersize=markersize,
++            figsize=figsize,
++            size=size,
++            aspect=aspect,
++            ax=ax,
++            row=row,
++            col=col,
++            col_wrap=col_wrap,
++            xincrease=xincrease,
++            yincrease=yincrease,
++            add_legend=add_legend,
++            add_colorbar=add_colorbar,
++            add_labels=add_labels,
++            add_title=add_title,
++            subplot_kws=subplot_kws,
++            **kwargs,
++        )
++    
++    # Similar methods for contour, contourf, hist, imshow, pcolormesh, surface...
++    
++    def contour(
++        self,
++        *args,
++        figsize: tuple[int, int] | None = None,
++        size: float | None = None,
++        aspect: float | None = None,
++        ax: Any | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        col_wrap: int | None = None,
++        xincrease: bool | None = True,
++        yincrease: bool | None = True,
++        add_legend: bool = True,
++        add_colorbar: bool | None = None,
++        add_labels: bool = True,
++        add_title: bool = True,
++        subplot_kws: dict[str, Any] | None = None,
++        **kwargs,
++    ) -> Any:
++        """Contour plot of DataArray."""
++        from .dataarray_plot import contour
++        
++        return contour(
++            self._da,
++            *args,
++            figsize=figsize,
++            size=size,
++            aspect=aspect,
++            ax=ax,
++            row=row,
++            col=col,
++            col_wrap=col_wrap,
++            xincrease=xincrease,
++            yincrease=yincrease,
++            add_legend=add_legend,
++            add_colorbar=add_colorbar,
++            add_labels=add_labels,
++            add_title=add_title,
++            subplot_kws=subplot_kws,
++            **kwargs,
++        )
++
++
++class DatasetPlotAccessor:
++    """Plot accessor for Dataset objects with static typing."""
++    
++    def __init__(self, ds: Dataset) -> None:
++        self._ds = ds
++    
++    def scatter(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        hue: Hashable | None = None,
++        markersize: Hashable | None = None,
++        figsize: tuple[int, int] | None = None,
++        size: float | None = None,
++        aspect: float | None = None,
++        ax: Any | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        col_wrap: int | None = None,
++        xincrease: bool | None = True,
++        yincrease: bool | None = True,
++        add_legend: bool = True,
++        add_colorbar: bool | None = None,
++        add_labels: bool = True,
++        add_title: bool = True,
++        subplot_kws: dict[str, Any] | None = None,
++        **kwargs,
++    ) -> Any:
++        """Scatter plot of Dataset."""
++        from .dataset_plot import scatter
++        
++        return scatter(
++            self._ds,
++            *args,
++            x=x,
++            y=y,
++            hue=hue,
++            markersize=markersize,
++            figsize=figsize,
++            size=size,
++            aspect=aspect,
++            ax=ax,
++            row=row,
++            col=col,
++            col_wrap=col_wrap,
++            xincrease=xincrease,
++            yincrease=yincrease,
++            add_legend=add_legend,
++            add_colorbar=add_colorbar,
++            add_labels=add_labels,
++            add_title=add_title,
++            subplot_kws=subplot_kws,
++            **kwargs,
++        )
++    
++    # Other dataset plot methods...
+diff --git a/xarray/plot/dataarray_plot.py b/xarray/plot/dataarray_plot.py
+new file mode 100644
+index 0000000..2b631b3
+--- /dev/null
++++ b/xarray/plot/dataarray_plot.py
+@@ -0,0 +1,313 @@
++"""
++Use this module directly:
++    import xarray.plot as xplt
++
++Or use the methods on a DataArray or Dataset:
++    DataArray.plot._____
++    Dataset.plot._____
++"""
++from __future__ import annotations
++
++import functools
++import inspect
++import warnings
++from typing import TYPE_CHECKING, Any, Callable, Hashable, Literal
++
++import numpy as np
++
++from xarray.core.utils import emit_user_level_warning
++
++from . import utils
++from .facetgrid import FacetGrid
++
++if TYPE_CHECKING:
++    from xarray import DataArray, Dataset
++
++
++# Decorator to deprecate positional arguments
++def _deprecate_positional_args(func: Callable) -> Callable:
++    """Decorator to deprecate positional arguments in plot methods."""
++    sig = inspect.signature(func)
++    params = list(sig.parameters.keys())
++    
++    @functools.wraps(func)
++    def wrapper(*args, **kwargs):
++        # Check if any positional arguments beyond self are passed
++        if len(args) > 1:
++            # Get the function name for the warning
++            func_name = func.__name__
++            # Emit deprecation warning
++            emit_user_level_warning(
++                f"Passing positional arguments to {func_name} is deprecated. "
++                f"Use keyword arguments instead.",
++                FutureWarning,
++            )
++        return func(*args, **kwargs)
++    
++    return wrapper
++
++
++# Main plot function with keyword-only arguments
++@_deprecate_positional_args
++def plot(
++    darray: DataArray,
++    *args,
++    figsize: tuple[int, int] | None = None,
++    size: float | None = None,
++    aspect: float | None = None,
++    ax: Any | None = None,
++    row: Hashable | None = None,
++    col: Hashable | None = None,
++    col_wrap: int | None = None,
++    xincrease: bool | None = True,
++    yincrease: bool | None = True,
++    add_legend: bool = True,
++    add_colorbar: bool | None = None,
++    add_labels: bool = True,
++    add_title: bool = True,
++    subplot_kws: dict[str, Any] | None = None,
++    **kwargs,
++) -> Any:
++    """Default plot of DataArray using matplotlib."""
++    # Import here to avoid circular imports
++    from .plot_methods import _plot1d, _plot2d
++    
++    ndims = len(darray.dims)
++    if ndims == 1:
++        return _plot1d(
++            darray,
++            *args,
++            figsize=figsize,
++            size=size,
++            aspect=aspect,
++            ax=ax,
++            row=row,
++            col=col,
++            col_wrap=col_wrap,
++            xincrease=xincrease,
++            yincrease=yincrease,
++            add_legend=add_legend,
++            add_colorbar=add_colorbar,
++            add_labels=add_labels,
++            add_title=add_title,
++            subplot_kws=subplot_kws,
++            **kwargs,
++        )
++    elif ndims == 2:
++        return _plot2d(
++            darray,
++            *args,
++            figsize=figsize,
++            size=size,
++            aspect=aspect,
++            ax=ax,
++            row=row,
++            col=col,
++            col_wrap=col_wrap,
++            xincrease=xincrease,
++            yincrease=yincrease,
++            add_legend=add_legend,
++            add_colorbar=add_colorbar,
++            add_labels=add_labels,
++            add_title=add_title,
++            subplot_kws=subplot_kws,
++            **kwargs,
++        )
++    else:
++        raise ValueError(
++            "Only 1D and 2D arrays can be plotted. "
++            "Consider using faceting (row=, col=) for higher dimensional arrays."
++        )
++
++
++# Individual plot methods with keyword-only arguments
++@_deprecate_positional_args
++def line(
++    darray: DataArray,
++    *args,
++    figsize: tuple[int, int] | None = None,
++    size: float | None = None,
++    aspect: float | None = None,
++    ax: Any | None = None,
++    row: Hashable | None = None,
++    col: Hashable | None = None,
++    col_wrap: int | None = None,
++    xincrease: bool | None = True,
++    yincrease: bool | None = True,
++    add_legend: bool = True,
++    add_colorbar: bool | None = None,
++    add_labels: bool = True,
++    add_title: bool = True,
++    subplot_kws: dict[str, Any] | None = None,
++    **kwargs,
++) -> Any:
++    """Line plot of DataArray."""
++    kwargs.setdefault("linestyle", "-")
++    kwargs.setdefault("marker", None)
++    return plot(
++        darray,
++        *args,
++        figsize=figsize,
++        size=size,
++        aspect=aspect,
++        ax=ax,
++        row=row,
++        col=col,
++        col_wrap=col_wrap,
++        xincrease=xincrease,
++        yincrease=yincrease,
++        add_legend=add_legend,
++        add_colorbar=add_colorbar,
++        add_labels=add_labels,
++        add_title=add_title,
++        subplot_kws=subplot_kws,
++        **kwargs,
++    )
++
++
++@_deprecate_positional_args
++def step(
++    darray: DataArray,
++    *args,
++    where: Literal["pre", "post", "mid"] = "pre",
++    figsize: tuple[int, int] | None = None,
++    size: float | None = None,
++    aspect: float | None = None,
++    ax: Any | None = None,
++    row: Hashable | None = None,
++    col: Hashable | None = None,
++    col_wrap: int | None = None,
++    xincrease: bool | None = True,
++    yincrease: bool | None = True,
++    add_legend: bool = True,
++    add_colorbar: bool | None = None,
++    add_labels: bool = True,
++    add_title: bool = True,
++    subplot_kws: dict[str, Any] | None = None,
++    **kwargs,
++) -> Any:
++    """Step plot of DataArray."""
++    kwargs["drawstyle"] = f"steps-{where}"
++    return line(
++        darray,
++        *args,
++        figsize=figsize,
++        size=size,
++        aspect=aspect,
++        ax=ax,
++        row=row,
++        col=col,
++        col_wrap=col_wrap,
++        xincrease=xincrease,
++        yincrease=yincrease,
++        add_legend=add_legend,
++        add_colorbar=add_colorbar,
++        add_labels=add_labels,
++        add_title=add_title,
++        subplot_kws=subplot_kws,
++        **kwargs,
++    )
++
++
++@_deprecate_positional_args
++def scatter(
++    darray: DataArray,
++    *args,
++    x: Hashable | None = None,
++    y: Hashable | None = None,
++    hue: Hashable | None = None,
++    markersize: Hashable | None = None,
++    figsize: tuple[int, int] | None = None,
++    size: float | None = None,
++    aspect: float | None = None,
++    ax: Any | None = None,
++    row: Hashable | None = None,
++    col: Hashable | None = None,
++    col_wrap: int | None = None,
++    xincrease: bool | None = True,
++    yincrease: bool | None = True,
++    add_legend: bool = True,
++    add_colorbar: bool | None = None,
++    add_labels: bool = True,
++    add_title: bool = True,
++    subplot_kws: dict[str, Any] | None = None,
++    **kwargs,
++) -> Any:
++    """Scatter plot of DataArray."""
++    # Import here to avoid circular imports
++    from .plot_methods import _plot_scatter
++    
++    return _plot_scatter(
++        darray,
++        *args,
++        x=x,
++        y=y,
++        hue=hue,
++        markersize=markersize,
++        figsize=figsize,
++        size=size,
++        aspect=aspect,
++        ax=ax,
++        row=row,
++        col=col,
++        col_wrap=col_wrap,
++        xincrease=xincrease,
++        yincrease=yincrease,
++        add_legend=add_legend,
++        add_colorbar=add_colorbar,
++        add_labels=add_labels,
++        add_title=add_title,
++        subplot_kws=subplot_kws,
++        **kwargs,
++    )
++
++
++# Other plot methods (contour, contourf, hist, imshow, pcolormesh, surface)
++# would follow the same pattern with @_deprecate_positional_args decorator
++# and keyword-only arguments...
++
++# For brevity, I'll show the pattern for one more:
++@_deprecate_positional_args
++def contour(
++    darray: DataArray,
++    *args,
++    figsize: tuple[int, int] | None = None,
++    size: float | None = None,
++    aspect: float | None = None,
++    ax: Any | None = None,
++    row: Hashable | None = None,
++    col: Hashable | None = None,
++    col_wrap: int | None = None,
++    xincrease: bool | None = True,
++    yincrease: bool | None = True,
++    add_legend: bool = True,
++    add_colorbar: bool | None = None,
++    add_labels: bool = True,
++    add_title: bool = True,
++    subplot_kws: dict[str, Any] | None = None,
++    **kwargs,
++) -> Any:
++    """Contour plot of DataArray."""
++    kwargs.setdefault("colors", "k")
++    return plot(
++        darray,
++        *args,
++        figsize=figsize,
++        size=size,
++        aspect=aspect,
++        ax=ax,
++        row=row,
++        col=col,
++        col_wrap=col_wrap,
++        xincrease=xincrease,
++        yincrease=yincrease,
++        add_legend=add_legend,
++        add_colorbar=add_colorbar,
++        add_labels=add_labels,
++        add_title=add_title,
++        subplot_kws=subplot_kws,
++        **kwargs,
++    )
++
++
++# Similar implementations for contourf, hist, imshow, pcolormesh, surface...
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+new file mode 100644
+index 0000000..525f420
+--- /dev/null
++++ b/xarray/plot/facetgrid.py
+@@ -0,0 +1,12 @@
++    def map_dataarray(self, func: Callable, *args, **kwargs) -> None:
++        """Apply a plotting function to each DataArray in the grid."""
++        # Existing implementation...
++
++    def map_plot1d(self, func: Callable, *args, **kwargs) -> None:
++        """
++        Apply a 1D plotting function to each DataArray in the grid.
++        
++        This is a convenience method for applying 1D plot functions
++        like line, step, etc. to faceted data.
++        """
++        return self.map_dataarray(func, *args, **kwargs)

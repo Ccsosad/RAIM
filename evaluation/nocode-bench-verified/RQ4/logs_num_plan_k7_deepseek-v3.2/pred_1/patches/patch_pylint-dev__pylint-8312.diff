@@ -1,0 +1,35 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 4def383..ad2a21e 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -94,7 +94,24 @@ def expand_modules(
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
+ 
++    # Expand glob patterns in the input list
++    expanded_items = []
+     for something in files_or_modules:
++        # Check if the string contains any wildcard characters
++        if glob.has_magic(something):
++            # Expand the glob pattern
++            matches = glob.glob(something, recursive=True)
++            if matches:
++                # Sort for deterministic order
++                matches.sort()
++                expanded_items.extend(matches)
++            else:
++                # If no matches, keep the original pattern (might be a module)
++                expanded_items.append(something)
++        else:
++            expanded_items.append(something)
++
++    for something in expanded_items:
+         basename = os.path.basename(something)
+         if _is_ignored_file(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+@@ -179,4 +196,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors

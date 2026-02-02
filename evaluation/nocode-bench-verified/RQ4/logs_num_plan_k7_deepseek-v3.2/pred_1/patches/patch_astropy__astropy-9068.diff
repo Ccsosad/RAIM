@@ -1,0 +1,64 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..a6f93be 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,59 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A table with the same column names and length as self, with boolean
++            values indicating element-wise equality.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table with different column names.
++        """
++        from astropy.table import Table
++
++        if isinstance(other, Table):
++            # Check column names
++            if set(self.colnames) != set(other.colnames):
++                raise ValueError('cannot compare tables with different column names')
++            # Reorder columns of other to match self
++            other = other[self.colnames]
++            # Compare each column
++            data = {}
++            for name in self.colnames:
++                data[name] = self[name] == other[name]
++            return Table(data, names=self.colnames)
++        elif np.isscalar(other):
++            # Compare each column with the scalar
++            data = {}
++            for name in self.colnames:
++                data[name] = self[name] == other
++            return Table(data, names=self.colnames)
++        else:
++            # Assume it's an array-like that can be broadcast column-wise
++            # We require the length to match the number of columns?
++            # Actually, the example shows comparing with an array of length equal to number of columns.
++            # So we compare each column with the corresponding array element.
++            other = np.asarray(other)
++            if other.shape == (len(self.colnames),):
++                data = {}
++                for i, name in enumerate(self.colnames):
++                    data[name] = self[name] == other[i]
++                return Table(data, names=self.colnames)
++            else:
++                raise ValueError('Array must have length equal to number of columns')
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

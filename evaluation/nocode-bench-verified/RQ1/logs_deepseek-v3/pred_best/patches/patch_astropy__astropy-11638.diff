@@ -1,0 +1,14 @@
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 836039e..b141740 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -1930,6 +1930,9 @@ class Time(TimeBase):
+         # Sec. 4.3.1: the arg DUT is the quantity delta_UT1 = UT1 - UTC in
+         # seconds. It is obtained from tables published by the IERS.
+         if not hasattr(self, '_delta_ut1_utc'):
++            from astropy.utils import iers
++            if iers.conf.auto_download:
++                update_leap_seconds()
+             from astropy.utils.iers import earth_orientation_table
+             iers_table = earth_orientation_table.get()
+             # jd1, jd2 are normally set (see above), except if delta_ut1_utc

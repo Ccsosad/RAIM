@@ -1,0 +1,83 @@
+diff --git a/astropy/utils/iers/__init__.py b/astropy/utils/iers/__init__.py
+index c88b0b3..b33ff43 100644
+--- a/astropy/utils/iers/__init__.py
++++ b/astropy/utils/iers/__init__.py
+@@ -1,2 +1,7 @@
+ 
+-from .iers import *
++
++from .iers import *
++from .earth_orientation_table import earth_orientation_table
++from .earth_orientation_table import earth_orientation_table
++
++__all__ = ['earth_orientation_table'] + iers.__all__
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..30c0a61 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -106,6 +106,33 @@ class Conf(_config.ConfigNamespace):
+         'Remote timeout downloading IERS file data (seconds).')
+ 
+ 
++from astropy.utils.state import ScienceState
++
++class earth_orientation_table(ScienceState):
++    """
++    Global science state for the Earth orientation table.
++
++    This state controls which Earth orientation table (e.g., IERS-A, IERS-B, or
++    IERS-Auto) is used for time and coordinate transformations.
++
++    Examples
++    --------
++    >>> from astropy.utils import iers
++    >>> iers.earth_orientation_table.set(iers.IERS_B.open())
++    >>> iers.earth_orientation_table.get()
++    <IERS_B length=...>
++    >>> iers.earth_orientation_table.set(None)  # Reset to default
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError("earth_orientation_table must be an IERS instance or None")
++        return value
++
+ conf = Conf()
+ 
+ 
+@@ -801,4 +828,30 @@ class IERS_Auto(IERS_A):
+             table['dX_2000A_B'][:n_iers_b] = iers_b['dX_2000A']
+             table['dY_2000A_B'][:n_iers_b] = iers_b['dY_2000A']
+ 
+-        return table
++        return table
++
++
++class earth_orientation_table(ScienceState):
++    """
++    Global science state for the Earth orientation table.
++
++    This state controls which Earth orientation table (e.g., IERS-A, IERS-B, or
++    IERS-Auto) is used for time and coordinate transformations.
++
++    Examples
++    --------
++    >>> from astropy.utils import iers
++    >>> iers.earth_orientation_table.set(iers.IERS_B.open())
++    >>> iers.earth_orientation_table.get()
++    <IERS_B length=...>
++    >>> iers.earth_orientation_table.set(None)  # Reset to default
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError("earth_orientation_table must be an IERS instance or None")
++        return value

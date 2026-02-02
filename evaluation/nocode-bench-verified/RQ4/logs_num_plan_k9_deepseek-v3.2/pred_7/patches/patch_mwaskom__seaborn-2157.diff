@@ -1,0 +1,297 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..f508859 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -2083,6 +2083,265 @@ def _freedman_diaconis_bins(a):
+         return int(np.ceil((a.max() - a.min()) / h))
+ 
+ 
++@_deprecate_positional_args
++def displot(
++    *,
++    data=None,
++    x=None, y=None,
++    hue=None, row=None, col=None,
++    weights=None,
++    kind="hist",
++    rug=False, rug_kws=None,
++    log_scale=None,
++    legend=True,
++    **kwargs
++):
++    """Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distributions of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    ``kind`` parameter selects the approach to use:
++
++    - ``hist`` (default) for histograms
++    - ``kde`` for kernel density estimates
++    - ``ecdf`` for empirical cumulative distribution functions
++
++    Additionally, a ``rug`` can be added to any of these kinds of plots, which
++    can be an effective way to show the location of individual observations.
++
++    Plotting functions accept a ``hue`` semantic, which will create distinct
++    distributions with different colors. Depending on the ``kind``, additional
++    keyword arguments may be accepted to tune the relevant visualization.
++
++    After plotting, the :class:`FacetGrid` with the plot is returned and can
++    be used directly to tweak supporting plot details or add other layers.
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure. Either a long-form collection of vectors that can
++        be assigned to named variables or a wide-form dataset that will be
++        internally reshaped.
++    x, y : vectors or keys in ``data``
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in ``data``
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in ``data``
++        Variables that define subsets to plot on different facets.
++    weights : vector or key in ``data``
++        If provided, weight the contribution of the corresponding data points
++        towards the kernel density estimate or histogram bin count.
++    kind : {"hist", "kde", "ecdf"}
++        The kind of plot to draw. Currently, only histograms, kernel density
++        estimates, and empirical cumulative distribution functions are supported.
++    rug : bool
++        If True, show each observation with marginal ticks (as in ``rugplot``).
++    rug_kws : dict
++        Keyword arguments for ``rugplot``.
++    log_scale : bool or number, or pair of bools or numbers
++        Set axis scale(s) to log. A single value sets the data axis for any
++        numeric axes in the plot. A pair of values sets each axis independently.
++        Numeric values are interpreted as the desired base (default 10).
++    legend : bool
++        If False, suppress the legend for semantic variables.
++    kwargs : key, value pairings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    g : FacetGrid
++        Returns the :class:`FacetGrid` object with the plot on it for further
++        tweaking.
++
++    See Also
++    --------
++    histplot : Draw a histogram using binned data.
++    kdeplot : Draw a kernel density estimate.
++    ecdfplot : Draw an empirical cumulative distribution function.
++    rugplot : Draw a rugplot for univariate or bivariate data.
++
++    Examples
++    --------
++
++    The default plot kind is a histogram:
++
++    .. plot::
++        :context: close-figs
++
++        >>> import seaborn as sns; sns.set(style="ticks")
++        >>> penguins = sns.load_dataset("penguins")
++        >>> sns.displot(data=penguins, x="flipper_length_mm")
++
++    Use the ``kind`` parameter to select a different representation:
++
++    .. plot::
++        :context: close-figs
++
++        >>> sns.displot(data=penguins, x="flipper_length_mm", kind="kde")
++
++    There are three main plot kinds; in addition to histograms and kernel
++    density estimates (KDEs), you can also draw empirical cumulative
++    distribution functions (ECDFs):
++
++    .. plot::
++        :context: close-figs
++
++        >>> sns.displot(data=penguins, x="flipper_length_mm", kind="ecdf")
++
++    While in histogram mode, it is also possible to add a KDE curve:
++
++    .. plot::
++        :context: close-figs
++
++        >>> sns.displot(data=penguins, x="flipper_length_mm", kde=True)
++
++    To draw a bivariate plot, assign both ``x`` and ``y``:
++
++    .. plot::
++        :context: close-figs
++
++        >>> sns.displot(data=penguins, x="flipper_length_mm", y="culmen_length_mm")
++
++    Currently, bivariate plots are available only for histograms and KDEs:
++
++    .. plot::
++        :context: close-figs
++
++        >>> sns.displot(data=penguins, x="flipper_length_mm", y="culmen_length_mm", kind="kde")
++
++    For each kind of plot, you can also show individual observations with a
++    marginal "rug":
++
++    .. plot::
++        :context: close-figs
++
++        >>> g = sns.displot(data=penguins, x="flipper_length_mm", y="culmen_length_mm", kind="kde", rug=True)
++
++    Each kind of plot can be drawn separately for subsets of data using ``hue``
++    mapping:
++
++    .. plot::
++        :context: close-figs
++
++        >>> sns.displot(data=penguins, x="flipper_length_mm", hue="species", kind="kde")
++
++    Additional keyword arguments are passed to the appropriate underlying
++    plotting function, allowing for further customization:
++
++    .. plot::
++        :context: close-figs
++
++        >>> sns.displot(data=penguins, x="flipper_length_mm", hue="species", multiple="stack")
++
++    The figure is constructed using a :class:`FacetGrid`, meaning that you can
++    also show subsets on distinct subplots, or "facets":
++
++    .. plot::
++        :context: close-figs
++
++        >>> sns.displot(data=penguins, x="flipper_length_mm", hue="species", col="sex", kind="kde")
++
++    Because the figure is drawn with a :class:`FacetGrid`, you control its size
++    and shape with the ``height`` and ``aspect`` parameters:
++
++    .. plot::
++        :context: close-figs
++
++        >>> sns.displot(
++        ...     data=penguins, y="flipper_length_mm", hue="sex", col="species",
++        ...     kind="ecdf", height=4, aspect=.7,
++        ... )
++
++    The function returns the :class:`FacetGrid` object with the plot, and you
++    can use the methods on this object to customize it further:
++
++    .. plot::
++        :context: close-figs
++
++        >>> g = sns.displot(
++        ...     data=penguins, y="flipper_length_mm", hue="sex", col="species",
++        ...     kind="kde", height=4, aspect=.7,
++        ... )
++        >>> g.set_axis_labels("Density (a.u.)", "Flipper length (mm)")
++        >>> g.set_titles("{col_name} penguins")
++
++    """
++    # Validate the plot kind
++    if kind not in ("hist", "kde", "ecdf"):
++        raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind}.")
++
++    # Initialize the FacetGrid object
++    g = FacetGrid(
++        data=data,
++        row=row, col=col,
++        hue=hue,
++        height=kwargs.pop("height", None),
++        aspect=kwargs.pop("aspect", None),
++        palette=kwargs.pop("palette", None),
++        row_order=kwargs.pop("row_order", None),
++        col_order=kwargs.pop("col_order", None),
++        hue_order=kwargs.pop("hue_order", None),
++        hue_norm=kwargs.pop("hue_norm", None),
++        legend_out=kwargs.pop("legend_out", True),
++        sharex=kwargs.pop("sharex", True),
++        sharey=kwargs.pop("sharey", True),
++        margin_titles=kwargs.pop("margin_titles", False),
++        xlim=kwargs.pop("xlim", None),
++        ylim=kwargs.pop("ylim", None),
++        subplot_kws=kwargs.pop("subplot_kws", None),
++        gridspec_kws=kwargs.pop("gridspec_kws", None),
++    )
++
++    # Define the function that will be applied to each facet
++    def plot_func(x, y, hue, data, **kwargs):
++        # Determine which axes-level function to use
++        if kind == "hist":
++            func = histplot
++        elif kind == "kde":
++            func = kdeplot
++        elif kind == "ecdf":
++            func = ecdfplot
++        
++        # Prepare keyword arguments for the axes-level function
++        plot_kws = kwargs.copy()
++        plot_kws.update(
++            x=x, y=y, hue=hue, data=data,
++            weights=weights,
++            log_scale=log_scale,
++            legend=False,
++        )
++        
++        # Call the axes-level function
++        ax = plt.gca()
++        func(**plot_kws)
++        
++        # Add rug plot if requested
++        if rug:
++            rug_data = data
++            if x is not None and y is not None:
++                # Bivariate rug plot
++                rug_kws = rug_kws or {}
++                rugplot(x=data[x], y=data[y], ax=ax, **rug_kws)
++            elif x is not None:
++                # Univariate rug plot on x-axis
++                rug_kws = rug_kws or {}
++                rugplot(x=data[x], ax=ax, **rug_kws)
++            elif y is not None:
++                # Univariate rug plot on y-axis
++                rug_kws = rug_kws or {}
++                rugplot(y=data[y], ax=ax, **rug_kws)
++
++    # Map the plotting function to the facets
++    g.map_dataframe(plot_func, **kwargs)
++
++    # Add a legend if requested
++    if legend and hue is not None:
++        g.add_legend()
++
++    return g
++
++
+ @_deprecate_positional_args
+ def distplot(
+     *,
+@@ -2099,6 +2358,11 @@ def distplot(
+     and :func:`rugplot` functions. It can also fit ``scipy.stats``
+     distributions and plot the estimated PDF over the data.
+ 
++    .. warning::
++        This function is deprecated and will be removed in a future version.
++        Please update your code to use :func:`displot` (a figure-level function)
++        or :func:`histplot` (an axes-level function).
++
+     Parameters
+     ----------
+ 
+@@ -2146,6 +2410,8 @@ def distplot(
+ 
+     See Also
+     --------
++    displot : Figure-level interface for distribution plots.
++    histplot : Draw a histogram using binned data.
+     kdeplot : Show a univariate or bivariate distribution with a kernel
+               density estimate.
+     rugplot : Draw small vertical lines to show each observation in a
+@@ -2322,4 +2588,4 @@ def distplot(
+         else:
+             ax.set_xlabel(axlabel)
+ 
+-    return ax
++    return ax

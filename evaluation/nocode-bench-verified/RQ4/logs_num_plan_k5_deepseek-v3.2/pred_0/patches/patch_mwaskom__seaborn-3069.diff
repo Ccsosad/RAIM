@@ -1,0 +1,20 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..874dde9 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -194,6 +194,15 @@ class Nominal(Scale):
+ 
+         new._matplotlib_scale = mpl_scale
+ 
++        # Set axis properties to mimic seaborn categorical axes
++        # Only for real matplotlib axes, not for PseudoAxis
++        if not isinstance(axis, PseudoAxis):
++            axes = axis.axes
++            axes.set_margin(0)
++            axes.grid(False)
++            if axis.axis_name == 'y':
++                axes.invert_yaxis()
++
+         # TODO array cast necessary to handle float/int mixture, which we need
+         # to solve in a more systematic way probably
+         # (i.e. if we have [1, 2.5], do we want [1.0, 2.5]? Unclear)

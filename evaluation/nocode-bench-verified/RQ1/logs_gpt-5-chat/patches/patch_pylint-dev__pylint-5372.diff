@@ -1,0 +1,12 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 0981994..a35949c 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -148,6 +148,7 @@ class TextReporter(BaseReporter):
+         template.
+         """
+         self_dict = asdict(msg)
++        # Represent None end_line / end_column as empty string in default TextReporter
+         for key in ("end_line", "end_column"):
+             self_dict[key] = self_dict[key] or ""
+ 

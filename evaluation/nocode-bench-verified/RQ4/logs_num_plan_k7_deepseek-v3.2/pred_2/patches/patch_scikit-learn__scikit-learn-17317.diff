@@ -1,0 +1,64 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 24b047c..46f30b9 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -1,3 +1,4 @@
++
+ import numpy as np
+ 
+ 
+@@ -32,14 +33,51 @@ def _unique(values, *, return_inverse=False):
+ 
+ def _unique_python(values, *, return_inverse):
+     # Only used in `_uniques`, see docstring there for details
++    # Separate missing and non-missing values
++    missing_mask = np.array([val is None or (isinstance(val, float) and np.isnan(val)) for val in values], dtype=bool)
++    non_missing_values = values[~missing_mask]
++    missing_values = values[missing_mask]
++
++    # Get unique non-missing values and sort them
+     try:
+-        uniques = sorted(set(values))
+-        uniques = np.array(uniques, dtype=values.dtype)
++        uniques_non_missing = sorted(set(non_missing_values))
+     except TypeError:
+         types = sorted(t.__qualname__
+-                       for t in set(type(v) for v in values))
++                       for t in set(type(v) for v in non_missing_values))
+         raise TypeError("Encoders require their input to be uniformly "
+                         f"strings or numbers. Got {types}")
++    uniques_non_missing = np.array(uniques_non_missing, dtype=values.dtype)
++
++    # Get unique missing values
++    # We want to have a deterministic order: first None, then NaN
++    unique_missing = []
++    seen_none = False
++    seen_nan = False
++    for val in missing_values:
++        if val is None and not seen_none:
++            unique_missing.append(None)
++            seen_none = True
++        elif isinstance(val, float) and np.isnan(val) and not seen_nan:
++            unique_missing.append(np.nan)
++            seen_nan = True
++
++    uniques = np.concatenate([uniques_non_missing, np.array(unique_missing, dtype=values.dtype)])
++
++    if not return_inverse:
++        return uniques
++
++    # Calculate the inverse indices
++    inverse = np.zeros(len(values), dtype=int)
++    # For each unique value, find where it occurs in the original array
++    for i, val in enumerate(uniques):
++        if val is None:
++            inverse[np.array([v is None for v in values], dtype=bool)] = i
++        elif isinstance(val, float) and np.isnan(val):
++            inverse[np.array([isinstance(v, float) and np.isnan(v) for v in values], dtype=bool)] = i
++        else:
++            inverse[values == val] = i
++
++    return uniques, inverse
+ 
+     if return_inverse:
+         table = {val: i for i, val in enumerate(uniques)}

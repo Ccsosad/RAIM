@@ -1,0 +1,89 @@
+diff --git a/astropy/__init__.py b/astropy/__init__.py
+index 9e1bf3a..bf68778 100644
+--- a/astropy/__init__.py
++++ b/astropy/__init__.py
+@@ -161,6 +161,9 @@ conf = Conf()
+ from .tests.runner import TestRunner
+ test = TestRunner.make_test_runner_in(__path__[0])
+ 
++# Import the ScienceState classes for constants
++from .constants.config import physical_constants, astronomical_constants
++
+ 
+ # if we are *not* in setup mode, import the logger and possibly populate the
+ # configuration file with the defaults
+@@ -320,7 +323,8 @@ def online_help(query):
+ 
+ __dir_inc__ = ['__version__', '__githash__', '__minimum_numpy_version__',
+                '__bibtex__', 'test', 'log', 'find_api_page', 'online_help',
+-               'online_docs_root', 'conf']
++               'online_docs_root', 'conf',
++               'physical_constants', 'astronomical_constants']
+ 
+ 
+ from types import ModuleType as __module_type__
+@@ -340,4 +344,4 @@ for varname in dir():
+         # the cleanup to keep any public submodules of the astropy package
+         del locals()[varname]
+ 
+-del varname, __module_type__
++del varname, __module_type__
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..862f547
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,53 @@
++"""
++Configuration parameters for `astropy.constants`.
++"""
++
++from astropy.config import ScienceState
++
++class physical_constants(ScienceState):
++    """
++    ScienceState for the physical constants version.
++    """
++    _value = 'codata2014'
++
++    @classmethod
++    def validate(cls, value):
++        # Check if astropy.units or astropy.constants are already imported
++        import sys
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError('astropy.units is already imported')
++        if 'astropy.constants' in sys.modules:
++            raise RuntimeError('astropy.constants is already imported')
++
++        # Map the module name to the actual version
++        if value == 'astropyconst13':
++            return 'codata2010'
++        elif value == 'astropyconst20':
++            return 'codata2014'
++        else:
++            # Assume it's a valid codata year
++            return value
++
++class astronomical_constants(ScienceState):
++    """
++    ScienceState for the astronomical constants version.
++    """
++    _value = 'iau2015'
++
++    @classmethod
++    def validate(cls, value):
++        # Check if astropy.units or astropy.constants are already imported
++        import sys
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError('astropy.units is already imported')
++        if 'astropy.constants' in sys.modules:
++            raise RuntimeError('astropy.constants is already imported')
++
++        # Map the module name to the actual version
++        if value == 'astropyconst13':
++            return 'iau2012'
++        elif value == 'astropyconst20':
++            return 'iau2015'
++        else:
++            # Assume it's a valid iau year
++            return value

@@ -1,0 +1,57 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..c9df7e9 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,52 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values with another table, array, or scalar element-wise.
++
++        Parameters
++        ----------
++        other : Table, array, or scalar
++            The object to compare with the table.
++
++        Returns
++        -------
++        result : Table
++            A Table with boolean columns and the same shape as the original table.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table with different column names.
++        """
++        from astropy.table import Table
++
++        if isinstance(other, Table):
++            # Compare with another table
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # Create a new table with boolean columns
++            result = Table(masked=self.masked or other.masked)
++            for name in self.colnames:
++                result[name] = self[name] == other[name]
++        else:
++            # Compare with an array or scalar
++            # We broadcast column-wise: each column is compared with the corresponding element in `other`.
++            # If `other` is a scalar, it is broadcast to all elements of all columns.
++            # If `other` is an array, it must have the same length as the number of columns.
++            result = Table(masked=self.masked)
++            if np.isscalar(other):
++                for name in self.colnames:
++                    result[name] = self[name] == other
++            else:
++                # Assume `other` is an array-like with length equal to number of columns
++                if len(other) != len(self.colnames):
++                    raise ValueError('Length of array must match number of columns')
++                for name, val in zip(self.colnames, other):
++                    result[name] = self[name] == val
++        return result
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

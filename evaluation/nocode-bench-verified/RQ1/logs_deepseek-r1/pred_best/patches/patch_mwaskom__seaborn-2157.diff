@@ -1,0 +1,248 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..af2bc45 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -1270,6 +1270,124 @@ class _DistributionPlotter(VectorPlotter):
+         ax.autoscale_view(scalex=var == "x", scaley=var == "y")
+ 
+ 
++def displot(
++    data=None, *,
++    # Vector variables
++    x=None, y=None, hue=None, row=None, col=None, weights=None,
++    # Distribution representation
++    kind="hist",
++    # Histogram computation parameters
++    stat="count", bins="auto", binwidth=None, binrange=None,
++    discrete=None, cumulative=False, common_bins=True, common_norm=True,
++    # Histogram appearance parameters
++    multiple="layer", element="bars", fill=True, shrink=1,
++    # Histogram smoothing with a kernel density estimate
++    kde=False, kde_kws=None, line_kws=None,
++    # Bivariate histogram parameters
++    thresh=0, pthresh=None, pmax=None, cbar=False, cbar_ax=None, cbar_kws=None,
++    # KDE parameters
++    bw_adjust=1, bw_method="scott", cut=3, gridsize=200,
++    # ECDF parameters
++    complementary=False,
++    # Hue mapping parameters
++    palette=None, hue_order=None, hue_norm=None, color=None,
++    # Facet parameters
++    col_wrap=None, row_order=None, col_order=None,
++    # Axes information
++    log_scale=None, legend=True,
++    # FacetGrid parameters
++    height=5, aspect=1,
++    # Other appearance keywords
++    facet_kws=None, **kwargs,
++):
++    """
++    Figure-level interface for drawing distribution plots onto a FacetGrid.
++    
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distributions of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots.
++    
++    Parameters
++    ----------
++    data : DataFrame, Series, array, or list of arrays
++        Input data structure. If x and y are both absent, this is interpreted
++        as wide-form. Otherwise it is expected to be long-form.
++    kind : str
++        Kind of plot to draw. Options are "hist" (histogram), "kde" (kernel density
++        estimate), or "ecdf" (empirical cumulative distribution function).
++    height : scalar
++        Height (in inches) of each facet. See also: `aspect`.
++    aspect : scalar
++        Aspect ratio of each facet, so that `aspect * height` gives the width
++        of each facet in inches.
++    facet_kws : dict
++        Dictionary of other keyword arguments to pass to :class:`FacetGrid`.
++    
++    Returns
++    -------
++    :class:`FacetGrid`
++        Returns the :class:`FacetGrid` object with the plot on it for further
++        tweaking.
++    
++    See Also
++    --------
++    histplot : Plot a univariate or bivariate histogram.
++    kdeplot : Plot a univariate or bivariate kernel density estimate.
++    ecdfplot : Plot empirical cumulative distribution functions.
++    """
++    
++    # Handle facet_kws
++    if facet_kws is None:
++        facet_kws = {}
++    
++    # Initialize the FacetGrid object
++    g = FacetGrid(
++        data=data, row=row, col=col, hue=hue,
++        col_wrap=col_wrap, row_order=row_order, col_order=col_order,
++        palette=palette, hue_order=hue_order, hue_norm=hue_norm,
++        height=height, aspect=aspect, **facet_kws
++    )
++    
++    # Add the axes information to the plotter structure
++    if log_scale is not None:
++        g.set_axes(log_scale=log_scale)
++    
++    # Determine what function to use for plotting
++    if kind == "hist":
++        plot_func = histplot
++    elif kind == "kde":
++        plot_func = kdeplot
++    elif kind == "ecdf":
++        plot_func = ecdfplot
++    else:
++        raise ValueError(f"kind must be one of ['hist', 'kde', 'ecdf'], got {kind}")
++    
++    # Prepare the keyword arguments for the plotting function
++    plot_kws = dict(
++        x=x, y=y, hue=hue, weights=weights,
++        stat=stat, bins=bins, binwidth=binwidth, binrange=binrange,
++        discrete=discrete, cumulative=cumulative, common_bins=common_bins,
++        common_norm=common_norm, multiple=multiple, element=element,
++        fill=fill, shrink=shrink, kde=kde, kde_kws=kde_kws, line_kws=line_kws,
++        thresh=thresh, pthresh=pthresh, pmax=pmax, cbar=cbar, cbar_ax=cbar_ax,
++        cbar_kws=cbar_kws, bw_adjust=bw_adjust, bw_method=bw_method, cut=cut,
++        gridsize=gridsize, complementary=complementary, color=color,
++        legend=legend, log_scale=log_scale, **kwargs
++    )
++    
++    # Remove None values to avoid passing them to the plotting function
++    plot_kws = {k: v for k, v in plot_kws.items() if v is not None}
++    
++    # Map the plotting function to the FacetGrid
++    g.map_dataframe(plot_func, **plot_kws)
++    
++    # Add a legend if needed
++    if legend and hue is not None:
++        g.add_legend()
++    
++    return g
++
++
+ # ==================================================================================== #
+ # External API
+ # ==================================================================================== #
+diff --git a/seaborn/__init__.py b/seaborn/__init__.py
+new file mode 100644
+index 0000000..08cc015
+--- /dev/null
++++ b/seaborn/__init__.py
+@@ -0,0 +1 @@
++from .distributions import displot, histplot, kdeplot, ecdfplot, rugplot
+diff --git a/seaborn/_ecdf.py b/seaborn/_ecdf.py
+new file mode 100644
+index 0000000..6cd3150
+--- /dev/null
++++ b/seaborn/_ecdf.py
+@@ -0,0 +1,106 @@
++"""
++Empirical cumulative distribution function plots.
++"""
++
++import numpy as np
++import pandas as pd
++import matplotlib as mpl
++
++from seaborn._core.vectors import variable_type
++from seaborn.utils import _check_argument, _draw_figure, _default_color
++
++
++def ecdfplot(
++    data=None, *,
++    x=None, y=None, hue=None, weights=None,
++    stat="proportion", complementary=False,
++    palette=None, hue_order=None, hue_norm=None, color=None,
++    legend=True, log_scale=None, ax=None, **kwargs
++):
++    """
++    Plot empirical cumulative distribution functions.
++    
++    An ECDF represents the proportion or count of observations falling below
++    each unique value in a dataset. 
++    
++    Parameters
++    ----------
++    data : DataFrame, Series, array, or list of arrays
++        Input data structure.
++    x, y : vectors or keys in `data`
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    stat : {{"proportion", "count"}}
++        Statistical transformation to use for the y-axis.
++    complementary : bool
++        If True, plot the complementary ECDF (1 - ECDF)
++    ax : matplotlib Axes
++        Axes object to draw the plot onto.
++    
++    Returns
++    -------
++    matplotlib Axes
++        Returns the Axes object with the plot drawn onto it.
++    """
++    
++    # Input processing and validation
++    if ax is None:
++        ax = plt.gca()
++    
++    # Check for valid stat parameter
++    _check_argument("stat", ["proportion", "count"], stat)
++    
++    # Handle univariate vs bivariate case
++    if x is not None and y is not None:
++        raise ValueError("ECDF plots are currently only supported for univariate data")
++    
++    # Determine the data variable
++    if x is not None:
++        var = "x"
++        data_variable = x
++    elif y is not None:
++        var = "y"
++        data_variable = y
++    else:
++        raise ValueError("Either x or y must be specified")
++    
++    # Extract the data vector
++    if data is not None:
++        if isinstance(data, pd.DataFrame):
++            data_vec = data[data_variable]
++        else:
++            data_vec = data
++    else:
++        data_vec = data_variable
++    
++    # Convert to numpy array
++    data_vec = np.asarray(data_vec)
++    data_vec = data_vec[~np.isnan(data_vec)]
++    
++    # Sort the data
++    sorted_data = np.sort(data_vec)
++    
++    # Calculate ECDF values
++    n = len(sorted_data)
++    if stat == "proportion":
++        y_vals = np.arange(1, n + 1) / n
++    else:  # stat == "count"
++        y_vals = np.arange(1, n + 1)
++    
++    if complementary:
++        y_vals = 1 - y_vals if stat == "proportion" else n - y_vals
++    
++    # Plot the ECDF
++    if var == "x":
++        ax.plot(sorted_data, y_vals, color=color, **kwargs)
++    else:  # var == "y"
++        ax.plot(y_vals, sorted_data, color=color, **kwargs)
++    
++    # Set appropriate labels
++    if stat == "proportion":
++        ax.set_ylabel("Proportion" + (" (complementary)" if complementary else ""))
++    else:
++        ax.set_ylabel("Count" + (" (complementary)" if complementary else ""))
++    
++    return ax

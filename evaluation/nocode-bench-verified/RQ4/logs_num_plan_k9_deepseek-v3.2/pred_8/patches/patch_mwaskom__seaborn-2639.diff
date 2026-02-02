@@ -1,0 +1,112 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..bd08d92 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -41,6 +41,9 @@ class Grid:
+         # don't add proxy artists onto the Axes. We need an overall cleaner approach.
+         self._extract_legend_handles = False
+ 
++        # Initialize _figure attribute for consistency across grid objects
++        self._figure = None
++
+     def set(self, **kwargs):
+         """Set attributes on each subplot Axes."""
+         for ax in self.axes.flat:
+@@ -52,7 +55,7 @@ class Grid:
+         """Save the figure."""
+         kwargs = kwargs.copy()
+         kwargs.setdefault("bbox_inches", "tight")
+-        self.fig.savefig(*args, **kwargs)
++        self.figure.savefig(*args, **kwargs)
+ 
+     def tight_layout(self, *args, **kwargs):
+         """Call fig.tight_layout within rect that exclude the legend."""
+@@ -60,7 +63,7 @@ class Grid:
+         kwargs.setdefault("rect", self._tight_layout_rect)
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+-        self.fig.tight_layout(*args, **kwargs)
++        self.figure.tight_layout(*args, **kwargs)
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -418,7 +421,8 @@ class FacetGrid(Grid):
+ 
+         # Attributes that are part of the public API but accessed through
+         # a  property so that Sphinx adds them to the auto class doc
+-        self._fig = fig
++        self._figure = fig
++        self._fig = fig  # Keep for backward compatibility
+         self._axes = axes
+         self._axes_dict = axes_dict
+         self._legend = None
+@@ -991,10 +995,22 @@ class FacetGrid(Grid):
+ 
+     # ------ Properties that are part of the public API and documented by Sphinx
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
+     @property
+     def fig(self):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+-        return self._fig
++        import warnings
++        warnings.warn(
++            "The `fig` attribute is deprecated and will be removed in a future version. "
++            "Please use `figure` instead.",
++            FutureWarning,
++            stacklevel=2
++        )
++        return self._figure
+ 
+     @property
+     def axes(self):
+@@ -1233,7 +1249,8 @@ class PairGrid(Grid):
+                 axes[i, j].remove()
+                 axes[i, j] = None
+ 
+-        self.fig = fig
++        self._figure = fig
++        self.fig = fig  # Keep for backward compatibility
+         self.axes = axes
+         self.data = data
+ 
+@@ -1650,7 +1667,8 @@ class JointGrid(object):
+         ax_marg_x = f.add_subplot(gs[0, :-1], sharex=ax_joint)
+         ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint)
+ 
+-        self.fig = f
++        self._figure = f
++        self.fig = f  # Keep for backward compatibility
+         self.ax_joint = ax_joint
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y
+@@ -1920,7 +1938,24 @@ class JointGrid(object):
+ 
+         """
+         kwargs.setdefault("bbox_inches", "tight")
+-        self.fig.savefig(*args, **kwargs)
++        self.figure.savefig(*args, **kwargs)
++
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
++    @property
++    def fig(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        import warnings
++        warnings.warn(
++            "The `fig` attribute is deprecated and will be removed in a future version. "
++            "Please use `figure` instead.",
++            FutureWarning,
++            stacklevel=2
++        )
++        return self._figure
+ 
+ 
+ JointGrid.__init__.__doc__ = """\

@@ -1,0 +1,53 @@
+diff --git a/astropy/cosmology/flrw.py b/astropy/cosmology/flrw.py
+index ecb617a..a7937bb 100644
+--- a/astropy/cosmology/flrw.py
++++ b/astropy/cosmology/flrw.py
+@@ -337,6 +337,15 @@ class FLRW(Cosmology):
+         """Omega nu; the density/critical density of neutrinos at z=0."""
+         return self._Onu0
+ 
++    @property
++    def Otot0(self):
++        """Omega total; total density parameter for all components but curvature at z=0.
++
++        This is the sum of the matter (`Om0`), radiation (`Ogamma0`, `Onu0`),
++        and dark energy (`Ode0`) density parameters.
++        """
++        return 1.0 - self._Ok0
++
+     # ---------------------------------------------------------------
+ 
+     @abstractmethod
+@@ -527,6 +536,32 @@ class FLRW(Cosmology):
+             return np.zeros(z.shape) if hasattr(z, "shape") else 0.0
+         return self.Ogamma(z) * self.nu_relative_density(z)
+ 
++    def Otot(self, z):
++        """Return the total density parameter for all components but curvature at redshift ``z``.
++
++        This is the sum of the matter, radiation, and dark energy density
++        parameters at redshift `z`.
++
++        Parameters
++        ----------
++        z : Quantity-like ['redshift'], array-like, or `~numbers.Number`
++            Input redshift.
++
++        Returns
++        -------
++        Otot : ndarray or float
++            The total density parameter at each redshift.
++            Returns `float` if the input is scalar.
++
++        Notes
++        -----
++        The total density parameter is defined as
++        :math:`\Omega_{tot}(z) = \Omega_m(z) + \Omega_r(z) + \Omega_{de}(z)`,
++        where :math:`\Omega_r(z) = \Omega_{\gamma}(z) + \Omega_{\nu}(z)`.
++        By definition, this is equal to :math:`1 - \Omega_k(z)`.
++        """
++        return 1.0 - self.Ok(z)
++
+     def Tcmb(self, z):
+         """Return the CMB temperature at redshift ``z``.
+ 

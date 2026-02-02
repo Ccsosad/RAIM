@@ -1,0 +1,82 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..7f50dba 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,77 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array-like, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A table with the same column names and boolean values for each element.
++
++        Raises
++        ------
++        ValueError
++            If comparing to another table with different column names.
++        """
++        from .column import MaskedColumn
++
++        if isinstance(other, Table):
++            # Table-table comparison
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++
++            data = {}
++            for name in self.colnames:
++                col_self = self[name]
++                col_other = other[name]
++                # Use element-wise comparison
++                col_result = (col_self == col_other)
++                # If the result is a masked array, convert to plain boolean array
++                # with masked values treated as False.
++                if hasattr(col_result, 'mask'):
++                    col_result = col_result.filled(False)
++                data[name] = col_result
++        else:
++            # Array or scalar comparison
++            # For array, it should have the same length as the number of columns.
++            # For scalar, broadcast to all columns.
++            if np.isscalar(other):
++                # Scalar: compare each column element-wise with the scalar.
++                data = {}
++                for name in self.colnames:
++                    col = self[name]
++                    col_result = (col == other)
++                    if hasattr(col_result, 'mask'):
++                        col_result = col_result.filled(False)
++                    data[name] = col_result
++            else:
++                # Array-like: should have same length as number of columns.
++                other = np.asarray(other)
++                if len(other) != len(self.colnames):
++                    raise ValueError('Array length must match number of columns')
++                data = {}
++                for name, val in zip(self.colnames, other):
++                    col = self[name]
++                    col_result = (col == val)
++                    if hasattr(col_result, 'mask'):
++                        col_result = col_result.filled(False)
++                    data[name] = col_result
++
++        # Create a new table with boolean columns.
++        # Use the same class as self (e.g., QTable if applicable).
++        result = self.__class__(data, copy=False)
++        # Set column types to bool.
++        for name in result.colnames:
++            result[name] = result[name].astype(bool)
++        return result
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

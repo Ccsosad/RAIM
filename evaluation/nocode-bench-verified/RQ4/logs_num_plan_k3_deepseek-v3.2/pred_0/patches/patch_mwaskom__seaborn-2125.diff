@@ -1,0 +1,530 @@
+diff --git a/seaborn/_statistics.py b/seaborn/_statistics.py
+index 82d1ff9..faecccb 100644
+--- a/seaborn/_statistics.py
++++ b/seaborn/_statistics.py
+@@ -1,9 +1,167 @@
++
+ from distutils.version import LooseVersion
+ import numpy as np
+ import scipy as sp
+ from scipy import stats
+ 
+ 
++class Histogram:
++    """Univariate and bivariate histogram estimator."""
++    def __init__(
++        self,
++        stat="count",
++        bins="auto",
++        binwidth=None,
++        binrange=None,
++        discrete=False,
++        cumulative=False,
++        common_bins=True,
++        common_norm=True,
++    ):
++        """Initialize the estimator with its parameters.
++
++        Parameters
++        ----------
++        stat : str
++            Aggregate statistic to compute in each bin.
++            Options: count, frequency, probability, proportion, percent, density.
++        bins : str, number, vector, or a pair of such values
++            Generic bin parameter that can be the name of a reference rule,
++            the number of bins, or the bin edges.
++        binwidth : number or pair of numbers
++            Width of each bin.
++        binrange : pair of numbers or pair of pairs
++            Lowest and highest value for bin edges.
++        discrete : bool or pair of bools
++            If True, set bin edges to integer values.
++        cumulative : bool
++            If True, return the cumulative statistic.
++        common_bins : bool
++            If True, use same bins for all subsets.
++        common_norm : bool
++            If True, normalize each subset by the total count/sum.
++        """
++        self.stat = stat
++        self.bins = bins
++        self.binwidth = binwidth
++        self.binrange = binrange
++        self.discrete = discrete
++        self.cumulative = cumulative
++        self.common_bins = common_bins
++        self.common_norm = common_norm
++
++        self.bin_edges = None
++        self.density = None
++
++    def _define_bin_edges(self, x, weights=None, bins=None, binwidth=None,
++                          binrange=None, discrete=False):
++        """Compute bin edges for given data."""
++        if binrange is None:
++            start = x.min()
++            stop = x.max()
++        else:
++            start, stop = binrange
++
++        if discrete:
++            bins = np.arange(start - 0.5, stop + 1.5)
++        elif binwidth is not None:
++            bins = np.arange(start, stop + binwidth, binwidth)
++        elif bins is not None:
++            if isinstance(bins, str):
++                # Use numpy's histogram_bin_edges
++                bins = np.histogram_bin_edges(x, bins, binrange)
++            elif np.isscalar(bins):
++                bins = np.linspace(start, stop, bins + 1)
++            else:
++                bins = np.asarray(bins)
++        else:
++            bins = np.histogram_bin_edges(x, "auto", binrange)
++
++        return bins
++
++    def define_bin_edges(self, x, y=None, weights=None, cache=True):
++        """Create bin edges for given data."""
++        if y is None:
++            bin_edges = self._define_bin_edges(
++                x, weights, self.bins, self.binwidth,
++                self.binrange, self.discrete
++            )
++        else:
++            x_edges = self._define_bin_edges(
++                x, weights, self.bins[0] if isinstance(self.bins, (list, tuple)) else self.bins,
++                self.binwidth[0] if isinstance(self.binwidth, (list, tuple)) else self.binwidth,
++                self.binrange[0] if isinstance(self.binrange, (list, tuple)) else self.binrange,
++                self.discrete[0] if isinstance(self.discrete, (list, tuple)) else self.discrete
++            )
++            y_edges = self._define_bin_edges(
++                y, weights, self.bins[1] if isinstance(self.bins, (list, tuple)) else self.bins,
++                self.binwidth[1] if isinstance(self.binwidth, (list, tuple)) else self.binwidth,
++                self.binrange[1] if isinstance(self.binrange, (list, tuple)) else self.binrange,
++                self.discrete[1] if isinstance(self.discrete, (list, tuple)) else self.discrete
++            )
++            bin_edges = (x_edges, y_edges)
++
++        if cache:
++            self.bin_edges = bin_edges
++
++        return bin_edges
++
++    def __call__(self, x, y=None, weights=None):
++        """Compute histogram for given data."""
++        if y is None:
++            return self._compute_univariate(x, weights)
++        else:
++            return self._compute_bivariate(x, y, weights)
++
++    def _compute_univariate(self, x, weights):
++        """Compute univariate histogram."""
++        bin_edges = self.bin_edges
++        if bin_edges is None:
++            bin_edges = self.define_bin_edges(x, cache=False)
++
++        heights, edges = np.histogram(x, bins=bin_edges, weights=weights)
++
++        if self.cumulative:
++            heights = heights.cumsum()
++
++        if self.stat == "density":
++            heights = heights / (heights.sum() * np.diff(edges))
++        elif self.stat in ["probability", "proportion"]:
++            heights = heights / heights.sum()
++        elif self.stat == "percent":
++            heights = heights / heights.sum() * 100
++        elif self.stat == "frequency":
++            heights = heights / len(x)
++
++        return heights, edges
++
++    def _compute_bivariate(self, x, y, weights):
++        """Compute bivariate histogram."""
++        bin_edges = self.bin_edges
++        if bin_edges is None:
++            bin_edges = self.define_bin_edges(x, y, cache=False)
++
++        x_edges, y_edges = bin_edges
++        heights, x_edges, y_edges = np.histogram2d(
++            x, y, bins=[x_edges, y_edges], weights=weights
++        )
++
++        if self.cumulative:
++            # Cumulative in both directions? For now, just cumsum over flattened.
++            heights = heights.cumsum().reshape(heights.shape)
++
++        if self.stat == "density":
++            heights = heights / (heights.sum() * np.diff(x_edges)[:, None] * np.diff(y_edges))
++        elif self.stat in ["probability", "proportion"]:
++            heights = heights / heights.sum()
++        elif self.stat == "percent":
++            heights = heights / heights.sum() * 100
++        elif self.stat == "frequency":
++            heights = heights / len(x)
++
++        return heights, (x_edges, y_edges)
++
++
+ class KDE:
+     """Univariate and bivariate kernel density estimator."""
+     def __init__(
+@@ -157,4 +315,4 @@ class KDE:
+         if x2 is None:
+             return self._eval_univariate(x1, weights)
+         else:
+-            return self._eval_bivariate(x1, x2, weights)
++            return self._eval_bivariate(x1, x2, weights)
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..398dfad 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -27,7 +27,7 @@ from ._docstrings import (
+ )
+ 
+ 
+-__all__ = ["distplot", "kdeplot", "rugplot"]
++__all__ = ["distplot", "histplot", "kdeplot", "rugplot"]
+ 
+ 
+ _param_docs = DocstringComponents.from_nested_components(
+@@ -82,7 +82,204 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def plot_univariate(
++        self,
++        element="bars",
++        fill=True,
++        shrink=1,
++        common_bins=True,
++        common_norm=True,
++        cumulative=False,
++        stat="count",
++        bins="auto",
++        binwidth=None,
++        binrange=None,
++        discrete=False,
++        legend=True,
++        estimate_kws=None,
++        plot_kws=None,
++        ax=None,
++    ):
++
++        if plot_kws is None:
++            plot_kws = {}
++
++        # Initialize the estimator
++        estimate_kws = estimate_kws or {}
++        estimator = Histogram(
++            stat=stat,
++            bins=bins,
++            binwidth=binwidth,
++            binrange=binrange,
++            discrete=discrete,
++            cumulative=cumulative,
++            common_bins=common_bins,
++            common_norm=common_norm,
++            **estimate_kws,
++        )
++
++        data_variable = {"x", "y"}.intersection(self.variables).pop()
++        data_axis = getattr(ax, f"{data_variable}axis")
++        log_scale = data_axis.get_scale() == "log"
++
++        if "hue" in self.variables and common_bins:
++            all_data = remove_na(self.plot_data[data_variable])
++            if log_scale:
++                all_data = np.log10(all_data)
++            estimator.define_bin_edges(all_data)
++
++        heights = {}
++        edges = {}
++
++        for sub_vars, sub_data in self._semantic_subsets("hue"):
++            observations = remove_na(sub_data[data_variable])
++            if "weights" in self.variables:
++                weights = sub_data["weights"]
++            else:
++                weights = None
++
++            if log_scale:
++                observations = np.log10(observations)
++
++            height, edge = estimator(observations, weights=weights)
++
++            if log_scale:
++                edge = np.power(10, edge)
++
++            key = tuple(sub_vars.items())
++            heights[key] = height
++            edges[key] = edge
++
++        # Handle multiple histograms
++        if "hue" in self.variables:
++            if element == "bars":
++                # For bars, we need to handle stacking/dodging
++                pass
++            elif element == "step":
++                # Draw step lines
++                pass
++            elif element == "poly":
++                # Draw polygons
++                pass
++        else:
++            # Single histogram
++            height = list(heights.values())[0]
++            edge = list(edges.values())[0]
++            if element == "bars":
++                if fill:
++                    ax.bar(edge[:-1], height, width=np.diff(edge), align="edge", **plot_kws)
++                else:
++                    # Outline only
++                    for i in range(len(edge)-1):
++                        rect = mpl.patches.Rectangle(
++                            (edge[i], 0), edge[i+1]-edge[i], height[i],
++                            fill=False, **plot_kws
++                        )
++                        ax.add_patch(rect)
++            elif element == "step":
++                # Draw step line
++                step_x = np.repeat(edge, 2)[1:-1]
++                step_y = np.repeat(height, 2)
++                ax.plot(step_x, step_y, **plot_kws)
++            elif element == "poly":
++                # Draw polygon
++                midpoints = (edge[:-1] + edge[1:]) / 2
++                poly_x = np.concatenate([[edge[0]], midpoints, [edge[-1]]])
++                poly_y = np.concatenate([[0], height, [0]])
++                ax.fill(poly_x, poly_y, **plot_kws)
++
++        # Add labels
++        default_x = default_y = ""
++        if data_variable == "x":
++            default_y = stat.capitalize()
++        if data_variable == "y":
++            default_x = stat.capitalize()
++        self._add_axis_labels(ax, default_x, default_y)
++
++        if "hue" in self.variables and legend:
++            self._add_legend(ax, mpl.patches.Patch, True, "layer", 1, plot_kws, {})
++
++    def plot_bivariate(
++        self,
++        common_bins=True,
++        common_norm=True,
++        cumulative=False,
++        stat="count",
++        bins="auto",
++        binwidth=None,
++        binrange=None,
++        discrete=False,
++        legend=True,
++        cbar=False,
++        cbar_ax=None,
++        cbar_kws=None,
++        estimate_kws=None,
++        plot_kws=None,
++        ax=None,
++    ):
++
++        if plot_kws is None:
++            plot_kws = {}
++
++        estimate_kws = estimate_kws or {}
++        estimator = Histogram(
++            stat=stat,
++            bins=bins,
++            binwidth=binwidth,
++            binrange=binrange,
++            discrete=discrete,
++            cumulative=cumulative,
++            common_bins=common_bins,
++            common_norm=common_norm,
++            **estimate_kws,
++        )
++
++        if "hue" in self.variables and common_bins:
++            all_x = remove_na(self.plot_data["x"])
++            all_y = remove_na(self.plot_data["y"])
++            estimator.define_bin_edges(all_x, all_y)
++
++        densities = {}
++        supports = {}
++
++        for sub_vars, sub_data in self._semantic_subsets("hue"):
++            observations = remove_na(sub_data[["x", "y"]])
++            if "weights" in self.variables:
++                weights = sub_data["weights"]
++            else:
++                weights = None
++
++            density, support = estimator(observations["x"], observations["y"], weights=weights)
++
++            key = tuple(sub_vars.items())
++            densities[key] = density
++            supports[key] = support
++
++        # Plot as heatmap
++        for sub_vars, _ in self._semantic_subsets("hue"):
++            key = tuple(sub_vars.items())
++            if key not in densities:
++                continue
++            density = densities[key]
++            x_edges, y_edges = supports[key]
++            xx, yy = np.meshgrid(x_edges, y_edges)
++            if "hue" in sub_vars:
++                color = self._hue_map(sub_vars["hue"])
++                cmap = _cmap_from_color(color)
++            else:
++                cmap = "viridis"
++            mesh = ax.pcolormesh(xx, yy, density.T, cmap=cmap, **plot_kws)
++
++        if cbar:
++            cbar_kws = cbar_kws or {}
++            ax.figure.colorbar(mesh, cbar_ax, ax, **cbar_kws)
++
++        self._add_axis_labels(ax)
++
++        if "hue" in self.variables and legend:
++            self._add_legend(ax, mpl.patches.Patch, True, "layer", 1, plot_kws, {})
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):
+@@ -493,6 +690,132 @@ class _KDEPlotter(_DistributionPlotter):
+         return levels
+ 
+ 
++@_deprecate_positional_args
++def histplot(
++    data=None, *, x=None, y=None, hue=None, weights=None,
++    stat="count", bins="auto", binwidth=None, binrange=None,
++    discrete=False, cumulative=False, common_bins=True, common_norm=True,
++    multiple="layer", element="bars", fill=True, shrink=1,
++    log_scale=None, legend=True, ax=None, **kwargs
++):
++    """Plot univariate or bivariate histograms.
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure.
++    x, y : vectors or keys in `data`
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    weights : vector or key in `data`
++        Observation weights.
++    stat : str
++        Aggregate statistic to compute in each bin.
++        Options: count, frequency, probability, proportion, percent, density.
++    bins : str, number, vector, or a pair of such values
++        Generic bin parameter that can be the name of a reference rule,
++        the number of bins, or the bin edges.
++    binwidth : number or pair of numbers
++        Width of each bin.
++    binrange : pair of numbers or pair of pairs
++        Lowest and highest value for bin edges.
++    discrete : bool or pair of bools
++        If True, set bin edges to integer values.
++    cumulative : bool
++        If True, return the cumulative statistic.
++    common_bins : bool
++        If True, use same bins for all subsets.
++    common_norm : bool
++        If True, normalize each subset by the total count/sum.
++    multiple : str
++        Approach to resolving multiple elements when semantic mapping creates subsets.
++        Options: layer, stack, fill, dodge.
++    element : str
++        Visual representation of the histogram statistic.
++        Options: bars, step, poly.
++    fill : bool
++        If True, fill in the space under the histogram.
++    shrink : number
++        Scale the width of each bar relative to binwidth.
++    log_scale : bool or number, or pair of same
++        Set axis scale(s) to log.
++    legend : bool
++        If False, suppress the legend for semantic variables.
++    ax : matplotlib Axes
++        Axes object to draw the plot onto.
++    kwargs : key, value mappings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    ax : matplotlib Axes
++        Axes with the plot drawn onto it.
++
++    """
++    # Process the input data
++    p = _HistPlotter(data=data, variables=dict(x=x, y=y, hue=hue, weights=weights))
++
++    # Set up the axes
++    if ax is None:
++        ax = plt.gca()
++
++    # Handle log scaling
++    if log_scale is not None:
++        if isinstance(log_scale, bool):
++            log_scale_x = log_scale_y = log_scale
++        elif isinstance(log_scale, (tuple, list)):
++            log_scale_x, log_scale_y = log_scale
++        else:
++            log_scale_x = log_scale_y = log_scale
++        if log_scale_x:
++            ax.set_xscale("log")
++        if log_scale_y:
++            ax.set_yscale("log")
++
++    # Determine if we are plotting univariate or bivariate
++    if x is not None and y is not None:
++        # Bivariate histogram
++        p.plot_bivariate(
++            common_bins=common_bins,
++            common_norm=common_norm,
++            cumulative=cumulative,
++            stat=stat,
++            bins=bins,
++            binwidth=binwidth,
++            binrange=binrange,
++            discrete=discrete,
++            legend=legend,
++            cbar=kwargs.pop("cbar", False),
++            cbar_ax=kwargs.pop("cbar_ax", None),
++            cbar_kws=kwargs.pop("cbar_kws", None),
++            estimate_kws=kwargs.pop("estimate_kws", None),
++            plot_kws=kwargs,
++            ax=ax,
++        )
++    else:
++        # Univariate histogram
++        p.plot_univariate(
++            element=element,
++            fill=fill,
++            shrink=shrink,
++            common_bins=common_bins,
++            common_norm=common_norm,
++            cumulative=cumulative,
++            stat=stat,
++            bins=bins,
++            binwidth=binwidth,
++            binrange=binrange,
++            discrete=discrete,
++            legend=legend,
++            estimate_kws=kwargs.pop("estimate_kws", None),
++            plot_kws=kwargs,
++            ax=ax,
++        )
++
++    return ax
++
++
+ @_deprecate_positional_args
+ def kdeplot(
+     x=None,  # Allow positional x, because behavior will not change with reorg

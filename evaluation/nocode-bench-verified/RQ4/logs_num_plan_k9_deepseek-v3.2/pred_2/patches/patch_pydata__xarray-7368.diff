@@ -1,0 +1,112 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..6a9080b 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -34,6 +34,36 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     _data: DataWithCoords
+     __slots__ = ("_data",)
+ 
++    def __new__(
++        cls,
++        coords: Mapping[Any, Any] | None = None,
++        indexes: Mapping[Any, Index] | None = None,
++    ) -> "Coordinates":
++        """Create a Coordinates object from coordinate variables and indexes.
++
++        Parameters
++        ----------
++        coords : mapping, optional
++            Mapping from coordinate names to arrays. The arrays may be
++            numpy arrays, DataArray objects, or pandas Index objects.
++        indexes : mapping, optional
++            Mapping from coordinate names to Index objects. If not provided,
++            indexes will be inferred from the coordinate data.
++
++        Returns
++        -------
++        DatasetCoordinates
++            A DatasetCoordinates object containing the given coordinates and indexes.
++        """
++        from xarray.core.dataset import Dataset
++
++        if coords is None:
++            coords = {}
++        
++        # Create a Dataset to handle the coordinate creation logic
++        dataset = Dataset(coords, indexes=indexes)
++        return dataset.coords
++
+     def __getitem__(self, key: Hashable) -> T_DataArray:
+         raise NotImplementedError()
+ 
+@@ -48,6 +78,18 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     def dims(self) -> Mapping[Hashable, int] | tuple[Hashable, ...]:
+         raise NotImplementedError()
+ 
++    @property
++    def sizes(self) -> Mapping[Hashable, int]:
++        """Mapping from dimension names to lengths.
++
++        Returns
++        -------
++        dict
++            Dictionary with keys given by dimension names and values
++            given by dimension lengths.
++        """
++        return self._data.sizes
++
+     @property
+     def dtypes(self) -> Frozen[Hashable, np.dtype]:
+         raise NotImplementedError()
+@@ -171,6 +213,51 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+         )
+         self._update_coords(coords, indexes)
+ 
++    @classmethod
++    def from_pandas_multiindex(
++        cls,
++        midx: pd.MultiIndex,
++        dim: Hashable,
++        index_type: type[Index] | None = None,
++    ) -> "Coordinates":
++        """Create Coordinates from a pandas MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            MultiIndex to convert to coordinates.
++        dim : hashable
++            Name of the dimension to assign to the MultiIndex.
++        index_type : type of Index, optional
++            The type of index to create. If not provided, defaults to
++            PandasMultiIndex.
++
++        Returns
++        -------
++        Coordinates
++            Coordinates object containing the MultiIndex levels as coordinates
++            and the MultiIndex itself as an index.
++        """
++        from xarray.core.indexes import PandasMultiIndex
++        from xarray.core.dataset import Dataset
++
++        if index_type is None:
++            index_type = PandasMultiIndex
++        
++        # Create coordinates from MultiIndex levels
++        coords = {}
++        for i, (name, level) in enumerate(zip(midx.names, midx.levels)):
++            if name is None:
++                name = f"level_{i}"
++            coords[name] = (dim, level)
++        
++        # Create the index
++        idx = index_type(midx, dim)
++        
++        # Create a Dataset with the coordinates and index
++        dataset = Dataset(coords, indexes={dim: idx})
++        return dataset.coords
++
+     def _merge_raw(self, other, reflexive):
+         """For use with binary arithmetic."""
+         if other is None:

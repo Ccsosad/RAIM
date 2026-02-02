@@ -1,0 +1,25 @@
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+index 796b7ad..8ab3963 100644
+--- a/sphinx/builders/__init__.py
++++ b/sphinx/builders/__init__.py
+@@ -178,7 +178,13 @@ class Builder:
+ 
+     def post_process_images(self, doctree: Node) -> None:
+         """Pick the best candidate for all image URIs."""
+-        images = ImageAdapter(self.env)
++        # Get the current document's directory for the {docpath} token
++        docname = self.env.docname
++        if docname:
++            docpath = path.dirname(docname) + '/' if path.dirname(docname) else ''
++        else:
++            docpath = ''
++        images = ImageAdapter(self.env, docpath=docpath)
+         for node in doctree.traverse(nodes.image):
+             if '?' in node['candidates']:
+                 # don't rewrite nonlocal image URIs
+@@ -617,4 +623,4 @@ class Builder:
+             return getattr(self.config, optname)
+         except AttributeError:
+             optname = '%s_%s' % (default, option)
+-            return getattr(self.config, optname)
++            return getattr(self.config, optname)

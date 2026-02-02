@@ -1,0 +1,29 @@
+diff --git a/sphinx/builders/latex/__init__.py b/sphinx/builders/latex/__init__.py
+index 1c44ce3..1b61287 100644
+--- a/sphinx/builders/latex/__init__.py
++++ b/sphinx/builders/latex/__init__.py
+@@ -199,6 +199,13 @@ class LaTeXBuilder(Builder):
+             # Show the release label only if release value exists
+             self.context.setdefault('releasename', _('Release'))
+ 
++        # Combine packages in the correct order: extrapackages, extension packages, packages
++        extrapackages = self.context.pop('extrapackages', '')
++        packages = self.context.pop('packages', '')
++        extension_packages = ''.join(self.usepackages)
++        combined = extrapackages + extension_packages + packages
++        self.context['packages'] = combined
++
+     def init_babel(self) -> None:
+         self.babel = ExtBabel(self.config.language, not self.context['babel'])
+         if self.config.language and not self.babel.is_supported_language():
+@@ -405,8 +412,9 @@ class LaTeXBuilder(Builder):
+ 
+ 
+ def validate_config_values(app: Sphinx, config: Config) -> None:
++    known_keys = set(DEFAULT_SETTINGS.keys()) | {'extrapackages'}
+     for key in list(config.latex_elements):
+-        if key not in DEFAULT_SETTINGS:
++        if key not in known_keys:
+             msg = __("Unknown configure key: latex_elements[%r]. ignored.")
+             logger.warning(msg % (key,))
+             config.latex_elements.pop(key)

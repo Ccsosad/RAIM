@@ -1,0 +1,43 @@
+diff --git a/seaborn/_statistics.py b/seaborn/_statistics.py
+index f405a74..9016508 100644
+--- a/seaborn/_statistics.py
++++ b/seaborn/_statistics.py
+@@ -451,7 +451,7 @@ class ECDF:
+ 
+ class EstimateAggregator:
+ 
+-    def __init__(self, estimator, errorbar=None, **boot_kws):
++    def __init__(self, estimator, errorbar=None, ci=None, **boot_kws):
+         """
+         Data aggregator that produces an estimate and error bar interval.
+ 
+@@ -464,12 +464,23 @@ class EstimateAggregator:
+             with a method name and a level parameter, or a function that maps from a
+             vector to a (min, max) interval. See the :ref:`tutorial <errorbar_tutorial>`
+             for more information.
++        ci : string or number, optional
++            Deprecated. Use `errorbar` instead.
+         boot_kws
+             Additional keywords are passed to bootstrap when error_method is "ci".
+ 
+         """
+         self.estimator = estimator
+ 
++        if ci is not None and errorbar is None:
++            import warnings
++            warnings.warn(
++                "The `ci` parameter is deprecated. Use `errorbar` instead.",
++                FutureWarning,
++                stacklevel=3
++            )
++            errorbar = ci
++
+         method, level = _validate_errorbar_arg(errorbar)
+         self.error_method = method
+         self.error_level = level
+@@ -545,4 +556,4 @@ def _validate_errorbar_arg(arg):
+     if level is not None and not isinstance(level, Number):
+         raise TypeError(usage)
+ 
+-    return method, level
++    return method, level

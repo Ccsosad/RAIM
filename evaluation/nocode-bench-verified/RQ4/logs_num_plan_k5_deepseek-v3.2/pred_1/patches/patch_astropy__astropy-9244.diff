@@ -1,0 +1,25 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..63b7998 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -546,6 +546,20 @@ class IERS_A(IERS):
+         return source
+ 
+ 
++from astropy.utils.state import ScienceState
++
++class earth_orientation_table(ScienceState):
++    """Global setting for the Earth orientation table."""
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            from .iers import IERS_Auto
++            return IERS_Auto.open()
++        return value
++
++
+ class IERS_B(IERS):
+     """IERS Table class targeted to IERS B, provided by IERS itself.
+ 

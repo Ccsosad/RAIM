@@ -1,0 +1,20 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+new file mode 100644
+index 0000000..2313c10
+--- /dev/null
++++ b/pylint/reporters/text.py
+@@ -0,0 +1,14 @@
++        return {
++            "msg": message.msg or "",
++            "line": message.line,
++            "column": message.column,
++            "end_line": message.end_line if message.end_line is not None else "",
++            "end_column": message.end_column if message.end_column is not None else "",
++            "path": message.path,
++            "module": message.module,
++            "obj": message.obj,
++            "symbol": message.symbol,
++            "category": message.category,
++            "C": message.C,
++            "type": message.category,
++        }

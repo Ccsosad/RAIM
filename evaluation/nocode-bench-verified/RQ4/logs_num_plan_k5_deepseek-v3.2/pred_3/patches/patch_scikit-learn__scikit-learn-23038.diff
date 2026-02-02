@@ -1,0 +1,39 @@
+diff --git a/sklearn/cluster/_kmeans.py b/sklearn/cluster/_kmeans.py
+index 89ad263..5e12893 100644
+--- a/sklearn/cluster/_kmeans.py
++++ b/sklearn/cluster/_kmeans.py
+@@ -1,3 +1,4 @@
++
+ """K-means clustering."""
+ 
+ # Authors: Gael Varoquaux <gael.varoquaux@normalesup.org>
+@@ -803,7 +804,7 @@ class _BaseKMeans(
+     _parameter_constraints = {
+         "n_clusters": [Interval(Integral, 1, None, closed="left")],
+         "init": [StrOptions({"k-means++", "random"}), callable, "array-like"],
+-        "n_init": [Interval(Integral, 1, None, closed="left")],
++        "n_init": [Interval(Integral, 1, None, closed="left"), StrOptions({"auto"})],
+         "max_iter": [Interval(Integral, 1, None, closed="left")],
+         "tol": [Interval(Real, 0, None, closed="left")],
+         "verbose": [Interval(Integral, 0, None, closed="left"), bool],
+@@ -840,7 +841,19 @@ class _BaseKMeans(
+         self._tol = _tolerance(X, self.tol)
+ 
+         # init
+-        self._n_init = self.n_init
++        if self.n_init == "auto":
++            if self.init == "k-means++":
++                self._n_init = 1
++            else:
++                # For 'random', we use the class's default n_init
++                # This will be set in the derived classes
++                if hasattr(self, "_default_n_init"):
++                    self._n_init = self._default_n_init
++                else:
++                    # Fallback for backward compatibility
++                    self._n_init = 10
++        else:
++            self._n_init = self.n_init
+         if _is_arraylike_not_scalar(self.init) and self._n_init != 1:
+             warnings.warn(
+                 "Explicit initial center position passed: performing only"

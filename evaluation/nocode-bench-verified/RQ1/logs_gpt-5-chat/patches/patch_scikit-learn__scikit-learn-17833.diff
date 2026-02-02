@@ -1,0 +1,28 @@
+diff --git a/sklearn/preprocessing/_data.py b/sklearn/preprocessing/_data.py
+index b090a46..ea43720 100644
+--- a/sklearn/preprocessing/_data.py
++++ b/sklearn/preprocessing/_data.py
+@@ -311,9 +311,10 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
+     """
+ 
+     @_deprecate_positional_args
+-    def __init__(self, feature_range=(0, 1), *, copy=True):
++    def __init__(self, feature_range=(0, 1), *, copy=True, clip=False):
+         self.feature_range = feature_range
+         self.copy = copy
++        self.clip = clip
+ 
+     def _reset(self):
+         """Reset internal data-dependent state of the scaler, if necessary.
+@@ -427,6 +428,11 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
+ 
+         X *= self.scale_
+         X += self.min_
++
++        if self.clip:
++            min_val, max_val = self.feature_range
++            X = np.clip(X, min_val, max_val)
++
+         return X
+ 
+     def inverse_transform(self, X):

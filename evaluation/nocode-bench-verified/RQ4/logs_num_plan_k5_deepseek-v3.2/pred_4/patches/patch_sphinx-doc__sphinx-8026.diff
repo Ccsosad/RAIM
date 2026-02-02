@@ -1,0 +1,49 @@
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+index 796b7ad..2742ebd 100644
+--- a/sphinx/builders/__init__.py
++++ b/sphinx/builders/__init__.py
+@@ -176,9 +176,9 @@ class Builder:
+         """Return list of paths for assets (ex. templates, CSS, etc.)."""
+         return []
+ 
+-    def post_process_images(self, doctree: Node) -> None:
++    def post_process_images(self, doctree: Node, docname: str = None) -> None:
+         """Pick the best candidate for all image URIs."""
+-        images = ImageAdapter(self.env)
++        images = ImageAdapter(self.env, docname)
+         for node in doctree.traverse(nodes.image):
+             if '?' in node['candidates']:
+                 # don't rewrite nonlocal image URIs
+@@ -617,4 +617,4 @@ class Builder:
+             return getattr(self.config, optname)
+         except AttributeError:
+             optname = '%s_%s' % (default, option)
+-            return getattr(self.config, optname)
++            return getattr(self.config, optname)
+diff --git a/sphinx/builders/html/__init__.py b/sphinx/builders/html/__init__.py
+index c052c27..8e03d61 100644
+--- a/sphinx/builders/html/__init__.py
++++ b/sphinx/builders/html/__init__.py
+@@ -604,7 +604,7 @@ class StandaloneHTMLBuilder(Builder):
+ 
+     def write_doc_serialized(self, docname: str, doctree: nodes.document) -> None:
+         self.imgpath = relative_uri(self.get_target_uri(docname), self.imagedir)
+-        self.post_process_images(doctree)
++        self.post_process_images(doctree, docname)
+         title_node = self.env.longtitles.get(docname)
+         title = self.render_partial(title_node)['title'] if title_node else ''
+         self.index_page(docname, doctree, title)
+@@ -817,11 +817,11 @@ class StandaloneHTMLBuilder(Builder):
+         if self.theme:
+             self.theme.cleanup()
+ 
+-    def post_process_images(self, doctree: Node) -> None:
++    def post_process_images(self, doctree: Node, docname: str = None) -> None:
+         """Pick the best candidate for an image and link down-scaled images to
+         their high res version.
+         """
+-        Builder.post_process_images(self, doctree)
++        Builder.post_process_images(self, doctree, docname)
+ 
+         if self.config.html_scaled_image_link and self.html_scaled_image_link:
+             for node in doctree.traverse(nodes.image):

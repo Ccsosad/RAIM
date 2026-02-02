@@ -1,0 +1,89 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..1293786 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -120,6 +120,8 @@ def do_constrained_layout(fig, h_pad, w_pad,
+                             w_pad=w_pad, hspace=hspace, wspace=wspace)
+         make_margin_suptitles(layoutgrids, fig, renderer, h_pad=h_pad,
+                               w_pad=w_pad)
++        make_margin_legends(layoutgrids, fig, renderer, h_pad=h_pad,
++                            w_pad=w_pad)
+ 
+         # if a layout is such that a columns (or rows) margin has no
+         # constraints, we need to make all such instances in the grid
+@@ -419,6 +421,75 @@ def make_layout_margins(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0,
+         layoutgrids[gs].edit_outer_margin_mins(margin, ss)
+ 
+ 
++def _get_side_from_loc(loc):
++    """
++    Given a legend location string that starts with 'outside', return the side
++    ('top', 'bottom', 'left', 'right') that the legend should be placed on.
++    """
++    tokens = loc.split()
++    if len(tokens) < 2:
++        return None
++    primary = tokens[1]
++    if primary in ('upper', 'lower'):
++        return 'top' if primary == 'upper' else 'bottom'
++    elif primary in ('left', 'right'):
++        return 'left' if primary == 'left' else 'right'
++    else:
++        return None
++
++
++def make_margin_legends(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
++    """
++    Adjust figure margins to make room for legends that are placed outside.
++    """
++    # Convert padding from figure-normalized units to local figure coordinates.
++    padbox = mtransforms.Bbox([[0, 0], [w_pad, h_pad]])
++    padbox = (fig.transFigure - fig.transSubfigure).transform_bbox(padbox)
++    h_pad_local = padbox.height
++    w_pad_local = padbox.width
++
++    # Process legends in axes
++    for ax in fig.axes:
++        legend = ax.get_legend()
++        if legend is not None and legend.get_in_layout():
++            loc = legend._loc
++            if isinstance(loc, str) and loc.startswith('outside'):
++                side = _get_side_from_loc(loc)
++                if side is not None:
++                    bbox = legend.get_tightbbox(renderer)
++                    bbox_fig = fig.transFigure.inverted().transform_bbox(bbox)
++                    if side == 'top':
++                        layoutgrids[fig].edit_margin_min('top', bbox_fig.height + 2 * h_pad_local)
++                    elif side == 'bottom':
++                        layoutgrids[fig].edit_margin_min('bottom', bbox_fig.height + 2 * h_pad_local)
++                    elif side == 'left':
++                        layoutgrids[fig].edit_margin_min('left', bbox_fig.width + 2 * w_pad_local)
++                    elif side == 'right':
++                        layoutgrids[fig].edit_margin_min('right', bbox_fig.width + 2 * w_pad_local)
++
++    # Process figure legends
++    for legend in fig.legends:
++        if legend.get_in_layout():
++            loc = legend._loc
++            if isinstance(loc, str) and loc.startswith('outside'):
++                side = _get_side_from_loc(loc)
++                if side is not None:
++                    bbox = legend.get_tightbbox(renderer)
++                    bbox_fig = fig.transFigure.inverted().transform_bbox(bbox)
++                    if side == 'top':
++                        layoutgrids[fig].edit_margin_min('top', bbox_fig.height + 2 * h_pad_local)
++                    elif side == 'bottom':
++                        layoutgrids[fig].edit_margin_min('bottom', bbox_fig.height + 2 * h_pad_local)
++                    elif side == 'left':
++                        layoutgrids[fig].edit_margin_min('left', bbox_fig.width + 2 * w_pad_local)
++                    elif side == 'right':
++                        layoutgrids[fig].edit_margin_min('right', bbox_fig.width + 2 * w_pad_local)
++
++    # Recursively process subfigures
++    for sfig in fig.subfigs:
++        make_margin_legends(layoutgrids, sfig, renderer, w_pad=w_pad, h_pad=h_pad)
++
++
+ def make_margin_suptitles(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
+     # Figure out how large the suptitle is and make the
+     # top level figure margin larger.

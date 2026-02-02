@@ -1,0 +1,70 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..a2409e8 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -996,6 +996,11 @@ class FacetGrid(Grid):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+         return self._fig
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._fig
++
+     @property
+     def axes(self):
+         """An array of the :class:`matplotlib.axes.Axes` objects in the grid."""
+@@ -1233,10 +1238,20 @@ class PairGrid(Grid):
+                 axes[i, j].remove()
+                 axes[i, j] = None
+ 
+-        self.fig = fig
++        self._figure = fig
+         self.axes = axes
+         self.data = data
+ 
++    @property
++    def fig(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
+         # Save what we are going to do with the diagonal
+         self.diag_sharey = diag_sharey
+         self.diag_vars = None
+@@ -1650,11 +1665,21 @@ class JointGrid(object):
+         ax_marg_x = f.add_subplot(gs[0, :-1], sharex=ax_joint)
+         ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint)
+ 
+-        self.fig = f
++        self._figure = f
+         self.ax_joint = ax_joint
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y
+ 
++    @property
++    def fig(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
+         # Turn off tick visibility for the measure axis on the marginal plots
+         plt.setp(ax_marg_x.get_xticklabels(), visible=False)
+         plt.setp(ax_marg_y.get_yticklabels(), visible=False)
+@@ -1920,7 +1945,7 @@ class JointGrid(object):
+ 
+         """
+         kwargs.setdefault("bbox_inches", "tight")
+-        self.fig.savefig(*args, **kwargs)
++        self._figure.savefig(*args, **kwargs)
+ 
+ 
+ JointGrid.__init__.__doc__ = """\

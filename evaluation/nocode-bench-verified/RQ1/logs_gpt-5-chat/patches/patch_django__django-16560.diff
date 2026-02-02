@@ -1,0 +1,54 @@
+diff --git a/django/contrib/postgres/constraints.py b/django/contrib/postgres/constraints.py
+index 50af5ce..870cfd9 100644
+--- a/django/contrib/postgres/constraints.py
++++ b/django/contrib/postgres/constraints.py
+@@ -32,6 +32,7 @@ class ExclusionConstraint(BaseConstraint):
+         condition=None,
+         deferrable=None,
+         include=None,
++        violation_error_code=None,
+         violation_error_message=None,
+     ):
+         if index_type and index_type.lower() not in {"gist", "spgist"}:
+@@ -60,7 +61,7 @@ class ExclusionConstraint(BaseConstraint):
+         self.condition = condition
+         self.deferrable = deferrable
+         self.include = tuple(include) if include else ()
+-        super().__init__(name=name, violation_error_message=violation_error_message)
++        super().__init__(name=name, violation_error_code=violation_error_code, violation_error_message=violation_error_message)
+ 
+     def _get_expressions(self, schema_editor, query):
+         expressions = []
+@@ -209,4 +210,4 @@ class ExclusionConstraint(BaseConstraint):
+             if (self.condition & Exists(queryset.filter(self.condition))).check(
+                 replacement_map, using=using
+             ):
+-                raise ValidationError(self.get_violation_error_message())
++                raise ValidationError(self.get_violation_error_message())
+diff --git a/django/db/models/constraints.py b/django/db/models/constraints.py
+index 8b23275..1b6f36c 100644
+--- a/django/db/models/constraints.py
++++ b/django/db/models/constraints.py
+@@ -18,11 +18,12 @@ __all__ = ["BaseConstraint", "CheckConstraint", "Deferrable", "UniqueConstraint"
+ 
+ class BaseConstraint:
+     default_violation_error_message = _("Constraint “%(name)s” is violated.")
++    violation_error_code = None
+     violation_error_message = None
+ 
+     # RemovedInDjango60Warning: When the deprecation ends, replace with:
+-    # def __init__(self, *, name, violation_error_message=None):
+-    def __init__(self, *args, name=None, violation_error_message=None):
++    # def __init__(self, *, name, violation_error_code=None, violation_error_message=None):
++    def __init__(self, *args, name=None, violation_error_code=None, violation_error_message=None):
+         # RemovedInDjango60Warning.
+         if name is None and not args:
+             raise TypeError(
+@@ -30,6 +31,7 @@ class BaseConstraint:
+                 f"argument: 'name'"
+             )
+         self.name = name
++        self.violation_error_code = violation_error_code
+         if violation_error_message is not None:
+             self.violation_error_message = violation_error_message
+         else:

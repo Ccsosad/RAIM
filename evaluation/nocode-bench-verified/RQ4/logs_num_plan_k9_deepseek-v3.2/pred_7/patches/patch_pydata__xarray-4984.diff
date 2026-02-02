@@ -1,0 +1,233 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..e5bbacf 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3081,6 +3081,39 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+         return title
+ 
++    def query(self, query: str) -> "DataArray":
++        """Return a new DataArray with data filtered by the query expression.
++
++        Parameters
++        ----------
++        query : str
++            Query expression to evaluate. The expression can refer to
++            variables in the DataArray by name (if it has a name) or by
++            the name 'data', and to coordinates by their names.
++
++        Returns
++        -------
++        result : DataArray
++            A new DataArray containing only the data that matches the query.
++
++        Examples
++        --------
++        >>> da = xr.DataArray([1, 2, 3], dims="x", coords={"x": [0, 1, 2]})
++        >>> da.query("data > 1")
++        <xarray.DataArray (x: 2)>
++        array([2, 3])
++        Coordinates:
++          * x        (x) int64 1 2
++        >>> da.query("x > 0")
++        <xarray.DataArray (x: 2)>
++        array([2, 3])
++        Coordinates:
++          * x        (x) int64 1 2
++        """
++        from .query_indexing import QueryIndexer
++        indexer = QueryIndexer(self)
++        return indexer(query)
++
+     def diff(self, dim: Hashable, n: int = 1, label: Hashable = "upper") -> "DataArray":
+         """Calculate the n-th order discrete difference along given axis.
+ 
+@@ -4360,4 +4393,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..6edcb8a 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5451,6 +5451,35 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             if v in self.variables:
+                 self.variables[v].attrs = other.variables[v].attrs
+ 
++    def query(self, query: str) -> "Dataset":
++        """Return a new Dataset with data filtered by the query expression.
++
++        Parameters
++        ----------
++        query : str
++            Query expression to evaluate. The expression can refer to
++            data variables and coordinates by their names.
++
++        Returns
++        -------
++        result : Dataset
++            A new Dataset containing only the data that matches the query.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({"a": ("x", [1, 2, 3]), "b": ("x", [4, 5, 6])})
++        >>> ds.query("a > 1")
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Dimensions without coordinates: x
++        Data variables:
++            a        (x) int64 2 3
++            b        (x) int64 5 6
++        """
++        from .query_indexing import QueryIndexer
++        indexer = QueryIndexer(self)
++        return indexer(query)
++
+     def diff(self, dim, n=1, label="upper"):
+         """Calculate the n-th order discrete difference along given axis.
+ 
+@@ -7002,4 +7031,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query_indexing.py b/xarray/core/query_indexing.py
+new file mode 100644
+index 0000000..f403c2e
+--- /dev/null
++++ b/xarray/core/query_indexing.py
+@@ -0,0 +1,131 @@
++"""
++Query indexing for xarray objects.
++"""
++import pandas as pd
++import numpy as np
++from typing import Any, Dict, Union
++
++from .utils import is_scalar
++
++
++class QueryIndexer:
++    """Indexer for query expressions."""
++
++    def __init__(self, obj: Union["DataArray", "Dataset"]):
++        self.obj = obj
++
++    def __call__(self, query: str) -> Union["DataArray", "Dataset"]:
++        """Evaluate a query expression on the object.
++
++        Parameters
++        ----------
++        query : str
++            Query expression to evaluate. The expression can refer to
++            variables in the object by name.
++
++        Returns
++        -------
++        result : same type as input
++            A new object with the same type as the input, containing only the
++            data that matches the query.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({"a": ("x", [1, 2, 3]), "b": ("x", [4, 5, 6])})
++        >>> ds.query("a > 1")
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Dimensions without coordinates: x
++        Data variables:
++            a        (x) int64 2 3
++            b        (x) int64 5 6
++
++        >>> da = xr.DataArray([1, 2, 3], dims="x")
++        >>> da.query("x > 1")
++        <xarray.DataArray (x: 2)>
++        array([2, 3])
++        Dimensions without coordinates: x
++        """
++        # Parse the query and evaluate it.
++        # We use pandas.eval for evaluation because it supports complex expressions.
++        # However, we need to build a namespace with the variables.
++        if hasattr(self.obj, "_query_engine"):
++            engine = self.obj._query_engine
++        else:
++            engine = PandasQueryEngine(self.obj)
++
++        mask = engine.eval(query)
++        return self.obj.isel({dim: mask for dim in self.obj.dims if dim in mask.coords})
++
++
++class PandasQueryEngine:
++    """Query engine using pandas.eval."""
++
++    def __init__(self, obj: Union["DataArray", "Dataset"]):
++        self.obj = obj
++
++    def eval(self, query: str) -> "DataArray":
++        """Evaluate a query expression and return a boolean mask.
++
++        Parameters
++        ----------
++        query : str
++            Query expression.
++
++        Returns
++        -------
++        mask : DataArray
++            Boolean mask with the same dimensions as the object.
++        """
++        # Build a namespace with the variables.
++        namespace = {}
++        if hasattr(self.obj, "data_vars"):
++            # Dataset
++            for name, var in self.obj.data_vars.items():
++                # Convert to pandas Series for easier evaluation.
++                # We need to align dimensions.
++                namespace[name] = var.to_pandas()
++        else:
++            # DataArray
++            namespace[self.obj.name or "data"] = self.obj.to_pandas()
++
++        # Also add coordinates to the namespace.
++        for name, coord in self.obj.coords.items():
++            namespace[name] = coord.to_pandas()
++
++        # Evaluate the query.
++        try:
++            result = pd.eval(query, local_dict=namespace)
++        except Exception as e:
++            raise ValueError(f"Failed to evaluate query {query!r}: {e}")
++
++        # Convert the result to a boolean mask.
++        if isinstance(result, pd.Series):
++            # For a Series, we need to align with the original dimensions.
++            # We assume the index is the same as the dimension.
++            mask = result.values
++        elif is_scalar(result):
++            # If the result is a scalar, we broadcast it.
++            mask = np.full(self.obj.shape, result)
++        else:
++            # Assume it's an array-like.
++            mask = np.asarray(result)
++
++        # Create a DataArray for the mask.
++        from .dataarray import DataArray
++
++        # We need to assign the mask to the correct dimensions.
++        # For simplicity, we assume the mask is for the first dimension.
++        # This is a limitation for now.
++        # Actually, we should return a mask for each dimension? 
++        # But the query might be multi-dimensional.
++        # Instead, we return a mask with the same shape as the object.
++        if mask.shape != self.obj.shape:
++            raise ValueError(
++                f"Query result has shape {mask.shape}, but object has shape {self.obj.shape}. "
++                "The query must return a boolean array with the same shape as the object."
++            )
++
++        # Create a DataArray with the same dimensions and coordinates.
++        mask_da = DataArray(mask, dims=self.obj.dims, coords=self.obj.coords)
++        return mask_da.astype(bool)

@@ -1,0 +1,35 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..31fa88e 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -398,6 +398,9 @@ class Documenter:
+         else:
+             # try to introspect the signature
+             try:
++                if self.env.config.autodoc_typehints == 'none':
++                    kwargs['show_annotation'] = False
++
+                 try:
+                     args = self.format_args(**kwargs)
+                 except TypeError:
+@@ -1612,6 +1615,7 @@ def setup(app):
+     app.add_config_value('autodoc_default_options', {}, True)
+     app.add_config_value('autodoc_docstring_signature', True, True)
+     app.add_config_value('autodoc_mock_imports', [], True)
++    app.add_config_value('autodoc_typehints', 'signature', True)
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
+     app.add_event('autodoc-process-docstring')
+diff --git a/sphinx/util/inspect.py b/sphinx/util/inspect.py
+index 275b3fa..9fbe6dc 100644
+--- a/sphinx/util/inspect.py
++++ b/sphinx/util/inspect.py
+@@ -465,7 +465,7 @@ class Signature:
+             args.append(arg.getvalue())
+             last_kind = param.kind
+ 
+-        if self.return_annotation is inspect.Parameter.empty:
++        if self.return_annotation is inspect.Parameter.empty or not show_annotation:
+             return '(%s)' % ', '.join(args)
+         else:
+             if 'return' in self.annotations:

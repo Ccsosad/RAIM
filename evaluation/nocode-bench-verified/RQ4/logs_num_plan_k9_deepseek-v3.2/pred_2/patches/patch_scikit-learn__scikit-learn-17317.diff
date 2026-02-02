@@ -1,0 +1,67 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 24b047c..21fb312 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -119,13 +119,50 @@ def _check_unknown(values, known_values, return_mask=False):
+ 
+     """
+     if values.dtype == object:
+-        uniques_set = set(known_values)
+-        diff = list(set(values) - uniques_set)
+-        if return_mask:
+-            if diff:
+-                valid_mask = np.array([val in uniques_set for val in values])
++        # Identify missing values in known_values
++        missing_mask = np.array([val is None or (isinstance(val, float) and np.isnan(val)) for val in known_values], dtype=bool)
++        known_missing = known_values[missing_mask]
++        known_non_missing = known_values[~missing_mask]
++        uniques_set = set(known_non_missing)
++
++        # Find unique values in the input
++        unique_values = set(values)
++        diff = []
++        for val in unique_values:
++            # Check if the value is missing
++            if val is None or (isinstance(val, float) and np.isnan(val)):
++                # Check if this missing value is in known_missing
++                found = False
++                for known_missing_val in known_missing:
++                    if val is None and known_missing_val is None:
++                        found = True
++                        break
++                    elif isinstance(val, float) and np.isnan(val) and isinstance(known_missing_val, float) and np.isnan(known_missing_val):
++                        found = True
++                        break
++                if not found:
++                    diff.append(val)
+             else:
+-                valid_mask = np.ones(len(values), dtype=bool)
++                if val not in uniques_set:
++                    diff.append(val)
++
++        if return_mask:
++            valid_mask = np.ones(len(values), dtype=bool)
++            for i, val in enumerate(values):
++                if val is None or (isinstance(val, float) and np.isnan(val)):
++                    found = False
++                    for known_missing_val in known_missing:
++                        if val is None and known_missing_val is None:
++                            found = True
++                            break
++                        elif isinstance(val, float) and np.isnan(val) and isinstance(known_missing_val, float) and np.isnan(known_missing_val):
++                            found = True
++                            break
++                    if not found:
++                        valid_mask[i] = False
++                else:
++                    if val not in uniques_set:
++                        valid_mask[i] = False
+             return diff, valid_mask
+         else:
+             return diff
+@@ -140,4 +177,4 @@ def _check_unknown(values, known_values, return_mask=False):
+                 valid_mask = np.ones(len(values), dtype=bool)
+             return diff, valid_mask
+         else:
+-            return diff
++            return diff

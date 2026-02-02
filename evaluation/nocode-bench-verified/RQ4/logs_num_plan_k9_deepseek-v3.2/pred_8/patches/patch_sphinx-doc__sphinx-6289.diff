@@ -1,0 +1,14 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..fd7ab5b 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -354,6 +354,9 @@ class Documenter:
+         # type: () -> bool
+         """Check if *self.object* is really defined in the module given by
+         *self.modname*.
++
++        If the configuration option ``imported_members`` is set to ``True``,
++        always return ``True``.
+         """
+         if self.options.imported_members:
+             return True

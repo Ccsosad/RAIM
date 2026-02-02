@@ -1,0 +1,87 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..fe8f42b 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1644,6 +1644,28 @@ class Ellipse(Patch):
+ 
+     angle = property(get_angle, set_angle)
+ 
++    def get_vertices(self):
++        """
++        Return the vertices of the ellipse (endpoints of the major axis).
++
++        Returns
++        -------
++        vertices : (2, 2) array
++            The coordinates of the two vertices (major axis endpoints).
++        """
++        return self.get_patch_transform().transform([(1, 0), (-1, 0)])
++
++    def get_co_vertices(self):
++        """
++        Return the co-vertices of the ellipse (endpoints of the minor axis).
++
++        Returns
++        -------
++        co_vertices : (2, 2) array
++            The coordinates of the two co-vertices (minor axis endpoints).
++        """
++        return self.get_patch_transform().transform([(0, 1), (0, -1)])
++
+     def get_corners(self):
+         """
+         Return the corners of the ellipse bounding box.
+diff --git a/galleries/examples/shapes_and_collections/ellipse_arrow.py b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+new file mode 100644
+index 0000000..9bcb651
+--- /dev/null
++++ b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+@@ -0,0 +1,48 @@
++"""
++==========================
++Ellipse with Arrow
++==========================
++
++This example demonstrates how to add an arrow to an ellipse showing
++clockwise or counter-clockwise rotation. The arrow is placed exactly
++on the ellipse using the coordinates of the vertices.
++"""
++
++import matplotlib.pyplot as plt
++import matplotlib.patches as mpatches
++
++# Create ellipse
++ellipse = mpatches.Ellipse((0.5, 0.5), 0.8, 0.4, angle=30)
++
++# Get vertices and co-vertices
++vertices = ellipse.get_vertices()
++co_vertices = ellipse.get_co_vertices()
++
++fig, ax = plt.subplots(figsize=(6, 6))
++ax.add_patch(ellipse)
++ax.set_aspect('equal')
++
++# Plot vertices and co-vertices
++ax.plot(vertices[:, 0], vertices[:, 1], 'ro', label='Vertices')
++ax.plot(co_vertices[:, 0], co_vertices[:, 1], 'bo', label='Co-vertices')
++
++# Add arrow showing counter-clockwise rotation
++# Using the first vertex as starting point
++ax.annotate('', 
++            xy=vertices[0], 
++            xytext=vertices[1],
++            arrowprops=dict(arrowstyle='->', lw=2, color='green'))
++
++# Add arrow showing clockwise rotation on co-vertices
++ax.annotate('', 
++            xy=co_vertices[0], 
++            xytext=co_vertices[1],
++            arrowprops=dict(arrowstyle='->', lw=2, color='orange'))
++
++ax.set_xlim(-0.2, 1.2)
++ax.set_ylim(-0.2, 1.2)
++ax.set_title('Ellipse with vertices and rotation arrows')
++ax.legend()
++ax.grid(True, linestyle='--', alpha=0.7)
++
++plt.show()

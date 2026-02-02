@@ -1,0 +1,40 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..b6fc124 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -996,6 +996,11 @@ class FacetGrid(Grid):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+         return self._fig
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._fig
++
+     @property
+     def axes(self):
+         """An array of the :class:`matplotlib.axes.Axes` objects in the grid."""
+@@ -1301,6 +1306,11 @@ class PairGrid(Grid):
+             utils.despine(fig=fig)
+         self.tight_layout(pad=layout_pad)
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+     def map(self, func, **kwargs):
+         """Plot with the same function in every subplot.
+ 
+@@ -1723,6 +1733,11 @@ class JointGrid(object):
+             if key in func_params:
+                 kws.setdefault(key, val)
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+     def plot(self, joint_func, marginal_func, **kwargs):
+         """Draw the plot by passing functions for joint and marginal axes.
+ 

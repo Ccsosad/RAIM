@@ -1,0 +1,43 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1ae55eb..f753178 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1457,9 +1457,18 @@ def merge_autodoc_default_flags(app, config):
+                   'Please use autodoc_default_options instead.',
+                   RemovedInSphinx30Warning)
+ 
++    # Import the supported options
++    from sphinx.ext.autodoc.constants import SUPPORTED_OPTIONS
++
+     for option in config.autodoc_default_flags:
+         if isinstance(option, string_types):
+-            config.autodoc_default_options[option] = None
++            if option in SUPPORTED_OPTIONS:
++                config.autodoc_default_options[option] = None
++            else:
++                logger.warning(
++                    __("Ignoring unsupported option in autodoc_default_flags: %r"),
++                    option, type='autodoc'
++                )
+         else:
+             logger.warning(
+                 __("Ignoring invalid option in autodoc_default_flags: %r"),
+diff --git a/sphinx/ext/autodoc/constants.py b/sphinx/ext/autodoc/constants.py
+new file mode 100644
+index 0000000..5768b97
+--- /dev/null
++++ b/sphinx/ext/autodoc/constants.py
+@@ -0,0 +1,13 @@
++"""Constants for the autodoc extension."""
++
++SUPPORTED_OPTIONS = [
++    'members',
++    'member-order', 
++    'undoc-members',
++    'private-members',
++    'special-members',
++    'inherited-members',
++    'show-inheritance',
++    'ignore-module-all',
++    'exclude-members',
++]

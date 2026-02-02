@@ -1,0 +1,19 @@
+diff --git a/sphinx/builders/html/__init__.py b/sphinx/builders/html/__init__.py
+index c052c27..9d8da88 100644
+--- a/sphinx/builders/html/__init__.py
++++ b/sphinx/builders/html/__init__.py
+@@ -839,8 +839,12 @@ class StandaloneHTMLBuilder(Builder):
+                 uri = node['uri']
+                 reference = nodes.reference('', '', internal=True)
+                 if uri in self.images:
+-                    reference['refuri'] = posixpath.join(self.imgpath,
+-                                                         self.images[uri])
++                    dest = self.images[uri]
++                    # Replace {docpath} with the directory of the current document
++                    if '{docpath}' in dest:
++                        docpath = posixpath.dirname(self.current_docname) + '/' if posixpath.dirname(self.current_docname) else ''
++                        dest = dest.replace('{docpath}', docpath)
++                    reference['refuri'] = posixpath.join(self.imgpath, dest)
+                 else:
+                     reference['refuri'] = uri
+                 node.replace_self(reference)

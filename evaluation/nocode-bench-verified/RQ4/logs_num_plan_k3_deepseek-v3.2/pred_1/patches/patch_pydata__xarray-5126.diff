@@ -1,0 +1,130 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..0e36556 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -371,15 +371,18 @@ def _calculate_col_width(col_items):
+     return col_width
+ 
+ 
+-def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
++def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None, expand=None):
+     if col_width is None:
+         col_width = _calculate_col_width(mapping)
+     if max_rows is None:
+-        max_rows = OPTIONS["display_max_rows"]
++        if expand is True:
++            max_rows = None
++        else:
++            max_rows = OPTIONS["display_max_rows"]
+     summary = [f"{title}:"]
+     if mapping:
+         len_mapping = len(mapping)
+-        if len_mapping > max_rows:
++        if max_rows is not None and len_mapping > max_rows:
+             summary = [f"{summary[0]} ({max_rows}/{len_mapping})"]
+             first_rows = max_rows // 2 + max_rows % 2
+             items = list(mapping.items())
+@@ -395,22 +398,48 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+     return "\n".join(summary)
+ 
+ 
+-data_vars_repr = functools.partial(
+-    _mapping_repr, title="Data variables", summarizer=summarize_datavar
+-)
++def data_vars_repr(mapping, col_width=None):
++    expand = should_expand("data_vars")
++    if expand is False:
++        return "Data variables: *collapsed*"
++    else:
++        return _mapping_repr(
++            mapping,
++            title="Data variables",
++            summarizer=summarize_datavar,
++            col_width=col_width,
++            expand=expand,
++        )
+ 
+ 
+-attrs_repr = functools.partial(
+-    _mapping_repr, title="Attributes", summarizer=summarize_attr
+-)
++def attrs_repr(mapping, col_width=None):
++    expand = should_expand("attrs")
++    if expand is False:
++        return "Attributes: *collapsed*"
++    else:
++        return _mapping_repr(
++            mapping,
++            title="Attributes",
++            summarizer=summarize_attr,
++            col_width=col_width,
++            expand=expand,
++        )
+ 
+ 
+ def coords_repr(coords, col_width=None):
+-    if col_width is None:
+-        col_width = _calculate_col_width(_get_col_items(coords))
+-    return _mapping_repr(
+-        coords, title="Coordinates", summarizer=summarize_coord, col_width=col_width
+-    )
++    expand = should_expand("coords")
++    if expand is False:
++        return "Coordinates: *collapsed*"
++    else:
++        if col_width is None:
++            col_width = _calculate_col_width(_get_col_items(coords))
++        return _mapping_repr(
++            coords,
++            title="Coordinates",
++            summarizer=summarize_coord,
++            col_width=col_width,
++            expand=expand,
++        )
+ 
+ 
+ def indexes_repr(indexes):
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..f3f234c 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -108,6 +108,15 @@ class set_options:
+       Default: ``'default'``.
+     - ``display_style``: display style to use in jupyter for xarray objects.
+       Default: ``'text'``. Other options are ``'html'``.
++    - ``display_expand_attrs``: control expansion of attributes section. Can be
++      ``True`` to always expand, ``False`` to always collapse, or ``'default'``
++      to expand unless over a pre-defined limit. Default: ``'default'``.
++    - ``display_expand_coords``: control expansion of coordinates section.
++      Same values as above. Default: ``'default'``.
++    - ``display_expand_data``: control expansion of data section in DataArray.
++      Same values as above. Default: ``'default'``.
++    - ``display_expand_data_vars``: control expansion of data variables section.
++      Same values as above. Default: ``'default'``.
+ 
+ 
+     You can use ``set_options`` either as a context manager:
+@@ -160,4 +169,4 @@ class set_options:
+         return
+ 
+     def __exit__(self, type, value, traceback):
+-        self._apply_update(self.old)
++        self._apply_update(self.old)
+diff --git a/xarray/core/formatting/display_controller.py b/xarray/core/formatting/display_controller.py
+new file mode 100644
+index 0000000..67d4e8a
+--- /dev/null
++++ b/xarray/core/formatting/display_controller.py
+@@ -0,0 +1,12 @@
++"""Controller for display expansion options."""
++
++from ..options import OPTIONS
++
++def should_expand(section_name):
++    """Return True if the section should be expanded, False if collapsed, or None for default."""
++    option_name = f"display_expand_{section_name}"
++    value = OPTIONS.get(option_name, 'default')
++    if value == 'default':
++        return None
++    else:
++        return bool(value)

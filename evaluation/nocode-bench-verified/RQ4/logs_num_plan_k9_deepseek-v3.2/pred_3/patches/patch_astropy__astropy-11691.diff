@@ -1,0 +1,47 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..fac0ee3 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -129,6 +129,8 @@ _units_and_physical_types = [
+ _physical_unit_mapping = {}
+ _unit_physical_mapping = {}
+ _name_physical_mapping = {}
++_attrname_physical_mapping = {}
++_attrname_physical_mapping = {}  # maps underscored attribute names to physical types
+ 
+ 
+ def _physical_type_from_str(name):
+@@ -139,6 +141,10 @@ def _physical_type_from_str(name):
+     if name == "unknown":
+         raise ValueError("cannot uniquely identify an 'unknown' physical type.")
+ 
++    # First, try the attribute name mapping (underscored names)
++    if name in _attrname_physical_mapping:
++        return _attrname_physical_mapping[name]
++    # Then try the regular name mapping
+     if name in _name_physical_mapping:
+         return _name_physical_mapping[name]
+     else:
+@@ -173,6 +179,22 @@ def _replace_temperatures_with_kelvin(unit):
+         return unit
+ 
+ 
++def _register_physical_type_attrname(physical_type):
++    """
++    Register the attribute name (underscored version) for a physical type.
++    This allows accessing physical types via attribute (e.g., physical.length).
++    """
++    # The physical type has a name (or names). We create an attribute name by
++    # replacing spaces with underscores.
++    # We use the primary name (the first one if it's a set) for the attribute.
++    if isinstance(physical_type._names, set):
++        primary_name = next(iter(physical_type._names))
++    else:
++        primary_name = physical_type._names
++    attrname = primary_name.replace(" ", "_")
++    _attrname_physical_mapping[attrname] = physical_type
++
++
+ def _standardize_physical_type_names(physical_type_input):
+     """
+     Convert a string or `set` of strings into a `set` containing

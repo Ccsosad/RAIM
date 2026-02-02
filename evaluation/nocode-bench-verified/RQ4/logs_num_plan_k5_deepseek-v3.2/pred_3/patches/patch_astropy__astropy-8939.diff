@@ -1,0 +1,119 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index 5d84827..a9bdafd 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -879,6 +879,114 @@ def _vstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='wa
+     return out
+ 
+ 
++def _cstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along the third axis)
++
++    A ``join_type`` of 'exact' (default) means that the arrays must all
++    have exactly the same column names (though the order can vary).  If
++    ``join_type`` is 'inner' then the intersection of common columns will
++    be the output.  A value of 'outer' means the output will have the union of
++    all columns, with array values being masked where no common values are
++    available.
++
++    Parameters
++    ----------
++    arrays : list of Tables
++        Tables to stack depth-wise
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    col_name_map : empty dict or None
++        If passed as a dict then it will be updated in-place with the
++        mapping of output to input column names.
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++    """
++    # Store user-provided col_name_map until the end
++    _col_name_map = col_name_map
++
++    # Input validation
++    if join_type not in ('inner', 'exact', 'outer'):
++        raise ValueError("`join_type` arg must be one of 'inner', 'exact' or 'outer'")
++
++    # Trivial case of one input array
++    if len(arrays) == 1:
++        return arrays[0]
++
++    # Check that all tables have the same length
++    lengths = [len(arr) for arr in arrays]
++    if len(set(lengths)) != 1:
++        raise ValueError("All input tables must have the same length")
++    n_rows = lengths[0]
++
++    # Start by assuming an outer match where all names go to output
++    names = set(itertools.chain(*[arr.colnames for arr in arrays]))
++    col_name_map = get_col_name_map(arrays, names)
++
++    # If require_match is True then the output must have exactly the same
++    # number of columns as each input array
++    if join_type == 'exact':
++        for names in col_name_map.values():
++            if any(x is None for x in names):
++                raise TableMergeError('Inconsistent columns in input arrays '
++                                      "(use 'inner' or 'outer' join_type to "
++                                      "allow non-matching columns)")
++        join_type = 'outer'
++
++    # For an inner join, keep only columns where all input arrays have that column
++    if join_type == 'inner':
++        col_name_map = OrderedDict((name, in_names) for name, in_names in col_name_map.items()
++                                   if all(x is not None for x in in_names))
++        if len(col_name_map) == 0:
++            raise TableMergeError('Input arrays have no columns in common')
++
++    out = _get_out_class(arrays)()
++
++    for out_name, in_names in col_name_map.items():
++        # List of input arrays that contribute to this output column
++        cols = [arr[name] for arr, name in zip(arrays, in_names) if name is not None]
++
++        # For depth-wise stacking, we need to stack along a new axis.
++        # We'll use the first column to determine the class.
++        col_cls = _get_out_class(cols)
++        if not hasattr(col_cls.info, 'new_like'):
++            raise NotImplementedError('cstack unavailable for mixin column type(s): {}'
++                                      .format(col_cls.__name__))
++
++        # We create a new column with the appropriate shape and type.
++        # The new column should have shape (n_rows, len(cols), ...) for 1D columns.
++        # However, the new_like method is designed for vstack. We need a different approach.
++        # Instead, we can stack the columns manually.
++        # First, get the data from each column as a numpy array.
++        data_list = [col.data for col in cols]
++        # Stack along axis=1 (for 1D) or axis=2 (for 2D)? Actually, we want to stack depth-wise.
++        # For 1D arrays, we want to produce a 2D array with shape (n_rows, n_cols).
++        # We can use np.column_stack, but that stacks horizontally. Alternatively, we can use np.stack with axis=1.
++        # Let's use np.stack with axis=1.
++        try:
++            stacked_data = np.stack(data_list, axis=1)
++        except ValueError as e:
++            raise TableMergeError(f"Cannot stack column '{out_name}': {e}")
++
++        # Now create a new column with the stacked data.
++        # We need to preserve the column attributes from the first column.
++        first_col = cols[0]
++        new_col = col_cls(stacked_data, name=out_name, dtype=first_col.dtype,
++                          format=first_col.format, unit=first_col.unit,
++                          description=first_col.description, meta=first_col.meta)
++
++        out[out_name] = new_col
++
++    # If col_name_map supplied as a dict input, then update.
++    if isinstance(_col_name_map, Mapping):
++        _col_name_map.update(col_name_map)
++
++    return out
++
++
+ def _hstack(arrays, join_type='outer', uniq_col_name='{col_name}_{table_name}',
+            table_names=None, col_name_map=None):
+     """

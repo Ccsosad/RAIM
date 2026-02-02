@@ -1,0 +1,160 @@
+diff --git a/seaborn/__init__.py b/seaborn/__init__.py
+index 0016b4b..61a1328 100644
+--- a/seaborn/__init__.py
++++ b/seaborn/__init__.py
+@@ -12,10 +12,11 @@ from .axisgrid import *  # noqa: F401,F403
+ from .widgets import *  # noqa: F401,F403
+ from .colors import xkcd_rgb, crayons  # noqa: F401
+ from . import cm  # noqa: F401
++from .legend import move_legend  # noqa: F401
+ 
+ # Capture the original matplotlib rcParams
+ import matplotlib as mpl
+ _orig_rc_params = mpl.rcParams.copy()
+ 
+ # Define the seaborn version
+-__version__ = "0.12.0.dev0"
++__version__ = "0.12.0.dev0"
+diff --git a/seaborn/legend.py b/seaborn/legend.py
+new file mode 100644
+index 0000000..e052b8a
+--- /dev/null
++++ b/seaborn/legend.py
+@@ -0,0 +1,84 @@
++"""
++Functions for working with plot legends.
++"""
++import matplotlib as mpl
++from matplotlib.legend import Legend
++from ._core.compat import get_legend_handles
++from ._core.compat import get_legend_loc
++from ._core.compat import get_legend_bbox_to_anchor
++from ._core.compat import set_legend_loc
++from ._core.compat import set_legend_bbox_to_anchor
++
++__all__ = ["move_legend"]
++
++
++def move_legend(obj, loc, **kwargs):
++    """
++    Move an existing legend to a new location or update its properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.FacetGrid
++        The object with the legend.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid location strings and integers.
++    **kwargs
++        Additional keyword arguments are passed to :meth:`matplotlib.axes.Axes.legend`.
++
++    Returns
++    -------
++    None
++
++    Examples
++    --------
++    .. include:: ../docstrings/move_legend.ipynb
++    """
++    # Check if the object has a legend
++    if hasattr(obj, "legend_"):
++        # This is an axes-level plot (e.g., histplot, kdeplot)
++        ax = obj
++        legend = ax.legend_
++    elif hasattr(obj, "legends"):
++        # This is a figure-level plot (e.g., FacetGrid)
++        # We assume there is exactly one legend
++        if len(obj.legends) == 0:
++            raise ValueError("No legend found.")
++        legend = obj.legends[0]
++        ax = legend.axes
++    else:
++        # Try to get the legend from the axes
++        if hasattr(obj, "get_legend"):
++            legend = obj.get_legend()
++            if legend is None:
++                raise ValueError("No legend found.")
++            ax = obj
++        else:
++            raise TypeError("Object must be an Axes or a FacetGrid.")
++
++    # Get the current legend handles and labels
++    handles = legend.legendHandles
++    labels = [t.get_text() for t in legend.get_texts()]
++
++    # Remove the old legend
++    legend.remove()
++
++    # Create a new legend with the new location and properties
++    new_legend = ax.legend(handles, labels, loc=loc, **kwargs)
++
++    # Update the appropriate attribute
++    if hasattr(obj, "legend_"):
++        obj.legend_ = new_legend
++    elif hasattr(obj, "legends"):
++        obj.legends = [new_legend]
++    else:
++        # For a plain Axes, we don't need to update anything else
++        pass
++
++    # If bbox_to_anchor is provided, we need to update the legend's bbox_to_anchor
++    if "bbox_to_anchor" in kwargs:
++        new_legend.set_bbox_to_anchor(kwargs["bbox_to_anchor"])
++
++    # Draw the figure to update
++    if ax.figure:
++        ax.figure.canvas.draw_idle()
+diff --git a/seaborn/legend_utils.py b/seaborn/legend_utils.py
+new file mode 100644
+index 0000000..7bf64cc
+--- /dev/null
++++ b/seaborn/legend_utils.py
+@@ -0,0 +1,47 @@
++"""
++Utilities for working with plot legends.
++"""
++__all__ = []
++
++def _get_legend_and_axes(obj):
++    """
++    Extract the legend and its axes from an object.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.FacetGrid
++        The object with the legend.
++
++    Returns
++    -------
++    legend : matplotlib.legend.Legend
++        The legend object.
++    ax : matplotlib.axes.Axes
++        The axes containing the legend.
++    """
++    # Try different attributes that might hold the legend
++    if hasattr(obj, "legend_"):
++        # Axes-level plot
++        legend = obj.legend_
++        ax = obj
++    elif hasattr(obj, "_legend"):
++        # FacetGrid
++        legend = obj._legend
++        if legend is None:
++            raise ValueError("No legend found.")
++        ax = legend.axes
++    elif hasattr(obj, "legends") and len(obj.legends) > 0:
++        # Object with a list of legends (e.g., some seaborn objects)
++        legend = obj.legends[0]
++        ax = legend.axes
++    else:
++        # Fallback to get_legend
++        if hasattr(obj, "get_legend"):
++            legend = obj.get_legend()
++            if legend is None:
++                raise ValueError("No legend found.")
++            ax = obj
++        else:
++            raise TypeError("Object must be an Axes or a FacetGrid.")
++
++    return legend, ax

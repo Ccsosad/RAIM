@@ -1,0 +1,71 @@
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..31cb333
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,65 @@
++"""Private import checker for pylint."""
++from typing import TYPE_CHECKING, List
++
++from astroid import nodes
++from pylint import checkers
++from pylint import interfaces
++from pylint.checkers import utils
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++
++class PrivateImportChecker(checkers.BaseChecker):
++    """Check for imports of private names (prefixed with '_') from external modules."""
++
++    name = "private-import"
++    msgs = {
++        "W5501": (
++            "Import of private name %r from external module",
++            "import-private-name",
++            "Used when a private name (starting with '_') is imported from an external module.",
++        )
++    }
++
++    def __init__(self, linter: "PyLinter") -> None:
++        super().__init__(linter)
++        self._imported_modules: List[str] = []
++
++    def visit_import(self, node: nodes.Import) -> None:
++        """Check regular import statements."""
++        for name, alias in node.names:
++            # Check if the imported module name starts with '_'
++            if name.startswith("_"):
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=(name,),
++                    confidence=interfaces.HIGH,
++                )
++
++    def visit_importfrom(self, node: nodes.ImportFrom) -> None:
++        """Check 'from ... import ...' statements."""
++        # Skip relative imports
++        if node.level:
++            return
++
++        module = node.modname
++        for name, alias in node.names:
++            # Check if the imported name starts with '_'
++            if name.startswith("_"):
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=(f"{module}.{name}",),
++                    confidence=interfaces.HIGH,
++                )
++
++    def close(self) -> None:
++        """Clean up when checking is complete."""
++        self._imported_modules.clear()
++
++
++def register(linter: "PyLinter") -> None:
++    """Required method to auto-register this checker."""
++    linter.register_checker(PrivateImportChecker(linter))

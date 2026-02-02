@@ -1,0 +1,66 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index fb4476d..146a3d4 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -913,6 +913,27 @@ class FacetGrid(Grid):
+                 ax.set_yticklabels(labels, **kwargs)
+         return self
+ 
++    def tick_params(self, **kwargs):
++        """
++        Customize the appearance of ticks, tick labels, and gridlines.
++
++        This method calls `matplotlib.axes.Axes.tick_params` on each subplot
++        in the grid. See that method's documentation for more information.
++
++        Parameters
++        ----------
++        **kwargs : dict
++            Keyword arguments to pass to `Axes.tick_params`.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++        """
++        for ax in self.axes.flat:
++            ax.tick_params(**kwargs)
++        return self
++
+     def set_titles(self, template=None, row_template=None, col_template=None,
+                    **kwargs):
+         """Draw titles either above each facet or on the grid margins.
+@@ -1642,6 +1663,33 @@ class PairGrid(Grid):
+         for ax, label in zip(self.axes[:, 0], self.y_vars):
+             ax.set_ylabel(label)
+ 
++    def tick_params(self, **kwargs):
++        """
++        Customize the appearance of ticks, tick labels, and gridlines.
++
++        This method calls `matplotlib.axes.Axes.tick_params` on each subplot
++        in the grid. See that method's documentation for more information.
++
++        Parameters
++        ----------
++        **kwargs : dict
++            Keyword arguments to pass to `Axes.tick_params`.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++        """
++        # Iterate over main axes
++        for ax in self.axes.flat:
++            if ax is not None:
++                ax.tick_params(**kwargs)
++        # Also apply to diagonal axes if they exist
++        if self.diag_axes is not None:
++            for ax in self.diag_axes.flat:
++                ax.tick_params(**kwargs)
++        return self
++
+     def _find_numeric_cols(self, data):
+         """Find which variables in a DataFrame are numeric."""
+         numeric_cols = []

@@ -1,0 +1,120 @@
+diff --git a/seaborn/utils.py b/seaborn/utils.py
+index c64edd8..0d18934 100644
+--- a/seaborn/utils.py
++++ b/seaborn/utils.py
+@@ -715,6 +715,115 @@ def adjust_legend_subtitles(legend):
+                 if font_size is not None:
+                     text.set_size(font_size)
+ 
++def move_legend(obj, loc, **kwargs):
++    """Move the legend on an existing plot.
++    
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid object
++        Object with the legend to move.
++    loc : str
++        New legend location.
++    **kwargs
++        Additional parameters to pass to Axes.legend.
++    
++    Examples
++    --------
++    For axes-level functions, pass the :class:`matplotlib.axes.Axes` object:
++    
++    .. plot::
++        :context: close-figs
++        
++        import seaborn as sns
++        penguins = sns.load_dataset("penguins")
++        ax = sns.histplot(penguins, x="bill_length_mm", hue="species")
++        sns.move_legend(ax, "center right")
++    
++    Use the `bbox_to_anchor` parameter for more fine-grained control:
++    
++    .. plot::
++        :context: close-figs
++        
++        ax = sns.histplot(penguins, x="bill_length_mm", hue="species")
++        sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
++    
++    Pass additional :meth:`matplotlib.axes.Axes.legend` parameters:
++    
++    .. plot::
++        :context: close-figs
++        
++        ax = sns.histplot(penguins, x="bill_length_mm", hue="species")
++        sns.move_legend(
++            ax, "lower center",
++            bbox_to_anchor=(.5, 1), ncol=3, title=None, frameon=False,
++        )
++    
++    It's also possible to move the legend created by a figure-level function:
++    
++    .. plot::
++        :context: close-figs
++        
++        g = sns.displot(
++            penguins,
++            x="bill_length_mm", hue="species",
++            col="island", col_wrap=2, height=3,
++        )
++        sns.move_legend(g, "upper left", bbox_to_anchor=(.55, .45))
++    
++    When the legend is on an axes (e.g. with ``legend_out=False``):
++    
++    .. plot::
++        :context: close-figs
++        
++        g = sns.displot(
++            penguins,
++            x="bill_length_mm", hue="species",
++            col="island", col_wrap=2, height=3,
++            facet_kws=dict(legend_out=False),
++        )
++        sns.move_legend(g, "upper left", bbox_to_anchor=(.55, .45), frameon=False)
++    """
++    # Determine if we're dealing with an axes or a figure/grid
++    if hasattr(obj, "axisgrid") or hasattr(obj, "fig"):
++        # This is a figure-level object like FacetGrid
++        fig = obj.fig
++        
++        # Try to find the legend
++        legend = None
++        if fig.legends:
++            legend = fig.legends[0]
++            is_figure = True
++        else:
++            # Look for a legend on any of the axes
++            for ax in fig.axes:
++                if hasattr(ax, "legend_") and ax.legend_ is not None:
++                    legend = ax.legend_
++                    is_figure = False
++                    break
++        
++        if legend is None:
++            raise ValueError("Object does not have a legend")
++    else:
++        # This is an axes-level object
++        if hasattr(obj, "legend_") and obj.legend_ is not None:
++            legend = obj.legend_
++            is_figure = False
++        else:
++            raise ValueError("Object does not have a legend")
++    
++    # Extract handles and labels
++    handles = legend.legendHandles
++    labels = [t.get_text() for t in legend.texts]
++    
++    # Remove existing legend
++    legend.remove()
++    
++    # Create new legend
++    if is_figure:
++        fig.legend(handles, labels, loc=loc, **kwargs)
++    else:
++        obj.legend(handles, labels, loc=loc, **kwargs)
++
+ 
+ def _deprecate_ci(errorbar, ci):
+     """

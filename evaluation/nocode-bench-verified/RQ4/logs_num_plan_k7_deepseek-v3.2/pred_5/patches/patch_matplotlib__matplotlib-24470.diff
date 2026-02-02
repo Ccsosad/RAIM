@@ -1,0 +1,50 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..2637c4f 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3074,7 +3074,7 @@ class Axes(_AxesBase):
+     def pie(self, x, explode=None, labels=None, colors=None,
+             autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
+             startangle=0, radius=1, counterclock=True,
+-            wedgeprops=None, textprops=None, center=(0, 0),
++            wedgeprops=None, hatch=None, textprops=None, center=(0, 0),
+             frame=False, rotatelabels=False, *, normalize=True):
+         """
+         Plot a pie chart.
+@@ -3219,11 +3219,19 @@ class Axes(_AxesBase):
+         if textprops is None:
+             textprops = {}
+ 
++        # Validate hatch
++        if isinstance(hatch, str):
++            wedgeprops['hatch'] = hatch
++        elif hatch is not None and not isinstance(hatch, list):
++            raise TypeError("hatch must be a string or a list of strings")
++        if isinstance(hatch, list) and len(hatch) != len(x):
++            raise ValueError("hatch must have the same length as x")
++
+         texts = []
+         slices = []
+         autotexts = []
+ 
+-        for frac, label, expl in zip(x, labels, explode):
++        for i, (frac, label, expl) in enumerate(zip(x, labels, explode)):
+             x, y = center
+             theta2 = (theta1 + frac) if counterclock else (theta1 - frac)
+             thetam = 2 * np.pi * 0.5 * (theta1 + theta2)
+@@ -3236,6 +3244,9 @@ class Axes(_AxesBase):
+                                clip_on=False,
+                                label=label)
+             w.set(**wedgeprops)
++            # If hatch is a list, set the hatch for this wedge.
++            if isinstance(hatch, list):
++                w.set_hatch(hatch[i])
+             slices.append(w)
+             self.add_patch(w)
+ 
+@@ -8280,4 +8291,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

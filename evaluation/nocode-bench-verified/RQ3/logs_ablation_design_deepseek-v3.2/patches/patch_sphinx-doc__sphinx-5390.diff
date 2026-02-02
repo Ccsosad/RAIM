@@ -1,0 +1,42 @@
+diff --git a/sphinx/builders/html.py b/sphinx/builders/html.py
+index 0939a74..e70ed5d 100644
+--- a/sphinx/builders/html.py
++++ b/sphinx/builders/html.py
+@@ -283,11 +283,23 @@ class StandaloneHTMLBuilder(Builder):
+         self.init_highlighter()
+         self.init_css_files()
+         self.init_js_files()
+-        if self.config.html_file_suffix is not None:
+-            self.out_suffix = self.config.html_file_suffix
++        # Determine the config keys based on the builder name
++        if self.name in ('html', 'dirhtml'):
++            file_suffix_key = 'html_file_suffix'
++            link_suffix_key = 'html_link_suffix'
++        elif self.name == 'htmlhelp':
++            file_suffix_key = 'htmlhelp_file_suffix'
++            link_suffix_key = 'htmlhelp_link_suffix'
++        else:
++            # fallback to the default
++            file_suffix_key = 'html_file_suffix'
++            link_suffix_key = 'html_link_suffix'
++
++        if getattr(self.config, file_suffix_key, None) is not None:
++            self.out_suffix = getattr(self.config, file_suffix_key)
+ 
+-        if self.config.html_link_suffix is not None:
+-            self.link_suffix = self.config.html_link_suffix
++        if getattr(self.config, link_suffix_key, None) is not None:
++            self.link_suffix = getattr(self.config, link_suffix_key)
+         else:
+             self.link_suffix = self.out_suffix
+ 
+diff --git a/sphinx/builders/htmlhelp.py b/sphinx/builders/htmlhelp.py
+new file mode 100644
+index 0000000..4ca4c66
+--- /dev/null
++++ b/sphinx/builders/htmlhelp.py
+@@ -0,0 +1,4 @@
++def setup(app):
++    app.add_builder(HTMLHelpBuilder)
++    app.add_config_value('htmlhelp_file_suffix', '.html', 'html')
++    app.add_config_value('htmlhelp_link_suffix', '.html', 'html')

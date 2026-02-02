@@ -1,0 +1,58 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..cc95522 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3075,7 +3075,7 @@ class Axes(_AxesBase):
+             autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
+             startangle=0, radius=1, counterclock=True,
+             wedgeprops=None, textprops=None, center=(0, 0),
+-            frame=False, rotatelabels=False, *, normalize=True):
++            frame=False, rotatelabels=False, *, normalize=True, hatch=None):
+         """
+         Plot a pie chart.
+ 
+@@ -3153,6 +3153,12 @@ class Axes(_AxesBase):
+         rotatelabels : bool, default: False
+             Rotate each label to the angle of the corresponding slice if true.
+ 
++        hatch : str or list of str, optional
++            Hatch pattern to use for the wedges. If a string, all wedges will
++            have the same hatch. If a list, each wedge will have a different
++            hatch from the list. The list will be cycled if it is shorter than
++            the number of wedges.
++
+         data : indexable object, optional
+             DATA_PARAMETER_PLACEHOLDER
+ 
+@@ -3219,6 +3225,14 @@ class Axes(_AxesBase):
+         if textprops is None:
+             textprops = {}
+ 
++        # Process hatch
++        if hatch is not None:
++            if isinstance(hatch, str):
++                hatch = [hatch]
++            hatch_cycle = itertools.cycle(hatch)
++        else:
++            hatch_cycle = itertools.repeat(None)
++
+         texts = []
+         slices = []
+         autotexts = []
+@@ -3236,6 +3250,10 @@ class Axes(_AxesBase):
+                                clip_on=False,
+                                label=label)
+             w.set(**wedgeprops)
++            # Apply hatch
++            h = next(hatch_cycle)
++            if h is not None:
++                w.set_hatch(h)
+             slices.append(w)
+             self.add_patch(w)
+ 
+@@ -8280,4 +8298,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

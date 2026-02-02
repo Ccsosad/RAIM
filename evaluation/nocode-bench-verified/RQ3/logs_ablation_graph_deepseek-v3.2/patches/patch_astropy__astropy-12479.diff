@@ -1,0 +1,101 @@
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+index 9e23fee..efc0902 100644
+--- a/astropy/cosmology/parameter.py
++++ b/astropy/cosmology/parameter.py
+@@ -1,3 +1,4 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ import astropy.units as u
+@@ -46,7 +47,7 @@ class Parameter:
+ 
+     _registry_validators = {}
+ 
+-    def __init__(self, fvalidate="default", doc=None, *,
++    def __init__(self, *, fvalidate="default", doc=None,
+                  unit=None, equivalencies=[], fmt=".3g", derived=False):
+         # parse registered fvalidate
+         if callable(fvalidate):
+@@ -148,6 +149,32 @@ class Parameter:
+                           derived=self.derived)
+         return desc
+ 
++    def clone(self, **kwargs):
++        """Return a copy of this Parameter with changed constructor arguments.
++
++        Parameters
++        ----------
++        **kwargs
++            Passed to the constructor. If not given, the current values are used.
++
++        Returns
++        -------
++        Parameter
++            A new Parameter instance.
++        """
++        # Current attributes
++        attrs = {
++            'fvalidate': self._fvalidate,
++            'doc': self.__doc__,
++            'unit': self.unit,
++            'equivalencies': self.equivalencies,
++            'fmt': self.format_spec,
++            'derived': self.derived,
++        }
++        # Update with any kwargs
++        attrs.update(kwargs)
++        return type(self)(**attrs)
++
+     def validate(self, cosmology, value):
+         """Run the validator on this Parameter.
+ 
+@@ -210,8 +237,48 @@ class Parameter:
+ 
+     # -------------------------------------------
+ 
++    def __eq__(self, other):
++        if not isinstance(other, Parameter):
++            return NotImplemented
++        return (self._attr_name == other._attr_name and
++                self._fvalidate == other._fvalidate and
++                self.__doc__ == other.__doc__ and
++                self.unit == other.unit and
++                self.equivalencies == other.equivalencies and
++                self._fmt == other._fmt and
++                self._derived == other._derived)
++
+     def __repr__(self):
+-        return f"<Parameter {self._attr_name!r} at {hex(id(self))}>"
++        # Try to create a string that can be used to recreate the object.
++        # This is only possible if fvalidate is a string or a registered validator.
++        fvalidate = self._fvalidate
++        if callable(fvalidate):
++            # Check if it's a registered validator
++            for key, val in self._registry_validators.items():
++                if val is fvalidate:
++                    fvalidate = key
++                    break
++            else:
++                # Not a registered validator, so we cannot roundtrip.
++                return f"<Parameter {self._attr_name!r} at {hex(id(self))}>"
++        # Now fvalidate is a string.
++        # Build the argument list.
++        args = []
++        if fvalidate != "default":
++            args.append(f"fvalidate={fvalidate!r}")
++        if self.__doc__ is not None:
++            args.append(f"doc={self.__doc__!r}")
++        if self.unit is not None:
++            args.append(f"unit={self.unit!r}")
++        if self.equivalencies:
++            args.append(f"equivalencies={self.equivalencies!r}")
++        if self._fmt != ".3g":
++            args.append(f"fmt={self._fmt!r}")
++        if self._derived:
++            args.append(f"derived={self._derived!r}")
++        # If there are no args, we still need to call the constructor.
++        arg_str = ", ".join(args)
++        return f"Parameter({arg_str})"
+ 
+ 
+ # ===================================================================

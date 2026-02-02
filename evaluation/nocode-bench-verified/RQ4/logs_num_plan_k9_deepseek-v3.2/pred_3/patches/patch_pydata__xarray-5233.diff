@@ -1,0 +1,216 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index e6fae2b..ca1af1e 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1804,6 +1804,67 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def convert_calendar(
++        self,
++        calendar: str,
++        align_on: Optional[str] = None,
++        missing: Optional[Any] = None,
++        use_cftime: Optional[bool] = None,
++    ) -> "DataArray":
++        """Convert the DataArray's time coordinate to another calendar.
++
++        Parameters
++        ----------
++        calendar : str
++            The target calendar name.
++        align_on : {None, 'date', 'year', 'random'}, optional
++            How to align the dates when converting. If None, defaults to 'date'.
++        missing : any, optional
++            Value to use for dates that are missing in the target calendar.
++            If None, missing dates are filled with NaN.
++        use_cftime : bool, optional
++            Whether to use cftime.datetime objects in the output. If None,
++            use cftime for non-standard calendars only.
++
++        Returns
++        -------
++        converted : DataArray
++            New DataArray with converted time coordinate.
++
++        See Also
++        --------
++        Dataset.convert_calendar
++        """
++        from xarray.coding.calendar_ops import convert_calendar
++        return convert_calendar(self, calendar, align_on, missing, use_cftime)
++
++    def interp_calendar(
++        self,
++        target: Union["DataArray", Dataset],
++        use_cftime: Optional[bool] = None,
++    ) -> "DataArray":
++        """Interpolate the DataArray's data to another calendar.
++
++        Parameters
++        ----------
++        target : DataArray or Dataset
++            The target time coordinate in the target calendar.
++        use_cftime : bool, optional
++            Whether to use cftime.datetime objects in the output. If None,
++            use cftime for non-standard calendars only.
++
++        Returns
++        -------
++        interpolated : DataArray
++            New DataArray with data interpolated to the target calendar.
++
++        See Also
++        --------
++        Dataset.interp_calendar
++        """
++        from xarray.coding.calendar_ops import interp_calendar
++        return interp_calendar(self, target, use_cftime)
++
+     def rename(
+         self,
+         new_name_or_name_dict: Union[Hashable, Mapping[Any, Hashable]] = None,
+@@ -4658,4 +4719,4 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..c0a1953
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1,132 @@
++"""
++Calendar-aware operations for xarray.
++"""
++import numpy as np
++import pandas as pd
++from datetime import datetime
++from typing import Optional, Union, Literal, Tuple, Any
++import cftime
++from xarray.core.types import T_Xarray
++from xarray.core.dataarray import DataArray
++from xarray.core.dataset import Dataset
++from xarray.core.variable import Variable
++from xarray.core.common import AbstractArray
++from xarray.core.indexes import CFTimeIndex
++from xarray.coding.times import _should_cftime_be_used
++from xarray.core.duck_array_ops import datetime_to_numeric, timedelta_to_numeric
++
++def convert_calendar(
++    obj: Union[DataArray, Dataset],
++    calendar: str,
++    align_on: Optional[str] = None,
++    missing: Optional[Any] = None,
++    use_cftime: Optional[bool] = None,
++) -> Union[DataArray, Dataset]:
++    """
++    Convert a DataArray or Dataset from one calendar to another.
++
++    Parameters
++    ----------
++    obj : DataArray or Dataset
++        The object with a time coordinate to convert.
++    calendar : str
++        The target calendar name.
++    align_on : {None, 'date', 'year', 'random'}, optional
++        How to align the dates when converting. If None, defaults to 'date'.
++    missing : any, optional
++        Value to use for dates that are missing in the target calendar.
++        If None, missing dates are filled with NaN.
++    use_cftime : bool, optional
++        Whether to use cftime.datetime objects in the output. If None,
++        use cftime for non-standard calendars only.
++
++    Returns
++    -------
++    converted : same as obj
++        New object with converted time coordinate.
++    """
++    # This is a stub. The actual implementation would be more complex.
++    raise NotImplementedError("convert_calendar is not yet implemented")
++
++def interp_calendar(
++    source: Union[DataArray, Dataset],
++    target: Union[DataArray, Dataset],
++    use_cftime: Optional[bool] = None,
++) -> Union[DataArray, Dataset]:
++    """
++    Interpolate data from one calendar to another.
++
++    Parameters
++    ----------
++    source : DataArray or Dataset
++        The source data with a time coordinate in the source calendar.
++    target : DataArray or Dataset
++        The target time coordinate in the target calendar.
++    use_cftime : bool, optional
++        Whether to use cftime.datetime objects in the output. If None,
++        use cftime for non-standard calendars only.
++
++    Returns
++    -------
++    interpolated : same as source
++        New object with data interpolated to the target calendar.
++    """
++    # This is a stub. The actual implementation would be more complex.
++    raise NotImplementedError("interp_calendar is not yet implemented")
++
++def date_range(
++    start: Union[str, datetime, cftime.datetime],
++    end: Union[str, datetime, cftime.datetime],
++    freq: str,
++    calendar: str = "standard",
++    use_cftime: Optional[bool] = None,
++) -> Union[pd.DatetimeIndex, CFTimeIndex]:
++    """
++    Generate a range of dates with a given frequency and calendar.
++
++    Parameters
++    ----------
++    start : str or datetime-like
++        Start of the range.
++    end : str or datetime-like
++        End of the range.
++    freq : str
++        Frequency string (e.g., 'D', 'M', 'Y').
++    calendar : str, default: 'standard'
++        Calendar name.
++    use_cftime : bool, optional
++        Whether to return a CFTimeIndex. If None, determined by the calendar.
++
++    Returns
++    -------
++    index : pd.DatetimeIndex or CFTimeIndex
++        The generated date range.
++    """
++    # This is a stub. The actual implementation would be more complex.
++    raise NotImplementedError("date_range is not yet implemented")
++
++def date_range_like(
++    source: Union[DataArray, Dataset, pd.DatetimeIndex, CFTimeIndex],
++    calendar: str,
++    use_cftime: Optional[bool] = None,
++) -> Union[pd.DatetimeIndex, CFTimeIndex]:
++    """
++    Generate a date range with the same length and frequency as a source,
++    but in a different calendar.
++
++    Parameters
++    ----------
++    source : DataArray, Dataset, pd.DatetimeIndex, or CFTimeIndex
++        The source time coordinate.
++    calendar : str
++        Target calendar.
++    use_cftime : bool, optional
++        Whether to return a CFTimeIndex. If None, determined by the calendar.
++
++    Returns
++    -------
++    index : pd.DatetimeIndex or CFTimeIndex
++        The generated date range.
++    """
++    # This is a stub. The actual implementation would be more complex.
++    raise NotImplementedError("date_range_like is not yet implemented")

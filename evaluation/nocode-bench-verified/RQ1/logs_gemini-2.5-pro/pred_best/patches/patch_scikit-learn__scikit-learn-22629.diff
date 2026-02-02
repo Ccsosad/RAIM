@@ -1,0 +1,18 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 38b5c3a..4eedace 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -229,7 +229,12 @@ def _encode(values, *, uniques, check_unknown=True):
+             diff = _check_unknown(values, uniques)
+             if diff:
+                 raise ValueError(f"y contains previously unseen labels: {str(diff)}")
+-        return np.searchsorted(uniques, values)
++
++        encoded = np.searchsorted(uniques, values)
++        if uniques.dtype.kind == "f" and np.isnan(uniques).any():
++            nan_idx = np.where(np.isnan(uniques))[0][0]
++            encoded[np.isnan(values)] = nan_idx
++        return encoded
+ 
+ 
+ def _check_unknown(values, known_values, return_mask=False):

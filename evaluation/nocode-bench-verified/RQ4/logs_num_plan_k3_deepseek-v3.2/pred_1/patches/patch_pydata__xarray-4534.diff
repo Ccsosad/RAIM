@@ -1,0 +1,165 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..187c849 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -146,6 +146,69 @@ def _strftime_through_series(values, date_format):
+     return strs.values.reshape(values.shape)
+ 
+ 
++def _isocalendar_through_series(values):
++    """Coerce an array of datetime-like values to a pandas Series and
++    get the ISO calendar year, week, and weekday.
++    """
++    values_as_series = pd.Series(values.ravel())
++    iso_df = values_as_series.dt.isocalendar()
++    # iso_df has columns: year, week, day
++    # We return a tuple of arrays for each column
++    return (iso_df.year.values, iso_df.week.values, iso_df.day.values)
++
++
++def _isocalendar(values):
++    if is_np_datetime_like(values.dtype):
++        # For numpy datetime, we use pandas
++        # Check pandas version
++        from distutils.version import LooseVersion
++        if LooseVersion(pd.__version__) < LooseVersion("1.1.0"):
++            raise AttributeError(
++                "The isocalendar method requires pandas version 1.1.0 or greater."
++            )
++        access_method = _isocalendar_through_series
++    else:
++        # For cftime, we cannot use isocalendar directly.
++        # We should implement it using cftime's date2num and then to datetime?
++        # But cftime doesn't have isocalendar. We might need to compute it manually.
++        # However, the requirement says it requires pandas>=1.1.0, so we might not support cftime.
++        # For now, we raise an error.
++        raise AttributeError(
++            "isocalendar is not supported for cftime datetime arrays."
++        )
++    if is_duck_dask_array(values):
++        from dask.array import map_blocks
++
++        # map_blocks expects a single array, but we return three.
++        # We need to handle this differently.
++        # We'll create a function that returns a tuple and then split.
++        # Alternatively, we can compute each component separately.
++        # For simplicity, we compute the three components in one go.
++        # We'll use map_blocks with a function that returns a 3-element tuple for each block.
++        # Then we split the result.
++        # But this is complex. Instead, we can compute year, week, day separately.
++        # However, we want to avoid three passes. Let's do it in one pass.
++        # We'll create a helper that returns a stacked array.
++        def _isocalendar_stacked(values):
++            y, w, d = access_method(values)
++            # Stack along a new axis
++            return np.stack([y, w, d], axis=-1)
++
++        stacked = map_blocks(_isocalendar_stacked, values, dtype=np.int64)
++        # Now we have an array with shape (..., 3)
++        # We split it into three arrays.
++        from dask.array import split
++        # split along the last axis
++        split_arrays = split(stacked, 3, axis=-1)
++        # Remove the last dimension (which is 1)
++        year = split_arrays[0][..., 0]
++        week = split_arrays[1][..., 0]
++        day = split_arrays[2][..., 0]
++        return year, week, day
++    else:
++        return access_method(values)
++
++
+ def _strftime(values, date_format):
+     if is_np_datetime_like(values.dtype):
+         access_method = _strftime_through_series
+@@ -271,6 +334,57 @@ class DatetimeAccessor(Properties):
+ 
+     """
+ 
++    def isocalendar(self):
++        """
++        Returns a Dataset with the year, week, and weekday calculated according to the ISO 8601 calendar.
++
++        Returns
++        -------
++        Dataset
++            Dataset with three variables: year, week, weekday.
++
++        Examples
++        --------
++        >>> import pandas as pd
++        >>> dates = pd.date_range(start="2000-01-01", periods=3, freq="D")
++        >>> ts = xr.DataArray(dates, dims=("time"))
++        >>> ts.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 3)
++        Coordinates:
++          * time     (time) datetime64[ns] 2000-01-01 2000-01-02 2000-01-03
++        Data variables:
++            year     (time) int64 2000 2000 2000
++            week     (time) int64 52 52 52
++            weekday  (time) int64 6 7 1
++
++        Notes
++        -----
++        This method requires pandas version 1.1.0 or greater.
++        """
++        from xarray import Dataset
++        from distutils.version import LooseVersion
++        import pandas as pd
++
++        if LooseVersion(pd.__version__) < LooseVersion("1.1.0"):
++            raise AttributeError(
++                "The isocalendar method requires pandas version 1.1.0 or greater."
++            )
++
++        obj_type = type(self._obj)
++        data = self._obj.data
++        year, week, weekday = _isocalendar(data)
++
++        # Create DataArrays for each component
++        coords = self._obj.coords
++        dims = self._obj.dims
++        year_da = obj_type(year, coords=coords, dims=dims, name="year")
++        week_da = obj_type(week, coords=coords, dims=dims, name="week")
++        weekday_da = obj_type(weekday, coords=coords, dims=dims, name="weekday")
++
++        # Combine into a Dataset
++        return Dataset({"year": year_da, "week": week_da, "weekday": weekday_da})
++
+     def strftime(self, date_format):
+         """
+         Return an array of formatted strings specified by date_format, which
+@@ -326,10 +440,28 @@ class DatetimeAccessor(Properties):
+     nanosecond = Properties._tslib_field_accessor(
+         "nanosecond", "The nanoseconds of the datetime", np.int64
+     )
+-    weekofyear = Properties._tslib_field_accessor(
+-        "weekofyear", "The week ordinal of the year", np.int64
+-    )
+-    week = weekofyear
++    @property
++    def weekofyear(self):
++        import warnings
++        warnings.warn(
++            "weekofyear is deprecated. Use DataArray.dt.isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        # Call the original _tslib_field_accessor function
++        f = Properties._tslib_field_accessor("weekofyear", "The week ordinal of the year", np.int64)
++        return f(self)
++
++    @property
++    def week(self):
++        import warnings
++        warnings.warn(
++            "week is deprecated. Use DataArray.dt.isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        f = Properties._tslib_field_accessor("week", "The week ordinal of the year", np.int64)
++        return f(self)
+     dayofweek = Properties._tslib_field_accessor(
+         "dayofweek", "The day of the week with Monday=0, Sunday=6", np.int64
+     )

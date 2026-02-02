@@ -1,0 +1,53 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index 469c69b..8d76468 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -440,6 +440,12 @@ class DatetimeAccessor(Properties):
+         "is_leap_year", "Boolean indicator if the date belongs to a leap year.", bool
+     )
+ 
++    calendar = Properties._tslib_field_accessor(
++        "calendar",
++        "The calendar type of the datetime (only for cftime datetimes, e.g. 'noleap', '360_day', 'gregorian').",
++        object,
++    )
++
+ 
+ class TimedeltaAccessor(Properties):
+     """Access Timedelta fields for DataArrays with Timedelta-like dtypes.
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index e6fae2b..cc831d0 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4658,4 +4658,30 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)
++
++    def convert_calendar(
++        self,
++        target: str,
++        use_cftime: Union[bool, None] = None,
++        align_on: str = "exact",
++    ) -> "DataArray":
++        """Convert datetimes between calendars."""
++        from ..coding import calendar_ops
++
++        ds = self._to_temp_dataset()
++        ds = calendar_ops.convert_calendar(ds, target=target, use_cftime=use_cftime, align_on=align_on)
++        return self._from_temp_dataset(ds)
++
++    def interp_calendar(
++        self,
++        target: Union["DataArray", "Dataset"],
++        align_on: str = "exact",
++        method: str = "linear",
++    ) -> "DataArray":
++        """Interpolate data between different datetime calendars."""
++        from ..coding import calendar_ops
++
++        ds = self._to_temp_dataset()
++        ds = calendar_ops.interp_calendar(ds, target=target, align_on=align_on, method=method)
++        return self._from_temp_dataset(ds)

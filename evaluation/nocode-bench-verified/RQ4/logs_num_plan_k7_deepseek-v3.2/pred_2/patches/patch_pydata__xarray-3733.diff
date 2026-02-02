@@ -1,0 +1,216 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..33c5dfa 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3202,6 +3202,79 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().integrate(dim, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        skipna: bool = False,
++        rcond: float = None,
++    ) -> "Dataset":
++        """
++        Least squares polynomial fit.
++
++        Parameters
++        ----------
++        dim : hashable
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        full : bool, optional
++            If True, return additional information.
++        skipna : bool, optional
++            If True, skip missing values (NaN) in the data.
++        rcond : float, optional
++            Cut-off ratio for small singular values.
++
++        Returns
++        -------
++        fit : Dataset
++            A dataset containing the coefficients and optionally other statistics.
++
++        See Also
++        --------
++        numpy.polyfit
++        """
++        from .polyfit import polyfit
++
++        # Get the coordinate along the dimension
++        coord = self.coords[dim].values
++        data = self.values
++
++        # We need to fit along the given dimension.
++        # The idea is to apply polyfit along that dimension for each slice.
++        # This is similar to how numpy.polyfit works for multi-dimensional arrays.
++        # We'll use apply_ufunc to handle dask arrays and multiple dimensions.
++
++        # For now, implement a simple version for 1D arrays.
++        # TODO: extend to multi-dimensional arrays.
++        if self.ndim != 1:
++            raise NotImplementedError("polyfit currently only supports 1D arrays.")
++
++        result = polyfit(coord, data, deg, rcond=rcond, full=full, skipna=skipna)
++
++        if full:
++            coeffs, residuals, rank, singular_values, rcond = result
++            # Create a dataset with the coefficients and other statistics.
++            # The coefficients are stored in a variable with dimension 'degree'
++            coeff_var = Variable(('degree',), coeffs)
++            # Create a dataset
++            from .dataset import Dataset
++            ds = Dataset({
++                'polyfit_coefficients': coeff_var,
++                'residuals': residuals,
++                'rank': rank,
++                'singular_values': singular_values,
++                'rcond': rcond,
++            })
++            return ds
++        else:
++            coeffs = result
++            coeff_var = Variable(('degree',), coeffs)
++            from .dataset import Dataset
++            ds = Dataset({'polyfit_coefficients': coeff_var})
++            return ds
++
+     def unify_chunks(self) -> "DataArray":
+         """ Unify chunk size along all chunked dimensions of this DataArray.
+ 
+@@ -3449,4 +3522,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/polyfit.py b/xarray/core/polyfit.py
+new file mode 100644
+index 0000000..d70d3d3
+--- /dev/null
++++ b/xarray/core/polyfit.py
+@@ -0,0 +1,120 @@
++"""
++Polynomial fitting for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from . import duck_array_ops as dao
++from .common import _contains_datetime_like_objects
++from .computation import apply_ufunc
++from .utils import is_scalar
++from .variable import Variable, IndexVariable
++
++def least_squares(lhs, rhs, rcond=None, skipna=False):
++    """
++    Return the coefficients of a polynomial of degree `deg` that fits the data.
++
++    This is a wrapper around numpy.linalg.lstsq.
++
++    Parameters
++    ----------
++    lhs : array_like
++        Left-hand side matrix (Vandermonde matrix) of shape (M, deg+1).
++    rhs : array_like
++        Right-hand side array of shape (M,) or (M, K).
++    rcond : float, optional
++        Cut-off ratio for small singular values.
++    skipna : bool, optional
++        If True, skip missing values (NaN) in the data.
++
++    Returns
++    -------
++    coefficients : ndarray
++        Polynomial coefficients.
++    residuals : ndarray
++        Sum of squared residuals.
++    rank : int
++        Effective rank of the matrix.
++    singular_values : ndarray
++        Singular values of the matrix.
++    """
++    if skipna:
++        # Remove rows where any column in lhs or rhs is NaN
++        mask = np.any(np.isnan(lhs), axis=1) | np.isnan(rhs)
++        lhs = lhs[~mask]
++        rhs = rhs[~mask]
++
++    return np.linalg.lstsq(lhs, rhs, rcond=rcond)
++
++def polyfit(coord, data, deg, rcond=None, full=False, skipna=False):
++    """
++    Least squares polynomial fit.
++
++    Parameters
++    ----------
++    coord : array_like
++        Coordinate values.
++    data : array_like
++        Data values.
++    deg : int
++        Degree of the fitting polynomial.
++    rcond : float, optional
++        Cut-off ratio for small singular values.
++    full : bool, optional
++        If True, return additional information.
++    skipna : bool, optional
++        If True, skip missing values (NaN) in the data.
++
++    Returns
++    -------
++    coefficients : ndarray
++        Polynomial coefficients.
++    [residuals, rank, singular_values, rcond] : list
++        Only if `full` is True.
++    """
++    # Convert to numpy arrays
++    x = np.asarray(coord)
++    y = np.asarray(data)
++
++    # Check for NaN in x
++    if np.any(np.isnan(x)):
++        raise ValueError("Coordinate contains NaN.")
++
++    # Handle missing values in y
++    if skipna:
++        mask = np.isnan(y)
++        x = x[~mask]
++        y = y[~mask]
++    else:
++        if np.any(np.isnan(y)):
++            raise ValueError("Data contains NaN and skipna is False.")
++
++    # Generate Vandermonde matrix
++    lhs = np.vander(x, deg + 1)
++
++    if full:
++        coeffs, residuals, rank, singular_values = least_squares(lhs, y, rcond=rcond, skipna=False)
++        return coeffs, residuals, rank, singular_values, rcond
++    else:
++        coeffs, residuals, rank, singular_values = least_squares(lhs, y, rcond=rcond, skipna=False)
++        return coeffs
++
++def polyval(coord, coeffs):
++    """
++    Evaluate a polynomial at specific values.
++
++    Parameters
++    ----------
++    coord : array_like
++        Coordinate values.
++    coeffs : array_like
++        Polynomial coefficients.
++
++    Returns
++    -------
++    values : ndarray
++        Evaluated polynomial.
++    """
++    x = np.asarray(coord)
++    c = np.asarray(coeffs)
++    # Use numpy.polyval
++    return np.polyval(c, x)

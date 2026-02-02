@@ -1,0 +1,73 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 24b047c..abc6129 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -1,3 +1,4 @@
++
+ import numpy as np
+ 
+ 
+@@ -32,18 +33,53 @@ def _unique(values, *, return_inverse=False):
+ 
+ def _unique_python(values, *, return_inverse):
+     # Only used in `_uniques`, see docstring there for details
+-    try:
+-        uniques = sorted(set(values))
+-        uniques = np.array(uniques, dtype=values.dtype)
+-    except TypeError:
+-        types = sorted(t.__qualname__
+-                       for t in set(type(v) for v in values))
+-        raise TypeError("Encoders require their input to be uniformly "
+-                        f"strings or numbers. Got {types}")
++    # Build a list of unique values while treating np.nan as equal to itself
++    uniques_list = []
++    none_index = -1
++    nan_index = -1
++    for val in values:
++        # Check for np.nan
++        if isinstance(val, float) and np.isnan(val):
++            if nan_index == -1:
++                nan_index = len(uniques_list)
++                uniques_list.append(val)
++        # Check for None
++        elif val is None:
++            if none_index == -1:
++                none_index = len(uniques_list)
++                uniques_list.append(val)
++        else:
++            if val not in uniques_list:
++                uniques_list.append(val)
++    # Now we have uniques_list with non-null values in order of appearance,
++    # and possibly None and np.nan at the end.
++    # We want to sort the non-null values, then None, then np.nan.
++    non_null = [v for v in uniques_list if not (v is None or (isinstance(v, float) and np.isnan(val)))]
++    non_null_sorted = sorted(non_null)
++    # Build the final uniques
++    uniques = non_null_sorted[:]
++    if none_index != -1:
++        uniques.append(None)
++    if nan_index != -1:
++        uniques.append(np.nan)
++    uniques = np.array(uniques, dtype=values.dtype)
+ 
+     if return_inverse:
+-        table = {val: i for i, val in enumerate(uniques)}
+-        inverse = np.array([table[v] for v in values])
++        # Build a mapping from value to index
++        table = {}
++        for i, val in enumerate(uniques):
++            if isinstance(val, float) and np.isnan(val):
++                # For np.nan, we need to use a special key
++                table['__nan__'] = i
++            else:
++                table[val] = i
++        inverse = []
++        for val in values:
++            if isinstance(val, float) and np.isnan(val):
++                inverse.append(table['__nan__'])
++            else:
++                inverse.append(table[val])
++        inverse = np.array(inverse, dtype=np.int64)
+         return uniques, inverse
+ 
+     return uniques

@@ -1,0 +1,29 @@
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index bb36ddd..9b11c8d 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -633,11 +633,22 @@ class Variable(AbstractArray, NdimSizeLenMixin, VariableArithmetic):
+         """Convert this variable to a pandas.Index"""
+         return self.to_index_variable().to_index()
+ 
+-    def to_dict(self, data: bool = True, encoding: bool = False) -> dict:
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict:
+         """Dictionary representation of variable."""
+         item = {"dims": self.dims, "attrs": decode_numpy_dict_values(self.attrs)}
++        
+         if data:
+-            item["data"] = ensure_us_time_resolution(self.values).tolist()
++            if data is True or data == 'list':
++                # Return data as Python lists (backward compatible)
++                item["data"] = ensure_us_time_resolution(self.values).tolist()
++            elif data == 'array':
++                # Return data as the underlying array type
++                item["data"] = ensure_us_time_resolution(self.values)
++            else:
++                raise ValueError(
++                    f"Invalid value for data: {data}. "
++                    "Must be True, False, 'list', or 'array'."
++                )
+         else:
+             item.update({"dtype": str(self.dtype), "shape": self.shape})
+ 

@@ -1,0 +1,110 @@
+diff --git a/astropy/constants/__init__.py b/astropy/constants/__init__.py
+index b9b3036..bd8458e 100644
+--- a/astropy/constants/__init__.py
++++ b/astropy/constants/__init__.py
+@@ -90,8 +90,23 @@ def set_enabled_constants(modname):
+     finally:
+         with warnings.catch_warnings():
+             warnings.simplefilter('ignore')
+-            # NOTE: Update this when default changes.
+-            _utils._set_c(codata2014, iau2015, module,
++            # Reset to the current ScienceState values.
++            from .config import physical_constants, astronomical_constants
++            phys_version = physical_constants.get()
++            astro_version = astronomical_constants.get()
++            if phys_version == 'codata2010':
++                from .codata2010 import codata2010 as codata_reset
++            elif phys_version == 'codata2014':
++                from .codata2014 import codata2014 as codata_reset
++            else:
++                raise ValueError(f'Unexpected physical constants version: {phys_version}')
++            if astro_version == 'iau2012':
++                from .iau2012 import iau2012 as iaudata_reset
++            elif astro_version == 'iau2015':
++                from .iau2015 import iau2015 as iaudata_reset
++            else:
++                raise ValueError(f'Unexpected astronomical constants version: {astro_version}')
++            _utils._set_c(codata_reset, iaudata_reset, module,
+                           not_in_module_only=False, set_class=True)
+ 
+ 
+@@ -99,4 +114,4 @@ def set_enabled_constants(modname):
+ del find_current_module
+ del contextmanager
+ del _utils
+-del _lines
++del _lines
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..cd81946
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,68 @@
++"""
++Configuration for astropy.constants.
++"""
++
++from astropy.config import ScienceState
++
++__all__ = ['physical_constants', 'astronomical_constants']
++
++
++class physical_constants(ScienceState):
++    """
++    ScienceState for the version of physical constants.
++
++    The default is the current version (codata2014 as of astropy 4.0).
++    """
++
++    _value = 'codata2014'
++
++    @classmethod
++    def validate(cls, value):
++        # Map of allowed values to the module names.
++        # The value can be either a codata year or an astropyconst version.
++        allowed = {
++            'codata2010': 'codata2010',
++            'codata2014': 'codata2014',
++            'astropyconst13': 'codata2010',
++            'astropyconst20': 'codata2014',
++        }
++        if value not in allowed:
++            raise ValueError(f'Invalid physical constants version: {value}. '
++                             f'Allowed values are: {list(allowed.keys())}')
++        # Check if astropy.constants or astropy.units has been imported.
++        # We do this by checking if the modules are in sys.modules.
++        import sys
++        if 'astropy.constants' in sys.modules:
++            raise RuntimeError('astropy.constants is already imported')
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError('astropy.units is already imported')
++        return allowed[value]
++
++
++class astronomical_constants(ScienceState):
++    """
++    ScienceState for the version of astronomical constants.
++
++    The default is the current version (iau2015 as of astropy 4.0).
++    """
++
++    _value = 'iau2015'
++
++    @classmethod
++    def validate(cls, value):
++        # Map of allowed values to the module names.
++        allowed = {
++            'iau2012': 'iau2012',
++            'iau2015': 'iau2015',
++            'astropyconst13': 'iau2012',
++            'astropyconst20': 'iau2015',
++        }
++        if value not in allowed:
++            raise ValueError(f'Invalid astronomical constants version: {value}. '
++                             f'Allowed values are: {list(allowed.keys())}')
++        import sys
++        if 'astropy.constants' in sys.modules:
++            raise RuntimeError('astropy.constants is already imported')
++        if 'astropy.units' in sys.modules:
++            raise RuntimeError('astropy.units is already imported')
++        return allowed[value]

@@ -1,0 +1,48 @@
+diff --git a/seaborn/miscplot.py b/seaborn/miscplot.py
+new file mode 100644
+index 0000000..1c788dc
+--- /dev/null
++++ b/seaborn/miscplot.py
+@@ -0,0 +1,42 @@
++def move_legend(obj, loc, **kwargs):
++    """
++    Recreate an existing legend at a new location on the figure, with updated properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.FacetGrid
++        The object with the legend to move.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend` for details.
++    **kwargs
++        Additional keyword arguments are passed to :meth:`matplotlib.axes.Axes.legend`.
++
++    Returns
++    -------
++    None
++
++    """
++    # Check if the object is a FacetGrid
++    from .axisgrid import FacetGrid
++    if isinstance(obj, FacetGrid):
++        # For FacetGrid, the legend is attached to the figure
++        fig = obj.figure
++        old_legend = obj.legend
++        if old_legend is None:
++            raise ValueError("No legend found on the FacetGrid.")
++        handles = old_legend.legendHandles
++        labels = [t.get_text() for t in old_legend.get_texts()]
++        old_legend.remove()
++        # Create a new legend on the figure
++        new_legend = fig.legend(handles, labels, loc=loc, **kwargs)
++        obj.legend = new_legend
++    else:
++        # Assume it's an Axes-like object
++        ax = obj
++        old_legend = ax.get_legend()
++        if old_legend is None:
++            raise ValueError("No legend found on the axes.")
++        handles = old_legend.legendHandles
++        labels = [t.get_text() for t in old_legend.get_texts()]
++        old_legend.remove()
++        ax.legend(handles, labels, loc=loc, **kwargs)

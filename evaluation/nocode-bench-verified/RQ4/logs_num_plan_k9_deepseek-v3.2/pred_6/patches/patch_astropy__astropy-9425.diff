@@ -1,0 +1,28 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index dbde177..62f9478 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -814,17 +814,17 @@ class Table:
+         else:
+             names_from_data = sorted(names_from_data)
+ 
+-        # Note: if set(data[0].keys()) != names_from_data, this will give an
+-        # exception later, so NO need to catch here.
+-
++        # Build columns, using np.ma.masked for missing values
+         cols = {}
+         for name in names_from_data:
+-            cols[name] = []
++            col_vals = []
+             for i, row in enumerate(data):
+                 try:
+-                    cols[name].append(row[name])
++                    col_vals.append(row[name])
+                 except KeyError:
+-                    raise ValueError(f'Row {i} has no value for column {name}')
++                    # Use np.ma.masked to indicate a missing value
++                    col_vals.append(np.ma.masked)
++            cols[name] = col_vals
+ 
+         if all(name is None for name in names):
+             names = names_from_data

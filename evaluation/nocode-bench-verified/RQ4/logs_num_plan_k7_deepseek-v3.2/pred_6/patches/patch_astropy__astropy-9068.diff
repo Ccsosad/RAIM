@@ -1,0 +1,91 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..7a4fe3d 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,86 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array-like, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A Table with boolean columns showing element-wise equality.
++
++        Raises
++        ------
++        ValueError
++            If comparing to another table with different column names.
++        """
++        import numpy as np
++        from astropy.table import Table, MaskedColumn, Column
++
++        if isinstance(other, Table):
++            # Check column names
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # For each column, compare
++            result_cols = []
++            for name in self.colnames:
++                col1 = self[name]
++                col2 = other[name]
++                # Use the column's __eq__ method
++                eq_data = (col1 == col2)
++                # Create a new column for the result
++                if isinstance(eq_data, (Column, MaskedColumn)):
++                    result_col = eq_data
++                else:
++                    # eq_data might be a plain ndarray or MaskedArray
++                    if isinstance(eq_data, np.ma.MaskedArray):
++                        result_col = MaskedColumn(eq_data, name=name)
++                    else:
++                        result_col = Column(eq_data, name=name)
++                result_cols.append(result_col)
++        else:
++            # other is scalar or array
++            other = np.asarray(other)
++            # Determine if we are comparing column-wise
++            if other.ndim == 1 and len(other) == len(self.colnames):
++                # Column-wise comparison
++                result_cols = []
++                for name, val in zip(self.colnames, other):
++                    col = self[name]
++                    eq_data = (col == val)
++                    if isinstance(eq_data, (Column, MaskedColumn)):
++                        result_col = eq_data
++                    else:
++                        if isinstance(eq_data, np.ma.MaskedArray):
++                            result_col = MaskedColumn(eq_data, name=name)
++                        else:
++                            result_col = Column(eq_data, name=name)
++                    result_cols.append(result_col)
++            else:
++                # Scalar or array that broadcasts to each column
++                result_cols = []
++                for name in self.colnames:
++                    col = self[name]
++                    eq_data = (col == other)
++                    if isinstance(eq_data, (Column, MaskedColumn)):
++                        result_col = eq_data
++                    else:
++                        if isinstance(eq_data, np.ma.MaskedArray):
++                            result_col = MaskedColumn(eq_data, name=name)
++                        else:
++                            result_col = Column(eq_data, name=name)
++                    result_cols.append(result_col)
++
++        # Create the result table
++        result = Table(result_cols, copy=False)
++        return result
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

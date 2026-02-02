@@ -1,0 +1,13 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..e59ae70 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -827,7 +827,7 @@ class _BaseRidge(LinearModel, metaclass=ABCMeta):
+ 
+         else:
+             if sparse.issparse(X) and self.fit_intercept:
+-                # required to fit intercept with sparse_cg and lbfgs solver
++                # required to fit intercept with sparse_cg, lbfgs and lsqr solver
+                 params = {"X_offset": X_offset, "X_scale": X_scale}
+             else:
+                 # for dense matrices or when intercept is set to 0

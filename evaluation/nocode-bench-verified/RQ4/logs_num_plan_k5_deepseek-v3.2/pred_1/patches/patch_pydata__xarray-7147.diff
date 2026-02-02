@@ -1,0 +1,75 @@
+diff --git a/xarray/coding/times.py b/xarray/coding/times.py
+index 3885b1c..7a517c0 100644
+--- a/xarray/coding/times.py
++++ b/xarray/coding/times.py
+@@ -685,14 +685,23 @@ class CFDatetimeCoder(VariableCoder):
+         if isinstance(units, str) and "since" in units:
+             units = pop_to(attrs, encoding, "units")
+             calendar = pop_to(attrs, encoding, "calendar")
+-            dtype = _decode_cf_datetime_dtype(data, units, calendar, self.use_cftime)
+-            transform = partial(
+-                decode_cf_datetime,
+-                units=units,
+-                calendar=calendar,
+-                use_cftime=self.use_cftime,
+-            )
+-            data = lazy_elemwise_func(data, transform, dtype)
++            try:
++                dtype = _decode_cf_datetime_dtype(data, units, calendar, self.use_cftime)
++            except ValueError as e:
++                from .errors import CFDecodingError
++                raise CFDecodingError.from_error(e, name) from e
++
++            # Wrap the transform to catch ValueError and re-raise with variable name
++            def transform_with_error_handling(arr):
++                try:
++                    return decode_cf_datetime(
++                        arr, units=units, calendar=calendar, use_cftime=self.use_cftime
++                    )
++                except ValueError as e:
++                    from .errors import CFDecodingError
++                    raise CFDecodingError.from_error(e, name) from e
++
++            data = lazy_elemwise_func(data, transform_with_error_handling, dtype)
+ 
+         return Variable(dims, data, attrs, encoding)
+ 
+@@ -713,8 +722,15 @@ class CFTimedeltaCoder(VariableCoder):
+         units = attrs.get("units")
+         if isinstance(units, str) and units in TIME_UNITS:
+             units = pop_to(attrs, encoding, "units")
+-            transform = partial(decode_cf_timedelta, units=units)
++            # Wrap the transform to catch ValueError and re-raise with variable name
++            def transform_with_error_handling(arr):
++                try:
++                    return decode_cf_timedelta(arr, units=units)
++                except ValueError as e:
++                    from .errors import CFDecodingError
++                    raise CFDecodingError.from_error(e, name) from e
++
+             dtype = np.dtype("timedelta64[ns]")
+-            data = lazy_elemwise_func(data, transform, dtype=dtype)
++            data = lazy_elemwise_func(data, transform_with_error_handling, dtype=dtype)
+ 
+-        return Variable(dims, data, attrs, encoding)
++        return Variable(dims, data, attrs, encoding)
+diff --git a/xarray/coding/errors.py b/xarray/coding/errors.py
+new file mode 100644
+index 0000000..43f4131
+--- /dev/null
++++ b/xarray/coding/errors.py
+@@ -0,0 +1,14 @@
++"""Exceptions and warnings for coding operations."""
++
++
++class CFDecodingError(ValueError):
++    """Raised when CF decoding fails."""
++
++    @classmethod
++    def from_error(cls, error, name=None):
++        """Create a CFDecodingError from an existing error, adding the variable name."""
++        if name is not None:
++            msg = f"Failed to decode variable {name!r}: {error}"
++        else:
++            msg = str(error)
++        return cls(msg)

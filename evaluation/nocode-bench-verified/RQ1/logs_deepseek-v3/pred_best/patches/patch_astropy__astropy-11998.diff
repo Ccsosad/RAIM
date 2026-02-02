@@ -1,0 +1,135 @@
+diff --git a/astropy/cosmology/connect.py b/astropy/cosmology/connect.py
+index de88de3..72bf630 100644
+--- a/astropy/cosmology/connect.py
++++ b/astropy/cosmology/connect.py
+@@ -6,9 +6,45 @@ import warnings
+ from astropy.io import registry as io_registry
+ from astropy.utils.exceptions import AstropyUserWarning
+ 
+-__all__ = ["CosmologyRead", "CosmologyWrite"]
++__all__ = ["CosmologyRead", "CosmologyWrite", "CosmologyFromFormat", "CosmologyToFormat"]
+ __doctest_skip__ = __all__
+ 
++# Registry for format conversion
++convert_registry = io_registry.UnifiedIORegistry()
++
++class CosmologyFromFormat(io_registry.UnifiedReadWrite):
++    """Convert data to a `~astropy.cosmology.Cosmology` object.
++
++    This function provides the Cosmology interface to the Astropy unified I/O
++    layer for converting data to a Cosmology instance.
++    """
++    def __init__(self, instance, cosmo_cls):
++        super().__init__(instance, cosmo_cls, "read", registry=convert_registry)
++
++    def __call__(self, obj, *args, **kwargs):
++        from astropy.cosmology.core import Cosmology
++
++        if self._cls is not Cosmology:
++            kwargs.setdefault("cosmology", self._cls)
++            valid = (self._cls, self._cls.__qualname__)
++            if kwargs["cosmology"] not in valid:
++                raise ValueError(
++                    "keyword argument `cosmology` must be either the class "
++                    f"{valid[0]} or its qualified name '{valid[1]}'")
++
++        return convert_registry.read(self._cls, obj, *args, **kwargs)
++
++class CosmologyToFormat(io_registry.UnifiedReadWrite):
++    """Convert this Cosmology object to another format.
++
++    This function provides the Cosmology interface to the Astropy unified I/O
++    layer for converting a Cosmology instance to another format.
++    """
++    def __init__(self, instance, cosmo_cls):
++        super().__init__(instance, cosmo_cls, "write", registry=convert_registry)
++
++    def __call__(self, format, *args, **kwargs):
++        return convert_registry.write(self._instance, format, *args, **kwargs)
+ 
+ class CosmologyRead(io_registry.UnifiedReadWrite):
+     """Read and parse data to a `~astropy.cosmology.Cosmology`.
+diff --git a/astropy/cosmology/io/__init__.py b/astropy/cosmology/io/__init__.py
+new file mode 100644
+index 0000000..0a7d0ef
+--- /dev/null
++++ b/astropy/cosmology/io/__init__.py
+@@ -0,0 +1,3 @@
++"""I/O subpackage for Cosmology."""
++
++from . import mapping
+diff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py
+new file mode 100644
+index 0000000..e997b33
+--- /dev/null
++++ b/astropy/cosmology/io/mapping.py
+@@ -0,0 +1,69 @@
++"""Read/write `~astropy.cosmology.Cosmology` as a mapping (dictionary)."""
++
++import copy
++
++from astropy.cosmology.connect import convert_registry
++from astropy.cosmology.core import Cosmology
++
++__all__ = ["from_mapping", "to_mapping"]
++
++def from_mapping(mapping, *, move_to_meta=False, cosmology=None):
++    """Load `~astropy.cosmology.Cosmology` from mapping (dictionary).
++
++    Parameters
++    ----------
++    mapping : dict
++        Mapping with Cosmology parameters and information.
++    move_to_meta : bool (optional, keyword-only)
++        Whether to move unrecognized fields in the mapping to the Cosmology's
++        metadata. Default is False.
++    cosmology : str, class, or None (optional, keyword-only)
++        The cosmology class to use when constructing the cosmology instance.
++        If `None` (default) the class is determined from the mapping.
++
++    Returns
++    -------
++    `~astropy.cosmology.Cosmology` instance
++    """
++    # Get cosmology class from mapping if not specified
++    if cosmology is None:
++        cosmology = mapping["cosmology"]
++    
++    # Get parameters from mapping
++    params = copy.deepcopy(mapping)
++    params.pop("cosmology", None)  # remove cosmology entry
++    
++    # Handle metadata
++    meta = params.pop("meta", None) if "meta" in params else None
++    if move_to_meta:
++        meta = meta or {}
++        for k in list(params.keys()):  # need list to change size during iteration
++            if k not in cosmology._init_signature.parameters:
++                meta[k] = params.pop(k)
++    
++    # Create cosmology instance
++    return cosmology(**params, meta=meta)
++
++def to_mapping(cosmology, *args):
++    """Return the `~astropy.cosmology.Cosmology` as a mapping (dictionary).
++
++    Parameters
++    ----------
++    cosmology : `~astropy.cosmology.Cosmology` instance
++        The cosmology to convert to a mapping.
++    *args
++        Not used. Needed for compatibility with the convert_registry.
++
++    Returns
++    -------
++    dict
++        Mapping with Cosmology parameters and information.
++    """
++    m = cosmology._init_arguments.copy()
++    m["cosmology"] = cosmology.__class__
++    m["meta"] = copy.deepcopy(cosmology.meta)
++    return m
++
++# Register to/from_mapping with convert registry
++convert_registry.register_reader("mapping", Cosmology, from_mapping)
++convert_registry.register_writer("mapping", Cosmology, to_mapping)

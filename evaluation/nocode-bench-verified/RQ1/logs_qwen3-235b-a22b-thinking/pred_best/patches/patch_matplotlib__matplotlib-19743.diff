@@ -1,0 +1,59 @@
+diff --git a/matplotlib/_layoutgrid.py b/matplotlib/_layoutgrid.py
+new file mode 100644
+index 0000000..83320da
+--- /dev/null
++++ b/matplotlib/_layoutgrid.py
+@@ -0,0 +1,53 @@
++        if self.figure.legends:
++            for legend in self.figure.legends:
++                if legend.get_visible():
++                    loc = legend._loc
++                    if isinstance(loc, str) and loc.startswith('outside'):
++                        # Parse loc string to determine side for outside placement
++                        parts = loc.split()[1:]
++                        side = None
++                        for part in parts:
++                            if part in ['upper', 'top']:
++                                side = 'top'
++                                break
++                            elif part in ['lower', 'bottom']:
++                                side = 'bottom'
++                                break
++                            elif part in ['left']:
++                                side = 'left'
++                                break
++                            elif part in ['right']:
++                                side = 'right'
++                                break
++                        if side is None:
++                            side = 'top'  # Default side if no valid direction found
++
++                        # Reserve space based on legend size
++                        bb = legend.get_window_extent(renderer)
++                        if side in ['top', 'bottom']:
++                            space_needed = bb.height / self.figure.bbox.height
++                            if side == 'top':
++                                top = max(top, space_needed)
++                            else:  # bottom
++                                bottom = max(bottom, space_needed)
++                        else:  # left or right
++                            space_needed = bb.width / self.figure.bbox.width
++                            if side == 'right':
++                                right = max(right, space_needed)
++                            else:  # left
++                                left = max(left, space_needed)
++                    else:
++                        bb = legend.get_window_extent(renderer)
++                        if bb.width or bb.height:
++                            if bb.x0 < self.figure.bbox.x0:
++                                left = max(left, (self.figure.bbox.x0 - bb.x0) /
++                                           self.figure.bbox.width)
++                            if bb.x1 > self.figure.bbox.x1:
++                                right = max(right, (bb.x1 - self.figure.bbox.x1) /
++                                            self.figure.bbox.width)
++                            if bb.y0 < self.figure.bbox.y0:
++                                bottom = max(bottom, (self.figure.bbox.y0 - bb.y0) /
++                                             self.figure.bbox.height)
++                            if bb.y1 > self.figure.bbox.y1:
++                                top = max(top, (bb.y1 - self.figure.bbox.y1) /
++                                          self.figure.bbox.height)

@@ -1,0 +1,47 @@
+diff --git a/astropy/visualization/wcsaxes/core.py b/astropy/visualization/wcsaxes/core.py
+index 573033c..c808d84 100644
+--- a/astropy/visualization/wcsaxes/core.py
++++ b/astropy/visualization/wcsaxes/core.py
+@@ -94,8 +94,41 @@ class WCSAxes(Axes):
+     """
+ 
+     def __init__(self, fig, rect, wcs=None, transform=None, coord_meta=None,
+-                 transData=None, slices=None, frame_class=RectangularFrame,
++                 transData=None, slices=None, frame_class=None,
+                  **kwargs):
++        
++        # Determine if we are in 1D or 2D
++        if slices is not None:
++            # Count the number of 'x' and 'y' in slices
++            n_xy = sum(1 for s in slices if s in ('x', 'y'))
++            if n_xy == 1:
++                # 1D plot
++                from .frame import RectangularFrame1D
++                if frame_class is None:
++                    frame_class = RectangularFrame1D
++            elif n_xy == 2:
++                # 2D plot
++                if frame_class is None:
++                    from .frame import RectangularFrame
++                    frame_class = RectangularFrame
++            else:
++                raise ValueError("slices must contain exactly one or two 'x' or 'y' entries")
++        else:
++            if frame_class is None:
++                from .frame import RectangularFrame
++                frame_class = RectangularFrame
++        
++        # Allow 1D or 2D plots
++        if slices is not None:
++            n_xy = sum(1 for s in slices if s in ('x', 'y'))
++            if n_xy not in (1, 2):
++                raise ValueError("slices must contain exactly one or two 'x' or 'y' entries")
++
++        # Allow 1D or 2D plots
++        if slices is not None:
++            n_xy = sum(1 for s in slices if s in ('x', 'y'))
++            if n_xy not in (1, 2):
++                raise ValueError("slices must contain exactly one or two 'x' or 'y' entries")
+ 
+         super().__init__(fig, rect, **kwargs)
+         self._bboxes = []

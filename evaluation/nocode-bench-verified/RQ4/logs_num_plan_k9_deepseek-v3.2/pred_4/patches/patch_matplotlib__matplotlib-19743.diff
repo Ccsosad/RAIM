@@ -1,0 +1,99 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..0bc86a6 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -54,6 +54,7 @@ import numpy as np
+ from matplotlib import _api, artist as martist
+ import matplotlib.transforms as mtransforms
+ import matplotlib._layoutgrid as mlayoutgrid
++from matplotlib._constrained_legend import make_layout_margins_for_legends
+ 
+ 
+ _log = logging.getLogger(__name__)
+@@ -120,6 +121,9 @@ def do_constrained_layout(fig, h_pad, w_pad,
+                             w_pad=w_pad, hspace=hspace, wspace=wspace)
+         make_margin_suptitles(layoutgrids, fig, renderer, h_pad=h_pad,
+                               w_pad=w_pad)
++        # make margins for legends with "outside" locations
++        make_layout_margins_for_legends(layoutgrids, fig, renderer,
++                                        h_pad, w_pad)
+ 
+         # if a layout is such that a columns (or rows) margin has no
+         # constraints, we need to make all such instances in the grid
+diff --git a/lib/matplotlib/_constrained_legend.py b/lib/matplotlib/_constrained_legend.py
+new file mode 100644
+index 0000000..0916517
+--- /dev/null
++++ b/lib/matplotlib/_constrained_legend.py
+@@ -0,0 +1,71 @@
++"""
++Handling of legends in constrained_layout.
++"""
++
++import logging
++import numpy as np
++from matplotlib import _api
++import matplotlib.transforms as mtransforms
++import matplotlib._layoutgrid as mlayoutgrid
++
++_log = logging.getLogger(__name__)
++
++
++def make_layout_margins_for_legends(layoutgrids, fig, renderer, h_pad, w_pad):
++    """
++    For each legend with an "outside" location, create a margin in the layoutgrid.
++
++    Parameters
++    ----------
++    layoutgrids : dict
++        The layoutgrids structure.
++    fig : Figure
++        The figure containing the legends.
++    renderer : Renderer
++        The renderer to use for measuring.
++    h_pad, w_pad : float
++        Padding in inches.
++    """
++    # Iterate over all axes in the figure
++    for ax in fig.axes:
++        # Check if the axes has a legend
++        if ax.legend_ is not None:
++            legend = ax.legend_
++            # Check if the legend is to be placed outside
++            loc = legend._loc
++            if isinstance(loc, str) and loc.startswith('outside'):
++                # Determine the side: top, bottom, left, right
++                # The loc string is like "outside upper right" or "outside right upper"
++                # We split to get the tokens
++                tokens = loc.split()
++                if len(tokens) == 3:
++                    # The second token indicates the primary direction
++                    if tokens[1] in ('upper', 'lower'):
++                        side = 'top' if tokens[1] == 'upper' else 'bottom'
++                    elif tokens[1] in ('left', 'right'):
++                        side = 'left' if tokens[1] == 'left' else 'right'
++                    else:
++                        # Fallback: default to top
++                        side = 'top'
++                else:
++                    # If the format is not as expected, default to top
++                    side = 'top'
++
++                # Get the legend's size in inches
++                bbox = legend.get_window_extent(renderer)
++                width = bbox.width / fig.dpi
++                height = bbox.height / fig.dpi
++
++                # Get the layoutgrid for the figure
++                lg = layoutgrids[fig]
++                # Add a margin on the required side
++                if side == 'top':
++                    lg.add_margin_top(height + h_pad)
++                elif side == 'bottom':
++                    lg.add_margin_bottom(height + h_pad)
++                elif side == 'left':
++                    lg.add_margin_left(width + w_pad)
++                elif side == 'right':
++                    lg.add_margin_right(width + w_pad)
++                else:
++                    _log.warning(f"Unknown side {side} for legend location {loc}")

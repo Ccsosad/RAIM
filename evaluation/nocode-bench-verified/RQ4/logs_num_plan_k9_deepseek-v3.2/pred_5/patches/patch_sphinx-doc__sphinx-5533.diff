@@ -1,0 +1,16 @@
+diff --git a/sphinx/ext/autodoc/directive.py b/sphinx/ext/autodoc/directive.py
+index 02803ef..3ddd19b 100644
+--- a/sphinx/ext/autodoc/directive.py
++++ b/sphinx/ext/autodoc/directive.py
+@@ -62,7 +62,10 @@ class DocumenterBridge:
+ def process_documenter_options(documenter, config, options):
+     # type: (Type[Documenter], Config, Dict) -> Options
+     """Recognize options of Documenter from user input."""
+-    for name in AUTODOC_DEFAULT_OPTIONS:
++    # Add 'member-order' to the list of options to check
++    all_default_options = list(AUTODOC_DEFAULT_OPTIONS) + ['member-order']
++    
++    for name in all_default_options:
+         if name not in documenter.option_spec:
+             continue
+         else:

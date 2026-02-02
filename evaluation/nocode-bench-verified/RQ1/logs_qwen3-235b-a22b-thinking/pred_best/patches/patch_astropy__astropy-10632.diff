@@ -1,0 +1,57 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..65c70f8 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -68,10 +68,16 @@ class Conf(_config.ConfigNamespace):
+         'for a particular call via http_headers option, where available. '
+         'This only provides the default value when not set by https_headers.')
+     remote_timeout = _config.ConfigItem(
+-        10.,
+-        'Time to wait for remote data queries (in seconds). Set this to zero '
+-        'to prevent any attempt to download anything.',
++        10.0,
++        'Time to wait for remote data queries (in seconds). Note: setting this to '
++        'zero is not recommended as it may cause connection errors; to prevent '
++        'any attempt to download, use `allow_internet` instead.',
+         aliases=['astropy.coordinates.name_resolve.name_resolve_timeout'])
++    allow_internet = _config.ConfigItem(
++        True,
++        'If False, prevent any attempt to download files from the internet. '
++        'This setting overrides the timeout and any sources; if the file is '
++        'not in the cache, an error will be raised.')
+     compute_hash_block_size = _config.ConfigItem(
+         2 ** 16,  # 64K
+         'Block size for computing file hashes.')
+@@ -1172,10 +1178,30 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+         http_headers = {'User-Agent': conf.default_http_user_agent,
+                         'Accept': '*/*'}
+ 
+-    missing_cache = ""
++    # Check if internet access is allowed
++    if not conf.allow_internet:
++        # We are not allowed to use the internet. So we can only use the cache if:
++        #   - cache is True (meaning we are allowed to use the cache) and not "update"
++        #   - and the file is in the cache.
++        if cache and cache != "update":
++            try:
++                dldir = _get_download_cache_loc(pkgname)
++            except OSError:
++                # Cache is not accessible -> fail
++                raise RuntimeError("Internet access is disabled and cache is not accessible.") from None
++            else:
++                filename = os.path.join(dldir, _url_to_dirname(remote_url), "contents")
++                if os.path.exists(filename):
++                    return os.path.abspath(filename)
++                else:
++                    # File not in cache -> fail
++                    raise RuntimeError(f"File {remote_url} not in cache and internet access is disabled.")
++        else:
++            # We are either in update mode or not using the cache -> we would need to download -> fail
++            raise RuntimeError(f"Internet access is disabled and a download would be required for {remote_url}.")
+ 
++    missing_cache = ""
+     url_key = remote_url
+-
+     if cache:
+         try:
+             dldir = _get_download_cache_loc(pkgname)

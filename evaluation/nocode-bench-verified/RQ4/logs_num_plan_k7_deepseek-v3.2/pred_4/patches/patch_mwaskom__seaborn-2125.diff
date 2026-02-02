@@ -1,0 +1,100 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..afe81ba 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -80,8 +80,95 @@ class _DistributionPlotter(VectorPlotter):
+         return kws
+ 
+ 
++class Histogram:
++    """Compute and store histogram data."""
++    def __init__(self, data, bins=None, range=None, weights=None):
++        self.data = data
++        self.bins = bins
++        self.range = range
++        self.weights = weights
++        self.bin_edges = None
++        self.heights = None
++        self.compute()
++
++    def compute(self):
++        # TODO: compute histogram using numpy
++        pass
++
++    def define_bin_edges(self):
++        # TODO: define bin edges
++        pass
++
++    @property
++    def comp_data(self):
++        # TODO: return computed data
++        pass
++
++
+ class _HistPlotter(_DistributionPlotter):
+ 
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def plot_univariate(
++        self,
++        ax,
++        common_norm,
++        common_bins,
++        fill,
++        element,
++        multiple,
++        shrink,
++        kde,
++        kde_kws,
++        color,
++        legend,
++        line_kws,
++        **plot_kws,
++    ):
++        # TODO: implement univariate histogram
++        pass
++
++    def plot_bivariate(
++        self,
++        ax,
++        common_norm,
++        common_bins,
++        fill,
++        thresh,
++        pthresh,
++        pmax,
++        color,
++        legend,
++        cbar,
++        cbar_ax,
++        cbar_kws,
++        **plot_kws,
++    ):
++        # TODO: implement bivariate histogram
++        pass
++
++
++def histplot(
++    data=None, *,
++    # Variables
++    x=None, y=None, hue=None, weights=None,
++    # Statistics
++    stat="count", bins="auto", binwidth=None, binrange=None,
++    discrete=None, cumulative=False, common_bins=True, common_norm=True,
++    multiple="layer", element="bars", fill=True, shrink=1,
++    # Smoothing
++    kde=False, kde_kws=None,
++    # Hue mapping
++    palette=None, hue_order=None, hue_norm=None,
++    # Color
++    color=None, colorbar=False, cbar_kws=None,
++    # Axes
++    ax=None, **kwargs
++):
++    """
++    Plot univariate or bivariate histograms.
++    """
++    # TODO: implement function
+     pass
+ 
+ 

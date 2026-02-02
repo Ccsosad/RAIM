@@ -1,0 +1,19 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index dbde177..b751424 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -1,3 +1,4 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ from .index import TableIndices, TableLoc, TableILoc, TableLocIndices
+@@ -824,7 +825,8 @@ class Table:
+                 try:
+                     cols[name].append(row[name])
+                 except KeyError:
+-                    raise ValueError(f'Row {i} has no value for column {name}')
++                    # For missing keys, we append a masked value
++                    cols[name].append(np.ma.masked)
+ 
+         if all(name is None for name in names):
+             names = names_from_data

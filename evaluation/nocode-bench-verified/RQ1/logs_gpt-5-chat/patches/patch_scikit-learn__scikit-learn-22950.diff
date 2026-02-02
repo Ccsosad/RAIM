@@ -1,0 +1,24 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..9a86dce 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -764,15 +764,17 @@ class _BaseRidge(LinearModel, metaclass=ABCMeta):
+             else:
+                 solver = self.solver
+         elif sparse.issparse(X) and self.fit_intercept:
+-            if self.solver not in ["auto", "sparse_cg", "sag", "lbfgs"]:
++            if self.solver not in ["auto", "sparse_cg", "sag", "lbfgs", "lsqr"]:
+                 raise ValueError(
+                     "solver='{}' does not support fitting the intercept "
+                     "on sparse data. Please set the solver to 'auto' or "
+-                    "'sparse_cg', 'sag', 'lbfgs' "
++                    "'sparse_cg', 'sag', 'lbfgs', 'lsqr' "
+                     "or set `fit_intercept=False`".format(self.solver)
+                 )
+             if self.solver == "lbfgs":
+                 solver = "lbfgs"
++            elif self.solver == "lsqr":
++                solver = "lsqr"
+             elif self.solver == "sag" and self.max_iter is None and self.tol > 1e-4:
+                 warnings.warn(
+                     '"sag" solver requires many iterations to fit '

@@ -1,0 +1,58 @@
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index 31d7f5b..d026ade 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -105,16 +105,38 @@ class CheckExternalLinksBuilder(Builder):
+             self.workers.append(thread)
+ 
+     def check_thread(self) -> None:
+-        kwargs = {
+-            'allow_redirects': True,
+-            'headers': {
++        timeout = self.app.config.linkcheck_timeout
++
++        def get_headers_for_uri(uri):
++            # start with the default headers
++            headers = {
+                 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+-            },
+-        }
+-        if self.app.config.linkcheck_timeout:
+-            kwargs['timeout'] = self.app.config.linkcheck_timeout
++            }
++            # get the configuration
++            request_headers = self.app.config.linkcheck_request_headers
++            if not request_headers:
++                return headers
++            # find the best matching base URL
++            matched_headers = None
++            for base_url, url_headers in request_headers.items():
++                if base_url == "*":
++                    if matched_headers is None:
++                        matched_headers = url_headers
++                elif uri.startswith(base_url):
++                    matched_headers = url_headers
++                    break
++            if matched_headers:
++                headers.update(matched_headers)
++            return headers
+ 
+         def check_uri() -> Tuple[str, str, int]:
++            # Build kwargs for the request
++            kwargs = {'allow_redirects': True}
++            if timeout:
++                kwargs['timeout'] = timeout
++            headers = get_headers_for_uri(uri)
++            kwargs['headers'] = headers
++
+             # split off anchor
+             if '#' in uri:
+                 req_url, anchor = uri.split('#', 1)
+@@ -340,6 +362,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_config_value('linkcheck_retries', 1, None)
+     app.add_config_value('linkcheck_timeout', None, None, [int])
+     app.add_config_value('linkcheck_workers', 5, None)
++    app.add_config_value('linkcheck_request_headers', {}, None)
+     app.add_config_value('linkcheck_anchors', True, None)
+     # Anchors starting with ! are ignored since they are
+     # commonly used for dynamic pages

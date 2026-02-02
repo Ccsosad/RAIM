@@ -1,0 +1,19 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..691cc0b 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -819,7 +819,13 @@ class ModuleDocumenter(Documenter):
+                     hasattr(self.object, '__all__')):
+                 # for implicit module members, check __module__ to avoid
+                 # documenting imported objects
+-                return True, safe_getmembers(self.object)
++                if not getattr(self.options, 'imported-members', False):
++                    # filter out imported objects unless imported-members is set
++                    members = safe_getmembers(self.object)
++                    return True, [(name, obj) for name, obj in members
++                                  if getattr(obj, '__module__', None) == self.object.__name__]
++                else:
++                    return True, safe_getmembers(self.object)
+             else:
+                 memberlist = self.object.__all__
+                 # Sometimes __all__ is broken...

@@ -1,0 +1,114 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..00b9b83 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3150,57 +3150,58 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().differentiate(coord, edge_order, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
+-    def integrate(
+-        self, dim: Union[Hashable, Sequence[Hashable]], datetime_unit: str = None
+-    ) -> "DataArray":
+-        """ integrate the array with the trapezoidal rule.
+-
+-        .. note::
+-            This feature is limited to simple cartesian geometry, i.e. dim
+-            must be one dimensional.
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        cov: bool = False,
++        full: bool = False,
++    ) -> "Dataset":
++        """Least squares polynomial fit along a dimension using numpy.polyfit.
+ 
+         Parameters
+         ----------
+-        dim: hashable, or a sequence of hashable
+-            Coordinate(s) used for the integration.
+-        datetime_unit: str, optional
+-            Can be used to specify the unit if datetime coordinate is used.
+-            One of {'Y', 'M', 'W', 'D', 'h', 'm', 's', 'ms', 'us', 'ns', 'ps',
+-            'fs', 'as'}
++        dim : hashable
++            Name of the dimension to fit the polynomial along.
++        deg : int
++            Degree of the fitting polynomial.
++        cov : bool, optional
++            If True, return covariance matrix.
++        full : bool, optional
++            If True, return additional diagnostic outputs from numpy.polyfit.
+ 
+         Returns
+         -------
+-        integrated: DataArray
+-
+-        See also
+-        --------
+-        numpy.trapz: corresponding numpy function
+-
+-        Examples
+-        --------
+-
+-        >>> da = xr.DataArray(
+-        ...     np.arange(12).reshape(4, 3),
+-        ...     dims=["x", "y"],
+-        ...     coords={"x": [0, 0.1, 1.1, 1.2]},
+-        ... )
+-        >>> da
+-        <xarray.DataArray (x: 4, y: 3)>
+-        array([[ 0,  1,  2],
+-               [ 3,  4,  5],
+-               [ 6,  7,  8],
+-               [ 9, 10, 11]])
+-        Coordinates:
+-          * x        (x) float64 0.0 0.1 1.1 1.2
+-        Dimensions without coordinates: y
+-        >>>
+-        >>> da.integrate("x")
+-        <xarray.DataArray (y: 3)>
+-        array([5.4, 6.6, 7.8])
+-        Dimensions without coordinates: y
+-        """
+-        ds = self._to_temp_dataset().integrate(dim, datetime_unit)
+-        return self._from_temp_dataset(ds)
++        result : Dataset
++            Dataset containing fitted coefficients and optionally covariance or residuals.
++        """
++        from numpy import polyfit as _np_polyfit
++
++        x = self.coords[dim].values
++        y = np.asarray(self.values)
++        shape_prefix = y.shape[:-1]
++        coeffs_list = []
++        residuals = []
++        covs = []
++        for vals in y.reshape(-1, y.shape[-1]):
++            res = _np_polyfit(x, vals, deg, cov=cov, full=full)
++            if full:
++                p, residual, _, _, _ = res
++                coeffs_list.append(p)
++                residuals.append(residual)
++            elif cov:
++                p, c = res
++                coeffs_list.append(p)
++                covs.append(c)
++            else:
++                coeffs_list.append(res)
++        coeff_arr = np.array(coeffs_list).reshape(*shape_prefix, deg + 1)
++        data_vars = {"polyfit_coefficients": (self.dims[:-1] + ("degree",), coeff_arr)}
++        if full:
++            data_vars["residuals"] = (self.dims[:-1], np.array(residuals).reshape(shape_prefix))
++        if cov:
++            data_vars["cov"] = (self.dims[:-1] + ("degree", "degree"), np.array(covs).reshape(*shape_prefix, deg + 1, deg + 1))
++        return Dataset(data_vars)
+ 
+     def unify_chunks(self) -> "DataArray":
+         """ Unify chunk size along all chunked dimensions of this DataArray.
+@@ -3449,4 +3450,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)

@@ -1,0 +1,44 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index b0a0822..f6bed98 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -494,7 +494,7 @@ class Continuous(ContinuousBase):
+         self,
+         formatter: Formatter | None = None, *,
+         like: str | Callable | None = None,
+-        base: int | None = None,
++        base: int | None | _Default = _DEFAULT,
+         unit: str | None = None,
+     ) -> Continuous:
+         """
+@@ -535,7 +535,7 @@ class Continuous(ContinuousBase):
+         new._label_params = {
+             "formatter": formatter,
+             "like": like,
+-            "base": base,
++            "base": base if base is not _DEFAULT else None,
+             "unit": unit,
+         }
+         return new
+@@ -613,10 +613,18 @@ class Continuous(ContinuousBase):
+     def _get_formatter(self, locator, formatter, like, base, unit):
+ 
+         log_base, symlog_thresh = self._parse_for_log_params(self.trans)
+-        if base is None:
++        if base is _DEFAULT:
++            # The user did not pass base, so use the transform's base if available
+             if symlog_thresh:
+-                log_base = 10
+-            base = log_base
++                base = 10
++            else:
++                base = log_base
++        elif base is None:
++            # The user explicitly passed base=None, so we do not use a log formatter
++            base = None
++        else:
++            # The user passed a number for base
++            pass
+ 
+         if formatter is not None:
+             return formatter

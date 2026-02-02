@@ -1,0 +1,47 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..6acb9c3 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -418,6 +418,42 @@ def make_layout_margins(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0,
+         # pass the new margins down to the layout grid for the solution...
+         layoutgrids[gs].edit_outer_margin_mins(margin, ss)
+ 
++    # Process figure-level legends placed outside
++    for legend in fig.legends:
++        if not legend.get_visible():
++            continue
++        loc = legend._get_loc()
++        if isinstance(loc, str) and loc.startswith('outside'):
++            parts = loc.split()
++            if len(parts) < 2:
++                continue  # invalid loc, skip
++            direction = parts[1]
++            if direction == 'upper':
++                margin_key = 'topcb'
++                pad = h_pad
++            elif direction == 'lower':
++                margin_key = 'bottomcb'
++                pad = h_pad
++            elif direction == 'left':
++                margin_key = 'leftcb'
++                pad = w_pad
++            elif direction == 'right':
++                margin_key = 'rightcb'
++                pad = w_pad
++            else:
++                continue  # unknown direction
++
++            pos, bbox = get_pos_and_bbox(legend, renderer)
++            if margin_key in ['leftcb', 'rightcb']:
++                size = bbox.width + pad
++            else:
++                size = bbox.height + pad
++
++            if fig in layoutgrids:
++                margin = {margin_key: size}
++                # Adjust figure's layoutgrid to make space for outside legend
++                layoutgrids[fig].edit_outer_margin_mins(margin, None)
++
+ 
+ def make_margin_suptitles(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
+     # Figure out how large the suptitle is and make the

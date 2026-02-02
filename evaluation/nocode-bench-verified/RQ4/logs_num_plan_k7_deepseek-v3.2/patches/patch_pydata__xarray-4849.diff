@@ -1,0 +1,233 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 17fe6af..82acfe1 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3788,6 +3788,64 @@ class DataArray(AbstractArray, DataWithCoords):
+             dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov
+         )
+ 
++    def curvefit(
++        self,
++        coords,
++        func,
++        reduce_dims=None,
++        param_names=None,
++        p0=None,
++        bounds=None,
++        **kwargs,
++    ):
++        """
++        Fit a function to the data using `scipy.optimize.curve_fit`.
++
++        Parameters
++        ----------
++        coords : str, DataArray, or list of str or DataArray
++            The coordinates to use as the independent variable(s) in the fit.
++            If a single string, it is treated as a coordinate name in the dataset.
++            If a DataArray, it must have matching dimensions.
++            If a list, each element can be a string or DataArray, and the function
++            will be fit against multiple coordinates.
++        func : callable
++            The model function to fit. It must take the independent variable(s)
++            as the first argument(s) and the parameters to fit as separate arguments.
++            The function should return the predicted data.
++        reduce_dims : str or list of str, optional
++            Dimensions to reduce during the fit. If None, all dimensions except
++            those in `coords` are reduced.
++        param_names : list of str, optional
++            Names for the fitted parameters. If not provided, they will be named
++            'param0', 'param1', etc.
++        p0 : array-like, optional
++            Initial guess for the parameters.
++        bounds : 2-tuple of array-like, optional
++            Lower and upper bounds on parameters. Each element can be a scalar
++            or an array with the same length as the number of parameters.
++        **kwargs
++            Additional keyword arguments passed to `scipy.optimize.curve_fit`.
++
++        Returns
++        -------
++        curvefit_results : Dataset
++            A dataset containing the fitted parameters for each variable.
++
++        See Also
++        --------
++        scipy.optimize.curve_fit
++        """
++        return self._to_temp_dataset().curvefit(
++            coords=coords,
++            func=func,
++            reduce_dims=reduce_dims,
++            param_names=param_names,
++            p0=p0,
++            bounds=bounds,
++            **kwargs,
++        )
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,
+@@ -4424,4 +4482,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 0127e99..12b241c 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6526,6 +6526,147 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+ 
+         return Dataset(data_vars=variables, attrs=self.attrs.copy())
+ 
++    def curvefit(
++        self,
++        coords,
++        func,
++        reduce_dims=None,
++        param_names=None,
++        p0=None,
++        bounds=None,
++        **kwargs,
++    ):
++        """
++        Fit a function to the data using `scipy.optimize.curve_fit`.
++
++        Parameters
++        ----------
++        coords : str, DataArray, or list of str or DataArray
++            The coordinates to use as the independent variable(s) in the fit.
++            If a single string, it is treated as a coordinate name in the dataset.
++            If a DataArray, it must have matching dimensions.
++            If a list, each element can be a string or DataArray, and the function
++            will be fit against multiple coordinates.
++        func : callable
++            The model function to fit. It must take the independent variable(s)
++            as the first argument(s) and the parameters to fit as separate arguments.
++            The function should return the predicted data.
++        reduce_dims : str or list of str, optional
++            Dimensions to reduce during the fit. If None, all dimensions except
++            those in `coords` are reduced.
++        param_names : list of str, optional
++            Names for the fitted parameters. If not provided, they will be named
++            'param0', 'param1', etc.
++        p0 : array-like, optional
++            Initial guess for the parameters.
++        bounds : 2-tuple of array-like, optional
++            Lower and upper bounds on parameters. Each element can be a scalar
++            or an array with the same length as the number of parameters.
++        **kwargs
++            Additional keyword arguments passed to `scipy.optimize.curve_fit`.
++
++        Returns
++        -------
++        curvefit_results : Dataset
++            A dataset containing the fitted parameters for each variable.
++
++        See Also
++        --------
++        scipy.optimize.curve_fit
++        """
++        try:
++            from scipy.optimize import curve_fit
++        except ImportError:
++            raise ImportError("curvefit requires scipy to be installed.")
++
++        # Process coords
++        if isinstance(coords, str):
++            coords = [self[coords]]
++        elif isinstance(coords, (list, tuple)):
++            coords = [self[c] if isinstance(c, str) else c for c in coords]
++        else:
++            coords = [coords]
++
++        # Determine dimensions to reduce
++        if reduce_dims is None:
++            reduce_dims = set(self.dims) - {c.dims for c in coords}
++        if isinstance(reduce_dims, str):
++            reduce_dims = [reduce_dims]
++
++        # Prepare the data for fitting
++        variables = {}
++        for name, da in self.data_vars.items():
++            # Check if the data variable has the coords dimensions
++            if not all(any(d in da.dims for d in c.dims) for c in coords):
++                continue
++
++            # Stack the dimensions to reduce
++            dims_to_stack = [dim for dim in da.dims if dim in reduce_dims]
++            if dims_to_stack:
++                stacked_dim = utils.get_temp_dimname(dims_to_stack, "stacked")
++                stacked = da.stack({stacked_dim: dims_to_stack})
++                data = stacked.data
++                # Also stack the coords accordingly
++                stacked_coords = []
++                for c in coords:
++                    if any(d in c.dims for d in dims_to_stack):
++                        stacked_coords.append(c.stack({stacked_dim: dims_to_stack}))
++                    else:
++                        stacked_coords.append(c)
++            else:
++                data = da.data
++                stacked_coords = coords
++                stacked_dim = None
++
++            # Prepare the independent variable(s) for curve_fit
++            if len(stacked_coords) == 1:
++                xdata = stacked_coords[0].data
++            else:
++                xdata = tuple(c.data for c in stacked_coords)
++
++            # Flatten the data and xdata for curve_fit
++            original_shape = data.shape
++            if stacked_dim is not None:
++                # We have stacked the reduction dimensions
++                # The data should be 1D along the stacked dimension
++                data_flat = data.reshape(-1)
++                if len(stacked_coords) == 1:
++                    xdata_flat = stacked_coords[0].data.reshape(-1)
++                else:
++                    xdata_flat = tuple(c.data.reshape(-1) for c in stacked_coords)
++            else:
++                data_flat = data.ravel()
++                if len(stacked_coords) == 1:
++                    xdata_flat = stacked_coords[0].data.ravel()
++                else:
++                    xdata_flat = tuple(c.data.ravel() for c in stacked_coords)
++
++            # Perform the fit
++            try:
++                popt, pcov = curve_fit(
++                    func, xdata_flat, data_flat, p0=p0, bounds=bounds, **kwargs
++                )
++            except Exception as e:
++                raise RuntimeError(f"curve_fit failed for variable {name}: {e}")
++
++            # Create DataArrays for the parameters
++            if param_names is None:
++                param_names = [f"param{i}" for i in range(len(popt))]
++            else:
++                if len(param_names) != len(popt):
++                    raise ValueError(
++                        "param_names must have the same length as the number of parameters."
++                    )
++
++            # The parameters are scalars (no dimensions) for each variable
++            for i, (pname, pval) in enumerate(zip(param_names, popt)):
++                full_name = f"{name}_{pname}"
++                variables[full_name] = xr.DataArray(pval, name=full_name)
++
++            # Optionally, we could also store the covariance matrix, but for now we skip it.
++
++        return Dataset(data_vars=variables, attrs=self.attrs.copy())
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,
+@@ -7075,4 +7216,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self.isel(indexers, missing_dims=missing_dims)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

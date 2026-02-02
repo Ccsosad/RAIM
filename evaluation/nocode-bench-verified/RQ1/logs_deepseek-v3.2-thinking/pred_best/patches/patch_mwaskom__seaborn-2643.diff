@@ -1,0 +1,77 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index c1f490d..43c3b76 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -248,6 +248,72 @@ class Grid(_BaseGrid):
+             return None
+ 
+ 
++def move_legend(obj, loc, **kwargs):
++    """
++    Move an existing legend to a new location or update its properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.Grid
++        The object with the legend to be moved.
++    loc : str or int
++        The new location for the legend. See the documentation for
++        :meth:`matplotlib.axes.Axes.legend` for valid location values.
++    **kwargs
++        Additional keyword arguments are passed to the underlying legend method
++        on the Figure or Axes object.
++
++    Returns
++    -------
++    None
++
++    """
++    import matplotlib as mpl
++    
++    if isinstance(obj, mpl.axes.Axes):
++        # For axes-level plots
++        ax = obj
++        legend = ax.get_legend()
++        if legend is None:
++            raise ValueError("No legend found for this Axes.")
++        
++        # Get existing legend data
++        legendHandles = legend.legendHandles
++        labels = [t.get_text() for t in legend.texts]
++        title = legend.get_title().get_text()
++        
++        # Remove old legend
++        legend.remove()
++        
++        # Create new legend with updated location/properties
++        ax.legend(legendHandles, labels, loc=loc, title=title, **kwargs)
++        
++    elif isinstance(obj, Grid):
++        # For figure-level plots (Grid/FacetGrid)
++        grid = obj
++        if grid.legend is None:
++            raise ValueError("No legend found for this Grid.")
++        
++        # Get existing legend data from the grid's legend
++        legend = grid.legend
++        legendHandles = legend.legendHandles
++        labels = [t.get_text() for t in legend.texts]
++        title = legend.get_title().get_text()
++        
++        # Remove old legend
++        legend.remove()
++        grid._legend = None
++        
++        # Create legend data dictionary
++        legend_data = dict(zip(labels, legendHandles))
++        
++        # Add new legend with updated location/properties
++        grid.add_legend(legend_data=legend_data, title=title, loc=loc, **kwargs)
++        
++    else:
++        raise TypeError("obj must be an Axes or Grid instance")
++
++
+ _facet_docs = dict(
+ 
+     data=dedent("""\

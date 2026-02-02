@@ -1,0 +1,38 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index c85af9f..9948b11 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -294,6 +294,8 @@ class Axes(_AxesBase):
+ 
+         Other Parameters
+         ----------------
++        reverse : bool, default: False
++            If True, the legend entries are displayed in reverse order.
+         %(_legend_kw_doc)s
+ 
+         See Also
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index 7d25be3..85952b3 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -346,7 +346,8 @@ class Legend(Artist):
+         alignment="center",       # control the alignment within the legend box
+         *,
+         ncol=1,  # synonym for ncols (backward compatibility)
+-        draggable=False  # whether the legend can be dragged with the mouse
++        draggable=False,  # whether the legend can be dragged with the mouse
++        reverse=False     # reverse the order of legend entries
+     ):
+         """
+         Parameters
+@@ -437,6 +438,10 @@ class Legend(Artist):
+                 _hand.append(handle)
+         labels, handles = _lab, _hand
+ 
++        if reverse:
++            handles = handles[::-1]
++            labels = labels[::-1]
++
+         handles = list(handles)
+         if len(handles) < 2:
+             ncols = 1

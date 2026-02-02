@@ -1,0 +1,47 @@
+diff --git a/astropy/visualization/wcsaxes/core.py b/astropy/visualization/wcsaxes/core.py
+index 573033c..094e6c0 100644
+--- a/astropy/visualization/wcsaxes/core.py
++++ b/astropy/visualization/wcsaxes/core.py
+@@ -355,10 +355,15 @@ class WCSAxes(Axes):
+ 
+             transform, coord_meta = transform_coord_meta_from_wcs(self.wcs, self.frame_class, slices=slices)
+ 
++        if coord_meta.get('naxes', 2) == 1:
++            frame_class = RectangularFrame1D
++        else:
++            frame_class = self.frame_class
++
+         self.coords = CoordinatesMap(self,
+                                      transform=transform,
+                                      coord_meta=coord_meta,
+-                                     frame_class=self.frame_class,
++                                     frame_class=frame_class,
+                                      previous_frame_path=previous_frame['path'])
+ 
+         self._transform_pixel2world = transform
+diff --git a/astropy/visualization/wcsaxes/frame.py b/astropy/visualization/wcsaxes/frame.py
+index e6627e8..ed89e6a 100644
+--- a/astropy/visualization/wcsaxes/frame.py
++++ b/astropy/visualization/wcsaxes/frame.py
+@@ -215,6 +215,21 @@ class RectangularFrame(BaseFrame):
+         self['l'].data = np.array(([xmin, ymax], [xmin, ymin]))
+ 
+ 
++class RectangularFrame1D(BaseFrame):
++    """
++    A frame for one-dimensional plots.
++    """
++
++    spine_names = 'b'
++
++    def update_spines(self):
++        xmin, xmax = self.parent_axes.get_xlim()
++        ymin, ymax = self.parent_axes.get_ylim()
++
++        # For a 1D plot, we draw a horizontal line at the bottom (y=ymin) from xmin to xmax.
++        self['b'].data = np.array(([xmin, ymin], [xmax, ymin]))
++
++
+ class EllipticalFrame(BaseFrame):
+     """
+     An elliptical frame.

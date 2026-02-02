@@ -1,0 +1,15 @@
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index a906241..90fdc61 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -256,6 +256,10 @@ def generate_autosummary_content(name: str, obj: Any, parent: Any,
+     ns['objtype'] = doc.objtype
+     ns['underline'] = len(name) * '='
+ 
++    # Add user-defined context variables from autosummary_context config
++    if app is not None and isinstance(app.config.autosummary_context, dict):
++        ns.update(app.config.autosummary_context)
++
+     return template.render(template_name, ns)
+ 
+ 

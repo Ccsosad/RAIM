@@ -1,0 +1,100 @@
+diff --git a/lib/mpl_toolkits/mplot3d/axes3d.py b/lib/mpl_toolkits/mplot3d/axes3d.py
+index 7e611ff..74820cf 100644
+--- a/lib/mpl_toolkits/mplot3d/axes3d.py
++++ b/lib/mpl_toolkits/mplot3d/axes3d.py
+@@ -56,6 +56,7 @@ class Axes3D(Axes):
+ 
+     _axis_names = ("x", "y", "z")
+     Axes._shared_axes["z"] = cbook.Grouper()
++    Axes._shared_axes["view"] = cbook.Grouper()
+ 
+     vvec = _api.deprecate_privatize_attribute("3.7")
+     eye = _api.deprecate_privatize_attribute("3.7")
+@@ -64,7 +65,7 @@ class Axes3D(Axes):
+ 
+     def __init__(
+             self, fig, rect=None, *args,
+-            elev=30, azim=-60, roll=0, sharez=None, proj_type='persp',
++            elev=30, azim=-60, roll=0, sharez=None, shareview=None, proj_type='persp',
+             box_aspect=None, computed_zorder=True, focal_length=None,
+             **kwargs):
+         """
+@@ -142,6 +143,12 @@ class Axes3D(Axes):
+             self._shared_axes["z"].join(self, sharez)
+             self._adjustable = 'datalim'
+ 
++        self._shareview = shareview
++        if shareview is not None:
++            self._shared_axes["view"].join(self, shareview)
++            va = {0: 'x', 1: 'y', 2: 'z'}[shareview._vertical_axis]
++            self.view_init(shareview.elev, shareview.azim, shareview.roll, va, _skip_shared_update=True)
++
+         if kwargs.pop('auto_add_to_figure', False):
+             raise AttributeError(
+                 'auto_add_to_figure is no longer supported for Axes3D. '
+@@ -757,7 +764,7 @@ class Axes3D(Axes):
+         """Currently not implemented for 3D axes, and returns *None*."""
+         return None
+ 
+-    def view_init(self, elev=None, azim=None, roll=None, vertical_axis="z"):
++    def view_init(self, elev=None, azim=None, roll=None, vertical_axis="z", _skip_shared_update=False):
+         """
+         Set the elevation and azimuth of the axes in degrees (not radians).
+ 
+@@ -826,6 +833,8 @@ class Axes3D(Axes):
+         self._vertical_axis = _api.check_getitem(
+             dict(x=0, y=1, z=2), vertical_axis=vertical_axis
+         )
++        if not _skip_shared_update:
++            self._update_shared_view()
+ 
+     def set_proj_type(self, proj_type, focal_length=None):
+         """
+@@ -975,6 +984,22 @@ class Axes3D(Axes):
+         self.set_zlim(z0, z1, emit=False, auto=other.get_autoscalez_on())
+         self.zaxis._scale = other.zaxis._scale
+ 
++    def shareview(self, other):
++        """
++        Share the view angles with *other*.
++
++        This is equivalent to passing ``shareview=other`` when constructing the
++        Axes, and cannot be used if the view is already being shared with
++        another Axes.
++        """
++        _api.check_isinstance(maxes._base._AxesBase, other=other)
++        if self._shareview is not None and other is not self._shareview:
++            raise ValueError("view is already shared")
++        self._shared_axes["view"].join(self, other)
++        self._shareview = other
++        va = {0: 'x', 1: 'y', 2: 'z'}[other._vertical_axis]
++        self.view_init(other.elev, other.azim, other.roll, va, _skip_shared_update=True)
++
+     def clear(self):
+         # docstring inherited.
+         super().clear()
+@@ -1110,6 +1135,7 @@ class Axes3D(Axes):
+             self.elev = self.elev + delev
+             self.azim = self.azim + dazim
+             self.stale = True
++            self._update_shared_view()
+ 
+         elif self.button_pressed in self._pan_btn:
+             # Start the pan event with pixel coordinates
+@@ -1166,6 +1192,16 @@ class Axes3D(Axes):
+         self.set_ylim3d(miny + dy, maxy + dy)
+         self.set_zlim3d(minz + dz, maxz + dz)
+ 
++    def _update_shared_view(self):
++        """Update all axes in the same view group to match this axes."""
++        if self._shareview is None:
++            return
++        for ax in self._shared_axes["view"].get_siblings(self):
++            if ax is not self:
++                # Avoid recursion by setting _skip_shared_update=True
++                va = {0: 'x', 1: 'y', 2: 'z'}[self._vertical_axis]
++                ax.view_init(self.elev, self.azim, self.roll, va, _skip_shared_update=True)
++
+     def _calc_view_axes(self, eye):
+         """
+         Get the unit vectors for the viewing axes in data coordinates.

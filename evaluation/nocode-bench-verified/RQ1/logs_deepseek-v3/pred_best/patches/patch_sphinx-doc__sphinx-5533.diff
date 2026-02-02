@@ -1,0 +1,18 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1ae55eb..a283368 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -665,9 +665,12 @@ class Documenter:
+                 '.'.join(self.objpath + [mname])
+             documenter = classes[-1](self.directive, full_mname, self.indent)
+             memberdocumenters.append((documenter, isattr))
++        # Handle both directive option and config value for member-order
+         member_order = self.options.member_order or \
+             self.env.config.autodoc_member_order
+-        if member_order == 'groupwise':
++        if member_order == 'alphabetical':
++            memberdocumenters.sort(key=lambda e: e[0].name.split('::')[-1])
++        elif member_order == 'groupwise':
+             # sort by group; relies on stable sort to keep items in the
+             # same group sorted alphabetically
+             memberdocumenters.sort(key=lambda e: e[0].member_order)

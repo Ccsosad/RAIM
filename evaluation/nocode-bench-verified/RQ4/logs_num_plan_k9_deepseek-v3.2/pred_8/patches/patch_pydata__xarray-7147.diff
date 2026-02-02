@@ -1,0 +1,30 @@
+diff --git a/xarray/coding/times.py b/xarray/coding/times.py
+index 3885b1c..a7d8a95 100644
+--- a/xarray/coding/times.py
++++ b/xarray/coding/times.py
+@@ -167,7 +167,7 @@ def _unpack_netcdf_time_units(units):
+     return delta_units, ref_date
+ 
+ 
+-def _decode_cf_datetime_dtype(data, units, calendar, use_cftime):
++def _decode_cf_datetime_dtype(data, units, calendar, use_cftime, variable_name=None):
+     # Verify that at least the first and last date can be decoded
+     # successfully. Otherwise, tracebacks end up swallowed by
+     # Dataset.__repr__ when users try to view their lazily decoded array.
+@@ -182,11 +182,15 @@ def _decode_cf_datetime_dtype(data, units, calendar, use_cftime):
+         calendar_msg = (
+             "the default calendar" if calendar is None else f"calendar {calendar!r}"
+         )
+-        msg = (
++        base_msg = (
+             f"unable to decode time units {units!r} with {calendar_msg!r}. Try "
+             "opening your dataset with decode_times=False or installing cftime "
+             "if it is not installed."
+         )
++        if variable_name is not None:
++            msg = f"Failed to decode variable {variable_name!r}. {base_msg}"
++        else:
++            msg = base_msg
+         raise ValueError(msg)
+     else:
+         dtype = getattr(result, "dtype", np.dtype("object"))

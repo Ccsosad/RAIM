@@ -1,0 +1,44 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..d29b466 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -106,9 +106,39 @@ class Conf(_config.ConfigNamespace):
+         'Remote timeout downloading IERS file data (seconds).')
+ 
+ 
++from astropy.utils.state import ScienceState
++
+ conf = Conf()
+ 
+ 
++class earth_orientation_table(ScienceState):
++    """
++    ScienceState for the earth orientation table.
++
++    This state controls the table used for earth orientation data (UT1-UTC, polar
++    motion, etc.) in time and coordinate transformations.
++
++    The default is to use an IERS_Auto table, which automatically downloads
++    the latest IERS data when needed.
++
++    Examples
++    --------
++    >>> from astropy.utils import iers
++    >>> iers.earth_orientation_table.set(iers.IERS_B.open())
++    >>> iers.earth_orientation_table.get()
++    <IERS_B length=...>
++    >>> with iers.earth_orientation_table.set(iers.IERS_A.open()):
++    ...     # use IERS_A table
++    ...     pass
++    """
++    _value = None
++
++    @classmethod
++    def default(cls):
++        from .iers import IERS_Auto
++        return IERS_Auto.open()
++
++
+ class IERSRangeError(IndexError):
+     """
+     Any error for when dates are outside of the valid range for IERS

@@ -1,0 +1,54 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 38b5c3a..fb567ed 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -225,11 +225,44 @@ def _encode(values, *, uniques, check_unknown=True):
+         except KeyError as e:
+             raise ValueError(f"y contains previously unseen labels: {str(e)}")
+     else:
+-        if check_unknown:
+-            diff = _check_unknown(values, uniques)
+-            if diff:
+-                raise ValueError(f"y contains previously unseen labels: {str(diff)}")
+-        return np.searchsorted(uniques, values)
++        # Check for NaN in values
++        if np.any(np.isnan(values)):
++            # If there is NaN, we need to handle it separately.
++            # First, check for unknown values if required.
++            if check_unknown:
++                # We need to check for unknown values, including NaN.
++                # But _check_unknown does not handle NaN properly? So we do it manually.
++                # We will split the values into NaN and non-NaN.
++                nan_mask = np.isnan(values)
++                non_nan_values = values[~nan_mask]
++                # Check for unknown in non_nan_values
++                diff = _check_unknown(non_nan_values, uniques)
++                if diff:
++                    raise ValueError(f"y contains previously unseen labels: {str(diff)}")
++                # Check if NaN is in uniques
++                if not np.any(np.isnan(uniques)):
++                    raise ValueError(
++                        "y contains previously unseen labels: array([nan])"
++                    )
++            # Now, encode.
++            # Create an array for the result.
++            encoded = np.full(values.shape, -1, dtype=np.int64)
++            # Encode non-NaN values.
++            if np.sum(~nan_mask) > 0:
++                # Remove NaN from uniques for searchsorted.
++                uniques_without_nan = uniques[~np.isnan(uniques)]
++                encoded[~nan_mask] = np.searchsorted(uniques_without_nan, values[~nan_mask])
++            # Encode NaN values.
++            if np.any(np.isnan(uniques)):
++                nan_index = np.where(np.isnan(uniques))[0][0]
++                encoded[nan_mask] = nan_index
++            return encoded
++        else:
++            if check_unknown:
++                diff = _check_unknown(values, uniques)
++                if diff:
++                    raise ValueError(f"y contains previously unseen labels: {str(diff)}")
++            return np.searchsorted(uniques, values)
+ 
+ 
+ def _check_unknown(values, known_values, return_mask=False):

@@ -1,0 +1,51 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d9aca35..397266c 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -313,6 +313,7 @@ class PyObject(ObjectDescription):
+         'noindex': directives.flag,
+         'module': directives.unchanged,
+         'annotation': directives.unchanged,
++        'canonical': directives.unchanged,
+     }
+ 
+     doc_field_types = [
+@@ -391,6 +392,8 @@ class PyObject(ObjectDescription):
+         signode['module'] = modname
+         signode['class'] = classname
+         signode['fullname'] = fullname
++        if 'canonical' in self.options:
++            signode['canonical'] = self.options['canonical']
+ 
+         sig_prefix = self.get_signature_prefix(sig)
+         if sig_prefix:
+@@ -440,18 +443,25 @@ class PyObject(ObjectDescription):
+                              signode: desc_signature) -> None:
+         modname = self.options.get('module', self.env.ref_context.get('py:module'))
+         fullname = (modname + '.' if modname else '') + name_cls[0]
+-        node_id = make_id(self.env, self.state.document, '', fullname)
++        # If canonical is given, use it for the target
++        if 'canonical' in self.options:
++            canonical = self.options['canonical']
++            # The canonical name should be used for the domain's note_object and for node_id
++            target_name = canonical
++        else:
++            target_name = fullname
++        node_id = make_id(self.env, self.state.document, '', target_name)
+         signode['ids'].append(node_id)
+ 
+         # Assign old styled node_id(fullname) not to break old hyperlinks (if possible)
+         # Note: Will removed in Sphinx-5.0  (RemovedInSphinx50Warning)
+-        if node_id != fullname and fullname not in self.state.document.ids:
+-            signode['ids'].append(fullname)
++        if node_id != target_name and target_name not in self.state.document.ids:
++            signode['ids'].append(target_name)
+ 
+         self.state.document.note_explicit_target(signode)
+ 
+         domain = cast(PythonDomain, self.env.get_domain('py'))
+-        domain.note_object(fullname, self.objtype, node_id, location=signode)
++        domain.note_object(target_name, self.objtype, node_id, location=signode)
+ 
+         indextext = self.get_index_text(modname, name_cls)
+         if indextext:

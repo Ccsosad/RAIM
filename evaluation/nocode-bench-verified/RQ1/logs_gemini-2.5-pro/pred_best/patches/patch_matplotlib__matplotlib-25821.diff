@@ -1,0 +1,104 @@
+diff --git a/lib/mpl_toolkits/mplot3d/axes3d.py b/lib/mpl_toolkits/mplot3d/axes3d.py
+index 7e611ff..2385afc 100644
+--- a/lib/mpl_toolkits/mplot3d/axes3d.py
++++ b/lib/mpl_toolkits/mplot3d/axes3d.py
+@@ -56,6 +56,7 @@ class Axes3D(Axes):
+ 
+     _axis_names = ("x", "y", "z")
+     Axes._shared_axes["z"] = cbook.Grouper()
++    Axes._shared_axes["view"] = cbook.Grouper()
+ 
+     vvec = _api.deprecate_privatize_attribute("3.7")
+     eye = _api.deprecate_privatize_attribute("3.7")
+@@ -64,7 +65,8 @@ class Axes3D(Axes):
+ 
+     def __init__(
+             self, fig, rect=None, *args,
+-            elev=30, azim=-60, roll=0, sharez=None, proj_type='persp',
++            elev=30, azim=-60, roll=0, sharez=None, shareview=None,
++            proj_type='persp',
+             box_aspect=None, computed_zorder=True, focal_length=None,
+             **kwargs):
+         """
+@@ -142,6 +144,10 @@ class Axes3D(Axes):
+             self._shared_axes["z"].join(self, sharez)
+             self._adjustable = 'datalim'
+ 
++        self._shareview = shareview
++        if shareview is not None:
++            self.shareview(shareview)
++
+         if kwargs.pop('auto_add_to_figure', False):
+             raise AttributeError(
+                 'auto_add_to_figure is no longer supported for Axes3D. '
+@@ -827,6 +833,45 @@ class Axes3D(Axes):
+             dict(x=0, y=1, z=2), vertical_axis=vertical_axis
+         )
+ 
++    @property
++    def elev(self):
++        """The elevation angle in degrees."""
++        return self._elev
++
++    @elev.setter
++    def elev(self, val):
++        if not hasattr(self, '_elev') or self._elev != val:
++            self._elev = val
++            self.stale = True
++            for ax in self._shared_axes['view'].get_siblings(self):
++                ax.elev = val
++
++    @property
++    def azim(self):
++        """The azimuth angle in degrees."""
++        return self._azim
++
++    @azim.setter
++    def azim(self, val):
++        if not hasattr(self, '_azim') or self._azim != val:
++            self._azim = val
++            self.stale = True
++            for ax in self._shared_axes['view'].get_siblings(self):
++                ax.azim = val
++
++    @property
++    def roll(self):
++        """The roll angle in degrees."""
++        return self._roll
++
++    @roll.setter
++    def roll(self, val):
++        if not hasattr(self, '_roll') or self._roll != val:
++            self._roll = val
++            self.stale = True
++            for ax in self._shared_axes['view'].get_siblings(self):
++                ax.roll = val
++
+     def set_proj_type(self, proj_type, focal_length=None):
+         """
+         Set the projection type.
+@@ -975,6 +1020,24 @@ class Axes3D(Axes):
+         self.set_zlim(z0, z1, emit=False, auto=other.get_autoscalez_on())
+         self.zaxis._scale = other.zaxis._scale
+ 
++    def shareview(self, other):
++        """
++        Share the view with *other*.
++
++        This is equivalent to passing ``shareview=other`` when constructing
++        the Axes, and cannot be used if the view is already being shared with
++        another Axes.
++        """
++        _api.check_isinstance(Axes3D, other=other)
++        if (getattr(self, '_shareview', None) is not None and
++                self._shareview is not other):
++            raise ValueError("View is already shared")
++        self._shared_axes['view'].join(self, other)
++        self._shareview = other
++        if (self.elev, self.azim, self.roll) != \
++                (other.elev, other.azim, other.roll):
++            self.view_init(other.elev, other.azim, other.roll)
++
+     def clear(self):
+         # docstring inherited.
+         super().clear()

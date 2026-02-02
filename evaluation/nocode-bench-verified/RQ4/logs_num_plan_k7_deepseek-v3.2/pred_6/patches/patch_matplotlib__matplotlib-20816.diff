@@ -1,0 +1,105 @@
+diff --git a/lib/matplotlib/cbook/__init__.py b/lib/matplotlib/cbook/__init__.py
+index 5c3e852..17be5fd 100644
+--- a/lib/matplotlib/cbook/__init__.py
++++ b/lib/matplotlib/cbook/__init__.py
+@@ -110,6 +110,8 @@ class _StrongRef:
+         return hash(self._obj)
+ 
+ 
++import contextlib
++
+ def _weak_or_strong_ref(func, callback):
+     """
+     Return a `WeakMethod` wrapping *func* if possible, else a `_StrongRef`.
+@@ -175,6 +177,9 @@ class CallbackRegistry:
+         self._func_cid_map = {}
+         # A hidden variable that marks cids that need to be pickled.
+         self._pickled_cids = set()
++        # Stack of sets of signals that are currently blocked.
++        # Each set contains signals to block. If None is in the set, all signals are blocked.
++        self._blocked = []
+ 
+     def __getstate__(self):
+         return {
+@@ -260,6 +265,70 @@ class CallbackRegistry:
+             del self.callbacks[signal]
+             del self._func_cid_map[signal]
+ 
++    @contextlib.contextmanager
++    def blocked(self, *, signal=None):
++        """
++        Context manager to temporarily block callbacks.
++
++        Parameters
++        ----------
++        signal : str, optional
++            The signal to block. If not provided, all signals are blocked.
++
++        Examples
++        --------
++        >>> with callbacks.blocked():
++        ...     # All callbacks are blocked
++        ...     pass
++        >>> with callbacks.blocked(signal="key_press_event"):
++        ...     # Only key_press_event is blocked
++        ...     pass
++        """
++        if signal is None:
++            block_set = None
++        else:
++            block_set = {signal}
++        self._blocked.append(block_set)
++        try:
++            yield
++        finally:
++            self._blocked.pop()
++
++    def blocked(self, *, signal=None):
++        """
++        Context manager to temporarily block callbacks.
++
++        Parameters
++        ----------
++        signal : str, optional
++            The signal to block. If not provided, all signals are blocked.
++
++        Examples
++        --------
++        >>> with callbacks.blocked():
++        ...     # All callbacks are blocked
++        ...     pass
++        >>> with callbacks.blocked(signal="key_press_event"):
++        ...     # Only key_press_event is blocked
++        ...     pass
++        """
++        class _BlockedContext:
++            def __init__(self, registry, block_set):
++                self.registry = registry
++                self.block_set = block_set
++
++            def __enter__(self):
++                self.registry._blocked.append(self.block_set)
++
++            def __exit__(self, *args):
++                self.registry._blocked.pop()
++
++        if signal is None:
++            block_set = None
++        else:
++            block_set = {signal}
++        return _BlockedContext(self, block_set)
++
+     def process(self, s, *args, **kwargs):
+         """
+         Process signal *s*.
+@@ -267,6 +336,10 @@ class CallbackRegistry:
+         All of the functions registered to receive callbacks on *s* will be
+         called with ``*args`` and ``**kwargs``.
+         """
++        # Check if the signal is blocked.
++        for blocked_set in self._blocked:
++            if blocked_set is None or s in blocked_set:
++                return
+         for cid, ref in list(self.callbacks.get(s, {}).items()):
+             func = ref()
+             if func is not None:

@@ -1,0 +1,31 @@
+diff --git a/sphinx/ext/autodoc/directive.py b/sphinx/ext/autodoc/directive.py
+index 02803ef..27d086a 100644
+--- a/sphinx/ext/autodoc/directive.py
++++ b/sphinx/ext/autodoc/directive.py
+@@ -97,6 +97,7 @@ class AutodocDirective(SphinxDirective):
+     the generated content by Documenter.
+     """
+     option_spec = DummyOptionSpec()
++    # Note: member-order is now a supported option (see autodoc_default_options)
+     has_content = True
+     required_arguments = 1
+     optional_arguments = 0
+@@ -117,10 +118,12 @@ class AutodocDirective(SphinxDirective):
+         doccls = get_documenters(self.env.app)[objtype]
+ 
+         # process the options with the selected documenter's option_spec
++        # Note: member-order is now a supported option (see autodoc_default_options)
+         try:
+             documenter_options = process_documenter_options(doccls, self.config, self.options)
+         except (KeyError, ValueError, TypeError) as exc:
+             # an option is either unknown or has a wrong type
++            # member-order is a valid option as of version X.X
+             logger.error('An option to %s is either unknown or has an invalid value: %s' %
+                          (self.name, exc), location=(source, lineno))
+             return []
+@@ -140,4 +143,4 @@ class AutodocDirective(SphinxDirective):
+             self.state.document.settings.record_dependencies.add(fn)
+ 
+         result = parse_generated_content(self.state, params.result, documenter)
+-        return result
++        return result

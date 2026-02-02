@@ -1,0 +1,89 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 38b5c3a..5186466 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -220,16 +220,77 @@ def _encode(values, *, uniques, check_unknown=True):
+         Encoded values
+     """
+     if values.dtype.kind in "OUS":
+-        try:
+-            return _map_to_integer(values, uniques)
+-        except KeyError as e:
+-            raise ValueError(f"y contains previously unseen labels: {str(e)}")
++        # For object dtype, we need to handle NaN specially because NaN != NaN
++        # We'll create a mapping that uses a special sentinel for NaN
++        from ..utils._missing import is_scalar_nan
++        
++        # Build a mapping from value to index, with special handling for NaN
++        _NAN_SENTINEL = object()
++        table = {}
++        for i, val in enumerate(uniques):
++            if is_scalar_nan(val):
++                # Use a special sentinel for NaN that won't collide with other values
++                table[_NAN_SENTINEL] = i
++            else:
++                table[val] = i
++        
++        # Now encode the values
++        encoded = np.empty(len(values), dtype=int)
++        for i, val in enumerate(values):
++            if is_scalar_nan(val):
++                key = _NAN_SENTINEL
++            else:
++                key = val
++            try:
++                encoded[i] = table[key]
++            except KeyError:
++                raise ValueError(f"y contains previously unseen labels: {str(val)}")
++        return encoded
+     else:
++        # For non-object dtype, we need to handle NaN specially
++        from ..utils._missing import is_scalar_nan
++        
+         if check_unknown:
+-            diff = _check_unknown(values, uniques)
+-            if diff:
++            # We'll check for unknown values, but we need to treat NaN specially
++            # First, find the NaN values
++            nan_mask = np.isnan(values)
++            non_nan_values = values[~nan_mask]
++            
++            # Check for unknown among non-NaN values
++            diff = _check_unknown(non_nan_values, uniques)
++            if diff.size > 0:
+                 raise ValueError(f"y contains previously unseen labels: {str(diff)}")
+-        return np.searchsorted(uniques, values)
++            
++            # Now, if there are NaN values, we need to check if NaN is in uniques
++            if np.any(nan_mask):
++                # Check if there is a NaN in uniques
++                nan_in_uniques = np.any(np.isnan(uniques))
++                if not nan_in_uniques:
++                    raise ValueError("y contains previously unseen labels: [nan]")
++        
++        # Now encode
++        # We'll handle NaN separately because np.searchsorted doesn't work with NaN
++        encoded = np.zeros(len(values), dtype=int)
++        
++        # For non-NaN values, use searchsorted
++        nan_mask = np.isnan(values)
++        if np.any(~nan_mask):
++            non_nan_values = values[~nan_mask]
++            # uniques is sorted, so we can use searchsorted for non-NaN
++            encoded[~nan_mask] = np.searchsorted(uniques, non_nan_values)
++        
++        # For NaN values, they should map to the index of NaN in uniques
++        if np.any(nan_mask):
++            # Find the index of NaN in uniques
++            # Since uniques is sorted, NaN should be at the end if present
++            nan_indices = np.where(np.isnan(uniques))[0]
++            if nan_indices.size > 0:
++                encoded[nan_mask] = nan_indices[0]
++            else:
++                # This should not happen because we already checked above
++                raise ValueError("y contains previously unseen labels: [nan]")
++        
++        return encoded
+ 
+ 
+ def _check_unknown(values, known_values, return_mask=False):

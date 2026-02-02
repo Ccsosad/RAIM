@@ -1,0 +1,171 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..cfefb14 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,10 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -384,7 +384,7 @@ def join(left, right, keys=None, join_type='inner',
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+-                join_funcs)
++                join_funcs, keys_left, keys_right)
+ 
+     # Merge the column and table meta data. Table subclasses might override
+     # these methods for custom merge behavior.
+@@ -1047,7 +1047,7 @@ def _join(left, right, keys=None, join_type='inner',
+           uniq_col_name='{col_name}_{table_name}',
+           table_names=['1', '2'],
+           col_name_map=None, metadata_conflicts='warn',
+-          join_funcs=None):
++          join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left and right Tables on specified keys.
+ 
+@@ -1091,6 +1091,10 @@ def _join(left, right, keys=None, join_type='inner',
+     # Special column name for cartesian join, should never collide with real column
+     cartesian_index_name = '__table_cartesian_join_temp_index__'
+ 
++    # Temporary columns for keys_left and keys_right
++    temp_left_cols = []
++    temp_right_cols = []
++
+     if join_type not in ('inner', 'outer', 'left', 'right', 'cartesian'):
+         raise ValueError("The 'join_type' argument should be in 'inner', "
+                          "'outer', 'left', 'right', or 'cartesian' "
+@@ -1112,6 +1116,104 @@ def _join(left, right, keys=None, join_type='inner',
+         right[cartesian_index_name] = np.uint8(0)
+         keys = (cartesian_index_name, )
+ 
++    # Handle keys_left and keys_right
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Cannot specify both keys and keys_left/keys_right')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both keys_left and keys_right')
++        
++        # Make light copies of left and right to avoid modifying originals
++        left = left.copy(copy_data=False)
++        right = right.copy(copy_data=False)
++        
++        # Convert to list of column-like objects
++        if not isinstance(keys_left, list):
++            keys_left = [keys_left]
++        if not isinstance(keys_right, list):
++            keys_right = [keys_right]
++        
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same length')
++        
++        # Create temporary columns in left and right tables
++        temp_keys = []
++        for i, (kl, kr) in enumerate(zip(keys_left, keys_right)):
++            # Generate a temporary column name
++            temp_name = f'__temp_key_{i}__'
++            temp_keys.append(temp_name)
++            
++            # Add to left table
++            if isinstance(kl, (str, np.str_)):
++                # It's a column name
++                if kl not in left.colnames:
++                    raise TableMergeError(f'Left table does not have key column {kl!r}')
++                left[temp_name] = left[kl]
++            else:
++                # Assume it's column-like
++                left[temp_name] = kl
++            
++            # Add to right table
++            if isinstance(kr, (str, np.str_)):
++                if kr not in right.colnames:
++                    raise TableMergeError(f'Right table does not have key column {kr!r}')
++                right[temp_name] = right[kr]
++            else:
++                right[temp_name] = kr
++            
++            temp_left_cols.append(temp_name)
++            temp_right_cols.append(temp_name)
++        
++        keys = tuple(temp_keys)
++    
++    # Handle keys_left and keys_right
++    temp_left_cols = []
++    temp_right_cols = []
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Cannot specify both keys and keys_left/keys_right')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both keys_left and keys_right')
++        
++        # Convert to list of column-like objects
++        if not isinstance(keys_left, list):
++            keys_left = [keys_left]
++        if not isinstance(keys_right, list):
++            keys_right = [keys_right]
++        
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same length')
++        
++        # Create temporary columns in left and right tables
++        temp_keys = []
++        for i, (kl, kr) in enumerate(zip(keys_left, keys_right)):
++            # Generate a temporary column name
++            temp_name = f'__temp_key_{i}__'
++            temp_keys.append(temp_name)
++            
++            # Add to left table
++            if isinstance(kl, (str, np.str_)):
++                # It's a column name
++                if kl not in left.colnames:
++                    raise TableMergeError(f'Left table does not have key column {kl!r}')
++                left[temp_name] = left[kl]
++            else:
++                # Assume it's column-like
++                left[temp_name] = kl
++            
++            # Add to right table
++            if isinstance(kr, (str, np.str_)):
++                if kr not in right.colnames:
++                    raise TableMergeError(f'Right table does not have key column {kr!r}')
++                right[temp_name] = right[kr]
++            else:
++                right[temp_name] = kr
++            
++            temp_left_cols.append(temp_name)
++            temp_right_cols.append(temp_name)
++        
++        keys = tuple(temp_keys)
++    
+     # If we have a single key, put it in a tuple
+     if keys is None:
+         keys = tuple(name for name in left.colnames if name in right.colnames)
+@@ -1143,6 +1245,10 @@ def _join(left, right, keys=None, join_type='inner',
+ 
+     # Joined array dtype as a list of descr (name, type_str, shape) tuples
+     col_name_map = get_col_name_map([left, right], keys, uniq_col_name, table_names)
++    # Remove temporary columns from col_name_map
++    for temp_key in temp_left_cols:
++        if temp_key in col_name_map:
++            del col_name_map[temp_key]
+     out_descrs = get_descrs([left, right], col_name_map)
+ 
+     try:
+@@ -1160,7 +1266,7 @@ def _join(left, right, keys=None, join_type='inner',
+     out = _get_out_class([left, right])()
+ 
+     for out_name, dtype, shape in out_descrs:
+-        if out_name == cartesian_index_name:
++        if out_name == cartesian_index_name or out_name in temp_left_cols:
+             continue
+ 
+         left_name, right_name = col_name_map[out_name]

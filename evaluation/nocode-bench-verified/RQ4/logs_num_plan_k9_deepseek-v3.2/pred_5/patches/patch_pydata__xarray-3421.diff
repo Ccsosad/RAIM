@@ -1,0 +1,41 @@
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 873be99..c969726 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -1209,7 +1209,8 @@ class Variable(
+         ----------
+         *dims : str, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+ 
+         Returns
+         -------
+@@ -1228,6 +1229,26 @@ class Variable(
+         """
+         if len(dims) == 0:
+             dims = self.dims[::-1]
++        else:
++            # Check for ellipsis
++            if ... in dims:
++                # Replace ... with the remaining dimensions in order
++                # First, get the explicit dimensions (excluding ...)
++                explicit_dims = [d for d in dims if d is not ...]
++                # Get all dimensions
++                all_dims = list(self.dims)
++                # Get the remaining dimensions in the original order
++                remaining_dims = [d for d in all_dims if d not in explicit_dims]
++                # Build the new dims list by replacing ... with remaining_dims
++                new_dims = []
++                for d in dims:
++                    if d is ...:
++                        new_dims.extend(remaining_dims)
++                    else:
++                        new_dims.append(d)
++                dims = tuple(new_dims)
++            # If there are duplicate dimensions? That would be an error.
++            # But we let the subsequent code handle it.
+         axes = self.get_axis_num(dims)
+         if len(dims) < 2:  # no need to transpose if only one dimension
+             return self.copy(deep=False)

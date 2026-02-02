@@ -1,0 +1,37 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d9aca35..237d2d9 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -313,6 +313,7 @@ class PyObject(ObjectDescription):
+         'noindex': directives.flag,
+         'module': directives.unchanged,
+         'annotation': directives.unchanged,
++        'canonical': directives.unchanged,
+     }
+ 
+     doc_field_types = [
+@@ -450,8 +451,15 @@ class PyObject(ObjectDescription):
+ 
+         self.state.document.note_explicit_target(signode)
+ 
++        # If there is a canonical name, use it for cross-references
++        canonical = self.options.get('canonical')
++        if canonical:
++            domain_name = canonical
++        else:
++            domain_name = fullname
++
+         domain = cast(PythonDomain, self.env.get_domain('py'))
+-        domain.note_object(fullname, self.objtype, node_id, location=signode)
++        domain.note_object(domain_name, self.objtype, node_id, location=signode)
+ 
+         indextext = self.get_index_text(modname, name_cls)
+         if indextext:
+@@ -523,6 +531,7 @@ class PyFunction(PyObject):
+     option_spec.update({
+         'async': directives.flag,
+     })
++    # canonical is already included from PyObject
+ 
+     def get_signature_prefix(self, sig: str) -> str:
+         if 'async' in self.options:

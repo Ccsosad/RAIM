@@ -1,0 +1,136 @@
+diff --git a/seaborn/__init__.py b/seaborn/__init__.py
+index 0016b4b..61a1328 100644
+--- a/seaborn/__init__.py
++++ b/seaborn/__init__.py
+@@ -12,10 +12,11 @@ from .axisgrid import *  # noqa: F401,F403
+ from .widgets import *  # noqa: F401,F403
+ from .colors import xkcd_rgb, crayons  # noqa: F401
+ from . import cm  # noqa: F401
++from .legend import move_legend  # noqa: F401
+ 
+ # Capture the original matplotlib rcParams
+ import matplotlib as mpl
+ _orig_rc_params = mpl.rcParams.copy()
+ 
+ # Define the seaborn version
+-__version__ = "0.12.0.dev0"
++__version__ = "0.12.0.dev0"
+diff --git a/seaborn/legend.py b/seaborn/legend.py
+new file mode 100644
+index 0000000..0663184
+--- /dev/null
++++ b/seaborn/legend.py
+@@ -0,0 +1,113 @@
++"""
++Functions for working with plot legends.
++"""
++
++import matplotlib as mpl
++from matplotlib.legend import Legend
++import numpy as np
++
++
++def move_legend(obj, loc, **kwargs):
++    """
++    Move an existing legend to a new location, or create a new legend.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.Grid
++        The object with the legend.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid location strings and integers.
++    **kwargs
++        Additional keyword arguments are passed to the underlying legend method.
++        These can be used to set other legend properties, such as `title`,
++        `frameon`, `ncol`, etc. For more fine-grained control, use `bbox_to_anchor`
++        to specify an exact position.
++
++    Returns
++    -------
++    None
++
++    Examples
++    --------
++    .. include:: ../docstrings/move_legend.ipynb
++
++    """
++    # Check if the object is a Grid (FacetGrid, PairGrid, etc.)
++    if hasattr(obj, "_legend") and obj._legend is not None:
++        # This is a Grid object with a legend
++        _move_legend_grid(obj, loc, **kwargs)
++    elif hasattr(obj, "legend_"):
++        # This is an Axes with a legend
++        _move_legend_ax(obj, loc, **kwargs)
++    else:
++        # No legend found
++        raise ValueError("No legend found on the provided object.")
++
++
++def _move_legend_ax(ax, loc, **kwargs):
++    """Move the legend on an Axes."""
++    # Get the current legend
++    legend = ax.legend_
++    if legend is None:
++        raise ValueError("No legend found on the Axes.")
++
++    # Get the current handles and labels
++    handles = legend.legendHandles
++    labels = [t.get_text() for t in legend.texts]
++
++    # Remove the old legend
++    legend.remove()
++
++    # Create a new legend
++    new_legend = ax.legend(handles, labels, loc=loc, **kwargs)
++    ax.legend_ = new_legend
++
++
++def _move_legend_grid(grid, loc, **kwargs):
++    """Move the legend on a Grid object."""
++    legend = grid._legend
++    if legend is None:
++        raise ValueError("No legend found on the Grid.")
++
++    # Get the current handles and labels
++    handles = legend.legendHandles
++    labels = [t.get_text() for t in legend.texts]
++
++    # Remove the old legend
++    legend.remove()
++
++    # For a Grid, we need to create a figure legend
++    fig = grid.figure
++    new_legend = fig.legend(handles, labels, loc=loc, **kwargs)
++    grid._legend = new_legend
++
++    # If the legend is outside, we need to adjust the figure layout
++    if grid._legend_out:
++        # Update the legend position and adjust the figure
++        _adjust_legend_out(grid, new_legend)
++
++
++def _adjust_legend_out(grid, legend):
++    """Adjust the figure layout when the legend is outside."""
++    # Draw the figure to get the correct bounding boxes
++    grid.figure.canvas.draw()
++
++    # Calculate the new width required for the legend
++    legend_width = legend.get_window_extent().width / grid.figure.dpi
++    fig_width, fig_height = grid.figure.get_size_inches()
++    grid.figure.set_size_inches(fig_width + legend_width, fig_height)
++
++    # Draw again to update transformations
++    grid.figure.canvas.draw()
++
++    # Calculate the space needed on the right
++    legend_width = legend.get_window_extent().width / grid.figure.dpi
++    space_needed = legend_width / (fig_width + legend_width)
++    margin = .04 if grid._margin_titles else .01
++    grid._space_needed = margin + space_needed
++    right = 1 - grid._space_needed
++
++    # Adjust the subplots
++    grid.figure.subplots_adjust(right=right)
++    grid._tight_layout_rect[2] = right

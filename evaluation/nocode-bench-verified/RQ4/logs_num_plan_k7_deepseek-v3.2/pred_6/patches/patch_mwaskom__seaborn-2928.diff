@@ -1,0 +1,88 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..0aefacc 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -36,6 +36,50 @@ class _BaseGrid:
+                 ax.set(**kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to each subplot Axes.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes an Axes object as its first argument and returns
++            an Axes object (or None). Additional arguments and keyword arguments
++            are passed through.
++        *args, **kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self for method chaining.
++
++        """
++        for ax in self.axes.flat:
++            if ax is not None:
++                func(ax, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function that takes the grid object as its first argument.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes the grid object as its first argument and returns
++            an object (which could be the same grid object, a different object, or
++            None). Additional arguments and keyword arguments are passed through.
++        *args, **kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        object : the return value of the function.
++
++        """
++        return func(self, *args, **kwargs)
++
+     @property
+     def fig(self):
+         """DEPRECATED: prefer the `figure` property."""
+@@ -84,6 +128,7 @@ class Grid(_BaseGrid):
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+         self._figure.tight_layout(*args, **kwargs)
++        return self
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -1883,6 +1928,24 @@ class JointGrid(_BaseGrid):
+ 
+         return self
+ 
++    def tight_layout(self, *args, **kwargs):
++        """
++        Call fig.tight_layout on the underlying figure.
++
++        Parameters
++        ----------
++        *args, **kwargs
++            Arguments are passed to :meth:`matplotlib.figure.Figure.tight_layout`.
++
++        Returns
++        -------
++        self : object
++            Returns self for method chaining.
++
++        """
++        self.figure.tight_layout(*args, **kwargs)
++        return self
++
+     def set_axis_labels(self, xlabel="", ylabel="", **kwargs):
+         """Set axis labels on the bivariate axes.
+ 

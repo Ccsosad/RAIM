@@ -1,0 +1,21 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..d54a0ec 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -129,6 +129,7 @@ _units_and_physical_types = [
+ _physical_unit_mapping = {}
+ _unit_physical_mapping = {}
+ _name_physical_mapping = {}
++_attrname_physical_mapping = {}
+ 
+ 
+ def _physical_type_from_str(name):
+@@ -141,6 +142,8 @@ def _physical_type_from_str(name):
+ 
+     if name in _name_physical_mapping:
+         return _name_physical_mapping[name]
++    elif name in _attrname_physical_mapping:
++        return _attrname_physical_mapping[name]
+     else:
+         raise ValueError(f"{name!r} is not a known physical type.")
+ 

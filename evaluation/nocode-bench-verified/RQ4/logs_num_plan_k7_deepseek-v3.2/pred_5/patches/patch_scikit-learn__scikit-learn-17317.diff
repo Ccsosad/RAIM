@@ -1,0 +1,27 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..53f9491 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -163,6 +163,12 @@ class OneHotEncoder(_BaseEncoder):
+     in each feature. Alternatively, you can also specify the `categories`
+     manually.
+ 
++    This transformer supports categorical features with missing values. It
++    considers the missing values as an additional category. When missing
++    values are present in the training set, the missing values will be
++    treated as a separate category. If a feature contains both `np.nan` and
++    `None`, they will be considered separate categories.
++
+     This encoding is needed for feeding categorical data to many scikit-learn
+     estimators, notably linear models and SVMs with the standard kernels.
+ 
+@@ -173,6 +179,9 @@ class OneHotEncoder(_BaseEncoder):
+ 
+     .. versionchanged:: 0.20
+ 
++    .. versionchanged:: 0.24
++        Added support for missing values.
++
+     Parameters
+     ----------
+     categories : 'auto' or a list of array-like, default='auto'

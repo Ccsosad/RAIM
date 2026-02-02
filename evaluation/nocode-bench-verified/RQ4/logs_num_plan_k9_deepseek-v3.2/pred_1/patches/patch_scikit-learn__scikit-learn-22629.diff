@@ -1,0 +1,29 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 38b5c3a..274b92b 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -229,6 +229,24 @@ def _encode(values, *, uniques, check_unknown=True):
+             diff = _check_unknown(values, uniques)
+             if diff:
+                 raise ValueError(f"y contains previously unseen labels: {str(diff)}")
++        
++        # Check for NaN in values
++        if np.isnan(values).any():
++            # Find NaN in uniques
++            nan_in_uniques = np.isnan(uniques)
++            if nan_in_uniques.any():
++                nan_index = np.where(nan_in_uniques)[0][0]
++                # For non-object dtypes, uniques is sorted and NaN is at the end
++                # Encode non-NaN values
++                non_nan_mask = ~np.isnan(values)
++                encoded = np.empty(values.shape, dtype=np.int64)
++                if non_nan_mask.any():
++                    # Search in uniques without the NaN
++                    uniques_without_nan = uniques[~nan_in_uniques]
++                    encoded[non_nan_mask] = np.searchsorted(uniques_without_nan, values[non_nan_mask])
++                encoded[~non_nan_mask] = nan_index
++                return encoded
++            # If no NaN in uniques, it would have been caught by check_unknown
+         return np.searchsorted(uniques, values)
+ 
+ 

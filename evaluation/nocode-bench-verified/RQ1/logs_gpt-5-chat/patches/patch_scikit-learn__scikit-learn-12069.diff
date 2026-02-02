@@ -1,0 +1,24 @@
+diff --git a/sklearn/decomposition/_kernel_pca.py b/sklearn/decomposition/_kernel_pca.py
+index 6f0266a..af0ad56 100644
+--- a/sklearn/decomposition/_kernel_pca.py
++++ b/sklearn/decomposition/_kernel_pca.py
+@@ -208,6 +208,13 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+         if eigen_solver == 'dense':
+             self.lambdas_, self.alphas_ = linalg.eigh(
+                 K, eigvals=(K.shape[0] - n_components, K.shape[0] - 1))
++        elif eigen_solver == 'randomized':
++            # use randomized SVD for approximate kPCA
++            from ..utils.extmath import randomized_svd
++            U, S, _ = randomized_svd(K, n_components=n_components,
++                                     random_state=self.random_state)
++            self.lambdas_ = S
++            self.alphas_ = U
+         elif eigen_solver == 'arpack':
+             v0 = _init_arpack_v0(K.shape[0], self.random_state)
+             self.lambdas_, self.alphas_ = eigsh(K, n_components,
+@@ -388,4 +395,4 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+ 
+     def _more_tags(self):
+         return {'preserves_dtype': [np.float64, np.float32],
+-                'pairwise': self.kernel == 'precomputed'}
++                'pairwise': self.kernel == 'precomputed'}

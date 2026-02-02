@@ -1,0 +1,34 @@
+diff --git a/sklearn/pipeline.py b/sklearn/pipeline.py
+index 37667a3..e82b4a9 100644
+--- a/sklearn/pipeline.py
++++ b/sklearn/pipeline.py
+@@ -884,6 +884,20 @@ def _fit_one(transformer, X, y, weight, message_clsname="", message=None, **fit_
+         return transformer.fit(X, y, **fit_params)
+ 
+ 
++class _PassthroughTransformer(FunctionTransformer):
++    """A custom FunctionTransformer that passes through the input features.
++
++    This transformer is used as a replacement for the string "passthrough" in
++    FeatureUnion. It provides get_feature_names_out method.
++    """
++    def get_feature_names_out(self, input_features=None):
++        if input_features is None:
++            raise ValueError(
++                "For passthrough transformer, input_features must be provided."
++            )
++        return input_features
++
++
+ class FeatureUnion(TransformerMixin, _BaseComposition):
+     """Concatenates results of multiple transformer objects.
+ 
+@@ -1053,7 +1067,7 @@ class FeatureUnion(TransformerMixin, _BaseComposition):
+             if trans == "drop":
+                 continue
+             if trans == "passthrough":
+-                trans = FunctionTransformer()
++                trans = _PassthroughTransformer()
+             yield (name, trans, get_weight(name))
+ 
+     @deprecated(

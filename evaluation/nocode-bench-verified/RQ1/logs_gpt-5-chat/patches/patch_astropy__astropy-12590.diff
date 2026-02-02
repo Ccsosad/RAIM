@@ -1,0 +1,21 @@
+diff --git a/astropy/cosmology/flrw.py b/astropy/cosmology/flrw.py
+index ecb617a..b1a1ffb 100644
+--- a/astropy/cosmology/flrw.py
++++ b/astropy/cosmology/flrw.py
+@@ -1408,6 +1408,16 @@ class FLRW(Cosmology):
+         """
+         return radian_in_arcsec / self.angular_diameter_distance(z).to(u.kpc)
+ 
++    def Otot0(self):
++        """Total density parameter at z=0."""
++        return self._Om0 + self._Ode0 + self._Ogamma0 + self._Onu0 + self._Ok0
++
++    def Otot(self, z):
++        """Total density parameter at redshift ``z``."""
++        z = aszarr(z)
++        return (self.Om(z) + self.Ode(z) + self.Ogamma(z) +
++                self.Onu(z) + self.Ok(z))
++
+ 
+ class FlatFLRWMixin(FlatCosmologyMixin):
+     """

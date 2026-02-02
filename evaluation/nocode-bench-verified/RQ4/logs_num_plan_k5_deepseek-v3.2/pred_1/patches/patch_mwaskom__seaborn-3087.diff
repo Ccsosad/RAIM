@@ -1,0 +1,21 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index b0a0822..2b03f86 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -614,9 +614,13 @@ class Continuous(ContinuousBase):
+ 
+         log_base, symlog_thresh = self._parse_for_log_params(self.trans)
+         if base is None:
+-            if symlog_thresh:
+-                log_base = 10
+-            base = log_base
++            if log_base is not None:
++                base = log_base
++            elif symlog_thresh:
++                base = 10
++            else:
++                # No log transform, but base=None is passed, so we use base=10
++                base = 10
+ 
+         if formatter is not None:
+             return formatter

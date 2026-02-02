@@ -1,0 +1,22 @@
+diff --git a/xarray/conventions.py b/xarray/conventions.py
+index df059cc..bda37ee 100644
+--- a/xarray/conventions.py
++++ b/xarray/conventions.py
+@@ -364,9 +364,15 @@ def decode_cf_variable(
+             var = coder.decode(var, name=name)
+ 
+     if decode_timedelta:
+-        var = times.CFTimedeltaCoder().decode(var, name=name)
++        try:
++            var = times.CFTimedeltaCoder().decode(var, name=name)
++        except ValueError as e:
++            raise ValueError(f"Failed to decode variable {name!r} as a timedelta. {e}")
+     if decode_times:
+-        var = times.CFDatetimeCoder(use_cftime=use_cftime).decode(var, name=name)
++        try:
++            var = times.CFDatetimeCoder(use_cftime=use_cftime).decode(var, name=name)
++        except ValueError as e:
++            raise ValueError(f"Failed to decode variable {name!r} as a datetime. {e}")
+ 
+     dimensions, data, attributes, encoding = variables.unpack_for_decoding(var)
+     # TODO(shoyer): convert everything below to use coders

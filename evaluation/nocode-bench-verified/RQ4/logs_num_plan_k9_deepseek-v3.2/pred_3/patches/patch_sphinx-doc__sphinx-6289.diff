@@ -1,0 +1,82 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..ad64dbc 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -814,12 +814,18 @@ class ModuleDocumenter(Documenter):
+ 
+     def get_object_members(self, want_all):
+         # type: (bool) -> Tuple[bool, List[Tuple[str, object]]]
++        from sphinx.ext.autodoc.imported_members import filter_imported_members
++
+         if want_all:
+             if (self.options.ignore_module_all or not
+                     hasattr(self.object, '__all__')):
+                 # for implicit module members, check __module__ to avoid
+                 # documenting imported objects
+-                return True, safe_getmembers(self.object)
++                members = safe_getmembers(self.object)
++                # Filter out imported members if imported-members is not set
++                if not getattr(self.options, 'imported_members', False):
++                    members = filter_imported_members(members, self.object)
++                return True, members
+             else:
+                 memberlist = self.object.__all__
+                 # Sometimes __all__ is broken...
+@@ -832,7 +838,10 @@ class ModuleDocumenter(Documenter):
+                         type='autodoc'
+                     )
+                     # fall back to all members
+-                    return True, safe_getmembers(self.object)
++                    members = safe_getmembers(self.object)
++                    if not getattr(self.options, 'imported_members', False):
++                        members = filter_imported_members(members, self.object)
++                    return True, members
+         else:
+             memberlist = self.options.members or []
+         ret = []
+diff --git a/sphinx/ext/autodoc/imported_members.py b/sphinx/ext/autodoc/imported_members.py
+new file mode 100644
+index 0000000..87c2e72
+--- /dev/null
++++ b/sphinx/ext/autodoc/imported_members.py
+@@ -0,0 +1,40 @@
++"""
++Helper functions to identify imported members in a module.
++"""
++
++import inspect
++from typing import Any, Tuple
++
++
++def is_imported_member(member: Any, membername: str, module: Any) -> bool:
++    """
++    Return True if the member is imported from another module.
++
++    This function checks if the member's __module__ attribute is different
++    from the module's __name__. If __module__ is not set, it is assumed to be
++    defined in the current module.
++    """
++    if not hasattr(member, '__module__'):
++        # Built-in types or functions might not have __module__
++        return False
++
++    member_module = getattr(member, '__module__', None)
++    module_name = getattr(module, '__name__', None)
++
++    if member_module is None or module_name is None:
++        return False
++
++    # Compare the module names
++    return member_module != module_name
++
++
++def filter_imported_members(members: list, module: Any) -> list:
++    """
++    Filter out members that are imported from another module.
++
++    :param members: List of (name, value) tuples.
++    :param module: The module object.
++    :return: Filtered list of (name, value) tuples.
++    """
++    return [(name, value) for (name, value) in members
++            if not is_imported_member(value, name, module)]

@@ -1,0 +1,81 @@
+diff --git a/lib/matplotlib/cbook/__init__.py b/lib/matplotlib/cbook/__init__.py
+index 5c3e852..3852f4b 100644
+--- a/lib/matplotlib/cbook/__init__.py
++++ b/lib/matplotlib/cbook/__init__.py
+@@ -175,6 +175,8 @@ class CallbackRegistry:
+         self._func_cid_map = {}
+         # A hidden variable that marks cids that need to be pickled.
+         self._pickled_cids = set()
++        # A set of signals that are currently blocked.
++        self._blocked = set()
+ 
+     def __getstate__(self):
+         return {
+@@ -186,6 +188,8 @@ class CallbackRegistry:
+                           for s, d in self.callbacks.items()},
+             # It is simpler to reconstruct this from callbacks in __setstate__.
+             "_func_cid_map": None,
++            # Do not pickle the blocked state.
++            "_blocked": set(),
+         }
+ 
+     def __setstate__(self, state):
+@@ -197,6 +201,9 @@ class CallbackRegistry:
+         self._func_cid_map = {
+             s: {proxy: cid for cid, proxy in d.items()}
+             for s, d in self.callbacks.items()}
++        # Ensure _blocked exists (for backward compatibility).
++        if not hasattr(self, '_blocked'):
++            self._blocked = set()
+ 
+     @_api.rename_parameter("3.4", "s", "signal")
+     def connect(self, signal, func):
+@@ -260,6 +267,38 @@ class CallbackRegistry:
+             del self.callbacks[signal]
+             del self._func_cid_map[signal]
+ 
++    def blocked(self, *, signal=None):
++        """
++        Context manager to temporarily block callbacks.
++
++        Parameters
++        ----------
++        signal : str, optional
++            The signal to block. If not provided, all signals are blocked.
++
++        Returns
++        -------
++        contextmanager
++            A context manager that blocks the specified signal(s) for its duration.
++        """
++        from contextlib import contextmanager
++
++        @contextmanager
++        def blocker():
++            if signal is None:
++                self._blocked.add(None)
++            else:
++                self._blocked.add(signal)
++            try:
++                yield
++            finally:
++                if signal is None:
++                    self._blocked.discard(None)
++                else:
++                    self._blocked.discard(signal)
++
++        return blocker()
++
+     def process(self, s, *args, **kwargs):
+         """
+         Process signal *s*.
+@@ -267,6 +306,9 @@ class CallbackRegistry:
+         All of the functions registered to receive callbacks on *s* will be
+         called with ``*args`` and ``**kwargs``.
+         """
++        # Check if the signal is blocked.
++        if None in self._blocked or s in self._blocked:
++            return
+         for cid, ref in list(self.callbacks.get(s, {}).items()):
+             func = ref()
+             if func is not None:

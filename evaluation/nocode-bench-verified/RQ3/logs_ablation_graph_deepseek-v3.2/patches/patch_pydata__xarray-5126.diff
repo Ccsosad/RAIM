@@ -1,0 +1,124 @@
+diff --git a/xarray/core/formatting_html.py b/xarray/core/formatting_html.py
+index 87f3bcf..fec66fc 100644
+--- a/xarray/core/formatting_html.py
++++ b/xarray/core/formatting_html.py
+@@ -164,9 +164,21 @@ def collapsible_section(
+     )
+ 
+ 
+-def _mapping_section(mapping, name, details_func, max_items_collapse, enabled=True):
++def _should_collapse(option_value, n_items, max_items_collapse):
++    if option_value is True:
++        return False
++    elif option_value is False:
++        return True
++    else:  # default
++        return n_items >= max_items_collapse
++
++
++def _mapping_section(mapping, name, details_func, max_items_collapse, enabled=True, expand_option=None):
+     n_items = len(mapping)
+-    collapsed = n_items >= max_items_collapse
++    if expand_option is not None:
++        collapsed = _should_collapse(expand_option, n_items, max_items_collapse)
++    else:
++        collapsed = n_items >= max_items_collapse
+ 
+     return collapsible_section(
+         name,
+@@ -263,26 +275,30 @@ def array_repr(arr):
+         format_dims(dims, coord_names),
+     ]
+ 
+-    sections = [array_section(arr)]
++    from xarray.core.options import OPTIONS
++
++    sections = [array_section(arr, expand_option=OPTIONS['display_expand_data'])]
+ 
+     if hasattr(arr, "coords"):
+-        sections.append(coord_section(arr.coords))
++        sections.append(coord_section(arr.coords, expand_option=OPTIONS['display_expand_coords']))
+ 
+-    sections.append(attr_section(arr.attrs))
++    sections.append(attr_section(arr.attrs, expand_option=OPTIONS['display_expand_attrs']))
+ 
+     return _obj_repr(arr, header_components, sections)
+ 
+ 
+ def dataset_repr(ds):
++    from xarray.core.options import OPTIONS
++
+     obj_type = "xarray.{}".format(type(ds).__name__)
+ 
+     header_components = [f"<div class='xr-obj-type'>{escape(obj_type)}</div>"]
+ 
+     sections = [
+         dim_section(ds),
+-        coord_section(ds.coords),
+-        datavar_section(ds.data_vars),
+-        attr_section(ds.attrs),
++        coord_section(ds.coords, expand_option=OPTIONS['display_expand_coords']),
++        datavar_section(ds.data_vars, expand_option=OPTIONS['display_expand_data_vars']),
++        attr_section(ds.attrs, expand_option=OPTIONS['display_expand_attrs']),
+     ]
+ 
+     return _obj_repr(ds, header_components, sections)
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..bf8fad7 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -78,6 +78,29 @@ def _get_keep_attrs(default):
+         )
+ 
+ 
++# Options for display expansion
++DISPLAY_EXPAND_ATTRS = 'display_expand_attrs'
++DISPLAY_EXPAND_COORDS = 'display_expand_coords'
++DISPLAY_EXPAND_DATA = 'display_expand_data'
++DISPLAY_EXPAND_DATA_VARS = 'display_expand_data_vars'
++
++# Update OPTIONS with default values for the new display options
++OPTIONS.update({
++    DISPLAY_EXPAND_ATTRS: 'default',
++    DISPLAY_EXPAND_COORDS: 'default',
++    DISPLAY_EXPAND_DATA: 'default',
++    DISPLAY_EXPAND_DATA_VARS: 'default',
++})
++
++# Update _VALIDATORS for the new display options
++_VALIDATORS.update({
++    DISPLAY_EXPAND_ATTRS: lambda x: x in [True, False, 'default'],
++    DISPLAY_EXPAND_COORDS: lambda x: x in [True, False, 'default'],
++    DISPLAY_EXPAND_DATA: lambda x: x in [True, False, 'default'],
++    DISPLAY_EXPAND_DATA_VARS: lambda x: x in [True, False, 'default'],
++})
++
++
+ class set_options:
+     """Set options for xarray in a controlled context.
+ 
+@@ -108,6 +131,18 @@ class set_options:
+       Default: ``'default'``.
+     - ``display_style``: display style to use in jupyter for xarray objects.
+       Default: ``'text'``. Other options are ``'html'``.
++    - ``display_expand_attrs``: control the expansion of the attributes section.
++      Can be ``True`` to always expand, ``False`` to always collapse, or
++      ``'default'`` to expand unless over a pre-defined limit. Default: ``'default'``.
++    - ``display_expand_coords``: control the expansion of the coordinates section.
++      Can be ``True`` to always expand, ``False`` to always collapse, or
++      ``'default'`` to expand unless over a pre-defined limit. Default: ``'default'``.
++    - ``display_expand_data``: control the expansion of the data section in DataArray.
++      Can be ``True`` to always expand, ``False`` to always collapse, or
++      ``'default'`` to expand unless over a pre-defined limit. Default: ``'default'``.
++    - ``display_expand_data_vars``: control the expansion of the data variables section.
++      Can be ``True`` to always expand, ``False`` to always collapse, or
++      ``'default'`` to expand unless over a pre-defined limit. Default: ``'default'``.
+ 
+ 
+     You can use ``set_options`` either as a context manager:
+@@ -160,4 +195,4 @@ class set_options:
+         return
+ 
+     def __exit__(self, type, value, traceback):
+-        self._apply_update(self.old)
++        self._apply_update(self.old)

@@ -1,0 +1,207 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..5f94435 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4360,4 +4360,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..f47d5b6 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6943,6 +6943,65 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+                 "Dataset.argmin() with a sequence or ... for dim"
+             )
+ 
++    def query(self, expr, engine='numexpr', **kwargs):
++        """
++        Return a new dataset with the rows where the expression evaluates to True.
++
++        Parameters
++        ----------
++        expr : str
++            A string expression to evaluate in the dataset's namespace.
++            The expression can refer to any variable in the dataset.
++        engine : str, optional
++            The evaluation engine to use. Default is 'numexpr'.
++        **kwargs
++            Additional keyword arguments passed to the evaluation engine.
++
++        Returns
++        -------
++        dataset : Dataset
++            A new dataset with the same variables, but only containing the rows
++            that satisfy the expression.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({'a': ('x', [1, 2, 3]), 'b': ('x', [4, 5, 6])})
++        >>> ds.query('a > 1')
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Dimensions without coordinates: x
++        Data variables:
++            a        (x) int64 2 3
++            b        (x) int64 5 6
++
++        See Also
++        --------
++        pandas.DataFrame.query
++        """
++        from .query_registry import evaluate_query, build_query_env
++
++        # Build the environment for evaluation
++        env = build_query_env(self)
++        # Evaluate the expression to get a boolean mask
++        mask = evaluate_query(expr, env, engine=engine, **kwargs)
++        # The mask should be 1D and have the same length as the first dimension
++        # We need to find the dimension to apply the mask to.
++        # We'll assume the mask is applied to the first dimension of the dataset.
++        # This is similar to pandas where query works on rows.
++        # We need to find the common dimension across all variables.
++        # For simplicity, we'll use the first dimension of the dataset.
++        if mask.ndim != 1:
++            raise ValueError("Query expression must return a 1-dimensional boolean array.")
++        # We need to find which dimension to index. We'll use the first dimension
++        # that has the same size as the mask.
++        dim_candidates = [dim for dim, size in self.dims.items() if size == mask.shape[0]]
++        if not dim_candidates:
++            raise ValueError("No dimension found with the same size as the query result.")
++        # Use the first candidate
++        dim = dim_candidates[0]
++        # Index the dataset with the mask
++        return self.isel({dim: np.where(mask)[0]})
++
+     def argmax(self, dim=None, **kwargs):
+         """Indices of the maxima of the member variables.
+ 
+@@ -7002,4 +7061,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query_registry.py b/xarray/core/query_registry.py
+new file mode 100644
+index 0000000..e3e9ed9
+--- /dev/null
++++ b/xarray/core/query_registry.py
+@@ -0,0 +1,115 @@
++"""
++Query evaluation for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from .utils import is_scalar
++
++# We'll use pandas' query engine as a base
++from pandas.core.computation.ops import UndefinedVariableError
++from pandas.core.computation.expr import Expr
++from pandas.core.computation.engines import _engines
++from pandas.core.computation.scope import Scope
++
++class QueryRegistry:
++    """
++    Registry for query engines and parsers.
++    """
++    def __init__(self):
++        self._engines = {}
++        self._parsers = {}
++
++    def register_engine(self, name, engine):
++        """Register a query engine."""
++        self._engines[name] = engine
++
++    def register_parser(self, name, parser):
++        """Register a query parser."""
++        self._parsers[name] = parser
++
++    def get_engine(self, name='numexpr'):
++        """Get a query engine by name."""
++        if name not in self._engines:
++            # Use pandas' engine
++            self._engines[name] = _engines[name]
++        return self._engines[name]
++
++    def get_parser(self):
++        """Get the default parser."""
++        # We'll use pandas' parser
++        from pandas.core.computation.parsing import tokenize_string
++        from pandas.core.computation.expr import Expr
++        return Expr
++
++    def evaluate(self, expr, env, engine='numexpr', parser=None, **kwargs):
++        """
++        Evaluate an expression in the given environment.
++
++        Parameters
++        ----------
++        expr : str
++            The expression to evaluate.
++        env : dict
++            The environment with variables.
++        engine : str, optional
++            The evaluation engine to use.
++        parser : str, optional
++            The parser to use.
++        **kwargs
++            Additional keyword arguments passed to the engine.
++
++        Returns
++        -------
++        result : array-like
++            The result of the evaluation.
++        """
++        if parser is None:
++            parser = self.get_parser()
++        if isinstance(expr, str):
++            expr = parser(expr, engine=engine)
++        return expr.evaluate(env, engine=engine, **kwargs)
++
++# Global registry
++_REGISTRY = QueryRegistry()
++
++def evaluate_query(expr, env, engine='numexpr', **kwargs):
++    """
++    Evaluate a query expression.
++
++    Parameters
++    ----------
++    expr : str
++        The query expression.
++    env : dict
++        The environment with variables.
++    engine : str, optional
++        The evaluation engine to use.
++    **kwargs
++        Additional keyword arguments.
++
++    Returns
++    -------
++    result : array-like
++        The boolean mask from the query.
++    """
++    return _REGISTRY.evaluate(expr, env, engine=engine, **kwargs)
++
++def build_query_env(dataset):
++    """
++    Build an environment for query evaluation from a dataset.
++
++    Parameters
++    ----------
++    dataset : Dataset
++        The dataset to build the environment from.
++
++    Returns
++    -------
++    env : dict
++        A dictionary with variable names as keys and data arrays as values.
++    """
++    env = {}
++    for name, var in dataset.variables.items():
++        # Convert to numpy array for evaluation
++        env[name] = var.values
++    return env

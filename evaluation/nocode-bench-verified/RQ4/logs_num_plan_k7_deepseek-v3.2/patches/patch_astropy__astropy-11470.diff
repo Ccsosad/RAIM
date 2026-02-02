@@ -1,0 +1,80 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..4e46e99 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -1656,18 +1656,22 @@ class UnitSphericalRepresentation(BaseRepresentation):
+         return rep
+ 
+     def __mul__(self, other):
+-        self._raise_if_has_differentials('multiplication')
+-        return self._dimensional_representation(lon=self.lon, lat=self.lat,
+-                                                distance=1. * other)
++        # Convert to cartesian with differentials, multiply, and convert back.
++        cart = self.to_cartesian()
++        new_cart = cart * other
++        return self._dimensional_representation.from_cartesian(new_cart)
+ 
+     def __truediv__(self, other):
+-        self._raise_if_has_differentials('division')
+-        return self._dimensional_representation(lon=self.lon, lat=self.lat,
+-                                                distance=1. / other)
++        # Convert to cartesian with differentials, divide, and convert back.
++        cart = self.to_cartesian()
++        new_cart = cart / other
++        return self._dimensional_representation.from_cartesian(new_cart)
+ 
+     def __neg__(self):
+-        self._raise_if_has_differentials('negation')
+-        return self.__class__(self.lon + 180. * u.deg, -self.lat, copy=False)
++        # Convert to cartesian with differentials, negate, and convert back.
++        cart = self.to_cartesian()
++        new_cart = -cart
++        return self.__class__.from_cartesian(new_cart)
+ 
+     def norm(self):
+         """Vector norm.
+@@ -1685,13 +1689,13 @@ class UnitSphericalRepresentation(BaseRepresentation):
+                           copy=False)
+ 
+     def _combine_operation(self, op, other, reverse=False):
+-        self._raise_if_has_differentials(op.__name__)
+-
+-        result = self.to_cartesian()._combine_operation(op, other, reverse)
+-        if result is NotImplemented:
++        # Convert to cartesian with differentials, combine, and convert back.
++        cart = self.to_cartesian()
++        new_cart = cart._combine_operation(op, other, reverse)
++        if new_cart is NotImplemented:
+             return NotImplemented
+         else:
+-            return self._dimensional_representation.from_cartesian(result)
++            return self._dimensional_representation.from_cartesian(new_cart)
+ 
+     def mean(self, *args, **kwargs):
+         """Vector mean.
+@@ -2022,9 +2026,22 @@ class SphericalRepresentation(BaseRepresentation):
+         return np.abs(self.distance)
+ 
+     def __neg__(self):
+-        self._raise_if_has_differentials('negation')
+-        return self.__class__(self.lon + 180. * u.deg, -self.lat, self.distance,
+-                              copy=False)
++        # Convert to cartesian with differentials, negate, and convert back.
++        cart = self.to_cartesian()
++        new_cart = -cart
++        return self.__class__.from_cartesian(new_cart)
++
++    def __mul__(self, other):
++        # Convert to cartesian with differentials, multiply, and convert back.
++        cart = self.to_cartesian()
++        new_cart = cart * other
++        return self.__class__.from_cartesian(new_cart)
++
++    def __truediv__(self, other):
++        # Convert to cartesian with differentials, divide, and convert back.
++        cart = self.to_cartesian()
++        new_cart = cart / other
++        return self.__class__.from_cartesian(new_cart)
+ 
+ 
+ class PhysicsSphericalRepresentation(BaseRepresentation):

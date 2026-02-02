@@ -1,0 +1,79 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..1cd4bb0 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,74 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise.
++
++        Parameters
++        ----------
++        other : Table, array, or scalar
++            The object to compare with the table.
++
++        Returns
++        -------
++        result : Table
++            A table of the same shape as the original table, with boolean values
++            indicating element-wise equality.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table with different column names.
++        """
++        from . import Table
++
++        if isinstance(other, Table):
++            # Check column names
++            if set(self.colnames) != set(other.colnames):
++                raise ValueError('cannot compare tables with different column names')
++            # Ensure same column order
++            other = other[self.colnames]
++
++            # Compare each column
++            out_cols = []
++            for name in self.colnames:
++                col_self = self[name]
++                col_other = other[name]
++                # Use element-wise equality
++                if hasattr(col_self, '__array_interface__') and hasattr(col_other, '__array_interface__'):
++                    eq = np.array(col_self) == np.array(col_other)
++                else:
++                    # For mixin columns, try direct comparison
++                    eq = col_self == col_other
++                # Convert to a Column if needed
++                if not isinstance(eq, Column):
++                    eq = Column(eq, name=name)
++                else:
++                    eq.info.name = name
++                out_cols.append(eq)
++            return Table(out_cols, copy=False)
++        else:
++            # Compare to an array or scalar column-wise
++            out_cols = []
++            for name, col in self.columns.items():
++                # Broadcast other to the column shape if possible
++                if np.isscalar(other) or (isinstance(other, np.ndarray) and other.shape == ()):
++                    # Scalar comparison
++                    eq = col == other
++                else:
++                    # Array comparison (column-wise)
++                    # We assume other is a 1D array with length equal to number of rows
++                    if len(other) != len(self):
++                        raise ValueError('Length of comparison array must match table length')
++                    eq = col == other
++                if not isinstance(eq, Column):
++                    eq = Column(eq, name=name)
++                else:
++                    eq.info.name = name
++                out_cols.append(eq)
++            return Table(out_cols, copy=False)
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

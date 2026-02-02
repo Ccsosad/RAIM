@@ -1,0 +1,170 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..815aff7 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -326,9 +326,21 @@ class DatetimeAccessor(Properties):
+     nanosecond = Properties._tslib_field_accessor(
+         "nanosecond", "The nanoseconds of the datetime", np.int64
+     )
+-    weekofyear = Properties._tslib_field_accessor(
+-        "weekofyear", "The week ordinal of the year", np.int64
+-    )
++    @property
++    def weekofyear(self):
++        import warnings
++        import numpy as np
++        warnings.warn(
++            "weekofyear is deprecated. Use isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        obj_type = type(self._obj)
++        result = _get_date_field(self._obj.data, "weekofyear", np.int64)
++        return obj_type(
++            result, name="weekofyear", coords=self._obj.coords, dims=self._obj.dims
++        )
++
+     week = weekofyear
+     dayofweek = Properties._tslib_field_accessor(
+         "dayofweek", "The day of the week with Monday=0, Sunday=6", np.int64
+@@ -382,6 +394,140 @@ class DatetimeAccessor(Properties):
+         "is_leap_year", "Boolean indicator if the date belongs to a leap year.", bool
+     )
+ 
++    def isocalendar(self):
++        """
++        Returns a Dataset with year, week, and weekday calculated according to the ISO 8601 calendar.
++
++        Returns
++        -------
++        Dataset
++            Dataset with fields year, week, and weekday.
++
++        Examples
++        --------
++        >>> import pandas as pd
++        >>> import xarray as xr
++        >>> dates = pd.date_range(start="2000-01-01", periods=10, freq="D")
++        >>> ts = xr.DataArray(dates, dims=("time",))
++        >>> ts.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 10)
++        Coordinates:
++          * time     (time) datetime64[ns] 2000-01-01 2000-01-02 ... 2000-01-10
++        Data variables:
++            year     (time) int64 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000
++            week     (time) int64 52 52 52 1 1 1 1 1 1 1
++            weekday  (time) int64 6 7 1 2 3 4 5 6 7 1
++        """
++        # Check pandas version
++        import pandas as pd
++        from distutils.version import LooseVersion
++
++        if LooseVersion(pd.__version__) < LooseVersion("1.1.0"):
++            raise AttributeError(
++                "isocalendar requires pandas version 1.1.0 or greater"
++            )
++
++        obj_type = type(self._obj)
++        data = self._obj.data
++        # For dask arrays, we need to map_blocks
++        if hasattr(data, "map_blocks"):
++            # We assume the data is datetime64
++            # We need to compute isocalendar for each block
++            # We can use map_blocks with a function that calls pandas isocalendar
++            # But note: isocalendar returns a DataFrame with columns year, week, weekday
++            # We need to return a Dataset with three variables.
++            # This is complex. For now, we only support non-dask arrays.
++            # We can raise an error for dask arrays? Or compute it?
++            # We'll leave it as a future improvement.
++            # For now, we'll compute it by converting to pandas Series.
++            # But that might be inefficient.
++            # We'll raise an error for dask arrays.
++            raise NotImplementedError(
++                "isocalendar is not implemented for dask arrays"
++            )
++        else:
++            # For non-dask arrays
++            series = pd.Series(data.ravel())
++            df = series.dt.isocalendar()
++            year = df.year.values.reshape(data.shape)
++            week = df.week.values.reshape(data.shape)
++            weekday = df.weekday.values.reshape(data.shape)
++
++        # Create a Dataset
++        from xarray import Dataset
++
++        coords = self._obj.coords
++        dims = self._obj.dims
++        # We need to create three DataArrays and then combine into a Dataset
++        # We can use the same object type for each? Actually, we want a Dataset.
++        # So we create three DataArrays and then a Dataset.
++        year_da = obj_type(year, coords=coords, dims=dims)
++        week_da = obj_type(week, coords=coords, dims=dims)
++        weekday_da = obj_type(weekday, coords=coords, dims=dims)
++
++        return Dataset({"year": year_da, "week": week_da, "weekday": weekday_da})
++
++    def isocalendar(self):
++        """
++        Returns a Dataset with year, week, and weekday calculated according to the ISO 8601 calendar.
++
++        Returns
++        -------
++        Dataset
++            Dataset with fields year, week, and weekday.
++
++        Examples
++        --------
++        >>> import pandas as pd
++        >>> import xarray as xr
++        >>> dates = pd.date_range(start="2000-01-01", periods=10, freq="D")
++        >>> ts = xr.DataArray(dates, dims=("time",))
++        >>> ts.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 10)
++        Coordinates:
++          * time     (time) datetime64[ns] 2000-01-01 2000-01-02 ... 2000-01-10
++        Data variables:
++            year     (time) int64 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000
++            week     (time) int64 52 52 52 1 1 1 1 1 1 1
++            weekday  (time) int64 6 7 1 2 3 4 5 6 7 1
++        """
++        # Check pandas version
++        import pandas as pd
++        from distutils.version import LooseVersion
++
++        if LooseVersion(pd.__version__) < LooseVersion("1.1.0"):
++            raise AttributeError(
++                "isocalendar requires pandas version 1.1.0 or greater"
++            )
++
++        obj_type = type(self._obj)
++        data = self._obj.data
++        # For dask arrays, we need to map_blocks
++        if hasattr(data, "map_blocks"):
++            raise NotImplementedError(
++                "isocalendar is not implemented for dask arrays"
++            )
++        else:
++            # For non-dask arrays
++            series = pd.Series(data.ravel())
++            df = series.dt.isocalendar()
++            year = df.year.values.reshape(data.shape)
++            week = df.week.values.reshape(data.shape)
++            weekday = df.weekday.values.reshape(data.shape)
++
++        # Create a Dataset
++        from xarray import Dataset
++
++        coords = self._obj.coords
++        dims = self._obj.dims
++        year_da = obj_type(year, coords=coords, dims=dims)
++        week_da = obj_type(week, coords=coords, dims=dims)
++        weekday_da = obj_type(weekday, coords=coords, dims=dims)
++
++        return Dataset({"year": year_da, "week": week_da, "weekday": weekday_da})
++
+ 
+ class TimedeltaAccessor(Properties):
+     """Access Timedelta fields for DataArrays with Timedelta-like dtypes.

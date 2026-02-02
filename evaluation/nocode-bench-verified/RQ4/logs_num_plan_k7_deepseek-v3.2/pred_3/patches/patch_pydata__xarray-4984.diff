@@ -1,0 +1,187 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..13138d1 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1260,6 +1260,51 @@ class DataArray(AbstractArray, DataWithCoords):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def query(
++        self,
++        expr: str,
++        parser: callable = None,
++        engine: str = None,
++    ) -> "DataArray":
++        """Return a new DataArray indexed by the result of a query.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate. The expression can refer to variables
++            in the DataArray's coordinates and data variables (if it's part of a Dataset).
++            For example, "temperature > 300" will return a DataArray with only the elements
++            where the temperature variable is greater than 300.
++        parser : callable, optional
++            Function to parse the query string. If None, uses the default parser.
++        engine : str, optional
++            Evaluation engine. Currently only 'numexpr' is supported if installed.
++
++        Returns
++        -------
++        obj : DataArray
++            A new DataArray with the same contents as this DataArray, except the
++            data is indexed by the boolean mask resulting from the query.
++
++        Examples
++        --------
++        >>> da = xr.DataArray([1, 2, 3, 4], dims="x", coords={"x": [0, 1, 2, 3]})
++        >>> da.query("x > 1")
++        <xarray.DataArray (x: 4)>
++        array([nan, nan,  3.,  4.])
++        Coordinates:
++          * x        (x) int64 0 1 2 3
++
++        See Also
++        --------
++        DataArray.sel
++        DataArray.isel
++        Dataset.query
++        """
++        # Convert to dataset, query, and convert back
++        ds = self._to_temp_dataset().query(expr, parser=parser, engine=engine)
++        return self._from_temp_dataset(ds)
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -4360,4 +4405,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..d76d136 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -7002,4 +7002,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query_engine.py b/xarray/core/query_engine.py
+new file mode 100644
+index 0000000..9bcd819
+--- /dev/null
++++ b/xarray/core/query_engine.py
+@@ -0,0 +1,109 @@
++"""
++Query engine for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from .utils import is_scalar
++
++class QueryEngine:
++    """Engine for evaluating query expressions on xarray objects."""
++
++    def __init__(self, parser=None, engine=None):
++        """
++        Parameters
++        ----------
++        parser : callable, optional
++            Function to parse the query string. If None, uses default parser.
++        engine : str, optional
++            Evaluation engine. Currently only 'numexpr' is supported if installed.
++        """
++        self.parser = parser
++        self.engine = engine
++
++    def evaluate(self, expr, variables):
++        """
++        Evaluate a query expression given a dictionary of variables.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression.
++        variables : dict
++            Dictionary mapping variable names to arrays.
++
++        Returns
++        -------
++        mask : array-like
++            Boolean mask indicating which elements satisfy the expression.
++        """
++        # If no parser is provided, use the default one.
++        if self.parser is None:
++            return self._default_evaluate(expr, variables)
++        else:
++            return self.parser(expr, variables)
++
++    def _default_evaluate(self, expr, variables):
++        # First, try to use numexpr if available and engine is 'numexpr'
++        if self.engine == 'numexpr':
++            try:
++                import numexpr
++                # numexpr requires variable names to be valid identifiers.
++                # We'll create a local dictionary with the variables.
++                local_dict = {}
++                for k, v in variables.items():
++                    # Convert to numpy array if it's a DataArray or Variable
++                    if hasattr(v, 'values'):
++                        local_dict[k] = v.values
++                    else:
++                        local_dict[k] = v
++                # Evaluate the expression
++                return numexpr.evaluate(expr, local_dict)
++            except ImportError:
++                pass
++
++        # Otherwise, use pandas eval
++        try:
++            # pandas eval can handle numpy arrays and Series
++            # We need to convert variables to a format pandas can handle.
++            local_dict = {}
++            for k, v in variables.items():
++                if hasattr(v, 'to_series'):
++                    local_dict[k] = v.to_series()
++                elif hasattr(v, 'values'):
++                    local_dict[k] = pd.Series(v.values.ravel())
++                else:
++                    local_dict[k] = v
++            return pd.eval(expr, engine=self.engine, local_dict=local_dict)
++        except Exception:
++            # Fall back to pure Python evaluation (slow)
++            return self._python_evaluate(expr, variables)
++
++    def _python_evaluate(self, expr, variables):
++        # This is a very simple and unsafe evaluator for demonstration.
++        # In production, we should use a safer method.
++        # We'll just evaluate the expression in the context of the variables.
++        # Note: This is not safe for arbitrary code.
++        # We'll restrict to simple expressions by using a limited environment.
++        allowed_operators = {
++            'and': lambda x, y: x & y,
++            'or': lambda x, y: x | y,
++            'not': lambda x: ~x,
++            'lt': lambda x, y: x < y,
++            'le': lambda x, y: x <= y,
++            'gt': lambda x, y: x > y,
++            'ge': lambda x, y: x >= y,
++            'eq': lambda x, y: x == y,
++            'ne': lambda x, y: x != y,
++        }
++        # We'll use a safe eval with only the variables and allowed operators.
++        # This is a simplified version.
++        code = compile(expr, '<string>', 'eval')
++        # Prepare the environment
++        env = {k: v for k, v in variables.items()}
++        env.update(allowed_operators)
++        env.update({'np': np, 'pd': pd})
++        return eval(code, {"__builtins__": {}}, env)
++
++def get_query_engine(parser=None, engine=None):
++    """Return a query engine instance."""
++    return QueryEngine(parser=parser, engine=engine)

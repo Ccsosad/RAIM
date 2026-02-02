@@ -1,0 +1,101 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..d406be3 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -371,11 +371,19 @@ def _calculate_col_width(col_items):
+     return col_width
+ 
+ 
+-def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
++def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None, expand_option=None):
+     if col_width is None:
+         col_width = _calculate_col_width(mapping)
+     if max_rows is None:
+-        max_rows = OPTIONS["display_max_rows"]
++        if expand_option is None:
++            max_rows = OPTIONS["display_max_rows"]
++        else:
++            if expand_option == "default":
++                max_rows = OPTIONS["display_max_rows"]
++            elif expand_option is True:
++                max_rows = None  # show all
++            else:  # expand_option is False
++                max_rows = 0
+     summary = [f"{title}:"]
+     if mapping:
+         len_mapping = len(mapping)
+@@ -395,14 +403,24 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+     return "\n".join(summary)
+ 
+ 
+-data_vars_repr = functools.partial(
+-    _mapping_repr, title="Data variables", summarizer=summarize_datavar
+-)
++def data_vars_repr(mapping, col_width=None):
++    return _mapping_repr(
++        mapping,
++        title="Data variables",
++        summarizer=summarize_datavar,
++        col_width=col_width,
++        expand_option=OPTIONS["display_expand_data_vars"],
++    )
+ 
+ 
+-attrs_repr = functools.partial(
+-    _mapping_repr, title="Attributes", summarizer=summarize_attr
+-)
++def attrs_repr(mapping, col_width=None):
++    return _mapping_repr(
++        mapping,
++        title="Attributes",
++        summarizer=summarize_attr,
++        col_width=col_width,
++        expand_option=OPTIONS["display_expand_attrs"],
++    )
+ 
+ 
+ def coords_repr(coords, col_width=None):
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..46af713 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -78,6 +78,14 @@ def _get_keep_attrs(default):
+         )
+ 
+ 
++def _validate_expand(choice):
++    if choice not in (True, False, "default"):
++        raise ValueError(
++            f"display_expand_* options must be one of True, False, or 'default', got {choice!r}."
++        )
++    return True
++
++
+ class set_options:
+     """Set options for xarray in a controlled context.
+ 
+@@ -108,6 +116,18 @@ class set_options:
+       Default: ``'default'``.
+     - ``display_style``: display style to use in jupyter for xarray objects.
+       Default: ``'text'``. Other options are ``'html'``.
++    - ``display_expand_attrs``: whether to expand the attributes section. One of
++      ``True`` to always expand, ``False`` to always collapse, or ``'default'`` to
++      expand unless over the ``display_max_rows`` limit. Default: ``'default'``.
++    - ``display_expand_coords``: whether to expand the coordinates section. One of
++      ``True`` to always expand, ``False`` to always collapse, or ``'default'`` to
++      expand unless over the ``display_max_rows`` limit. Default: ``'default'``.
++    - ``display_expand_data``: whether to expand the data section for DataArray.
++      One of ``True`` to always expand, ``False`` to always collapse, or
++      ``'default'`` to expand unless over a pre-defined limit. Default: ``'default'``.
++    - ``display_expand_data_vars``: whether to expand the data variables section.
++      One of ``True`` to always expand, ``False`` to always collapse, or
++      ``'default'`` to expand unless over the ``display_max_rows`` limit. Default: ``'default'``.
+ 
+ 
+     You can use ``set_options`` either as a context manager:
+@@ -160,4 +180,4 @@ class set_options:
+         return
+ 
+     def __exit__(self, type, value, traceback):
+-        self._apply_update(self.old)
++        self._apply_update(self.old)

@@ -1,0 +1,35 @@
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 336078d..062c8e3 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -899,8 +899,23 @@ class PyLinter(
+         self, files_or_modules: Sequence[str]
+     ) -> dict[str, ModuleDescriptionDict]:
+         """Get modules and errors from a list of modules and handle errors."""
++        import glob
++        expanded_items: list[str] = []
++        for item in files_or_modules:
++            # Check if the item contains glob patterns
++            if "*" in item or "?" in item or "[" in item:
++                # Expand glob pattern
++                glob_results = glob.glob(item, recursive=True)
++                if not glob_results:
++                    # If no matches, keep the original to produce an appropriate error
++                    expanded_items.append(item)
++                else:
++                    expanded_items.extend(glob_results)
++            else:
++                expanded_items.append(item)
++        
+         result, errors = expand_modules(
+-            files_or_modules,
++            expanded_items,
+             self.config.source_roots,
+             self.config.ignore,
+             self.config.ignore_patterns,
+@@ -1381,4 +1396,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)

@@ -1,0 +1,36 @@
+diff --git a/sphinx/builders/htmlhelp.py b/sphinx/builders/htmlhelp.py
+index 4273245..94698a5 100644
+--- a/sphinx/builders/htmlhelp.py
++++ b/sphinx/builders/htmlhelp.py
+@@ -196,9 +196,15 @@ class HTMLHelpBuilder(StandaloneHTMLBuilder):
+     def init(self):
+         # type: () -> None
+         StandaloneHTMLBuilder.init(self)
+-        # the output files for HTML help must be .html only
+-        self.out_suffix = '.html'
+-        self.link_suffix = '.html'
++        # the output files for HTML help can have a different suffix
++        if self.config.htmlhelp_file_suffix is not None:
++            self.out_suffix = self.config.htmlhelp_file_suffix
++        else:
++            self.out_suffix = '.html'
++        if self.config.htmlhelp_link_suffix is not None:
++            self.link_suffix = self.config.htmlhelp_link_suffix
++        else:
++            self.link_suffix = '.html'
+         # determine the correct locale setting
+         locale = chm_locales.get(self.config.language)
+         if locale is not None:
+@@ -341,9 +347,11 @@ def setup(app):
+     app.add_builder(HTMLHelpBuilder)
+ 
+     app.add_config_value('htmlhelp_basename', lambda self: make_filename(self.project), None)
++    app.add_config_value('htmlhelp_file_suffix', None, 'html')
++    app.add_config_value('htmlhelp_link_suffix', None, 'html')
+ 
+     return {
+         'version': 'builtin',
+         'parallel_read_safe': True,
+         'parallel_write_safe': True,
+-    }
++    }

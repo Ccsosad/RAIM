@@ -1,0 +1,91 @@
+diff --git a/xarray/coding/times.py b/xarray/coding/times.py
+index 3885b1c..f95c706 100644
+--- a/xarray/coding/times.py
++++ b/xarray/coding/times.py
+@@ -685,14 +685,20 @@ class CFDatetimeCoder(VariableCoder):
+         if isinstance(units, str) and "since" in units:
+             units = pop_to(attrs, encoding, "units")
+             calendar = pop_to(attrs, encoding, "calendar")
+-            dtype = _decode_cf_datetime_dtype(data, units, calendar, self.use_cftime)
+-            transform = partial(
+-                decode_cf_datetime,
+-                units=units,
+-                calendar=calendar,
+-                use_cftime=self.use_cftime,
+-            )
+-            data = lazy_elemwise_func(data, transform, dtype)
++            try:
++                dtype = _decode_cf_datetime_dtype(data, units, calendar, self.use_cftime)
++                transform = partial(
++                    decode_cf_datetime,
++                    units=units,
++                    calendar=calendar,
++                    use_cftime=self.use_cftime,
++                )
++                data = lazy_elemwise_func(data, transform, dtype)
++            except Exception as e:
++                raise ValueError(
++                    f"Failed to decode variable {name!r} as a datetime. "
++                    f"Error: {e}"
++                ) from e
+ 
+         return Variable(dims, data, attrs, encoding)
+ 
+diff --git a/xarray/coding/variables.py b/xarray/coding/variables.py
+index 9592ba1..6ddda1e 100644
+--- a/xarray/coding/variables.py
++++ b/xarray/coding/variables.py
+@@ -204,13 +204,19 @@ class CFMaskCoder(VariableCoder):
+             dtype, decoded_fill_value = dtypes.maybe_promote(data.dtype)
+ 
+             if encoded_fill_values:
+-                transform = partial(
+-                    _apply_mask,
+-                    encoded_fill_values=encoded_fill_values,
+-                    decoded_fill_value=decoded_fill_value,
+-                    dtype=dtype,
+-                )
+-                data = lazy_elemwise_func(data, transform, dtype)
++                try:
++                    transform = partial(
++                        _apply_mask,
++                        encoded_fill_values=encoded_fill_values,
++                        decoded_fill_value=decoded_fill_value,
++                        dtype=dtype,
++                    )
++                    data = lazy_elemwise_func(data, transform, dtype)
++                except Exception as e:
++                    raise ValueError(
++                        f"Failed to decode variable {name!r} with mask. "
++                        f"Error: {e}"
++                    ) from e
+ 
+         return Variable(dims, data, attrs, encoding)
+ 
+@@ -274,13 +280,19 @@ class CFScaleOffsetCoder(VariableCoder):
+                 scale_factor = np.asarray(scale_factor).item()
+             if np.ndim(add_offset) > 0:
+                 add_offset = np.asarray(add_offset).item()
+-            transform = partial(
+-                _scale_offset_decoding,
+-                scale_factor=scale_factor,
+-                add_offset=add_offset,
+-                dtype=dtype,
+-            )
+-            data = lazy_elemwise_func(data, transform, dtype)
++            try:
++                transform = partial(
++                    _scale_offset_decoding,
++                    scale_factor=scale_factor,
++                    add_offset=add_offset,
++                    dtype=dtype,
++                )
++                data = lazy_elemwise_func(data, transform, dtype)
++            except Exception as e:
++                raise ValueError(
++                    f"Failed to decode variable {name!r} with scale/offset. "
++                    f"Error: {e}"
++                ) from e
+ 
+         return Variable(dims, data, attrs, encoding)
+ 

@@ -1,0 +1,87 @@
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..df1d3ee 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -882,12 +882,8 @@ class Response(object):
+         r"""Returns the json-encoded content of a response, if any.
+ 
+         :param \*\*kwargs: Optional arguments that ``json.loads`` takes.
+-        :raises simplejson.JSONDecodeError: If the response body does not
+-            contain valid json and simplejson is installed.
+-        :raises json.JSONDecodeError: If the response body does not contain
+-            valid json and simplejson is not installed on Python 3.
+-        :raises ValueError: If the response body does not contain valid
+-            json and simplejson is not installed on Python 2.        
++        :raises requests.exceptions.JSONDecodeError: If the response body does not
++            contain valid json.
+         """
+ 
+         if not self.encoding and self.content and len(self.content) > 3:
+@@ -907,7 +903,22 @@ class Response(object):
+                     # and the server didn't bother to tell us what codec *was*
+                     # used.
+                     pass
+-        return complexjson.loads(self.text, **kwargs)
++        try:
++            return complexjson.loads(self.text, **kwargs)
++        except (ValueError, JSONDecodeError) as e:
++            # Handle JSON decode errors from different libraries
++            # json.JSONDecodeError (Python 3), simplejson.JSONDecodeError, or ValueError (Python 2)
++            if hasattr(e, 'msg') and hasattr(e, 'doc') and hasattr(e, 'pos'):
++                # This is already a JSONDecodeError-like exception
++                raise JSONDecodeError(e.msg, e.doc, e.pos)
++            else:
++                # This is a ValueError from Python 2's json library
++                # We need to extract information from the error message
++                msg = str(e)
++                # Try to parse the error message to get position info
++                # Common error message: "No JSON object could be decoded"
++                # We'll create a generic position
++                raise JSONDecodeError(msg, self.text, 0)
+ 
+     @property
+     def links(self):
+@@ -963,4 +974,4 @@ class Response(object):
+ 
+         release_conn = getattr(self.raw, 'release_conn', None)
+         if release_conn is not None:
+-            release_conn()
++            release_conn()
+diff --git a/requests/__init__.py b/requests/__init__.py
+new file mode 100644
+index 0000000..34bbb3e
+--- /dev/null
++++ b/requests/__init__.py
+@@ -0,0 +1,5 @@
++from .exceptions import (
++    RequestException, Timeout, URLRequired,
++    TooManyRedirects, HTTPError, ConnectionError,
++    FileModeWarning, ConnectTimeout, ReadTimeout, JSONDecodeError
++)
+diff --git a/requests/exceptions.py b/requests/exceptions.py
+new file mode 100644
+index 0000000..f86acbe
+--- /dev/null
++++ b/requests/exceptions.py
+@@ -0,0 +1,21 @@
++class InvalidJSONError(RequestException):
++    """A JSON error occurred."""
++
++
++class JSONDecodeError(ValueError):
++    """Wrapper exception for JSON decode errors from different libraries.
++    
++    This exception provides interoperability for multiple exceptions that may be 
++    thrown by different python versions and json serialization libraries.
++    """
++    def __init__(self, msg, doc, pos):
++        super().__init__(msg)
++        self.msg = msg
++        self.doc = doc
++        self.pos = pos
++    
++    def __reduce__(self):
++        return self.__class__, (self.msg, self.doc, self.pos)
++    
++    def __str__(self):
++        return f'{self.msg}: line {self.pos} column {self.pos} (char {self.pos})'

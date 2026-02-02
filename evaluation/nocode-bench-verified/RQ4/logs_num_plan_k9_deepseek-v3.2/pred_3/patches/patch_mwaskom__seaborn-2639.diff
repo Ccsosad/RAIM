@@ -1,0 +1,16 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..0b62541 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -215,6 +215,11 @@ class Grid:
+ 
+         return palette
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` object containing the grid."""
++        return self.fig
++
+     @property
+     def legend(self):
+         """The :class:`matplotlib.legend.Legend` object, if present."""

@@ -1,0 +1,24 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..3ac97dd 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -517,8 +517,8 @@ class Documenter:
+         elif self.options.inherited_members:
+             return False, sorted((m.name, m.value) for m in members.values())
+         else:
+-            return False, sorted((m.name, m.value) for m in members.values()
+-                                 if m.directly_defined)
++            return True, sorted((m.name, m.value) for m in members.values()
++                                if m.directly_defined)
+ 
+     def filter_members(self, members, want_all):
+         # type: (List[Tuple[str, Any]], bool) -> List[Tuple[str, Any, bool]]
+@@ -622,7 +622,7 @@ class Documenter:
+             self.env.temp_data['autodoc:class'] = self.objpath[0]
+ 
+         want_all = all_members or self.options.inherited_members or \
+-            self.options.members is ALL
++            self.options.imported_members or self.options.members is ALL
+         # find out which members are documentable
+         members_check_module, members = self.get_object_members(want_all)
+ 

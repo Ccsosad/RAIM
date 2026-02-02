@@ -1,0 +1,219 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 17fe6af..f43c196 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1,3 +1,4 @@
++
+ import datetime
+ import functools
+ import warnings
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 0127e99..4e7ab50 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -1,3 +1,4 @@
++
+ import copy
+ import datetime
+ import functools
+@@ -6526,6 +6527,200 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+ 
+         return Dataset(data_vars=variables, attrs=self.attrs.copy())
+ 
++    def curvefit(
++        self,
++        coords,
++        func,
++        reduce_dims=None,
++        bounds=None,
++        param_names=None,
++        kwargs=None,
++        **curvefit_kwargs,
++    ):
++        """
++        Fit a function to the data using `scipy.optimize.curve_fit`.
++
++        Parameters
++        ----------
++        coords : str, list of str, or DataArray
++            Independent coordinate(s) to use for fitting. If a string or list of strings,
++            they are used as coordinate names. If a DataArray, it is used directly.
++        func : callable
++            The model function, f(x, ...). It must take the independent variable as the
++            first argument and the parameters to fit as separate remaining arguments.
++        reduce_dims : str or list of str, optional
++            Dimensions to reduce. If provided, the fit is performed along these dimensions.
++        bounds : dict, optional
++            A dictionary mapping parameter names to (lower, upper) bounds. If not provided,
++            bounds are unbounded.
++        param_names : list of str, optional
++            Names of the parameters. If not provided, they are inferred from the function
++            signature or generated as param0, param1, ...
++        kwargs : dict, optional
++            Additional keyword arguments to pass to `scipy.optimize.curve_fit`.
++        **curvefit_kwargs
++            Additional keyword arguments passed to `func`.
++
++        Returns
++        -------
++        curvefit_results : Dataset
++            A dataset containing the fitted parameters and their covariance.
++
++        See Also
++        --------
++        scipy.optimize.curve_fit
++        """
++        try:
++            from scipy.optimize import curve_fit
++        except ImportError:
++            raise ImportError(
++                "curvefit requires scipy to be installed. "
++                "You can install it via pip or conda."
++            )
++
++        # Handle coords
++        if isinstance(coords, str):
++            coords = [coords]
++        if isinstance(coords, list):
++            # Convert to DataArray if they are coordinate names
++            coord_arrays = [self[coord] for coord in coords]
++            # Broadcast them together
++            from .dataarray import DataArray
++            coord_arrays = broadcast_variables(*[c.variable for c in coord_arrays])
++            coords = [DataArray(c) for c in coord_arrays]
++        else:
++            # Assume it's a DataArray or similar
++            coords = [coords]
++
++        # Determine the independent variable data
++        # We'll stack the coords along a new dimension if there are multiple
++        if len(coords) == 1:
++            xdata = coords[0].data
++        else:
++            # Stack along a new dimension
++            stacked_coords = []
++            for c in coords:
++                stacked_coords.append(c.variable)
++            stacked = broadcast_variables(*stacked_coords)
++            xdata = np.stack([c.data for c in stacked], axis=-1)
++
++        # Prepare reduce_dims
++        if reduce_dims is None:
++            reduce_dims = []
++        elif isinstance(reduce_dims, str):
++            reduce_dims = [reduce_dims]
++
++        # We'll iterate over data variables and fit each one
++        variables = {}
++        for name, da in self.data_vars.items():
++            # Check if the data variable has the dimensions to reduce
++            if not set(reduce_dims).issubset(set(da.dims)):
++                continue
++
++            # We need to fit along reduce_dims, so we'll loop over other dimensions
++            other_dims = [d for d in da.dims if d not in reduce_dims]
++            if other_dims:
++                # We'll stack these dimensions to loop over them
++                stacked_da = da.stack({"_tmp": other_dims})
++                # The shape of the stacked dimension
++                n_stacked = stacked_da.shape[0]
++                # Initialize arrays for parameters and covariance
++                # We need to know the number of parameters
++                # We'll get it by a trial fit on the first element
++                first_data = stacked_da.isel(_tmp=0).data
++                # We need to pass the independent variable for the first element
++                # The independent variable should be the same for all stacked elements?
++                # Actually, the independent variable should be aligned with the data.
++                # We'll assume that the independent variable is the same for all stacked elements.
++                # This is a limitation for now.
++                try:
++                    # Initial guess for parameters
++                    p0 = curvefit_kwargs.get('p0', None)
++                    # Get bounds in the form required by curve_fit
++                    if bounds is not None:
++                        # Convert bounds to lower and upper arrays
++                        lower = []
++                        upper = []
++                        for p in param_names:
++                            if p in bounds:
++                                l, u = bounds[p]
++                                lower.append(l)
++                                upper.append(u)
++                            else:
++                                lower.append(-np.inf)
++                                upper.append(np.inf)
++                        bounds = (lower, upper)
++                    # Fit the first element to get the number of parameters
++                    popt, pcov = curve_fit(
++                        func,
++                        xdata,
++                        first_data,
++                        p0=p0,
++                        bounds=bounds,
++                        **(kwargs or {}),
++                    )
++                    n_params = len(popt)
++                except Exception as e:
++                    raise RuntimeError(
++                        f"Failed to fit the first element of variable {name}: {e}"
++                    )
++
++                # Now fit all stacked elements
++                popt_arr = np.empty((n_stacked, n_params))
++                pcov_arr = np.empty((n_stacked, n_params, n_params))
++                for i in range(n_stacked):
++                    ydata = stacked_da.isel(_tmp=i).data
++                    try:
++                        popt_i, pcov_i = curve_fit(
++                            func,
++                            xdata,
++                            ydata,
++                            p0=p0,
++                            bounds=bounds,
++                            **(kwargs or {}),
++                        )
++                        popt_arr[i] = popt_i
++                        pcov_arr[i] = pcov_i
++                    except Exception as e:
++                        # If fitting fails, fill with NaN
++                        popt_arr[i] = np.nan
++                        pcov_arr[i] = np.nan
++
++                # Unstack the results
++                if param_names is None:
++                    param_names = [f"param{i}" for i in range(n_params)]
++                # Create DataArrays for each parameter
++                for i, param_name in enumerate(param_names):
++                    param_da = DataArray(
++                        popt_arr[:, i],
++                        dims=["_tmp"],
++                        coords={"_tmp": stacked_da._tmp},
++                    ).unstack("_tmp")
++                    variables[f"{name}_{param_name}"] = param_da
++                # Also store the covariance if requested?
++                # For now, we'll skip covariance because it's 3D.
++            else:
++                # No other dimensions, fit the entire array
++                ydata = da.data
++                try:
++                    popt, pcov = curve_fit(
++                        func,
++                        xdata,
++                        ydata,
++                        p0=curvefit_kwargs.get('p0', None),
++                        bounds=bounds,
++                        **(kwargs or {}),
++                    )
++                    n_params = len(popt)
++                    if param_names is None:
++                        param_names = [f"param{i}" for i in range(n_params)]
++                    for i, param_name in enumerate(param_names):
++                        variables[f"{name}_{param_name}"] = DataArray(popt[i])
++                except Exception as e:
++                    raise RuntimeError(f"Failed to fit variable {name}: {e}")
++
++        return Dataset(data_vars=variables, attrs=self.attrs.copy())
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,

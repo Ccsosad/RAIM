@@ -1,0 +1,55 @@
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..778c9fb
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,49 @@
++# Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
++# For details: https://github.com/PyCQA/pylint/blob/main/LICENSE
++
++"""Checker for imports of private names from external modules."""
++
++from typing import TYPE_CHECKING, List
++
++import astroid
++from pylint import interfaces
++from pylint.checkers import BaseChecker
++from pylint.interfaces import HIGH
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++
++class PrivateImportChecker(BaseChecker):
++    """Check for imports of private names (starting with '_') from external modules."""
++
++    name = "private-import"
++    msgs = {
++        "W5501": (
++            "Import of private name %s from external module %s",
++            "import-private-name",
++            "Used when a private name (starting with '_') is imported from an external module.",
++        )
++    }
++
++    def visit_importfrom(self, node: astroid.ImportFrom) -> None:
++        """Check each imported name in an import-from statement."""
++        if node.level is not None and node.level > 0:
++            # Relative import, skip because it's within the same package
++            return
++
++        module = node.modname
++        for name, _ in node.names:
++            if name.startswith("_"):
++                # Emit a warning with high confidence
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=(name, module),
++                    confidence=HIGH,
++                )
++
++
++def register(linter: "PyLinter") -> None:
++    """Required method to auto-register this checker."""
++    linter.register_checker(PrivateImportChecker(linter))

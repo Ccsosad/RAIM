@@ -1,0 +1,23 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index e770a09..9305408 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -1016,14 +1016,16 @@ class LeapSeconds(QTable):
+             if self is None or trial.expires > self.expires:
+                 self = trial
+                 self.meta['data_url'] = str(f)
+-                if self.expires > good_enough:
++                # If auto_download is False, we are not allowed to download,
++                # so we break on the first successfully opened file.
++                if not conf.auto_download or self.expires > good_enough:
+                     break
+ 
+         if self is None:
+             raise ValueError('none of the files could be read. The '
+                              'following errors were raised:\n' + str(err_list))
+ 
+-        if self.expires < self._today():
++        if self.expires < self._today() and conf.auto_download:
+             warn('leap-second file is expired.', IERSStaleWarning)
+ 
+         return self

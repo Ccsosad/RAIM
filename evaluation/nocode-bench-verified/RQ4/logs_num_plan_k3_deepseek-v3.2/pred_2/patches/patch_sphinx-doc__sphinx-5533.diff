@@ -1,0 +1,15 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1ae55eb..549dfc1 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -229,6 +229,10 @@ class Documenter:
+     titles_allowed = False
+ 
+     option_spec = {'noindex': bool_option}  # type: Dict[unicode, Callable]
++    # Note: The following options are also supported via autodoc_default_options:
++    # 'members', 'member-order', 'undoc-members', 'private-members',
++    # 'special-members', 'inherited-members', 'show-inheritance',
++    # 'ignore-module-all', 'exclude-members'
+ 
+     def get_attr(self, obj, name, *defargs):
+         # type: (Any, unicode, Any) -> Any

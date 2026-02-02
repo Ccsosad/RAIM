@@ -1,0 +1,16 @@
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 836039e..c922450 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -544,6 +544,11 @@ class TimeBase(ShapedLikeNDArray):
+         if scale not in self.SCALES:
+             raise ValueError("Scale {!r} is not in the allowed scales {}"
+                              .format(scale, sorted(self.SCALES)))
++        
++        # Ensure leap second table is updated only when UTC transformations are performed
++        if self.scale == 'utc' or scale == 'utc':
++            from astropy.utils.iers import LeapSeconds
++            LeapSeconds.auto_open()
+ 
+         # Determine the chain of scale transformations to get from the current
+         # scale to the new scale.  MULTI_HOPS contains a dict of all

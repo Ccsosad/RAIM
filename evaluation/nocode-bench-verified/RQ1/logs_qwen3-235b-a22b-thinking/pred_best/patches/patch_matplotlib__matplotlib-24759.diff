@@ -1,0 +1,25 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index c85af9f..c6e6045 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -294,6 +294,9 @@ class Axes(_AxesBase):
+ 
+         Other Parameters
+         ----------------
++        reverse : bool, default: False
++            If True, the order of the legend entries is reversed.
++
+         %(_legend_kw_doc)s
+ 
+         See Also
+@@ -315,6 +318,10 @@ class Axes(_AxesBase):
+                 **kwargs)
+         if len(extra_args):
+             raise TypeError('legend only accepts two non-keyword arguments')
++        reverse = kwargs.pop('reverse', False)
++        if reverse:
++            handles = list(reversed(handles))
++            labels = list(reversed(labels))
+         self.legend_ = mlegend.Legend(self, handles, labels, **kwargs)
+         self.legend_._remove_method = self._remove_legend
+         return self.legend_

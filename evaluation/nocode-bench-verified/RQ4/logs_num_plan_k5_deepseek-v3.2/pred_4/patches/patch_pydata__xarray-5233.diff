@@ -1,0 +1,313 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index 469c69b..92a2243 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -412,6 +412,10 @@ class DatetimeAccessor(Properties):
+         "date", "Date corresponding to datetimes", object
+     )
+ 
++    calendar = Properties._tslib_field_accessor(
++        "calendar", "Calendar of the datetime", object
++    )
++
+     is_month_start = Properties._tslib_field_accessor(
+         "is_month_start",
+         "Indicates whether the date is the first day of the month.",
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index e6fae2b..70cd9f4 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1804,6 +1804,72 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def convert_calendar(
++        self,
++        target_calendar: str,
++        align_on: str = "year",
++        missing: str = None,
++        use_cftime: bool = None,
++    ) -> "DataArray":
++        """Convert the DataArray to another calendar.
++
++        Parameters
++        ----------
++        target_calendar : str
++            Target calendar name.
++        align_on : {"year", "date"}, default: "year"
++            How to align the dates when converting.
++        missing : {None, "nan", "skip", "raise"}, default: None
++            How to handle dates that are missing in the target calendar.
++        use_cftime : bool, optional
++            Whether to use cftime for the output. If None, use pandas when possible.
++
++        Returns
++        -------
++        converted : DataArray
++            DataArray with converted datetime coordinate.
++
++        See Also
++        --------
++        DataArray.interp_calendar
++        """
++        from xarray.coding.calendar_ops import convert_calendar
++
++        return convert_calendar(
++            self,
++            target_calendar=target_calendar,
++            align_on=align_on,
++            missing=missing,
++            use_cftime=use_cftime,
++        )
++
++    def interp_calendar(
++        self,
++        target: "DataArray",
++        **kwargs,
++    ) -> "DataArray":
++        """Interpolate the DataArray to another calendar.
++
++        Parameters
++        ----------
++        target : DataArray
++            Target datetime coordinate.
++        **kwargs : dict
++            Additional arguments passed to `DataArray.interp`.
++
++        Returns
++        -------
++        interpolated : DataArray
++            Data interpolated to the target calendar.
++
++        See Also
++        --------
++        DataArray.convert_calendar
++        """
++        from xarray.coding.calendar_ops import interp_calendar
++
++        return interp_calendar(self, target, **kwargs)
++
+     def rename(
+         self,
+         new_name_or_name_dict: Union[Hashable, Mapping[Any, Hashable]] = None,
+@@ -4658,4 +4724,4 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..88beda8
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1,209 @@
++"""
++Calendar-aware operations for xarray.
++"""
++import numpy as np
++import pandas as pd
++from datetime import datetime
++
++from xarray.core.common import _contains_datetime_like_objects
++from xarray.core.duck_array_ops import _dask_or_eager_func
++from xarray.core.utils import is_np_datetime_like
++from xarray.coding.times import (
++    _should_cftime_be_used,
++    _decode_datetime_with_cftime,
++    _encode_datetime_with_cftime,
++    _parse_iso8601_with_cftime,
++)
++
++try:
++    import cftime
++except ImportError:
++    cftime = None
++
++
++def _get_calendar(coord):
++    """Get the calendar name from a coordinate array."""
++    if hasattr(coord, "calendar"):
++        return coord.calendar
++    elif is_np_datetime_like(coord.dtype):
++        return "standard"
++    elif cftime is not None and _contains_datetime_like_objects(coord.values):
++        # This is a CFTimeIndex
++        return coord.values[0].calendar
++    else:
++        raise TypeError("Unsupported datetime type")
++
++
++def _convert_calendar_array(
++    array, source_calendar, target_calendar, align_on="year", missing=None
++):
++    """
++    Convert an array of datetime values from one calendar to another.
++
++    Parameters
++    ----------
++    array : array-like
++        Input datetime array.
++    source_calendar : str
++        Source calendar name.
++    target_calendar : str
++        Target calendar name.
++    align_on : {"year", "date"}, default: "year"
++        How to align the dates when converting.
++    missing : {None, "nan", "skip", "raise"}, default: None
++        How to handle dates that are missing in the target calendar.
++
++    Returns
++    -------
++    converted : array-like
++        Array of datetime values in the target calendar.
++    """
++    if source_calendar == target_calendar:
++        return array
++
++    if is_np_datetime_like(array.dtype):
++        # Convert to cftime for conversion
++        if cftime is None:
++            raise ImportError("cftime is required for calendar conversion")
++        # Decode to cftime
++        cftime_array = _decode_datetime_with_cftime(array, source_calendar)
++    else:
++        cftime_array = array
++
++    # Convert each date
++    converted = []
++    for date in cftime_array.ravel():
++        if missing == "skip" and not _is_in_target_calendar(date, target_calendar):
++            continue
++        try:
++            new_date = _convert_single_date(date, target_calendar, align_on)
++            converted.append(new_date)
++        except ValueError as e:
++            if missing == "nan":
++                converted.append(np.nan)
++            elif missing == "raise":
++                raise
++            else:
++                converted.append(np.nan)
++
++    # Reshape to original shape
++    converted = np.array(converted).reshape(array.shape)
++
++    # Encode back to original dtype if needed
++    if is_np_datetime_like(array.dtype):
++        converted = _encode_datetime_with_cftime(converted, target_calendar)
++
++    return converted
++
++
++def _is_in_target_calendar(date, target_calendar):
++    """Check if a date exists in the target calendar."""
++    try:
++        cftime.datetime(
++            date.year, date.month, date.day, calendar=target_calendar
++        )
++        return True
++    except ValueError:
++        return False
++
++
++def _convert_single_date(date, target_calendar, align_on):
++    """Convert a single date to another calendar."""
++    if align_on == "year":
++        # Keep the year-day the same
++        day_of_year = date.dayofyr
++        year = date.year
++        # Find the date in the target calendar with the same day-of-year
++        # This is approximate and may not be exact for leap years.
++        return cftime.datetime(year, 1, 1, calendar=target_calendar) + datetime.timedelta(days=day_of_year-1)
++    elif align_on == "date":
++        # Keep the month-day the same
++        return cftime.datetime(
++            date.year, date.month, date.day, calendar=target_calendar
++        )
++    else:
++        raise ValueError(f"Invalid align_on: {align_on}")
++
++
++def convert_calendar(
++    obj, target_calendar, align_on="year", missing=None, use_cftime=None
++):
++    """
++    Convert a DataArray or Dataset to another calendar.
++
++    Parameters
++    ----------
++    obj : DataArray or Dataset
++        Input data with a datetime coordinate.
++    target_calendar : str
++        Target calendar name.
++    align_on : {"year", "date"}, default: "year"
++        How to align the dates when converting.
++    missing : {None, "nan", "skip", "raise"}, default: None
++        How to handle dates that are missing in the target calendar.
++    use_cftime : bool, optional
++        Whether to use cftime for the output. If None, use pandas when possible.
++
++    Returns
++    -------
++    converted : same type as obj
++        Object with converted datetime coordinate.
++    """
++    from xarray.core.dataarray import DataArray
++    from xarray.core.dataset import Dataset
++
++    if isinstance(obj, DataArray):
++        dim = obj.dims[0]  # assume first dimension is time
++        coord = obj[dim]
++    elif isinstance(obj, Dataset):
++        # For now, only convert the first time coordinate
++        time_coords = [c for c in obj.coords if _contains_datetime_like_objects(obj[c].values)]
++        if not time_coords:
++            raise ValueError("No datetime coordinate found")
++        dim = time_coords[0]
++        coord = obj[dim]
++    else:
++        raise TypeError("Object must be a DataArray or Dataset")
++
++    source_calendar = _get_calendar(coord)
++    converted_coord = _convert_calendar_array(
++        coord.values, source_calendar, target_calendar, align_on, missing
++    )
++
++    # Create new object with converted coordinate
++    if isinstance(obj, DataArray):
++        new_obj = obj.copy()
++        new_obj[dim] = converted_coord
++    else:
++        new_obj = obj.copy()
++        new_obj[dim] = converted_coord
++
++    return new_obj
++
++
++def interp_calendar(source, target, **kwargs):
++    """
++    Interpolate data from one calendar to another.
++
++    Parameters
++    ----------
++    source : DataArray
++        Source data with a datetime coordinate.
++    target : DataArray
++        Target datetime coordinate.
++    **kwargs : dict
++        Additional arguments passed to `DataArray.interp`.
++
++    Returns
++    -------
++    interpolated : DataArray
++        Data interpolated to the target calendar.
++    """
++    # Convert source to target calendar
++    source_calendar = _get_calendar(source[source.dims[0]])
++    target_calendar = _get_calendar(target[target.dims[0]])
++    if source_calendar != target_calendar:
++        source = convert_calendar(source, target_calendar)
++
++    # Interpolate
++    return source.interp({source.dims[0]: target}, **kwargs)

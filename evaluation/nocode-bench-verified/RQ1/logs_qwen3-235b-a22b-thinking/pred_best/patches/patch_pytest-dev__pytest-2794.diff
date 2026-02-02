@@ -1,0 +1,199 @@
+diff --git a/_pytest/logging.py b/_pytest/logging.py
+new file mode 100644
+index 0000000..3baef2f
+--- /dev/null
++++ b/_pytest/logging.py
+@@ -0,0 +1,193 @@
++import logging
++from contextlib import contextmanager
++
++class LogCaptureHandler(logging.Handler):
++    def __init__(self):
++        super().__init__()
++        self.records = []
++
++    def emit(self, record):
++        self.records.append(record)
++
++class caplog:
++    """Test fixture for accessing and testing logging output.
++    
++    This fixture provides the following attributes:
++    
++    * ``records`` - list of LogRecord objects of the captured log entries
++    * ``text`` - string containing formatted log output
++    * ``record_tuples`` - list of (logger_name, level, message) tuples
++    """
++    
++    def __init__(self, item):
++        self._item = item
++        self.handler = LogCaptureHandler()
++        self.logger = logging.getLogger()
++        self.logger.addHandler(self.handler)
++        self.logger.setLevel(logging.NOTSET)
++        self.handler.records = []
++
++    def set_level(self, level, logger=None):
++        """Set the logging level for the given logger or the root logger."""
++        logger = logging.getLogger(logger)
++        self._old_level = logger.level
++        logger.setLevel(level)
++
++    @contextmanager
++    def at_level(self, level, logger=None):
++        """Context manager to temporarily change the logging level."""
++        logger = logging.getLogger(logger)
++        self.set_level(level, logger)
++        try:
++            yield
++        finally:
++            logger.setLevel(self._old_level)
++
++    def clear(self):
++        """Clear captured records."""
++        self.handler.records = []
++
++    @property
++    def records(self):
++        """List of log records."""
++        return self.handler.records
++
++    @property
++    def text(self):
++        """Formatted log text."""
++        log_format = self._item.config.getini("log_format")
++        if log_format is None:
++            log_format = "%(filename)-25s %(lineno)4d %(levelname)-8s %(message)s"
++        date_format = self._item.config.getini("log_date_format")
++        formatter = logging.Formatter(log_format, date_format)
++        return "".join(
++            formatter.format(record) + "\n" for record in self.handler.records
++        )
++
++    @property
++    def record_tuples(self):
++        """List of (logger_name, level, message) tuples."""
++        return [(r.name, r.levelno, r.getMessage()) for r in self.records]
++
++def pytest_addoption(parser):
++    """Add command-line options for logging."""
++    group = parser.getgroup("logging", "logging")
++    group.addoption(
++        "--log-format",
++        action="store",
++        default=None,
++        metavar="format",
++        help="Log format as used by the logging module.",
++    )
++    group.addoption(
++        "--log-date-format",
++        action="store",
++        default=None,
++        metavar="format",
++        help="Log date format as used by the logging module.",
++    )
++    group.addoption(
++        "--log-cli-level",
++        action="store",
++        default=None,
++        metavar="level",
++        help="LogLevel to capture for the console logger.",
++    )
++    group.addoption(
++        "--log-cli-format",
++        action="store",
++        default=None,
++        metavar="format",
++        help="Log format for the console logger.",
++    )
++    group.addoption(
++        "--log-cli-date-format",
++        action="store",
++        default=None,
++        metavar="format",
++        help="Log date format for the console logger.",
++    )
++    group.addoption(
++        "--log-file",
++        action="store",
++        default=None,
++        metavar="path",
++        help="Path to a file when logging will be written to.",
++    )
++    group.addoption(
++        "--log-file-level",
++        action="store",
++        default=None,
++        metavar="level",
++        help="LogLevel to capture for the file logger.",
++    )
++    group.addoption(
++        "--log-file-format",
++        action="store",
++        default=None,
++        metavar="format",
++        help="Log format for the file logger.",
++    )
++    group.addoption(
++        "--log-file-date-format",
++        action="store",
++        default=None,
++        metavar="format",
++        help="Log date format for the file logger.",
++    )
++    group.addoption(
++        "--no-print-logs",
++        action="store_true",
++        default=False,
++        help="Disable printing of captured logs on failed tests.",
++    )
++
++def pytest_configure(config):
++    """Configure logging based on command-line and config options."""
++    config.addinivalue_line(
++        "markers", "log_level(level): set the logging level for the test"
++    )
++
++def pytest_runtest_setup(item):
++    """Start capturing logs before test execution."""
++    caplog = caplog(item)
++    item._caplog = caplog
++    log_level = item.config.getoption("log_level")
++    if log_level is not None:
++        caplog.set_level(log_level)
++
++def pytest_runtest_teardown(item):
++    """Stop capturing logs after test execution."""
++    caplog = item._caplog
++    caplog.clear()
++
++def pytest_runtest_logreport(report):
++    """Display captured logs for failed tests."""
++    if report.when != "call":
++        return
++
++    caplog = getattr(report.item, "_caplog", None)
++    if caplog is None:
++        return
++
++    if report.item.config.getoption("no_print_logs"):
++        return
++
++    if caplog.records:
++        tw = report.item.config._tw
++        tw.line()
++        tw.sep("-", "captured log")
++        log_format = report.item.config.getini("log_format")
++        if log_format is None:
++            log_format = "%(filename)-25s %(lineno)4d %(levelname)-8s %(message)s"
++        date_format = report.item.config.getini("log_date_format")
++        formatter = logging.Formatter(log_format, date_format)
++        for record in caplog.records:
++            tw.line(formatter.format(record))
++
++@pytest.fixture
++def caplog(request):
++    """Fixture to capture log output."""
++    caplog = caplog(request.node)
++    request.addfinalizer(caplog.clear)
++    return caplog

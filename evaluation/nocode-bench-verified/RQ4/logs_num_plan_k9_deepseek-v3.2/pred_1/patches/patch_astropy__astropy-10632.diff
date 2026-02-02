@@ -1,0 +1,32 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..560fcee 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -995,11 +995,11 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+                                http_headers=None, ftp_tls=None):
+     from astropy.utils.console import ProgressBarOrSpinner
+ 
+-    if timeout == 0:
++    if not conf.allow_internet:
+         raise urllib.error.URLError(
+-            f"URL {remote_url} was supposed to be downloaded but timeout was set to 0; "
++            f"URL {remote_url} was supposed to be downloaded but allow_internet is set to False; "
+             f"if this is unexpected check the astropy config file for the option "
+-            f"remote_timeout")
++            f"allow_internet")
+ 
+     if remote_url is None:
+         remote_url = source_url
+@@ -1197,6 +1197,12 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+                 if os.path.exists(filename):
+                     return os.path.abspath(filename)
+ 
++    if sources and not conf.allow_internet:
++        raise urllib.error.URLError(
++            f"URL {remote_url} was supposed to be downloaded but allow_internet is set to False; "
++            f"if this is unexpected check the astropy config file for the option "
++            f"allow_internet")
++
+     errors = {}
+     for source_url in sources:
+         try:

@@ -1,0 +1,161 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..2d42e23 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -271,6 +271,37 @@ class DatetimeAccessor(Properties):
+ 
+     """
+ 
++    def isocalendar(self):
++        """
++        Returns a Dataset with three components: year, week, and weekday
++        according to the ISO 8601 calendar.
++
++        Requires pandas version 1.1.0 or greater.
++
++        Returns
++        -------
++        Dataset with fields: year, week, weekday
++
++        Examples
++        --------
++        >>> import pandas as pd
++        >>> import xarray as xr
++        >>> dates = pd.date_range(start="2000-01-01", freq="D", periods=10)
++        >>> ts = xr.DataArray(dates, dims=("time"))
++        >>> ts.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 10)
++        Coordinates:
++          * time     (time) datetime64[ns] 2000-01-01 2000-01-02 ... 2000-01-10
++        Data variables:
++            year     (time) int64 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000
++            week     (time) int64 52 52 1 1 1 1 1 1 1 1
++            weekday  (time) int64 6 7 1 2 3 4 5 6 7 1
++        """
++        from xarray.core.calendar_mixin import _isocalendar
++
++        return _isocalendar(self._obj)
++
+     def strftime(self, date_format):
+         """
+         Return an array of formatted strings specified by date_format, which
+@@ -326,10 +357,35 @@ class DatetimeAccessor(Properties):
+     nanosecond = Properties._tslib_field_accessor(
+         "nanosecond", "The nanoseconds of the datetime", np.int64
+     )
+-    weekofyear = Properties._tslib_field_accessor(
+-        "weekofyear", "The week ordinal of the year", np.int64
+-    )
+-    week = weekofyear
++    @property
++    def weekofyear(self):
++        import warnings
++        from xarray.core.calendar_mixin import _check_pandas_version
++
++        _check_pandas_version()
++        warnings.warn(
++            "`weekofyear` is deprecated. Use `isocalendar().week` instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return Properties._tslib_field_accessor(
++            "weekofyear", "The week ordinal of the year", np.int64
++        ).fget(self)
++
++    @property
++    def week(self):
++        import warnings
++        from xarray.core.calendar_mixin import _check_pandas_version
++
++        _check_pandas_version()
++        warnings.warn(
++            "`week` is deprecated. Use `isocalendar().week` instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return Properties._tslib_field_accessor(
++            "weekofyear", "The week ordinal of the year", np.int64
++        ).fget(self)
+     dayofweek = Properties._tslib_field_accessor(
+         "dayofweek", "The day of the week with Monday=0, Sunday=6", np.int64
+     )
+diff --git a/xarray/core/calendar_mixin.py b/xarray/core/calendar_mixin.py
+new file mode 100644
+index 0000000..326fbf8
+--- /dev/null
++++ b/xarray/core/calendar_mixin.py
+@@ -0,0 +1,73 @@
++"""
++Mixin for calendar-related operations.
++"""
++
++import numpy as np
++import pandas as pd
++from distutils.version import LooseVersion
++
++from xarray.core.common import AbstractArray
++from xarray.core.dataarray import DataArray
++from xarray.core.dataset import Dataset
++
++
++def _check_pandas_version():
++    """Check if pandas version is >=1.1.0 for isocalendar support."""
++    if LooseVersion(pd.__version__) < LooseVersion("1.1.0"):
++        raise AttributeError(
++            "`isocalendar` requires pandas version 1.1.0 or greater."
++        )
++
++
++def _isocalendar(obj: AbstractArray) -> Dataset:
++    """
++    Return a Dataset with ISO year, week, and weekday for each element.
++
++    Parameters
++    ----------
++    obj : DataArray
++        Must have datetime-like dtype.
++
++    Returns
++    -------
++    Dataset with three variables: year, week, weekday.
++    """
++    _check_pandas_version()
++
++    if not isinstance(obj, DataArray):
++        raise TypeError("`isocalendar` only supports DataArray.")
++
++    # Use pandas isocalendar
++    data = obj.data
++    if hasattr(data, "isocalendar"):
++        # For pandas Series
++        iso = data.isocalendar()
++    else:
++        # For numpy array or dask array
++        # We need to convert to pandas Series first
++        if hasattr(data, "compute"):
++            # dask array
++            data = data.compute()
++        # Convert to pandas Series
++        series = pd.Series(data.ravel())
++        iso = series.dt.isocalendar()
++        # Reshape back
++        iso = {col: vals.values.reshape(data.shape) for col, vals in iso.items()}
++
++    # Create a Dataset
++    coords = obj.coords
++    dims = obj.dims
++
++    if isinstance(iso, pd.DataFrame):
++        year = DataArray(iso.year.values.reshape(obj.shape), coords=coords, dims=dims)
++        week = DataArray(iso.week.values.reshape(obj.shape), coords=coords, dims=dims)
++        weekday = DataArray(
++            iso.day.values.reshape(obj.shape), coords=coords, dims=dims
++        )
++    else:
++        # iso is a dict
++        year = DataArray(iso["year"], coords=coords, dims=dims)
++        week = DataArray(iso["week"], coords=coords, dims=dims)
++        weekday = DataArray(iso["day"], coords=coords, dims=dims)
++
++    return Dataset({"year": year, "week": week, "weekday": weekday})

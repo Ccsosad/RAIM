@@ -1,0 +1,214 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..0449c25 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4354,10 +4354,92 @@ class DataArray(AbstractArray, DataWithCoords):
+         else:
+             return self._replace_maybe_drop_dims(result)
+ 
++    def query(self, expr, engine=None, parser="pandas", **kwargs):
++        """
++        Return a new DataArray with data selected by the query expression.
++
++        The query string is evaluated in the namespace of the DataArray,
++        using the same engine and parser as pandas. The result of the
++        evaluation must be a boolean array. The DataArray is then indexed
++        along each dimension with the boolean array, giving a new DataArray
++        containing only the points where the condition is True.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        engine : {"python", "numexpr"}, optional
++            The engine used to evaluate the expression. If None, defaults to
++            'numexpr' if installed, otherwise 'python'.
++        parser : {"pandas"}, optional
++            The parser to use. Only "pandas" is currently supported.
++        **kwargs
++            Additional keyword arguments passed to the query engine.
++
++        Returns
++        -------
++        DataArray
++            A new DataArray with the same dimensions as the original, but
++            with only the selected data points.
++
++        See Also
++        --------
++        Dataset.query
++        pandas.DataFrame.query
++
++        Examples
++        --------
++        >>> da = xr.DataArray([1, 2, 3, 4], dims="x")
++        >>> da.query("x > 2")
++        <xarray.DataArray (x: 2)>
++        array([3, 4])
++        Dimensions without coordinates: x
++        """
++        # Evaluate the query expression to get a boolean mask
++        mask = self._eval_query(expr, engine=engine, parser=parser, **kwargs)
++        # Use the mask to index the DataArray
++        return self.isel(mask)
++
++    def _eval_query(self, expr, engine=None, parser="pandas", **kwargs):
++        """
++        Evaluate a query expression on the DataArray.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        engine : {"python", "numexpr"}, optional
++            The engine used to evaluate the expression.
++        parser : {"pandas"}, optional
++            The parser to use.
++        **kwargs
++            Additional keyword arguments passed to the query engine.
++
++        Returns
++        -------
++        DataArray
++            A boolean DataArray with the same dimensions as the original.
++        """
++        # Import pandas here to avoid a hard dependency
++        import pandas as pd
++
++        # Build a temporary dataset with this DataArray as a variable
++        # so that the query can reference the DataArray's name and coordinates.
++        # We use a temporary name to avoid conflicts.
++        temp_name = "__temp_var__"
++        ds = self.to_dataset(name=temp_name)
++
++        # Evaluate the query on the dataset
++        mask_ds = ds.query(expr, engine=engine, parser=parser, **kwargs)
++
++        # Extract the mask from the dataset
++        mask = mask_ds[temp_name]
++        return mask
++
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+     str = utils.UncachedAccessor(StringAccessor)
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..507e6a5 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -7001,5 +7001,110 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+                 "Dataset.argmin() with a sequence or ... for dim"
+             )
+ 
++    def query(self, expr, engine=None, parser="pandas", **kwargs):
++        """
++        Return a new Dataset with data selected by the query expression.
++
++        The query string is evaluated in the namespace of the Dataset,
++        using the same engine and parser as pandas. The result of the
++        evaluation must be a boolean array. The Dataset is then indexed
++        along each dimension with the boolean array, giving a new Dataset
++        containing only the points where the condition is True.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        engine : {"python", "numexpr"}, optional
++            The engine used to evaluate the expression. If None, defaults to
++            'numexpr' if installed, otherwise 'python'.
++        parser : {"pandas"}, optional
++            The parser to use. Only "pandas" is currently supported.
++        **kwargs
++            Additional keyword arguments passed to the query engine.
++
++        Returns
++        -------
++        Dataset
++            A new Dataset with the same dimensions as the original, but
++            with only the selected data points.
++
++        See Also
++        --------
++        DataArray.query
++        pandas.DataFrame.query
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({"a": ("x", [1, 2, 3, 4])})
++        >>> ds.query("a > 2")
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Dimensions without coordinates: x
++        Data variables:
++            a        (x) int64 3 4
++        """
++        # Evaluate the query expression to get a boolean mask
++        mask = self._eval_query(expr, engine=engine, parser=parser, **kwargs)
++        # Use the mask to index the Dataset
++        return self.isel(mask)
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++    def _eval_query(self, expr, engine=None, parser="pandas", **kwargs):
++        """
++        Evaluate a query expression on the Dataset.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression to evaluate.
++        engine : {"python", "numexpr"}, optional
++            The engine used to evaluate the expression.
++        parser : {"pandas"}, optional
++            The parser to use.
++        **kwargs
++            Additional keyword arguments passed to the query engine.
++
++        Returns
++        -------
++        DataArray
++            A boolean DataArray with the same dimensions as the Dataset.
++        """
++        # Import pandas here to avoid a hard dependency
++        import pandas as pd
++
++        # We need to evaluate the expression in the context of the Dataset.
++        # We'll create a temporary pandas DataFrame with the same structure.
++        # First, flatten the Dataset to a DataFrame.
++        df = self.to_dataframe()
++
++        # Evaluate the query on the DataFrame
++        try:
++            mask_df = df.query(expr, engine=engine, parser=parser, **kwargs)
++        except pd.errors.UndefinedVariableError as e:
++            # The error might be due to referencing a coordinate that is not
++            # in the DataFrame. We should include coordinates in the DataFrame.
++            # Let's try again with coordinates included.
++            df_with_coords = self.to_dataframe(dim_order=list(self.dims))
++            mask_df = df_with_coords.query(expr, engine=engine, parser=parser, **kwargs)
++
++        # Convert the mask back to a DataArray
++        # The mask_df has the same index as the original DataFrame, but only
++        # the rows that satisfy the condition. We need a boolean mask for all rows.
++        # So we create a boolean series with the same index as the original.
++        mask_series = pd.Series(False, index=df.index)
++        mask_series.loc[mask_df.index] = True
++
++        # Convert the series to a DataArray
++        mask = mask_series.to_xarray()
++        # The mask might have the same dimensions as the original Dataset.
++        # We need to ensure it has the same dimensions as the Dataset.
++        # The to_xarray method might have created a DataArray with a single dimension
++        # (if the Dataset has a single dimension) or with multiple dimensions.
++        # We should reshape it to match the original dimensions.
++        # Actually, the index of the DataFrame is a MultiIndex with the same
++        # dimensions as the Dataset. So the mask should already have the right shape.
++        # But let's just make sure by reindexing.
++        mask = mask.reindex_like(self, method=None)
++        return mask
++
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

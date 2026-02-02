@@ -1,0 +1,146 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..756414d 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -1006,6 +1006,71 @@ class FacetGrid(Grid):
+         if y is not None:
+             self.map(plt.axhline, y=y, **line_kws)
+ 
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to each subplot in the grid.
++
++        Parameters
++        ----------
++        func : callable
++            A function to apply to each Axes in the grid. The function must accept
++            an Axes object as its first argument and return an Axes object.
++        args : tuple
++            Additional positional arguments to pass to `func`.
++        kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        for ax in self.axes.flat:
++            func(ax, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the FacetGrid object.
++
++        Parameters
++        ----------
++        func : callable
++            A function to apply to the FacetGrid. The function must accept
++            a FacetGrid object as its first argument and return any object.
++        args : tuple
++            Additional positional arguments to pass to `func`.
++        kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        object : the return value of `func`.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def tight_layout(self, **kwargs):
++        """
++        Call matplotlib's tight_layout on the figure.
++
++        Parameters
++        ----------
++        kwargs : dict
++            Keyword arguments passed to matplotlib's tight_layout.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        self._figure.tight_layout(**kwargs)
++        return self
++
+     # ------ Properties that are part of the public API and documented by Sphinx
+ 
+     @property
+@@ -1883,6 +1948,69 @@ class JointGrid(_BaseGrid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to each Axes in the grid.
++
++        Parameters
++        ----------
++        func : callable
++            A function to apply to each Axes in the grid. The function must accept
++            an Axes object as its first argument and return an Axes object.
++        args : tuple
++            Additional positional arguments to pass to `func`.
++        kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        for ax in [self.ax_joint, self.ax_marg_x, self.ax_marg_y]:
++            func(ax, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the JointGrid object.
++
++        Parameters
++        ----------
++        func : callable
++            A function to apply to the JointGrid. The function must accept
++            a JointGrid object as its first argument and return any object.
++        args : tuple
++            Additional positional arguments to pass to `func`.
++        kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        object : the return value of `func`.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def tight_layout(self, **kwargs):
++        """
++        Call matplotlib's tight_layout on the figure.
++
++        Parameters
++        ----------
++        kwargs : dict
++            Keyword arguments passed to matplotlib's tight_layout.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        self._figure.tight_layout(**kwargs)
++        return self
++
+     def set_axis_labels(self, xlabel="", ylabel="", **kwargs):
+         """Set axis labels on the bivariate axes.
+ 

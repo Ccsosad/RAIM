@@ -1,0 +1,44 @@
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index 577f2c2..d00ada8 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -109,6 +109,12 @@ class CheckExternalLinksBuilder(Builder):
+         if self.app.config.linkcheck_timeout:
+             kwargs['timeout'] = self.app.config.linkcheck_timeout
+ 
++        def get_auth_for_uri(uri: str) -> Any:
++            for pattern, auth_info in self.app.config.linkcheck_auth:
++                if re.match(pattern, uri):
++                    return auth_info
++            return None
++
+         def check_uri() -> Tuple[str, str, int]:
+             # split off anchor
+             if '#' in uri:
+@@ -127,6 +133,14 @@ class CheckExternalLinksBuilder(Builder):
+             except UnicodeError:
+                 req_url = encode_uri(req_url)
+ 
++            # get authentication for this URI
++            auth = get_auth_for_uri(uri)
++            if auth:
++                kwargs['auth'] = auth
++            else:
++                # remove auth if it was set for a previous URI
++                kwargs.pop('auth', None)
++
+             try:
+                 if anchor and self.app.config.linkcheck_anchors:
+                     # Read the whole document and see if #anchor exists
+@@ -312,9 +326,10 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     # Anchors starting with ! are ignored since they are
+     # commonly used for dynamic pages
+     app.add_config_value('linkcheck_anchors_ignore', ["^!"], None)
++    app.add_config_value('linkcheck_auth', [], None)
+ 
+     return {
+         'version': 'builtin',
+         'parallel_read_safe': True,
+         'parallel_write_safe': True,
+-    }
++    }

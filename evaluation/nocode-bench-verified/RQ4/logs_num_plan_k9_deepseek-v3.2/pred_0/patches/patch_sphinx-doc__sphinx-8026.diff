@@ -1,0 +1,26 @@
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+index 796b7ad..c74ba60 100644
+--- a/sphinx/builders/__init__.py
++++ b/sphinx/builders/__init__.py
+@@ -603,6 +603,15 @@ class Builder:
+         """
+         pass
+ 
++    def get_docpath(self, docname: str) -> str:
++        """Return the directory path for the given document, with a trailing slash if non-empty."""
++        import posixpath
++        dirname = posixpath.dirname(docname)
++        if dirname:
++            return dirname + '/'
++        else:
++            return ''
++
+     def get_builder_config(self, option: str, default: str) -> Any:
+         """Return a builder specific option.
+ 
+@@ -617,4 +626,4 @@ class Builder:
+             return getattr(self.config, optname)
+         except AttributeError:
+             optname = '%s_%s' % (default, option)
+-            return getattr(self.config, optname)
++            return getattr(self.config, optname)

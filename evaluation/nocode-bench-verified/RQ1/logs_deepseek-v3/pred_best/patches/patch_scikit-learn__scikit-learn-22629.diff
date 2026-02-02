@@ -1,0 +1,16 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..98786f4 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -136,7 +136,10 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         if _num_samples(y) == 0:
+             return np.array([])
+ 
+-        return _encode(y, uniques=self.classes_)
++        mask = np.isnan(y)
++        result = _encode(y, uniques=self.classes_)
++        result[mask] = -1
++        return result
+ 
+     def inverse_transform(self, y):
+         """Transform labels back to original encoding.

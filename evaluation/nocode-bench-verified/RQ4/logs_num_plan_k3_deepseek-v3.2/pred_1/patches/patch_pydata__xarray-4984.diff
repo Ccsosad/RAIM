@@ -1,0 +1,162 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..5f94435 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4360,4 +4360,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..a5cc922 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5451,6 +5451,45 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             if v in self.variables:
+                 self.variables[v].attrs = other.variables[v].attrs
+ 
++    def query(self, expr, engine=None):
++        """Return a new Dataset with data filtered by the query expression.
++
++        The query expression is evaluated against the data variables in the
++        Dataset. The expression can refer to any data variable in the dataset.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression string.
++        engine : str, optional
++            Evaluation engine to use. Default is 'numexpr' if installed,
++            otherwise 'python'.
++
++        Returns
++        -------
++        filtered : Dataset
++            New Dataset with only the elements that satisfy the query.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({'a': ('x', [1, 2, 3, 4])})
++        >>> ds.query('a > 2')
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Dimensions without coordinates: x
++        Data variables:
++            a        (x) int64 3 4
++        """
++        from .query_parser import QueryParser, query_result_to_indexer
++
++        # Evaluate the query on the dataset's data variables
++        parser = QueryParser(expr, engine=engine)
++        mask = parser.evaluate(self.data_vars)
++        # Convert mask to indexer
++        indexer = query_result_to_indexer(mask, self.dims)
++        # Use isel to select the data
++        return self.isel(indexer)
++
+     def diff(self, dim, n=1, label="upper"):
+         """Calculate the n-th order discrete difference along given axis.
+ 
+@@ -7002,4 +7041,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query_parser.py b/xarray/core/query_parser.py
+new file mode 100644
+index 0000000..86245e0
+--- /dev/null
++++ b/xarray/core/query_parser.py
+@@ -0,0 +1,90 @@
++"""
++Query parser for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from .utils import is_scalar
++
++class QueryParser:
++    """Parse and evaluate query expressions on xarray objects."""
++
++    def __init__(self, expr, engine=None):
++        self.expr = expr
++        self.engine = engine or 'numexpr'
++
++    def evaluate(self, data_vars):
++        """Evaluate the query expression against the given data variables.
++
++        Parameters
++        ----------
++        data_vars : dict
++            Dictionary of variable names to arrays.
++
++        Returns
++        -------
++        mask : array-like
++            Boolean mask indicating which elements satisfy the query.
++        """
++        # For now, we implement a simple parser that uses pandas eval.
++        # This requires pandas and numexpr.
++        # We'll build a local dictionary of variables for evaluation.
++        local_dict = {}
++        for name, var in data_vars.items():
++            # Convert to numpy array if it's a DataArray or Variable
++            if hasattr(var, 'values'):
++                local_dict[name] = var.values
++            else:
++                local_dict[name] = var
++
++        # Use pandas eval for the expression
++        # Note: this requires pandas >= 0.20.0
++        try:
++            result = pd.eval(self.expr, local_dict, engine=self.engine)
++        except Exception as e:
++            raise ValueError(f"Failed to evaluate query {self.expr}: {e}")
++
++        # The result should be a boolean array
++        if not isinstance(result, np.ndarray):
++            if is_scalar(result):
++                result = np.array(result)
++            else:
++                result = np.asarray(result)
++
++        if result.dtype != bool:
++            raise TypeError(f"Query result must be boolean, got {result.dtype}")
++
++        return result
++
++
++def query_result_to_indexer(mask, dims):
++    """Convert a boolean mask to an indexer for the given dimensions.
++
++    Parameters
++    ----------
++    mask : array-like
++        Boolean mask.
++    dims : tuple
++        Dimensions of the target object.
++
++    Returns
++    -------
++    indexer : dict
++        Dictionary of indexers for each dimension.
++    """
++    # Find the indices where mask is True
++    indices = np.where(mask)
++    if len(indices) == 0:
++        # No matches
++        return {dim: slice(0, 0) for dim in dims}
++
++    # For each dimension, get the indices
++    indexer = {}
++    for i, dim in enumerate(dims):
++        idx = indices[i]
++        if len(idx) == 0:
++            indexer[dim] = slice(0, 0)
++        else:
++            # We use a list of indices for fancy indexing
++            indexer[dim] = idx
++
++    return indexer

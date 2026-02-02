@@ -1,0 +1,47 @@
+diff --git a/astropy/cosmology/parameters.py b/astropy/cosmology/parameters.py
+index 233dc71..b47047f 100644
+--- a/astropy/cosmology/parameters.py
++++ b/astropy/cosmology/parameters.py
+@@ -235,4 +235,4 @@ WMAP1 = MappingProxyType(dict(
+ 
+ # If new parameters are added, this list must be updated
+ available = ('Planck18', 'Planck15', 'Planck13',
+-             'WMAP9', 'WMAP7', 'WMAP5', 'WMAP3', 'WMAP1')
++             'WMAP9', 'WMAP7', 'WMAP5', 'WMAP3', 'WMAP1')
+diff --git a/astropy/cosmology/_parameter_utils.py b/astropy/cosmology/_parameter_utils.py
+new file mode 100644
+index 0000000..c36a0c4
+--- /dev/null
++++ b/astropy/cosmology/_parameter_utils.py
+@@ -0,0 +1,31 @@
++"""Utilities for cosmology parameters."""
++
++__all__ = []
++
++
++def _parameter_repr(parameter):
++    """Create a repr string for a Parameter that can roundtrip.
++    
++    Parameters
++    ----------
++    parameter : Parameter
++        The parameter to represent.
++        
++    Returns
++    -------
++    str
++        A string representation that can be used with eval() to recreate
++        the parameter, provided all arguments can similarly roundtrip.
++    """
++    # Get all attributes that are part of the constructor
++    attrs = []
++    for attr in ('name', 'unit', 'derived', 'equivalencies', 'fmt'):
++        value = getattr(parameter, attr)
++        if value is not None and value != ():
++            attrs.append(f"{attr}={repr(value)}")
++    
++    # Add doc if it exists and is not the default
++    if parameter.__doc__ is not None:
++        attrs.append(f"doc={repr(parameter.__doc__)}")
++    
++    return f"Parameter({', '.join(attrs)})"

@@ -1,0 +1,7 @@
+diff --git a/astropy/units/__init__.py b/astropy/units/__init__.py
+new file mode 100644
+index 0000000..b5ef3cf
+--- /dev/null
++++ b/astropy/units/__init__.py
+@@ -0,0 +1 @@
++Angstrom = def_unit(['Angstrom', 'AA'], namespace=namespace, prefixes=True)

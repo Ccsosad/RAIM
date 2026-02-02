@@ -1,0 +1,55 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index fb4476d..a7d8253 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -117,6 +117,23 @@ class Grid(_BaseGrid):
+         self._figure.tight_layout(*args, **kwargs)
+         return self
+ 
++    def tick_params(self, **kwargs):
++        """
++        Customize the appearance of the ticks, tick labels, and gridlines of all subplots.
++        
++        This wraps :meth:`matplotlib.axes.Axes.tick_params`, passing the kwargs
++        to the tick_params method of each subplot Axes.
++        
++        Returns
++        -------
++        self : Grid instance
++            Returns self for easy chaining.
++        """
++        for ax in self.axes.flat:
++            if ax is not None:
++                ax.tick_params(**kwargs)
++        return self
++
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+         """Draw a legend, maybe placing it outside axes and resizing the figure.
+@@ -1650,6 +1667,26 @@ class PairGrid(Grid):
+                 numeric_cols.append(col)
+         return numeric_cols
+ 
++    def tick_params(self, **kwargs):
++        """
++        Customize the appearance of the ticks, tick labels, and gridlines of all subplots.
++        
++        This extends the Grid.tick_params method to also apply to the diagonal axes.
++        
++        Returns
++        -------
++        self : PairGrid instance
++            Returns self for easy chaining.
++        """
++        # Apply to main axes
++        super().tick_params(**kwargs)
++        
++        # Also apply to diagonal axes if they exist
++        if self.diag_axes is not None:
++            for ax in self.diag_axes.flat:
++                ax.tick_params(**kwargs)
++        return self
++
+ 
+ class JointGrid(_BaseGrid):
+     """Grid for drawing a bivariate plot with marginal univariate plots.

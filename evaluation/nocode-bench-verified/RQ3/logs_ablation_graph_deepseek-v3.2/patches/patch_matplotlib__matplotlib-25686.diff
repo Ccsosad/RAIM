@@ -1,0 +1,32 @@
+diff --git a/lib/matplotlib/figure.py b/lib/matplotlib/figure.py
+index 6d7c2c5..b18468a 100644
+--- a/lib/matplotlib/figure.py
++++ b/lib/matplotlib/figure.py
+@@ -417,6 +417,27 @@ default: %(va)s
+         """Get the face color of the Figure rectangle."""
+         return self.patch.get_facecolor()
+ 
++    def get_suptitle(self):
++        """
++        Return the suptitle text string.
++        """
++        suptitle = getattr(self, '_suptitle', None)
++        return suptitle.get_text() if suptitle is not None else ''
++
++    def get_supxlabel(self):
++        """
++        Return the supxlabel text string.
++        """
++        supxlabel = getattr(self, '_supxlabel', None)
++        return supxlabel.get_text() if supxlabel is not None else ''
++
++    def get_supylabel(self):
++        """
++        Return the supylabel text string.
++        """
++        supylabel = getattr(self, '_supylabel', None)
++        return supylabel.get_text() if supylabel is not None else ''
++
+     def get_frameon(self):
+         """
+         Return the figure's background patch visibility, i.e.

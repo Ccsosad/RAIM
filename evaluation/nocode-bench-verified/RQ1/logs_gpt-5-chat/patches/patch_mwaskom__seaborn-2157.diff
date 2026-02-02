@@ -1,0 +1,45 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..8c0ccc3 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -2322,4 +2322,39 @@ def distplot(
+         else:
+             ax.set_xlabel(axlabel)
+ 
+-    return ax
++    return ax
++
++
++# New wrapper for figure-level distribution plotting
++def displot(*args, **kwargs):
++    """
++    Figure-level interface for distribution plots.
++
++    This function is an alias for `sns.FacetGrid.map` style interface for
++    univariate or bivariate distribution visualization.
++
++    It simply delegates to `seaborn.distributions.histplot`, `kdeplot`,
++    or `ecdfplot` via `seaborn.axisgrid.FacetGrid` depending on
++    the ``kind`` parameter.
++    """
++    # Import lazily to avoid circular imports in seaborn
++    from seaborn.axisgrid import FacetGrid
++    from seaborn.distributions import histplot, kdeplot, ecdfplot, rugplot
++
++    kind = kwargs.pop("kind", "hist")
++    data = kwargs.pop("data", None)
++    # Setup a simple grid to handle hue/col/row arguments transparently
++    plot_func = {
++        "hist": histplot,
++        "kde": kdeplot,
++        "ecdf": ecdfplot,
++    }.get(kind, None)
++    if plot_func is None:
++        # default to histplot for safety
++        plot_func = histplot
++
++    # Create facet grid with kwargs that match figure-level plotting functions
++    g = FacetGrid(data, **{k: v for k, v in kwargs.items() if k in ["hue", "col", "row", "height", "aspect"]})
++    plot_args = {k: v for k, v in kwargs.items() if k not in ["hue", "col", "row", "height", "aspect"]}
++    g.map_dataframe(plot_func, **plot_args)
++    return g

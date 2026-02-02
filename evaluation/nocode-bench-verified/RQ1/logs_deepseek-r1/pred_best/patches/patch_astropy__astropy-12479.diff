@@ -1,0 +1,110 @@
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+index 9e23fee..15b9330 100644
+--- a/astropy/cosmology/parameter.py
++++ b/astropy/cosmology/parameter.py
+@@ -1,3 +1,4 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ import astropy.units as u
+@@ -46,7 +47,7 @@ class Parameter:
+ 
+     _registry_validators = {}
+ 
+-    def __init__(self, fvalidate="default", doc=None, *,
++    def __init__(self, *, fvalidate="default", doc=None,
+                  unit=None, equivalencies=[], fmt=".3g", derived=False):
+         # parse registered fvalidate
+         if callable(fvalidate):
+@@ -165,6 +166,42 @@ class Parameter:
+         """
+         return self.fvalidate(cosmology, self, value)
+ 
++    def clone(self, **kwargs):
++        """Create a copy of this `Parameter`, possibly with changes.
++
++        Parameters
++        ----------
++        **kwargs
++            Passed to the constructor of `Parameter`. If an argument is not
++            provided, the value from this instance is used.
++
++        Returns
++        -------
++        `~astropy.cosmology.Parameter`
++        """
++        # Get the current attributes that are passed to __init__
++        attrs = {
++            "fvalidate": self.fvalidate,
++            "doc": self.__doc__,
++            "unit": self.unit,
++            "equivalencies": self.equivalencies,
++            "fmt": self.format_spec,
++            "derived": self.derived,
++        }
++        # Update with any provided keyword arguments
++        attrs.update(kwargs)
++        return type(self)(**attrs)
++    def __eq__(self, other):
++        if not isinstance(other, Parameter):
++            return NotImplemented
++
++        return (self.fvalidate == other.fvalidate and
++                self.__doc__ == other.__doc__ and
++                self.unit == other.unit and
++                self.equivalencies == other.equivalencies and
++                self.format_spec == other.format_spec and
++                self.derived == other.derived)
++
+     @classmethod
+     def register_validator(cls, key, fvalidate=None):
+         """Decorator to register a new kind of validator function.
+@@ -207,12 +244,45 @@ class Parameter:
+             return fvalidate
+ 
+         return register
+-
+     # -------------------------------------------
+ 
+     def __repr__(self):
+-        return f"<Parameter {self._attr_name!r} at {hex(id(self))}>"
+-
++        # Find the key for the fvalidate if it is in the registry
++        fvalidate_repr = None
++        for key, val in self._registry_validators.items():
++            if val is self.fvalidate:
++                fvalidate_repr = f"{key!r}"
++                break
++        if fvalidate_repr is None:
++            # If it's the default, we should have found it. Otherwise, we try by name?
++            # But if it's a custom function, we cannot represent it. So we use the function's name?
++            # But that might not be unique. We'll use the function's qualified name if available.
++            if hasattr(self.fvalidate, "__qualname__"):
++                fvalidate_repr = self.fvalidate.__qualname__
++            else:
++                fvalidate_repr = repr(self.fvalidate)
++
++        # Build the representation
++        args = []
++        # fvalidate
++        args.append(f"fvalidate={fvalidate_repr}")
++        # doc
++        if self.__doc__ is not None:
++            args.append(f"doc={repr(self.__doc__)}")
++        # unit
++        if self.unit is not None:
++            args.append(f"unit={repr(self.unit)}")
++        # equivalencies: we have to be careful because it's a list
++        if self.equivalencies:
++            args.append(f"equivalencies={repr(self.equivalencies)}")
++        # fmt
++        if self.format_spec != ".3g":  # default
++            args.append(f"fmt={repr(self.format_spec)}")
++        # derived
++        if self.derived:
++            args.append(f"derived={repr(self.derived)}")
++
++        return f"Parameter({', '.join(args)})"
+ 
+ # ===================================================================
+ # Built-in validators

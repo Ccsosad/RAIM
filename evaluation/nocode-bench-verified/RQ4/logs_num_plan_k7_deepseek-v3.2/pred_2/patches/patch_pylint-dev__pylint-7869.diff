@@ -1,0 +1,66 @@
+diff --git a/pylint/reporters/__init__.py b/pylint/reporters/__init__.py
+index 0e4280c..9ac31b9 100644
+--- a/pylint/reporters/__init__.py
++++ b/pylint/reporters/__init__.py
+@@ -13,6 +13,7 @@ from pylint.reporters.base_reporter import BaseReporter
+ from pylint.reporters.collecting_reporter import CollectingReporter
+ from pylint.reporters.json_reporter import JSONReporter
+ from pylint.reporters.multi_reporter import MultiReporter
++from pylint.reporters.noheader import NoHeaderReporter
+ from pylint.reporters.reports_handler_mix_in import ReportsHandlerMixIn
+ 
+ if TYPE_CHECKING:
+@@ -30,4 +31,5 @@ __all__ = [
+     "JSONReporter",
+     "CollectingReporter",
+     "MultiReporter",
+-]
++    "NoHeaderReporter",
++]
+diff --git a/pylint/reporters/noheader.py b/pylint/reporters/noheader.py
+new file mode 100644
+index 0000000..c27ccd6
+--- /dev/null
++++ b/pylint/reporters/noheader.py
+@@ -0,0 +1,41 @@
++"""No header reporter for pylint."""
++from __future__ import annotations
++
++from typing import TYPE_CHECKING
++
++from pylint.reporters.base_reporter import BaseReporter
++
++if TYPE_CHECKING:
++    from pylint.reporters.ureports.nodes import Section
++
++
++class NoHeaderReporter(BaseReporter):
++    """Reporter that outputs messages without module headers."""
++
++    name = "no-header"
++    extension = "txt"
++
++    def _display(self, layout: Section) -> None:
++        """Launch layouts display."""
++        # Override to skip the header section
++        # We only want to output the messages, not the module header
++        for section in layout.children:
++            # Skip the module header section
++            if section.name == "module":
++                # Only output the messages from the module section
++                for subsection in section.children:
++                    if subsection.name == "message":
++                        self.writeln(str(subsection))
++            else:
++                # For other sections, output as usual
++                self.writeln(str(section))
++
++    def display_messages(self, layout: Section | None) -> None:
++        """Display messages stored in the layout tree."""
++        if layout:
++            self._display(layout)
++
++    def handle_message(self, msg: Message) -> None:
++        """Handle a new message triggered on the current file."""
++        # Use the parent implementation to store the message
++        super().handle_message(msg)

@@ -1,0 +1,55 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..1c5b0d1 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3000,6 +3000,8 @@ class Table:
+     def __eq__(self, other):
+ 
+         if isinstance(other, Table):
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
+             other = other.as_array()
+ 
+         if self.has_masked_columns:
+@@ -3024,6 +3026,41 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Element-wise comparison of table values.
++
++        This returns a boolean `~astropy.table.Table` with the same columns
++        and dimensions as this table.
++
++        Parameters
++        ----------
++        other : `~astropy.table.Table`, numpy array, list, or scalar
++            Object to compare with.
++
++        Returns
++        -------
++        table : `~astropy.table.Table`
++            Boolean table of comparison results.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a `~astropy.table.Table` and the column names are different.
++        """
++        if isinstance(other, Table):
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++
++            new_cols = [self[name] == other[name] for name in self.colnames]
++
++        else:
++            # Comparison with a scalar, list, or numpy array.
++            # This object is broadcast to be compared with each column.
++            new_cols = [col == other for col in self.columns.values()]
++
++        return self.__class__(new_cols, names=self.colnames, copy=False)
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

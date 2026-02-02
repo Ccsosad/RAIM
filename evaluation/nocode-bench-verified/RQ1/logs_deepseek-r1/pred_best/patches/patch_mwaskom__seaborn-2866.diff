@@ -1,0 +1,234 @@
+diff --git a/seaborn/categorical.py b/seaborn/categorical.py
+index 8858341..f80f02d 100644
+--- a/seaborn/categorical.py
++++ b/seaborn/categorical.py
+@@ -1435,7 +1435,7 @@ class _CategoricalStatPlotter(_CategoricalPlotter):
+             width = self.width
+         return width
+ 
+-    def estimate_statistic(self, estimator, ci, n_boot, seed):
++    def estimate_statistic(self, estimator, errorbar, n_boot, seed):
+ 
+         if self.hue_names is None:
+             statistic = []
+@@ -1444,6 +1444,20 @@ class _CategoricalStatPlotter(_CategoricalPlotter):
+             statistic = [[] for _ in self.plot_data]
+             confint = [[] for _ in self.plot_data]
+ 
++        # Convert deprecated ci parameter to errorbar
++        if errorbar is None:
++            errorbar = "ci"  # Will be handled as None later
++
++        # Handle errorbar parameter
++        if isinstance(errorbar, tuple):
++            errorbar_type, errorbar_range = errorbar
++        elif errorbar in ["ci", "pi", "se", "sd"]:
++            errorbar_type = errorbar
++            errorbar_range = 95  # Default range
++        else:
++            errorbar_type = "ci" if errorbar is not None else None
++            errorbar_range = 95
++
+         for i, group_data in enumerate(self.plot_data):
+ 
+             # Option 1: we have a single layer of grouping
+@@ -1467,25 +1481,36 @@ class _CategoricalStatPlotter(_CategoricalPlotter):
+                     statistic.append(estimator(stat_data))
+ 
+                 # Get a confidence interval for this estimate
+-                if ci is not None:
++                if errorbar is not None:
+ 
+                     if stat_data.size < 2:
+                         confint.append([np.nan, np.nan])
+                         continue
+ 
+-                    if ci == "sd":
+-
++                    if errorbar_type == "sd":
+                         estimate = estimator(stat_data)
+                         sd = np.std(stat_data)
+                         confint.append((estimate - sd, estimate + sd))
+ 
+-                    else:
++                    elif errorbar_type == "se":
++                        estimate = estimator(stat_data)
++                        se = np.std(stat_data) / np.sqrt(len(stat_data))
++                        confint.append((estimate - se, estimate + se))
+ 
++                    elif errorbar_type == "pi":
++                        low = np.percentile(stat_data, (100 - errorbar_range)/2)
++                        high = np.percentile(stat_data, 100 - (100 - errorbar_range)/2)
++                        confint.append((low, high))
++
++                    elif errorbar_type == "ci":
+                         boots = bootstrap(stat_data, func=estimator,
+                                           n_boot=n_boot,
+                                           units=unit_data,
+                                           seed=seed)
+-                        confint.append(utils.ci(boots, ci))
++                        confint.append(utils.ci(boots, errorbar_range))
++
++                    elif callable(errorbar):
++                        confint.append(errorbar(stat_data))
+ 
+             # Option 2: we are grouping by a hue layer
+             # ----------------------------------------
+@@ -1495,7 +1520,7 @@ class _CategoricalStatPlotter(_CategoricalPlotter):
+ 
+                     if not self.plot_hues[i].size:
+                         statistic[i].append(np.nan)
+-                        if ci is not None:
++                        if errorbar is not None:
+                             confint[i].append((np.nan, np.nan))
+                         continue
+ 
+@@ -1518,25 +1543,36 @@ class _CategoricalStatPlotter(_CategoricalPlotter):
+                         statistic[i].append(estimator(stat_data))
+ 
+                     # Get a confidence interval for this estimate
+-                    if ci is not None:
++                    if errorbar is not None:
+ 
+                         if stat_data.size < 2:
+                             confint[i].append([np.nan, np.nan])
+                             continue
+ 
+-                        if ci == "sd":
+-
++                        if errorbar_type == "sd":
+                             estimate = estimator(stat_data)
+                             sd = np.std(stat_data)
+                             confint[i].append((estimate - sd, estimate + sd))
+ 
+-                        else:
++                        elif errorbar_type == "se":
++                            estimate = estimator(stat_data)
++                            se = np.std(stat_data) / np.sqrt(len(stat_data))
++                            confint[i].append((estimate - se, estimate + se))
++
++                        elif errorbar_type == "pi":
++                            low = np.percentile(stat_data, (100 - errorbar_range)/2)
++                            high = np.percentile(stat_data, 100 - (100 - errorbar_range)/2)
++                            confint[i].append((low, high))
+ 
++                        elif errorbar_type == "ci":
+                             boots = bootstrap(stat_data, func=estimator,
+                                               n_boot=n_boot,
+                                               units=unit_data,
+                                               seed=seed)
+-                            confint[i].append(utils.ci(boots, ci))
++                            confint[i].append(utils.ci(boots, errorbar_range))
++
++                        elif callable(errorbar):
++                            confint[i].append(errorbar(stat_data))
+ 
+         # Save the resulting values for plotting
+         self.statistic = np.array(statistic)
+@@ -1575,14 +1611,22 @@ class _BarPlotter(_CategoricalStatPlotter):
+     """Show point estimates and confidence intervals with bars."""
+ 
+     def __init__(self, x, y, hue, data, order, hue_order,
+-                 estimator, ci, n_boot, units, seed,
++                 estimator, errorbar, n_boot, units, seed,
+                  orient, color, palette, saturation, width,
+                  errcolor, errwidth, capsize, dodge):
+         """Initialize the plotter."""
+         self.establish_variables(x, y, hue, data, orient,
+                                  order, hue_order, units)
+         self.establish_colors(color, palette, saturation)
+-        self.estimate_statistic(estimator, ci, n_boot, seed)
++        
++        # Handle deprecated ci parameter
++        if errorbar is None and isinstance(n_boot, int) and n_boot > 0:
++            errorbar = "ci"
++            warnings.warn(("\n\nThe `ci` parameter is deprecated. "
++                           "Use `errorbar=('ci', {})` for the same effect.\n"
++                          ).format(n_boot), UserWarning)
++        
++        self.estimate_statistic(estimator, errorbar, n_boot, seed)
+ 
+         self.dodge = dodge
+         self.width = width
+@@ -1647,14 +1691,22 @@ class _PointPlotter(_CategoricalStatPlotter):
+ 
+     """Show point estimates and confidence intervals with (joined) points."""
+     def __init__(self, x, y, hue, data, order, hue_order,
+-                 estimator, ci, n_boot, units, seed,
++                 estimator, errorbar, n_boot, units, seed,
+                  markers, linestyles, dodge, join, scale,
+                  orient, color, palette, errwidth=None, capsize=None):
+         """Initialize the plotter."""
+         self.establish_variables(x, y, hue, data, orient,
+                                  order, hue_order, units)
+         self.establish_colors(color, palette, 1)
+-        self.estimate_statistic(estimator, ci, n_boot, seed)
++        
++        # Handle deprecated ci parameter
++        if errorbar is None and isinstance(n_boot, int) and n_boot > 0:
++            errorbar = "ci"
++            warnings.warn(("\n\nThe `ci` parameter is deprecated. "
++                           "Use `errorbar=('ci', {})` for the same effect.\n"
++                          ).format(n_boot), UserWarning)
++        
++        self.estimate_statistic(estimator, errorbar, n_boot, seed)
+ 
+         # Override the default palette for single-color plots
+         if hue is None and color is None and palette is None:
+@@ -2743,15 +2795,25 @@ swarmplot.__doc__ = dedent("""\
+ 
+ def barplot(
+     data=None, *, x=None, y=None, hue=None, order=None, hue_order=None,
+-    estimator=np.mean, ci=95, n_boot=1000, units=None, seed=None,
++    estimator=np.mean, errorbar=("ci", 95), n_boot=1000, units=None, seed=None,
+     orient=None, color=None, palette=None, saturation=.75, width=.8,
+     errcolor=".26", errwidth=None, capsize=None, dodge=True,
+-    ax=None,
++    ax=None, ci=None,  # ci is deprecated
+     **kwargs,
+ ):
+ 
++    # Handle deprecated ci parameter
++    if ci is not None:
++        if errorbar != ("ci", 95):
++            raise ValueError("Cannot use both `ci` and `errorbar`.")
++        errorbar = "ci"
++        n_boot = ci
++        warnings.warn(("\n\nThe `ci` parameter is deprecated. "
++                       "Use `errorbar=('ci', {})` for the same effect.\n"
++                      ).format(ci), UserWarning)
++
+     plotter = _BarPlotter(x, y, hue, data, order, hue_order,
+-                          estimator, ci, n_boot, units, seed,
++                          estimator, errorbar, n_boot, units, seed,
+                           orient, color, palette, saturation,
+                           width, errcolor, errwidth, capsize, dodge)
+ 
+@@ -2826,14 +2888,24 @@ barplot.__doc__ = dedent("""\
+ 
+ def pointplot(
+     data=None, *, x=None, y=None, hue=None, order=None, hue_order=None,
+-    estimator=np.mean, ci=95, n_boot=1000, units=None, seed=None,
++    estimator=np.mean, errorbar=("ci", 95), n_boot=1000, units=None, seed=None,
+     markers="o", linestyles="-", dodge=False, join=True, scale=1,
+     orient=None, color=None, palette=None, errwidth=None,
+-    capsize=None, ax=None,
++    capsize=None, ax=None, ci=None,  # ci is deprecated
+ ):
+ 
++    # Handle deprecated ci parameter
++    if ci is not None:
++        if errorbar != ("ci", 95):
++            raise ValueError("Cannot use both `ci` and `errorbar`.")
++        errorbar = "ci"
++        n_boot = ci
++        warnings.warn(("\n\nThe `ci` parameter is deprecated. "
++                       "Use `errorbar=('ci', {})` for the same effect.\n"
++                      ).format(ci), UserWarning)
++
+     plotter = _PointPlotter(x, y, hue, data, order, hue_order,
+-                            estimator, ci, n_boot, units, seed,
++                            estimator, errorbar, n_boot, units, seed,
+                             markers, linestyles, dodge, join, scale,
+                             orient, color, palette, errwidth, capsize)
+ 

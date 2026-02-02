@@ -1,0 +1,58 @@
+diff --git a/astropy/io/fits/connect.py b/astropy/io/fits/connect.py
+index 8c70ca8..9d3458f 100644
+--- a/astropy/io/fits/connect.py
++++ b/astropy/io/fits/connect.py
+@@ -112,7 +112,10 @@ def _decode_mixins(tbl):
+ 
+ 
+ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+-                    character_as_bytes=True):
++                    character_as_bytes=True, unit_parse_strict="warn"):
++    # Validate unit_parse_strict parameter
++    if unit_parse_strict not in ("warn", "error", "silent"):
++        raise ValueError("unit_parse_strict must be one of 'warn', 'error', or 'silent'")
+     """
+     Read a Table object from an FITS file
+ 
+@@ -152,6 +155,12 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+         ``U``) internally, you should set this to `False`, but note that this
+         will use more memory. If set to `False`, string columns will not be
+         memory-mapped even if ``memmap`` is `True`.
++    unit_parse_strict : str, optional
++        How to handle invalid units when parsing FITS unit strings. Can be
++        "warn" (default), "error", or "silent". If "warn", invalid units will
++        issue a warning and be set to ``None``. If "error", invalid units will
++        raise a ``ValueError``. If "silent", invalid units will be silently set
++        to ``None``.
+     """
+ 
+     if isinstance(input, HDUList):
+@@ -212,7 +221,8 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+ 
+         try:
+             return read_table_fits(hdulist, hdu=hdu,
+-                                   astropy_native=astropy_native)
++                                   astropy_native=astropy_native,
++                                   unit_parse_strict=unit_parse_strict)
+         finally:
+             hdulist.close()
+ 
+@@ -249,7 +259,7 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+ 
+         # Copy over units
+         if col.unit is not None:
+-            column.unit = u.Unit(col.unit, format='fits', parse_strict='silent')
++            column.unit = u.Unit(col.unit, format='fits', parse_strict=unit_parse_strict)
+ 
+         # Copy over display format
+         if col.disp is not None:
+diff --git a/astropy/table/connect.py b/astropy/table/connect.py
+new file mode 100644
+index 0000000..f3d135a
+--- /dev/null
++++ b/astropy/table/connect.py
+@@ -0,0 +1,4 @@
++    def __call__(self, *args, **kwargs):
++        # Extract unit_parse_strict from kwargs if present, since it's specific to FITS
++        unit_parse_strict = kwargs.pop('unit_parse_strict', 'warn')
++        return self._read(*args, unit_parse_strict=unit_parse_strict, **kwargs)

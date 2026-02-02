@@ -1,0 +1,42 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..f333e08 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -72,6 +72,10 @@ class Conf(_config.ConfigNamespace):
+         'Time to wait for remote data queries (in seconds). Set this to zero '
+         'to prevent any attempt to download anything.',
+         aliases=['astropy.coordinates.name_resolve.name_resolve_timeout'])
++    allow_internet = _config.ConfigItem(
++        True,
++        'If False, prevent any attempt to download any file from the internet. '
++        'This overrides remote_timeout to zero.')
+     compute_hash_block_size = _config.ConfigItem(
+         2 ** 16,  # 64K
+         'Block size for computing file hashes.')
+@@ -223,6 +227,8 @@ def get_readable_fileobj(name_or_obj, encoding=None, cache=False,
+     if remote_timeout is None:
+         # use configfile default
+         remote_timeout = conf.remote_timeout
++    if not conf.allow_internet:
++        remote_timeout = 0.0
+ 
+     # Get a file object to the content
+     if isinstance(name_or_obj, PATH_TYPES):
+@@ -598,6 +604,8 @@ def get_pkg_data_filename(data_name, package=None, show_progress=True,
+     if remote_timeout is None:
+         # use configfile default
+         remote_timeout = conf.remote_timeout
++    if not conf.allow_internet:
++        remote_timeout = 0.0
+ 
+     if data_name.startswith('hash/'):
+         # first try looking for a local version if a hash is specified
+@@ -1166,6 +1174,8 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+     """
+     if timeout is None:
+         timeout = conf.remote_timeout
++    if not conf.allow_internet:
++        timeout = 0.0
+     if sources is None:
+         sources = [remote_url]
+     if http_headers is None:

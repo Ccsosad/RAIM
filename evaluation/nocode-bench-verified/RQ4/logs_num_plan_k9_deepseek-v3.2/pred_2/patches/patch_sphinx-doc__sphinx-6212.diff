@@ -1,0 +1,36 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 7b3b943..64f3bfc 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -766,13 +766,20 @@ class ModuleDocumenter(Documenter):
+         'platform': identity, 'deprecated': bool_option,
+         'member-order': identity, 'exclude-members': members_set_option,
+         'private-members': bool_option, 'special-members': members_option,
+-        'imported-members': bool_option, 'ignore-module-all': bool_option
++        'imported-members': bool_option, 'ignore-module-all': bool_option,
++        'autosummary-imported-members': bool_option
+     }  # type: Dict[str, Callable]
+ 
+     def __init__(self, *args):
+         # type: (Any) -> None
+         super().__init__(*args)
+         merge_special_members_option(self.options)
++        # If the autosummary_imported_members config is set, override the imported-members option
++        if self.env.config.autosummary_imported_members:
++            self.options.imported_members = True
++        # If the autosummary_imported_members config is set, override the imported-members option
++        if hasattr(self, 'env') and self.env and self.env.config.autosummary_imported_members:
++            self.options.imported_members = True
+ 
+     @classmethod
+     def can_document_member(cls, member, membername, isattr, parent):
+@@ -794,6 +801,9 @@ class ModuleDocumenter(Documenter):
+             logger.warning(__('signature arguments or return annotation '
+                               'given for automodule %s') % self.fullname,
+                            type='autodoc')
++        # If the autosummary_imported_members config is set, override the imported-members option
++        if self.env.config.autosummary_imported_members:
++            self.options.imported_members = True
+         return ret
+ 
+     def add_directive_header(self, sig):

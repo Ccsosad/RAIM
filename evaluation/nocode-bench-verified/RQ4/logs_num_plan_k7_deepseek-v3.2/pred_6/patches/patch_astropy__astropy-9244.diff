@@ -1,0 +1,112 @@
+diff --git a/astropy/utils/iers/__init__.py b/astropy/utils/iers/__init__.py
+index c88b0b3..e5cc147 100644
+--- a/astropy/utils/iers/__init__.py
++++ b/astropy/utils/iers/__init__.py
+@@ -1,2 +1,4 @@
+ 
+-from .iers import *
++
++from .iers import *
++from .iers import earth_orientation_table
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..546b7b1 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -546,6 +546,25 @@ class IERS_A(IERS):
+         return source
+ 
+ 
++class EarthOrientationTableScienceState(ScienceState):
++    """
++    ScienceState to set the Earth orientation table used by astropy.
++
++    The default is to use the IERS-A table with automatic downloading.
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError('Earth orientation table must be an instance of IERS.')
++        return value
++
++earth_orientation_table = EarthOrientationTableScienceState()
++
++
+ class IERS_B(IERS):
+     """IERS Table class targeted to IERS B, provided by IERS itself.
+ 
+@@ -557,8 +576,6 @@ class IERS_B(IERS):
+     version can be downloaded from ``iers.IERS_B_URL``.
+     """
+ 
+-    iers_table = None
+-
+     @classmethod
+     def read(cls, file=None, readme=None, data_start=14):
+         """Read IERS-B table from a eopc04_iau2000.* file provided by IERS.
+@@ -604,7 +621,6 @@ class IERS_Auto(IERS_A):
+     Provide most-recent IERS data and automatically handle downloading
+     of updated values as necessary.
+     """
+-    iers_table = None
+ 
+     @classmethod
+     def open(cls):
+@@ -619,29 +635,16 @@ class IERS_Auto(IERS_A):
+         is set to False then ``astropy.utils.iers.IERS()`` is returned.  This
+         is normally the IERS-B table that is supplied with astropy.
+ 
+-        On the first call in a session, the table will be memoized (in the
+-        ``iers_table`` class attribute), and further calls to ``open`` will
+-        return this stored table.
+-
+         Returns
+         -------
+         `~astropy.table.QTable` instance with IERS (Earth rotation) data columns
+ 
+         """
+         if not conf.auto_download:
+-            cls.iers_table = IERS_B.open()
+-            return cls.iers_table
++            return IERS_B.open()
+ 
+         all_urls = (conf.iers_auto_url, conf.iers_auto_url_mirror)
+ 
+-        if cls.iers_table is not None:
+-
+-            # If the URL has changed, we need to redownload the file, so we
+-            # should ignore the internally cached version.
+-
+-            if cls.iers_table.meta.get('data_url') in all_urls:
+-                return cls.iers_table
+-
+         dl_success = False
+         err_list = []
+ 
+@@ -661,13 +664,12 @@ class IERS_Auto(IERS_A):
+             warn(AstropyWarning('failed to download {}, using local IERS-B: {}'
+                                 .format(' and '.join(all_urls),
+                                         ';'.join(err_list))))  # noqa
+-            cls.iers_table = IERS_B.open()
+-            return cls.iers_table
++            return IERS_B.open()
+ 
+-        cls.iers_table = cls.read(file=filename)
+-        cls.iers_table.meta['data_url'] = str(url)
++        table = cls.read(file=filename)
++        table.meta['data_url'] = str(url)
+ 
+-        return cls.iers_table
++        return table
+ 
+     def _check_interpolate_indices(self, indices_orig, indices_clipped, max_input_mjd):
+         """Check that the indices from interpolation match those after clipping to the
+@@ -801,4 +803,4 @@ class IERS_Auto(IERS_A):
+             table['dX_2000A_B'][:n_iers_b] = iers_b['dX_2000A']
+             table['dY_2000A_B'][:n_iers_b] = iers_b['dY_2000A']
+ 
+-        return table
++        return table

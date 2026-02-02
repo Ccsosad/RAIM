@@ -1,0 +1,30 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index dbde177..0786d9c 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -818,17 +818,24 @@ class Table:
+         # exception later, so NO need to catch here.
+ 
+         cols = {}
++        has_missing = False
+         for name in names_from_data:
+             cols[name] = []
+             for i, row in enumerate(data):
+                 try:
+                     cols[name].append(row[name])
+                 except KeyError:
+-                    raise ValueError(f'Row {i} has no value for column {name}')
++                    # Append a masked value for the missing key
++                    cols[name].append(np.ma.masked)
++                    has_missing = True
+ 
+         if all(name is None for name in names):
+             names = names_from_data
+ 
++        # If there are any missing values, then set the table to be masked
++        if has_missing and not self.masked:
++            self._set_masked(True)
++
+         self._init_from_dict(cols, names, dtype, n_cols, copy)
+         return
+ 

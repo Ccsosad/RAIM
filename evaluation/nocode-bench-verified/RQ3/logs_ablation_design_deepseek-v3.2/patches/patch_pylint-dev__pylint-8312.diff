@@ -1,0 +1,112 @@
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 336078d..45c01dc 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -623,36 +623,81 @@ class PyLinter(
+ 
+         Returns iterator of paths to discovered modules and packages.
+         """
++        import glob
++        import re
++
++        GLOB_CHARS = re.compile(r"[*?\[\]]")
++
+         for something in files_or_modules:
+-            if os.path.isdir(something) and not os.path.isfile(
+-                os.path.join(something, "__init__.py")
+-            ):
+-                skip_subtrees: list[str] = []
+-                for root, _, files in os.walk(something):
+-                    if any(root.startswith(s) for s in skip_subtrees):
+-                        # Skip subtree of already discovered package.
+-                        continue
+-
+-                    if _is_ignored_file(
+-                        root,
+-                        self.config.ignore,
+-                        self.config.ignore_patterns,
+-                        self.config.ignore_paths,
++            # Check if the string contains glob characters
++            if GLOB_CHARS.search(something):
++                # Expand the glob pattern
++                expanded = glob.glob(something, recursive=True)
++                if not expanded:
++                    # Skip patterns that match nothing
++                    continue
++                # Process each expanded path
++                for path in expanded:
++                    if os.path.isdir(path) and not os.path.isfile(
++                        os.path.join(path, "__init__.py")
+                     ):
+-                        skip_subtrees.append(root)
+-                        continue
+-
+-                    if "__init__.py" in files:
+-                        skip_subtrees.append(root)
+-                        yield root
++                        skip_subtrees: list[str] = []
++                        for root, _, files in os.walk(path):
++                            if any(root.startswith(s) for s in skip_subtrees):
++                                # Skip subtree of already discovered package.
++                                continue
++
++                            if _is_ignored_file(
++                                root,
++                                self.config.ignore,
++                                self.config.ignore_patterns,
++                                self.config.ignore_paths,
++                            ):
++                                skip_subtrees.append(root)
++                                continue
++
++                            if "__init__.py" in files:
++                                skip_subtrees.append(root)
++                                yield root
++                            else:
++                                yield from (
++                                    os.path.join(root, file)
++                                    for file in files
++                                    if file.endswith(".py")
++                                )
+                     else:
+-                        yield from (
+-                            os.path.join(root, file)
+-                            for file in files
+-                            if file.endswith(".py")
+-                        )
++                        yield path
+             else:
+-                yield something
++                # No glob characters, process as before
++                if os.path.isdir(something) and not os.path.isfile(
++                    os.path.join(something, "__init__.py")
++                ):
++                    skip_subtrees: list[str] = []
++                    for root, _, files in os.walk(something):
++                        if any(root.startswith(s) for s in skip_subtrees):
++                            # Skip subtree of already discovered package.
++                            continue
++
++                        if _is_ignored_file(
++                            root,
++                            self.config.ignore,
++                            self.config.ignore_patterns,
++                            self.config.ignore_paths,
++                        ):
++                            skip_subtrees.append(root)
++                            continue
++
++                        if "__init__.py" in files:
++                            skip_subtrees.append(root)
++                            yield root
++                        else:
++                            yield from (
++                                os.path.join(root, file)
++                                for file in files
++                                if file.endswith(".py")
++                            )
++                else:
++                    yield something
+ 
+     def check(self, files_or_modules: Sequence[str] | str) -> None:
+         """Main checking entry: check a list of files or modules from their name.

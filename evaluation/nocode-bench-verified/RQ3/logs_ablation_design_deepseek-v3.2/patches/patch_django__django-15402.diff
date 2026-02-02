@@ -1,0 +1,76 @@
+diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py
+index eb43231..9616470 100644
+--- a/django/urls/resolvers.py
++++ b/django/urls/resolvers.py
+@@ -41,13 +41,28 @@ class ResolverMatch:
+         namespaces=None,
+         route=None,
+         tried=None,
++        captured_kwargs=None,
++        extra_kwargs=None,
+     ):
+         self.func = func
+         self.args = args
+-        self.kwargs = kwargs
+         self.url_name = url_name
+         self.route = route
+         self.tried = tried
++        
++        # Initialize captured_kwargs and extra_kwargs
++        if captured_kwargs is None:
++            captured_kwargs = {}
++        if extra_kwargs is None:
++            extra_kwargs = {}
++        
++        self.captured_kwargs = captured_kwargs
++        self.extra_kwargs = extra_kwargs
++        
++        # Backward compatibility: if kwargs is provided (old call style),
++        # use it as captured_kwargs
++        if kwargs is not None and not captured_kwargs and not extra_kwargs:
++            self.captured_kwargs = kwargs.copy() if kwargs else {}
+ 
+         # If a URLRegexResolver doesn't have a namespace or app_name, it passes
+         # in an empty value.
+@@ -68,6 +83,14 @@ class ResolverMatch:
+         view_path = url_name or self._func_path
+         self.view_name = ":".join(self.namespaces + [view_path])
+ 
++    @property
++    def kwargs(self):
++        """All keyword arguments that would be passed to the view function."""
++        # Combine captured_kwargs and extra_kwargs for backward compatibility
++        combined = self.captured_kwargs.copy()
++        combined.update(self.extra_kwargs)
++        return combined
++
+     def __getitem__(self, index):
+         return (self.func, self.args, self.kwargs)[index]
+ 
+@@ -78,7 +101,8 @@ class ResolverMatch:
+             func = self._func_path
+         return (
+             "ResolverMatch(func=%s, args=%r, kwargs=%r, url_name=%r, "
+-            "app_names=%r, namespaces=%r, route=%r)"
++            "app_names=%r, namespaces=%r, route=%r, captured_kwargs=%r, "
++            "extra_kwargs=%r)"
+             % (
+                 func,
+                 self.args,
+@@ -87,6 +111,8 @@ class ResolverMatch:
+                 self.app_names,
+                 self.namespaces,
+                 self.route,
++                self.captured_kwargs,
++                self.extra_kwargs,
+             )
+         )
+ 
+@@ -197,6 +223,7 @@ class RegexPattern(CheckURLMixin):
+             kwargs = match.groupdict()
+             args = () if kwargs else match.groups()
+             kwargs = {k: v for k, v in kwargs.items() if v is not None}
++            # These are the captured kwargs from URL pattern
+             return path[match.end() :], args, kwargs
+         return None
+ 

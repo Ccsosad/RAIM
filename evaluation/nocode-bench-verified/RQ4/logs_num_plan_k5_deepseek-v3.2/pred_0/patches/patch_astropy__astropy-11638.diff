@@ -1,0 +1,25 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index e770a09..ea2b9ff 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -992,11 +992,10 @@ class LeapSeconds(QTable):
+         # Our trials start with normal files and remote ones that are
+         # already in cache.  The bools here indicate that the cache
+         # should be used.
+-        trials = [(f, True) for f in files
+-                  if not urlparse(f).netloc or is_url_in_cache(f)]
+-        # If we are allowed to download, we try downloading new versions
+-        # if none of the above worked.
++        trials = [(f, True) for f in files if not urlparse(f).netloc]
+         if conf.auto_download:
++            trials += [(f, True) for f in files
++                       if urlparse(f).netloc and is_url_in_cache(f)]
+             trials += [(f, False) for f in files if urlparse(f).netloc]
+ 
+         self = None
+@@ -1173,4 +1172,4 @@ class LeapSeconds(QTable):
+             if initialize_erfa == 'only':
+                 return 0
+ 
+-        return erfa.leap_seconds.update(self)
++        return erfa.leap_seconds.update(self)

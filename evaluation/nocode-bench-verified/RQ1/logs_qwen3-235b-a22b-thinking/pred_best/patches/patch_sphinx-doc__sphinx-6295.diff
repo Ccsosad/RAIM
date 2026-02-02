@@ -1,0 +1,42 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index 612ff28..c31ce5c 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -438,17 +438,35 @@ class PyModulelevel(PyObject):
+ class PyFunction(PyObject):
+     """Description of a function."""
+ 
++    option_spec = dict(PyObject.option_spec)
++    option_spec['async'] = directives.flag
++
++    def run(self):
++        self.iscoroutinefunction = 'async' in self.options
++        return super().run()
++
+     def needs_arglist(self):
+         # type: () -> bool
+         return True
+ 
++    def get_signature_prefix(self, sig):
++        if self.iscoroutinefunction:
++            return 'async '
++        return ''
++
+     def get_index_text(self, modname, name_cls):
+         # type: (str, Tuple[str, str]) -> str
+         name, cls = name_cls
+         if modname:
+-            return _('%s() (in module %s)') % (name, modname)
++            if self.iscoroutinefunction:
++                return _('%s() (in module %s, async)') % (name, modname)
++            else:
++                return _('%s() (in module %s)') % (name, modname)
+         else:
+-            return _('%s() (built-in function)') % name
++            if self.iscoroutinefunction:
++                return _('%s() (built-in async function)') % name
++            else:
++                return _('%s() (built-in function)') % name
+ 
+ 
+ class PyVariable(PyObject):

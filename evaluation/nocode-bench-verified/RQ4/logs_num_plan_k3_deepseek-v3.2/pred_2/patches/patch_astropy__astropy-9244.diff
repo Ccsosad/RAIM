@@ -1,0 +1,35 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..f6912a4 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -599,6 +599,24 @@ class IERS_B(IERS):
+         return np.ones_like(i) * FROM_IERS_B
+ 
+ 
++class EarthOrientationTableScienceState(ScienceState):
++    """
++    ScienceState to manage the Earth orientation table (IERS) used for time and coordinate transformations.
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = IERS_Auto.open()
++        # Ensure it's an IERS table
++        if not isinstance(value, (IERS, IERS_A, IERS_B, IERS_Auto)):
++            raise TypeError("Earth orientation table must be an IERS table instance.")
++        return value
++
++earth_orientation_table = EarthOrientationTableScienceState()
++
++
+ class IERS_Auto(IERS_A):
+     """
+     Provide most-recent IERS data and automatically handle downloading
+@@ -801,4 +819,4 @@ class IERS_Auto(IERS_A):
+             table['dX_2000A_B'][:n_iers_b] = iers_b['dX_2000A']
+             table['dY_2000A_B'][:n_iers_b] = iers_b['dY_2000A']
+ 
+-        return table
++        return table

@@ -1,0 +1,64 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..5691285 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -457,6 +457,59 @@ def make_margin_suptitles(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
+             bbox = inv_trans_fig(fig._supylabel.get_tightbbox(renderer))
+             layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
+ 
++    # Check all axes in the figure for legends with outside location
++    for ax in fig.axes:
++        legend = ax.get_legend()
++        if legend is not None and legend.get_in_layout():
++            loc = legend._loc
++            if isinstance(loc, str) and loc.startswith('outside'):
++                # Get the tightbbox of the legend in figure coordinates
++                bbox = inv_trans_fig(legend.get_tightbbox(renderer))
++                # Adjust the appropriate margin based on the location
++                if loc == 'outside upper right' or loc == 'outside upper left':
++                    layoutgrids[fig].edit_margin_min('top', bbox.height + 2 * h_pad)
++                elif loc == 'outside lower right' or loc == 'outside lower left':
++                    layoutgrids[fig].edit_margin_min('bottom', bbox.height + 2 * h_pad)
++                elif loc == 'outside right upper' or loc == 'outside right lower':
++                    layoutgrids[fig].edit_margin_min('right', bbox.width + 2 * w_pad)
++                elif loc == 'outside left upper' or loc == 'outside left lower':
++                    layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
++
++
++def make_margin_figure_legends(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
++    # Figure out how large the figure legend is and make the
++    # top level figure margin larger.
++
++    inv_trans_fig = fig.transFigure.inverted().transform_bbox
++    # get the h_pad and w_pad as distances in the local subfigure coordinates:
++    padbox = mtransforms.Bbox([[0, 0], [w_pad, h_pad]])
++    padbox = (fig.transFigure -
++                   fig.transSubfigure).transform_bbox(padbox)
++    h_pad_local = padbox.height
++    w_pad_local = padbox.width
++
++    for sfig in fig.subfigs:
++        make_margin_figure_legends(layoutgrids, sfig, renderer,
++                                   w_pad=w_pad, h_pad=h_pad)
++
++    # Check all axes in the figure for legends with outside location
++    for ax in fig.axes:
++        legend = ax.get_legend()
++        if legend is not None and legend.get_in_layout():
++            loc = legend._loc
++            if isinstance(loc, str) and loc.startswith('outside'):
++                # Get the tightbbox of the legend in figure coordinates
++                bbox = inv_trans_fig(legend.get_tightbbox(renderer))
++                # Adjust the appropriate margin based on the location
++                if loc == 'outside upper right' or loc == 'outside upper left':
++                    layoutgrids[fig].edit_margin_min('top', bbox.height + 2 * h_pad)
++                elif loc == 'outside lower right' or loc == 'outside lower left':
++                    layoutgrids[fig].edit_margin_min('bottom', bbox.height + 2 * h_pad)
++                elif loc == 'outside right upper' or loc == 'outside right lower':
++                    layoutgrids[fig].edit_margin_min('right', bbox.width + 2 * w_pad)
++                elif loc == 'outside left upper' or loc == 'outside left lower':
++                    layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
++
+ 
+ def match_submerged_margins(layoutgrids, fig):
+     """

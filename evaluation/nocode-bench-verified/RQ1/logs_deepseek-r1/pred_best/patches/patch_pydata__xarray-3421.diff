@@ -1,0 +1,84 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..0f7466c 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. Ellipsis (`...`) may be used to represent
++            all dimensions not explicitly provided.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1863,6 +1864,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         Dataset.transpose
+         """
+         if dims:
++            # Resolve Ellipsis to actual dimensions
++            dims = utils.infix_dims(dims, self.dims)
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+@@ -3122,4 +3125,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..55ac0bc 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5449,4 +5449,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/utils.py b/xarray/core/utils.py
+index 383949f..6fd6040 100644
+--- a/xarray/core/utils.py
++++ b/xarray/core/utils.py
+@@ -660,6 +660,34 @@ class HiddenKeyDict(MutableMapping[K, V]):
+         return len(self._data) - num_hidden
+ 
+ 
++def infix_dims(dims_supplied, dims_all):
++    """
++    Resolve a supplied dims list containing an ellipsis to an explicit dims list.
++    """
++    if ... not in dims_supplied:
++        return dims_supplied
++
++    if not isinstance(dims_supplied, tuple):
++        dims_supplied = tuple(dims_supplied)
++    
++    # More than one ellipsis is not allowed
++    if dims_supplied.count(...) > 1:
++        raise ValueError("At most one ellipsis may be supplied.")
++    
++    # Find the position of the ellipsis
++    ellipsis_index = dims_supplied.index(...)
++    
++    # Split the supplied dims into before and after the ellipsis
++    before = dims_supplied[:ellipsis_index]
++    after = dims_supplied[ellipsis_index+1:]
++    
++    # Determine the remaining dims that are not in before or after
++    remaining = [dim for dim in dims_all if dim not in before and dim not in after]
++    
++    # Combine before + remaining + after
++    return before + tuple(remaining) + after
++
++
+ def get_temp_dimname(dims: Container[Hashable], new_dim: Hashable) -> Hashable:
+     """ Get an new dimension name based on new_dim, that is not used in dims.
+     If the same name exists, we add an underscore(s) in the head.
+@@ -675,4 +703,4 @@ def get_temp_dimname(dims: Container[Hashable], new_dim: Hashable) -> Hashable:
+     """
+     while new_dim in dims:
+         new_dim = "_" + str(new_dim)
+-    return new_dim
++    return new_dim

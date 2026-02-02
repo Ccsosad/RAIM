@@ -1,0 +1,153 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..11f6cab 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -304,6 +304,122 @@ class DatetimeAccessor(Properties):
+             result, name="strftime", coords=self._obj.coords, dims=self._obj.dims
+         )
+ 
++    def isocalendar(self):
++        """
++        Returns a Dataset with year, week, and day according to the ISO 8601 calendar.
++
++        Requires pandas version 1.1.0 or greater.
++
++        Returns
++        -------
++        Dataset with fields year, week, and day.
++
++        Examples
++        --------
++        >>> import pandas as pd
++        >>> dates = pd.date_range(start="2000-01-01", periods=10, freq="D")
++        >>> ts = xr.DataArray(dates, dims=("time"))
++        >>> ts.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 10)
++        Coordinates:
++          * time     (time) datetime64[ns] 2000-01-01 2000-01-02 ... 2000-01-10
++        Data variables:
++            year     (time) int64 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000
++            week     (time) int64 52 52 52 1 1 1 1 1 1 1
++            day      (time) int64 6 7 1 2 3 4 5 6 7 1
++        """
++        from ..core.dataset import Dataset
++        from ..core.dataarray import DataArray
++
++        obj_type = type(self._obj)
++        data = self._obj.data
++
++        if is_duck_dask_array(data):
++            from dask.array import map_blocks
++            # We need to return a Dataset with three dask arrays.
++            # We'll compute year, week, day separately.
++            # But we can compute them in one go with a function that returns three arrays.
++            # We'll use _isocalendar in a block-wise manner.
++            # However, map_blocks expects a single array. We'll have to write a function that returns a tuple.
++            # Alternatively, we can compute three dask arrays.
++            # Let's do it similarly to how _strftime handles dask.
++            # We'll create a function that returns a tuple of three arrays.
++            def isocalendar_block(v):
++                year, week, day = _isocalendar(v)
++                # Stack them along a new axis? We'll return a tuple.
++                return year, week, day
++
++            # We need to map_blocks and get three results.
++            # We can use map_blocks with multiple outputs? Actually, map_blocks returns one array.
++            # So we need to call map_blocks three times? That would be inefficient.
++            # Alternatively, we can write a function that returns a single array with three channels.
++            # But we want three separate DataArrays.
++            # So we'll compute each component separately using map_blocks with the same function but returning one component.
++            # We'll create three dask arrays.
++            year = map_blocks(lambda x: _isocalendar(x)[0], data, dtype=np.int64)
++            week = map_blocks(lambda x: _isocalendar(x)[1], data, dtype=np.int64)
++            day = map_blocks(lambda x: _isocalendar(x)[2], data, dtype=np.int64)
++        else:
++            year, week, day = _isocalendar(data)
++
++        # Create DataArrays for each component
++        year_da = DataArray(year, coords=self._obj.coords, dims=self._obj.dims)
++        week_da = DataArray(week, coords=self._obj.coords, dims=self._obj.dims)
++        day_da = DataArray(day, coords=self._obj.coords, dims=self._obj.dims)
++
++        # Create a Dataset
++        return Dataset({"year": year_da, "week": week_da, "day": day_da})
++
++    def isocalendar(self):
++        """
++        Returns a Dataset with year, week, and day according to the ISO 8601 calendar.
++
++        Requires pandas version 1.1.0 or greater.
++
++        Returns
++        -------
++        Dataset with fields year, week, and day.
++
++        Examples
++        --------
++        >>> import pandas as pd
++        >>> dates = pd.date_range(start="2000-01-01", periods=10, freq="D")
++        >>> ts = xr.DataArray(dates, dims=("time"))
++        >>> ts.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 10)
++        Coordinates:
++          * time     (time) datetime64[ns] 2000-01-01 2000-01-02 ... 2000-01-10
++        Data variables:
++            year     (time) int64 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000
++            week     (time) int64 52 52 52 1 1 1 1 1 1 1
++            day      (time) int64 6 7 1 2 3 4 5 6 7 1
++        """
++        from ..core.dataset import Dataset
++        from ..core.dataarray import DataArray
++        import numpy as np
++
++        obj_type = type(self._obj)
++        data = self._obj.data
++
++        if is_duck_dask_array(data):
++            from dask.array import map_blocks
++            # Compute each component separately
++            year = map_blocks(lambda x: _isocalendar(x)[0], data, dtype=np.int64)
++            week = map_blocks(lambda x: _isocalendar(x)[1], data, dtype=np.int64)
++            day = map_blocks(lambda x: _isocalendar(x)[2], data, dtype=np.int64)
++        else:
++            year, week, day = _isocalendar(data)
++
++        # Create DataArrays for each component
++        year_da = DataArray(year, coords=self._obj.coords, dims=self._obj.dims)
++        week_da = DataArray(week, coords=self._obj.coords, dims=self._obj.dims)
++        day_da = DataArray(day, coords=self._obj.coords, dims=self._obj.dims)
++
++        # Create a Dataset
++        return Dataset({"year": year_da, "week": week_da, "day": day_da})
++
+     year = Properties._tslib_field_accessor(
+         "year", "The year of the datetime", np.int64
+     )
+@@ -326,9 +442,22 @@ class DatetimeAccessor(Properties):
+     nanosecond = Properties._tslib_field_accessor(
+         "nanosecond", "The nanoseconds of the datetime", np.int64
+     )
+-    weekofyear = Properties._tslib_field_accessor(
+-        "weekofyear", "The week ordinal of the year", np.int64
+-    )
++    @property
++    def weekofyear(self):
++        """
++        The week ordinal of the year (deprecated).
++
++        .. deprecated:: 0.16.2
++            Use DataArray.dt.isocalendar().week instead.
++        """
++        import warnings
++        warnings.warn(
++            "weekofyear is deprecated. Use DataArray.dt.isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return self.isocalendar().week
++
+     week = weekofyear
+     dayofweek = Properties._tslib_field_accessor(
+         "dayofweek", "The day of the week with Monday=0, Sunday=6", np.int64

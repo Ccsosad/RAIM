@@ -1,0 +1,45 @@
+diff --git a/seaborn/_core/plot.py b/seaborn/_core/plot.py
+index 5b43615..a43758d 100644
+--- a/seaborn/_core/plot.py
++++ b/seaborn/_core/plot.py
+@@ -1174,6 +1174,8 @@ class Plotter:
+         variables: list[str] | None = None,
+     ) -> None:
+ 
++        from seaborn._core.scales import Nominal
++
+         if variables is None:
+             # Add variables that have data but not a scale, which happens
+             # because this method can be called multiple time, to handle
+@@ -1238,7 +1240,6 @@ class Plotter:
+             # This only affects us when sharing *paired* axes. This is a novel/niche
+             # behavior, so we will raise rather than hack together a workaround.
+             if axis is not None and Version(mpl.__version__) < Version("3.4.0"):
+-                from seaborn._core.scales import Nominal
+                 paired_axis = axis in p._pair_spec.get("structure", {})
+                 cat_scale = isinstance(scale, Nominal)
+                 ok_dim = {"x": "col", "y": "row"}[axis]
+@@ -1275,6 +1276,17 @@ class Plotter:
+                 view_scale = scale._setup(seed_values, prop, axis=axis_obj)
+                 set_scale_obj(view["ax"], axis, view_scale._matplotlib_scale)
+ 
++                # Style axes with Nominal scale to look like categorical axes
++                if isinstance(scale, Nominal):
++                    ax = view["ax"]
++                    if axis == "x":
++                        ax.margins(x=0)
++                        ax.grid(axis="x", visible=False)
++                    else:  # axis == "y"
++                        ax.margins(y=0)
++                        ax.grid(axis="y", visible=False)
++                        ax.invert_yaxis()
++
+                 for layer, new_series in zip(layers, transformed_data):
+                     layer_df = layer["data"].frame
+                     if var in layer_df:
+@@ -1646,4 +1658,4 @@ class Plotter:
+ 
+         engine_default = None if p._target is not None else "tight"
+         layout_engine = p._layout_spec.get("engine", engine_default)
+-        set_layout_engine(self._figure, layout_engine)
++        set_layout_engine(self._figure, layout_engine)

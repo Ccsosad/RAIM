@@ -1,0 +1,119 @@
+diff --git a/astropy/__init__.py b/astropy/__init__.py
+index 9e1bf3a..29662a1 100644
+--- a/astropy/__init__.py
++++ b/astropy/__init__.py
+@@ -161,6 +161,11 @@ conf = Conf()
+ from .tests.runner import TestRunner
+ test = TestRunner.make_test_runner_in(__path__[0])
+ 
++# ScienceState instances for constants version management
++from .constants.science_state import PhysicalConstantsState, AstronomicalConstantsState
++physical_constants = PhysicalConstantsState()
++astronomical_constants = AstronomicalConstantsState()
++
+ 
+ # if we are *not* in setup mode, import the logger and possibly populate the
+ # configuration file with the defaults
+diff --git a/astropy/constants/__init__.py b/astropy/constants/__init__.py
+index b9b3036..6535012 100644
+--- a/astropy/constants/__init__.py
++++ b/astropy/constants/__init__.py
+@@ -99,4 +99,4 @@ def set_enabled_constants(modname):
+ del find_current_module
+ del contextmanager
+ del _utils
+-del _lines
++del _lines
+diff --git a/astropy/constants/science_state.py b/astropy/constants/science_state.py
+new file mode 100644
+index 0000000..70b2f88
+--- /dev/null
++++ b/astropy/constants/science_state.py
+@@ -0,0 +1,87 @@
++"""
++ScienceState classes for managing physical and astronomical constants versions.
++"""
++
++from astropy.utils.state import ScienceState
++
++
++class PhysicalConstantsState(ScienceState):
++    """
++    ScienceState for physical constants version.
++
++    Allowed values are version strings like 'codata2010', 'codata2014',
++    'codata2018', and 'astropyconst13' (which maps to 'codata2010').
++    """
++
++    _value = 'codata2014'  # default
++
++    @classmethod
++    def validate(cls, value):
++        # Map allowed values to canonical versions
++        if value in ('codata2010', 'astropyconst13'):
++            return 'codata2010'
++        elif value == 'codata2014':
++            return 'codata2014'
++        elif value == 'codata2018':
++            return 'codata2018'
++        else:
++            raise ValueError(f"Invalid physical constants version: {value}")
++
++    @classmethod
++    def _get_imported_subpackages(cls):
++        """Check if astropy.constants or astropy.units have been imported."""
++        import sys
++        return {
++            'constants': 'astropy.constants' in sys.modules,
++            'units': 'astropy.units' in sys.modules,
++        }
++
++    @classmethod
++    def set(cls, value):
++        # Check if either subpackage is already imported
++        imported = cls._get_imported_subpackages()
++        if imported['constants']:
++            raise RuntimeError('astropy.constants is already imported')
++        if imported['units']:
++            raise RuntimeError('astropy.units is already imported')
++        return super().set(value)
++
++
++class AstronomicalConstantsState(ScienceState):
++    """
++    ScienceState for astronomical constants version.
++
++    Allowed values are version strings like 'iau2012', 'iau2015',
++    and 'astropyconst13' (which maps to 'iau2012').
++    """
++
++    _value = 'iau2015'  # default
++
++    @classmethod
++    def validate(cls, value):
++        # Map allowed values to canonical versions
++        if value in ('iau2012', 'astropyconst13'):
++            return 'iau2012'
++        elif value == 'iau2015':
++            return 'iau2015'
++        else:
++            raise ValueError(f"Invalid astronomical constants version: {value}")
++
++    @classmethod
++    def _get_imported_subpackages(cls):
++        """Check if astropy.constants or astropy.units have been imported."""
++        import sys
++        return {
++            'constants': 'astropy.constants' in sys.modules,
++            'units': 'astropy.units' in sys.modules,
++        }
++
++    @classmethod
++    def set(cls, value):
++        # Check if either subpackage is already imported
++        imported = cls._get_imported_subpackages()
++        if imported['constants']:
++            raise RuntimeError('astropy.constants is already imported')
++        if imported['units']:
++            raise RuntimeError('astropy.units is already imported')
++        return super().set(value)

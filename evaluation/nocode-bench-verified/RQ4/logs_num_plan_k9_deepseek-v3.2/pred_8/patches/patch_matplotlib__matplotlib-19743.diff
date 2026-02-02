@@ -1,0 +1,39 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..680d34e 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -191,9 +191,34 @@ def make_layoutgrids(fig, layoutgrids, rect=(0, 0, 1, 1)):
+         if gs is not None:
+             layoutgrids = make_layoutgrids_gs(layoutgrids, gs)
+ 
++    # handle figure legends that are outside
++    _add_legend_margins(fig, layoutgrids[fig])
++
+     return layoutgrids
+ 
+ 
++def _add_legend_margins(fig, fig_layoutgrid):
++    """
++    Adjust the figure's layoutgrid to account for legends placed outside.
++    """
++    for legend in fig.legends:
++        loc = legend._loc
++        if isinstance(loc, str) and loc.startswith('outside'):
++            # We cannot calculate the legend's size here because we don't have a renderer.
++            # Instead, we set a placeholder margin that will be updated later.
++            # The actual margin will be set in reset_margins when the renderer is available.
++            # For now, we set a small default margin.
++            # The side is determined by the location string.
++            if 'upper' in loc:
++                fig_layoutgrid.add_margin('top', 0.1)  # placeholder
++            if 'lower' in loc:
++                fig_layoutgrid.add_margin('bottom', 0.1)
++            if 'left' in loc:
++                fig_layoutgrid.add_margin('left', 0.1)
++            if 'right' in loc:
++                fig_layoutgrid.add_margin('right', 0.1)
++
++
+ def make_layoutgrids_gs(layoutgrids, gs):
+     """
+     Make the layoutgrid for a gridspec (and anything nested in the gridspec)

@@ -1,0 +1,15 @@
+diff --git a/sklearn/base.py b/sklearn/base.py
+index 858d304..f25a23d 100644
+--- a/sklearn/base.py
++++ b/sklearn/base.py
+@@ -84,6 +84,10 @@ def clone(estimator, *, safe=True):
+                     "'get_params' method." % (repr(estimator), type(estimator))
+                 )
+ 
++    # If the estimator has a __sklearn_clone__ method, call it and return the result.
++    if hasattr(estimator, "__sklearn_clone__"):
++        return estimator.__sklearn_clone__()
++
+     klass = estimator.__class__
+     new_object_params = estimator.get_params(deep=False)
+     for name, param in new_object_params.items():

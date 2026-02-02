@@ -1,0 +1,60 @@
+diff --git a/django/core/management/commands/makemigrations.py b/django/core/management/commands/makemigrations.py
+index 66985c1..86243df 100644
+--- a/django/core/management/commands/makemigrations.py
++++ b/django/core/management/commands/makemigrations.py
+@@ -57,6 +57,13 @@ class Command(BaseCommand):
+             '--check', action='store_true', dest='check_changes',
+             help='Exit with a non-zero status if model changes are missing migrations.',
+         )
++        parser.add_argument(
++            '--scriptable', action='store_true',
++            help=(
++                'Divert log output and input prompts to stderr, write only paths of '
++                'generated migration files to stdout.'
++            ),
++        )
+ 
+     def log(self, msg):
+         self.stdout.write(msg)
+@@ -69,6 +76,11 @@ class Command(BaseCommand):
+         self.merge = options['merge']
+         self.empty = options['empty']
+         self.migration_name = options['name']
++        self.scriptable = options['scriptable']
++        if self.scriptable:
++            import sys
++            self.original_stdout = self.stdout._out
++            self.stdout._out = sys.stderr
+         if self.migration_name and not self.migration_name.isidentifier():
+             raise CommandError('The migration name must be a valid Python identifier.')
+         self.include_header = options['include_header']
+@@ -223,7 +235,10 @@ class Command(BaseCommand):
+                         migration_string = writer.path
+                     if migration_string.startswith('..'):
+                         migration_string = writer.path
+-                    self.log('  %s\n' % self.style.MIGRATE_LABEL(migration_string))
++                    if self.scriptable:
++                        self.original_stdout.write(migration_string + '\n')
++                    else:
++                        self.log('  %s\n' % self.style.MIGRATE_LABEL(migration_string))
+                     for operation in migration.operations:
+                         self.log('    - %s' % operation.describe())
+                 if not self.dry_run:
+@@ -326,7 +341,10 @@ class Command(BaseCommand):
+                     with open(writer.path, "w", encoding='utf-8') as fh:
+                         fh.write(writer.as_string())
+                     if self.verbosity > 0:
+-                        self.log('\nCreated new merge migration %s' % writer.path)
++                        if self.scriptable:
++                            self.original_stdout.write(writer.path + '\n')
++                        else:
++                            self.log('\nCreated new merge migration %s' % writer.path)
+                 elif self.verbosity == 3:
+                     # Alternatively, makemigrations --merge --dry-run --verbosity 3
+                     # will log the merge migrations rather than saving the file
+@@ -334,4 +352,4 @@ class Command(BaseCommand):
+                     self.log(self.style.MIGRATE_HEADING(
+                         "Full merge migrations file '%s':" % writer.filename
+                     ))
+-                    self.log(writer.as_string())
++                    self.log(writer.as_string())

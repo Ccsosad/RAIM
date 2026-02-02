@@ -1,0 +1,22 @@
+diff --git a/sklearn/decomposition/_kernel_pca.py b/sklearn/decomposition/_kernel_pca.py
+index 6f0266a..6712631 100644
+--- a/sklearn/decomposition/_kernel_pca.py
++++ b/sklearn/decomposition/_kernel_pca.py
+@@ -215,6 +215,17 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+                                                 tol=self.tol,
+                                                 maxiter=self.max_iter,
+                                                 v0=v0)
++        elif eigen_solver == 'randomized':
++            from sklearn.utils.extmath import randomized_svd
++            n_oversamples = 10  # default
++            n_iter = 'auto'     # default
++            U, S, _ = randomized_svd(K, n_components=n_components,
++                                     n_oversamples=n_oversamples,
++                                     n_iter=n_iter,
++                                     flip_sign=False,
++                                     random_state=self.random_state)
++            self.alphas_ = U
++            self.lambdas_ = S
+ 
+         # make sure that the eigenvalues are ok and fix numerical issues
+         self.lambdas_ = _check_psd_eigenvalues(self.lambdas_,

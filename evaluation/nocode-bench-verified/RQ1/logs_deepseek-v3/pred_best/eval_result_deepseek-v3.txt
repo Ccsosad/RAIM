@@ -1,0 +1,24 @@
+------------------------------------------------------------------------------------------
+Evaluation Results - Unresolved Only Mode (Processed 84 instances this run, Total 114 instances)
+------------------------------------------------------------------------------------------
+Total Instances: 114
+Submitted Instances: 113
+Applied%: 97.37% (111 / 114)
+Success%: 25.44% (29 / 114)
+Regression Test (RT%): 81.58% (93 / 114)
+FV-Micro: 0.1514 (1151 / 7600)
+FV-Macro: 0.3564
+------------------------------------------------------------------------------------------
+Failure Type Analysis
+------------------------------------------------------------------------------------------
+Total Instances: 114
+Successfully Resolved: 29 (25.44%)
+Failed to Resolve: 85 (74.56%)
+
+Error Type Distribution (Not Mutually Exclusive):
+1. Regression Errors (P2P): 21 (18.42%)
+2. New Feature Implementation Errors (F2P): 83 (72.81%)
+3. Both Types of Errors: 19 (16.67%)
+
+Note: These error types are not mutually exclusive - instances can have both types of errors.
+------------------------------------------------------------------------------------------

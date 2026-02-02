@@ -1,0 +1,191 @@
+diff --git a/astropy/cosmology/core.py b/astropy/cosmology/core.py
+index 775db70..c7ea329 100644
+--- a/astropy/cosmology/core.py
++++ b/astropy/cosmology/core.py
+@@ -85,6 +85,10 @@ class Cosmology(metaclass=ABCMeta):
+     # Unified I/O read and write methods
+     read = UnifiedReadWriteMethod(CosmologyRead)
+     write = UnifiedReadWriteMethod(CosmologyWrite)
++    
++    # Unified I/O convert methods
++    to_format = UnifiedReadWriteMethod(CosmologyToFormat)
++    from_format = UnifiedReadWriteMethod(CosmologyFromFormat)
+ 
+     def __init_subclass__(cls):
+         super().__init_subclass__()
+diff --git a/astropy/cosmology/io/__init__.py b/astropy/cosmology/io/__init__.py
+new file mode 100644
+index 0000000..832120a
+--- /dev/null
++++ b/astropy/cosmology/io/__init__.py
+@@ -0,0 +1,18 @@
++"""
++I/O subpackage for Cosmology.
++
++This package contains functions and classes for reading, writing, and converting
++Cosmology objects.
++"""
++
++from . import mapping
++
++__all__ = ['mapping']
++
++# Register the mapping format
++from astropy.io import registry as io_registry
++from astropy.cosmology.core import Cosmology
++
++io_registry.register_reader("mapping", Cosmology, mapping.from_mapping)
++io_registry.register_writer("mapping", Cosmology, mapping.to_mapping)
++io_registry.register_identifier("mapping", Cosmology, mapping.mapping_identify)
+diff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py
+new file mode 100644
+index 0000000..5dd4b68
+--- /dev/null
++++ b/astropy/cosmology/io/mapping.py
+@@ -0,0 +1,146 @@
++"""
++Convert a Cosmology to/from a mapping (e.g., dict).
++
++This is a built-in format for Cosmology I/O.
++"""
++
++import copy
++
++from astropy.cosmology.core import Cosmology, _COSMOLOGY_CLASSES
++from astropy import units as u
++
++__all__ = []  # nothing is publicly scoped
++
++
++def from_mapping(mapping, *, move_to_meta=False, cosmology=None):
++    """Load a Cosmology from a mapping.
++    
++    Parameters
++    ----------
++    mapping : dict
++        A mapping with cosmology information.
++    move_to_meta : bool (optional, keyword-only)
++        Whether to move extra keys in the mapping to the cosmology's ``meta``.
++        Default is `False`.
++    cosmology : str, `~astropy.cosmology.Cosmology` class, or None (optional, keyword-only)
++        The cosmology class to use when constructing the cosmology instance.
++        If `None` (default), the class is identified from the mapping.
++        If a class, it is used directly.
++        If a string, the class is looked up in the registry.
++    
++    Returns
++    -------
++    `~astropy.cosmology.Cosmology` subclass instance
++    
++    Raises
++    ------
++    TypeError
++        If the cosmology class is not a subclass of `~astropy.cosmology.Cosmology`.
++    KeyError
++        If required cosmology parameters are missing from the mapping.
++    """
++    # Get the cosmology class
++    if cosmology is None:
++        # Get from mapping
++        cosmo_cls = mapping.get('cosmology')
++        if cosmo_cls is None:
++            raise KeyError("'cosmology' key is required in mapping.")
++    else:
++        # Use the provided cosmology
++        cosmo_cls = cosmology
++    
++    # Convert string to class if needed
++    if isinstance(cosmo_cls, str):
++        try:
++            cosmo_cls = _COSMOLOGY_CLASSES[cosmo_cls]
++        except KeyError:
++            # Try with qualified name
++            for cls in _COSMOLOGY_CLASSES.values():
++                if cls.__qualname__ == cosmo_cls or cls.__name__ == cosmo_cls:
++                    cosmo_cls = cls
++                    break
++            else:
++                raise ValueError(f"Unknown cosmology class: {cosmo_cls}")
++    
++    # Check it's a cosmology class
++    if not (isinstance(cosmo_cls, type) and issubclass(cosmo_cls, Cosmology)):
++        raise TypeError(f"cosmology must be a Cosmology subclass, got {cosmo_cls}")
++    
++    # Make a copy of the mapping to avoid modifying the input
++    mapping = copy.deepcopy(mapping)
++    
++    # Remove the cosmology key
++    mapping.pop('cosmology', None)
++    
++    # Get metadata
++    meta = mapping.pop('meta', {})
++    
++    # Get name
++    name = mapping.pop('name', None)
++    
++    # Handle move_to_meta: move extra keys to meta
++    if move_to_meta:
++        # Get the expected parameters from the cosmology class signature
++        sig = cosmo_cls._init_signature
++        expected_params = set(sig.parameters.keys())
++        expected_params.update(['name', 'meta'])  # these are always allowed
++        
++        # Move unexpected keys to meta
++        extra_keys = set(mapping.keys()) - expected_params
++        for key in extra_keys:
++            meta[key] = mapping.pop(key)
++    
++    # Create the cosmology instance
++    return cosmo_cls(name=name, meta=meta, **mapping)
++
++
++def to_mapping(cosmology, *args):
++    """Convert a Cosmology to a mapping.
++    
++    Parameters
++    ----------
++    cosmology : `~astropy.cosmology.Cosmology` subclass instance
++        The cosmology to convert.
++    *args
++        Not used. Present for compatibility with the Unified I/O interface.
++    
++    Returns
++    -------
++    dict
++        A mapping with cosmology information.
++    """
++    # Start with the initialization arguments
++    mapping = cosmology._init_arguments.copy()
++    
++    # Add the cosmology class
++    mapping['cosmology'] = cosmology.__class__
++    
++    # Ensure name is included (it should already be there)
++    if 'name' not in mapping:
++        mapping['name'] = cosmology.name
++    
++    # Ensure meta is included (it should already be there)
++    if 'meta' not in mapping:
++        mapping['meta'] = cosmology.meta
++    
++    return mapping
++
++
++def mapping_identify(origin, format, *args, **kwargs):
++    """Identify if an object uses the mapping format.
++    
++    Parameters
++    ----------
++    origin : str
++        The origin of the identification call.
++    format : str or None
++        The format to check.
++    *args, **kwargs
++        Additional arguments.
++    
++    Returns
++    -------
++    bool
++        True if the format is mapping.
++    """
++    return format == "mapping"

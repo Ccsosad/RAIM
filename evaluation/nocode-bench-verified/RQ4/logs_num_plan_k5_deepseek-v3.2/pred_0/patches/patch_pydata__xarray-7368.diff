@@ -1,0 +1,126 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..0a5ebe5 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -60,6 +60,18 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     def xindexes(self) -> Indexes[Index]:
+         return self._data.xindexes
+ 
++    @property
++    def sizes(self) -> Mapping[Hashable, int]:
++        """Mapping from dimension names to lengths.
++
++        This is equivalent to :py:attr:`dims` but always returns a dict.
++        """
++        dims = self.dims
++        if isinstance(dims, tuple):
++            return {k: self._data.sizes[k] for k in dims}
++        else:
++            return dims
++
+     @property
+     def variables(self):
+         raise NotImplementedError()
+@@ -70,6 +82,34 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     def _maybe_drop_multiindex_coords(self, coords):
+         raise NotImplementedError()
+ 
++    @classmethod
++    def from_pandas_multiindex(
++        cls, midx: pd.MultiIndex, dims: Sequence[Hashable] | None = None
++    ) -> "Coordinates":
++        """Create Coordinates from a pandas.MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            MultiIndex to convert to coordinates.
++        dims : sequence of hashable, optional
++            Dimension names for the levels of the MultiIndex. If not provided,
++            the names of the MultiIndex are used.
++
++        Returns
++        -------
++        Coordinates
++            A Coordinates object containing the coordinate variables and indexes
++            corresponding to the MultiIndex.
++        """
++        from xarray.core.dataset import Dataset
++
++        if dims is not None:
++            # Rename the levels
++            midx = midx.rename(dims)
++        ds = Dataset(coords=midx)
++        return ds.coords
++
+     def __iter__(self) -> Iterator[Hashable]:
+         # needs to be in the same order as the dataset variables
+         for k in self.variables:
+@@ -236,6 +276,67 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+             variables=coords, coord_names=coord_names, indexes=indexes
+         )
+ 
++    def copy(self, deep: bool = True) -> "Coordinates":
++        """Return a copy of the coordinates.
++
++        Parameters
++        ----------
++        deep : bool, default: True
++            Whether to make a deep copy.
++
++        Returns
++        -------
++        Coordinates
++            Copied coordinates.
++        """
++        dataset = self.to_dataset()
++        if deep:
++            dataset = dataset.copy(deep=True)
++        return dataset.coords
++
++    def equals(self, other: "Coordinates") -> bool:
++        """Two Coordinates objects are equal if they have the same variables
++        and indexes.
++
++        Parameters
++        ----------
++        other : Coordinates
++            The other Coordinates object.
++
++        Returns
++        -------
++        bool
++            True if the two Coordinates are equal.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        return self.variables == other.variables and self.xindexes == other.xindexes
++
++    def identical(self, other: "Coordinates") -> bool:
++        """Two Coordinates objects are identical if they have the same variables
++        and indexes, and the variables have the same data and attributes.
++
++        Parameters
++        ----------
++        other : Coordinates
++            The other Coordinates object.
++
++        Returns
++        -------
++        bool
++            True if the two Coordinates are identical.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        return (
++            self.variables.keys() == other.variables.keys()
++            and all(
++                self_var.identical(other_var)
++                for self_var, other_var in zip(self.variables.values(), other.variables.values())
++            )
++            and self.xindexes == other.xindexes
++        )
++
+ 
+ class DatasetCoordinates(Coordinates):
+     """Dictionary like container for Dataset coordinates.

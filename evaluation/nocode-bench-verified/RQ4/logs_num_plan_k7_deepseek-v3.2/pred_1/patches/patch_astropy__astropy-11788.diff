@@ -1,0 +1,20 @@
+diff --git a/astropy/units/__init__.py b/astropy/units/__init__.py
+index 0853e7b..9c72505 100644
+--- a/astropy/units/__init__.py
++++ b/astropy/units/__init__.py
+@@ -40,7 +40,13 @@ from .decorators import *
+ 
+ del bases
+ 
+-# Enable the set of default units.  This notably does *not* include
++# Enable the set of default units.  This notably does *not$ include
+ # Imperial units.
+ 
+-set_enabled_units([si, cgs, astrophys, function_units, misc, photometric])
++set_enabled_units([si, cgs, astrophys, function_units, misc, photometric])
++
++# Add milli-Angstrom unit
++from .core import PrefixUnit, CompositeUnit
++from .astrophys import Angstrom
++mAngstrom = PrefixUnit(['mAngstrom', 'mangstrom'], CompositeUnit(1e-3, [Angstrom], [1]))
++add_enabled_units([mAngstrom])

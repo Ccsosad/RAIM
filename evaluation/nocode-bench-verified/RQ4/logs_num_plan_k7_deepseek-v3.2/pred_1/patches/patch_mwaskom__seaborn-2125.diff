@@ -1,0 +1,80 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..2a60e91 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -82,7 +82,74 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def __init__(self, data=None, variables={}, **kwargs):
++        super().__init__(data=data, variables=variables, **kwargs)
++
++    def _compute_bins(self, data, bins, binwidth, binrange):
++        """Compute bin edges given data and bin parameters."""
++        if binrange is None:
++            start, stop = data.min(), data.max()
++        else:
++            start, stop = binrange
++
++        if bins is None:
++            if binwidth is not None:
++                bins = int(np.ceil((stop - start) / binwidth))
++            else:
++                # Use Freedman-Diaconis rule as default
++                iqr = np.subtract(*np.percentile(data, [75, 25]))
++                binwidth = 2 * iqr * (len(data) ** (-1/3))
++                bins = int(np.ceil((stop - start) / binwidth))
++
++        if isinstance(bins, int):
++            bin_edges = np.linspace(start, stop, bins + 1)
++        else:
++            bin_edges = np.asarray(bins)
++
++        return bin_edges
++
++    def define_bin_edges(self, x=None, y=None, bins=None, binwidth=None, binrange=None):
++        """Define bin edges for x and/or y variables."""
++        if x is not None and y is not None:
++            x_edges = self._compute_bins(x, bins[0] if isinstance(bins, (list, tuple)) else bins,
++                                         binwidth[0] if isinstance(binwidth, (list, tuple)) else binwidth,
++                                         binrange[0] if isinstance(binrange, (list, tuple)) else binrange)
++            y_edges = self._compute_bins(y, bins[1] if isinstance(bins, (list, tuple)) else bins,
++                                         binwidth[1] if isinstance(binwidth, (list, tuple)) else binwidth,
++                                         binrange[1] if isinstance(binrange, (list, tuple)) else binrange)
++            return x_edges, y_edges
++        elif x is not None:
++            return self._compute_bins(x, bins, binwidth, binrange)
++        else:
++            return self._compute_bins(y, bins, binwidth, binrange)
++
++    def comp_data(self, x, y, weights=None, bins=None, binwidth=None, binrange=None):
++        """Compute histogram data (counts or density)."""
++        if y is None:
++            # Univariate histogram
++            bin_edges = self.define_bin_edges(x=x, bins=bins, binwidth=binwidth, binrange=binrange)
++            heights, _ = np.histogram(x, bins=bin_edges, weights=weights)
++            return heights, bin_edges
++        else:
++            # Bivariate histogram
++            x_edges, y_edges = self.define_bin_edges(x=x, y=y, bins=bins, binwidth=binwidth, binrange=binrange)
++            heights, _, _ = np.histogram2d(x, y, bins=[x_edges, y_edges], weights=weights)
++            return heights, x_edges, y_edges
++
++    def plot_univariate(self, element="bars", fill=True, stat="count", common_norm=True, common_bins=True,
++                        shrink=1, kde=False, kde_kws=None, color=None, legend=True, ax=None, **plot_kws):
++        """Plot a univariate histogram."""
++        # This is a placeholder for the actual implementation.
++        # In practice, we would use the computed data to draw bars, steps, or polygons.
++        pass
++
++    def plot_bivariate(self, element="bars", fill=True, stat="count", common_norm=True, common_bins=True,
++                       shrink=1, color=None, legend=True, cbar=False, cbar_ax=None, ax=None, **plot_kws):
++        """Plot a bivariate histogram."""
++        # This is a placeholder for the actual implementation.
++        pass
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):

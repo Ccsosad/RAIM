@@ -1,0 +1,108 @@
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+index 9e23fee..f8bb3b3 100644
+--- a/astropy/cosmology/parameter.py
++++ b/astropy/cosmology/parameter.py
+@@ -1,3 +1,4 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ import astropy.units as u
+@@ -46,7 +47,7 @@ class Parameter:
+ 
+     _registry_validators = {}
+ 
+-    def __init__(self, fvalidate="default", doc=None, *,
++    def __init__(self, *, fvalidate="default", doc=None,
+                  unit=None, equivalencies=[], fmt=".3g", derived=False):
+         # parse registered fvalidate
+         if callable(fvalidate):
+@@ -142,11 +143,7 @@ class Parameter:
+         `~astropy.cosmology.Parameter`
+             Copy of this Parameter but with custom ``fvalidate``.
+         """
+-        desc = type(self)(fvalidate=fvalidate,
+-                          doc=self.__doc__, fmt=self.format_spec,
+-                          unit=self.unit, equivalencies=self.equivalencies,
+-                          derived=self.derived)
+-        return desc
++        return self.clone(fvalidate=fvalidate)
+ 
+     def validate(self, cosmology, value):
+         """Run the validator on this Parameter.
+@@ -211,7 +208,75 @@ class Parameter:
+     # -------------------------------------------
+ 
+     def __repr__(self):
+-        return f"<Parameter {self._attr_name!r} at {hex(id(self))}>"
++        # Build a repr that can be used to recreate the Parameter.
++        # We try to make it roundtrippable when possible.
++        args = []
++        # fvalidate
++        if callable(self._fvalidate):
++            # For a callable, we cannot roundtrip easily. Use the registry?
++            # Check if it's in the registry.
++            for key, val in self._registry_validators.items():
++                if val is self._fvalidate:
++                    args.append(f"fvalidate={key!r}")
++                    break
++            else:
++                # Not in registry, so we cannot roundtrip. Use a placeholder.
++                args.append(f"fvalidate={self._fvalidate!r}")
++        else:
++            args.append(f"fvalidate={self._fvalidate!r}")
++        # doc
++        if self.__doc__ is not None:
++            args.append(f"doc={self.__doc__!r}")
++        # unit
++        if self._unit is not None:
++            args.append(f"unit={self._unit!r}")
++        # equivalencies
++        if self._equivalencies:
++            args.append(f"equivalencies={self._equivalencies!r}")
++        # fmt
++        if self._fmt != ".3g":
++            args.append(f"fmt={self._fmt!r}")
++        # derived
++        if self._derived:
++            args.append(f"derived={self._derived!r}")
++        return f"Parameter({', '.join(args)})"
++
++    def __eq__(self, other):
++        if not isinstance(other, Parameter):
++            return NotImplemented
++        # Compare all constructor arguments.
++        return (self._fvalidate == other._fvalidate and
++                self.__doc__ == other.__doc__ and
++                self._unit == other._unit and
++                self._equivalencies == other._equivalencies and
++                self._fmt == other._fmt and
++                self._derived == other._derived)
++
++    def clone(self, **kwargs):
++        """Return a copy of this Parameter with changed constructor arguments.
++
++        Parameters
++        ----------
++        **kwargs
++            Constructor arguments to change.
++
++        Returns
++        -------
++        Parameter
++            A new Parameter instance.
++        """
++        # Current constructor arguments.
++        current = {
++            'fvalidate': self._fvalidate,
++            'doc': self.__doc__,
++            'unit': self._unit,
++            'equivalencies': self._equivalencies,
++            'fmt': self._fmt,
++            'derived': self._derived,
++        }
++        # Update with any new values.
++        current.update(kwargs)
++        return type(self)(**current)
+ 
+ 
+ # ===================================================================

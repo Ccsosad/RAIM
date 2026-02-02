@@ -1,0 +1,259 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..a945f20 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -1,3 +1,4 @@
++
+ from __future__ import annotations
+ 
+ import warnings
+@@ -31,44 +32,67 @@ _THIS_ARRAY = ReprObject("<this-array>")
+ 
+ 
+ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+-    _data: DataWithCoords
++    _data: DataWithCoords | None
+     __slots__ = ("_data",)
+ 
++    def __init__(self, data: DataWithCoords | None = None) -> None:
++        self._data = data
++
+     def __getitem__(self, key: Hashable) -> T_DataArray:
+-        raise NotImplementedError()
++        if self._data is None:
++            raise KeyError(key)
++        return self._data[key]
+ 
+     def __setitem__(self, key: Hashable, value: Any) -> None:
++        if self._data is None:
++            raise TypeError("Cannot set item on empty Coordinates")
+         self.update({key: value})
+ 
+     @property
+     def _names(self) -> set[Hashable]:
+-        raise NotImplementedError()
++        if self._data is None:
++            return set()
++        return self._data._coord_names
+ 
+     @property
+     def dims(self) -> Mapping[Hashable, int] | tuple[Hashable, ...]:
+-        raise NotImplementedError()
++        if self._data is None:
++            return {}
++        return self._data.dims
+ 
+     @property
+     def dtypes(self) -> Frozen[Hashable, np.dtype]:
+-        raise NotImplementedError()
++        if self._data is None:
++            return Frozen({})
++        return Frozen({k: v.dtype for k, v in self.variables.items()})
+ 
+     @property
+     def indexes(self) -> Indexes[pd.Index]:
++        if self._data is None:
++            return Indexes({}, {})
+         return self._data.indexes
+ 
+     @property
+     def xindexes(self) -> Indexes[Index]:
++        if self._data is None:
++            return Indexes({}, {})
+         return self._data.xindexes
+ 
+     @property
+     def variables(self):
+-        raise NotImplementedError()
++        if self._data is None:
++            return {}
++        return self._data._coord_variables
+ 
+     def _update_coords(self, coords, indexes):
+-        raise NotImplementedError()
++        if self._data is None:
++            raise TypeError("Cannot update empty Coordinates")
++        self._data._update_coords(coords, indexes)
+ 
+     def _maybe_drop_multiindex_coords(self, coords):
+-        raise NotImplementedError()
++        if self._data is None:
++            return
++        self._data._maybe_drop_multiindex_coords(coords)
+ 
+     def __iter__(self) -> Iterator[Hashable]:
+         # needs to be in the same order as the dataset variables
+@@ -86,7 +110,162 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+         return formatting.coords_repr(self)
+ 
+     def to_dataset(self) -> Dataset:
+-        raise NotImplementedError()
++        """Convert these coordinates to a Dataset.
++
++        Returns
++        -------
++        Dataset
++            Dataset containing only these coordinates.
++        """
++        from xarray.core.dataset import Dataset
++
++        if self._data is None:
++            return Dataset()
++        
++        coord_names = set(self._names)
++        return Dataset._construct_direct(
++            variables=dict(self.variables),
++            coord_names=coord_names,
++            indexes=dict(self.xindexes),
++        )
++
++    @classmethod
++    def from_pandas_multiindex(
++        cls,
++        midx: pd.MultiIndex,
++        dim: Hashable | None = None,
++        index_type: type[Index] | None = None,
++    ) -> Coordinates:
++        """Create Coordinates from a pandas MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            MultiIndex to convert to coordinates.
++        dim : hashable, optional
++            Name of the dimension to assign to the coordinates.
++            If not provided, uses the name of the MultiIndex.
++        index_type : type of Index, optional
++            Type of index to create. Defaults to PandasMultiIndex.
++
++        Returns
++        -------
++        Coordinates
++            Coordinates object containing the MultiIndex coordinates.
++        """
++        from xarray.core.dataset import Dataset
++        from xarray.indexes import PandasMultiIndex
++
++        if index_type is None:
++            index_type = PandasMultiIndex
++        
++        if dim is None:
++            dim = midx.name
++        
++        # Create a Dataset with the MultiIndex
++        ds = Dataset._construct_direct(
++            variables={},
++            coord_names=set(),
++            indexes={},
++        )
++        
++        # Add the MultiIndex as coordinates
++        ds = ds._assign_coords_from_multiindex({dim: midx}, index_type=index_type)
++        
++        return ds.coords
++
++    def get(self, key: Hashable, default: Any = None) -> T_DataArray | Any:
++        """Return the value for key if key is in the coordinates, else default."""
++        try:
++            return self[key]
++        except KeyError:
++            return default
++
++    def items(self) -> Iterator[tuple[Hashable, T_DataArray]]:
++        """Return an iterator over (key, value) pairs."""
++        for key in self:
++            yield key, self[key]
++
++    def keys(self) -> Iterator[Hashable]:
++        """Return an iterator over the coordinate names."""
++        return iter(self)
++
++    def values(self) -> Iterator[T_DataArray]:
++        """Return an iterator over coordinate values."""
++        for key in self:
++            yield self[key]
++
++    def copy(self, deep: bool = True) -> Coordinates:
++        """Return a copy of these coordinates.
++
++        Parameters
++        ----------
++        deep : bool, default True
++            Whether to create a deep copy of the underlying data.
++
++        Returns
++        -------
++        Coordinates
++            New Coordinates object.
++        """
++        if self._data is None:
++            return Coordinates()
++        
++        from xarray.core.dataset import Dataset
++        
++        ds = self.to_dataset()
++        if deep:
++            ds = ds.copy(deep=True)
++        
++        return ds.coords
++
++    def equals(self, other: Coordinates) -> bool:
++        """True if two Coordinates objects have the same coordinate variables
++        and indexes.
++
++        See Also
++        --------
++        Coordinates.identical
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        
++        if set(self) != set(other):
++            return False
++        
++        for key in self:
++            if not self[key].equals(other[key]):
++                return False
++        
++        # Check indexes
++        if self.xindexes != other.xindexes:
++            return False
++        
++        return True
++
++    def identical(self, other: Coordinates) -> bool:
++        """True if two Coordinates objects have the same coordinate variables,
++        indexes, and attributes.
++
++        See Also
++        --------
++        Coordinates.equals
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        
++        if set(self) != set(other):
++            return False
++        
++        for key in self:
++            if not self[key].identical(other[key]):
++                return False
++        
++        # Check indexes
++        if self.xindexes != other.xindexes:
++            return False
++        
++        return True
+ 
+     def to_index(self, ordered_dims: Sequence[Hashable] | None = None) -> pd.Index:
+         """Convert all index coordinates into a :py:class:`pandas.Index`.
+@@ -244,6 +423,9 @@ class DatasetCoordinates(Coordinates):
+     dimensions and the values given by the corresponding xarray.Coordinate
+     objects.
+     """
++    
++    def __init__(self, dataset: Dataset) -> None:
++        super().__init__(dataset)
+ 
+     _data: Dataset
+ 

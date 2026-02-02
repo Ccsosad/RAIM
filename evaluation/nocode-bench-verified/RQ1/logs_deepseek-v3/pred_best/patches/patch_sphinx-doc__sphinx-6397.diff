@@ -1,0 +1,31 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..514f2f2 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -392,6 +392,9 @@ class Documenter:
+ 
+         Let the user process it via the ``autodoc-process-signature`` event.
+         """
++        if self.env.config.autodoc_typehints == 'none':
++            return ''
++
+         if self.args is not None:
+             # signature given explicitly
+             args = "(%s)" % self.args
+@@ -408,7 +411,7 @@ class Documenter:
+                                (self.fullname, err), type='autodoc')
+                 args = None
+ 
+-        retann = self.retann
++        retann = self.retann if self.env.config.autodoc_typehints != 'none' else None
+ 
+         result = self.env.events.emit_firstresult('autodoc-process-signature',
+                                                   self.objtype, self.fullname,
+@@ -1614,6 +1617,7 @@ def setup(app):
+     app.add_config_value('autodoc_mock_imports', [], True)
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
++    app.add_config_value('autodoc_typehints', 'signature', True)
+     app.add_event('autodoc-process-docstring')
+     app.add_event('autodoc-process-signature')
+     app.add_event('autodoc-skip-member')

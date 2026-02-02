@@ -1,0 +1,39 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..f88977c 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -440,18 +440,34 @@ class BaseRepresentationOrDifferential(ShapedLikeNDArray):
+         raise NotImplementedError()
+ 
+     def __mul__(self, other):
++        if hasattr(self, 'differentials') and self.differentials:
++            cart = self.to_cartesian()
++            mul_cart = cart * other
++            return self.from_cartesian(mul_cart)
+         return self._scale_operation(operator.mul, other)
+ 
+     def __rmul__(self, other):
+         return self.__mul__(other)
+ 
+     def __truediv__(self, other):
++        if hasattr(self, 'differentials') and self.differentials:
++            cart = self.to_cartesian()
++            div_cart = cart / other
++            return self.from_cartesian(div_cart)
+         return self._scale_operation(operator.truediv, other)
+ 
+     def __div__(self, other):  # pragma: py2
++        if hasattr(self, 'differentials') and self.differentials:
++            cart = self.to_cartesian()
++            div_cart = cart / other
++            return self.from_cartesian(div_cart)
+         return self._scale_operation(operator.truediv, other)
+ 
+     def __neg__(self):
++        if hasattr(self, 'differentials') and self.differentials:
++            cart = self.to_cartesian()
++            neg_cart = -cart
++            return self.from_cartesian(neg_cart)
+         return self._scale_operation(operator.neg)
+ 
+     # Follow numpy convention and make an independent copy.

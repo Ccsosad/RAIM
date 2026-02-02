@@ -1,0 +1,172 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..25132f5 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -2069,6 +2069,161 @@ Examples
+ # =========================================================================== #
+ 
+ 
++@_deprecate_positional_args
++def displot(
++    *,
++    data=None,
++    x=None, y=None,
++    hue=None, row=None, col=None,
++    weights=None,
++    kind="hist",
++    rug=False,
++    rug_kws=None,
++    log_scale=None,
++    legend=True,
++    **kwargs
++):
++    """Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distribution of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    ``kind`` parameter selects the approach to use:
++
++    - ``hist`` (default) for histograms
++    - ``kde`` for kernel density estimates
++    - ``ecdf`` for empirical cumulative distribution functions
++
++    Additionally, a ``rug`` can be added to any kind of plot to show
++    individual observations.
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure. Either a long-form collection of vectors
++        that can be assigned to named variables or a wide-form dataset that
++        will be internally reshaped.
++    x, y : vectors or keys in ``data``
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in ``data``
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in ``data``
++        Variables that define subsets to plot on different facets.
++    weights : vector or key in ``data``
++        If provided, weight the contribution of the corresponding data points
++        towards the kernel density estimate or histogram bin count.
++    kind : {"hist", "kde", "ecdf"}
++        Approach for visualizing the data. Default is "hist".
++    rug : bool
++        If True, show each observation with marginal ticks (like ``rugplot``).
++    rug_kws : dict
++        Keyword arguments for ``rugplot``.
++    log_scale : bool or number, or pair of bools or numbers
++        Set axis scale(s) to log. A single value sets the data axis for any
++        numeric axes in the plot. A pair of values sets each axis independently.
++        Numeric values are interpreted as the desired base (default 10).
++    legend : bool
++        If False, suppress the legend for semantic variables.
++    kwargs : key, value pairings
++        Other keyword arguments are passed to the underlying plotting function
++        (``histplot``, ``kdeplot``, or ``ecdfplot``).
++
++    Returns
++    -------
++    g : FacetGrid
++        Returns the ``FacetGrid`` object with the plot on it for further
++        tweaking.
++
++    See Also
++    --------
++    histplot : Plot a histogram with optional kernel density estimate.
++    kdeplot : Plot univariate or bivariate distributions using kernel
++              density estimation.
++    ecdfplot : Plot empirical cumulative distribution functions.
++    rugplot : Plot marginal ticks.
++
++    Examples
++    --------
++
++    .. include:: ../docstrings/displot.ipynb
++
++    """
++    # Handle deprecation of positional arguments
++    # This function is keyword-only, but we use the decorator for consistency
++
++    # Initialize the FacetGrid object
++    g = FacetGrid(
++        data=data,
++        row=row, col=col,
++        hue=hue,
++        legend_out=False,
++    )
++
++    # Prepare keyword arguments for the plotting function
++    plot_kws = kwargs.copy()
++    plot_kws["weights"] = weights
++    if log_scale is not None:
++        plot_kws["log_scale"] = log_scale
++
++    # Define the plotting function based on kind
++    if kind == "hist":
++        plot_func = histplot
++    elif kind == "kde":
++        plot_func = kdeplot
++    elif kind == "ecdf":
++        plot_func = ecdfplot
++    else:
++        raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind}")
++
++    # Add the rug plot if requested
++    if rug:
++        rug_kws = {} if rug_kws is None else rug_kws.copy()
++        rug_kws.setdefault("height", 0.025)
++
++    # Define a function that plots on each facet
++    def plot_single_facet(x, y, hue, data, **kwargs):
++        # Plot the main distribution
++        ax = kwargs.pop("ax", None)
++        if ax is None:
++            ax = plt.gca()
++        
++        # Call the appropriate plotting function
++        plot_func(x=x, y=y, hue=hue, data=data, ax=ax, **kwargs)
++        
++        # Add rug plot if requested
++        if rug:
++            rug_data = data
++            if hue is not None:
++                # Filter data for current hue level
++                hue_level = data[hue].iloc[0]
++                rug_data = data[data[hue] == hue_level]
++            rugplot(x=x, y=y, data=rug_data, ax=ax, **rug_kws)
++        
++        return ax
++
++    # Map the plotting function to the FacetGrid
++    g.map_dataframe(plot_single_facet, x=x, y=y, **plot_kws)
++
++    # Adjust the legend
++    if legend and hue is not None:
++        g.add_legend()
++
++    # Apply log scaling if requested
++    if log_scale is not None:
++        if isinstance(log_scale, (bool, int, float)):
++            log_scale = (log_scale, log_scale)
++        for ax in g.axes.flat:
++            if log_scale[0]:
++                ax.set_xscale("log", base=log_scale[0] if isinstance(log_scale[0], (int, float)) else 10)
++            if log_scale[1]:
++                ax.set_yscale("log", base=log_scale[1] if isinstance(log_scale[1], (int, float)) else 10)
++
++    return g
++
++
++# =========================================================================== #
++
++
+ def _freedman_diaconis_bins(a):
+     """Calculate number of hist bins using Freedman-Diaconis rule."""
+     # From https://stats.stackexchange.com/questions/798/
+@@ -2322,4 +2477,4 @@ def distplot(
+         else:
+             ax.set_xlabel(axlabel)
+ 
+-    return ax
++    return ax

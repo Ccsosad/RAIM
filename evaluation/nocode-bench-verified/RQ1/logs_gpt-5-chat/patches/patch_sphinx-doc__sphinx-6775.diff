@@ -1,0 +1,15 @@
+diff --git a/sphinx/builders/latex/__init__.py b/sphinx/builders/latex/__init__.py
+index 1c44ce3..0a35631 100644
+--- a/sphinx/builders/latex/__init__.py
++++ b/sphinx/builders/latex/__init__.py
+@@ -178,6 +178,10 @@ class LaTeXBuilder(Builder):
+ 
+         # Apply extension settings to context
+         self.context['packages'] = self.usepackages
++        # Apply user provided extra packages before hyperref
++        extrapackages = self.config.latex_elements.get('extrapackages')
++        if extrapackages:
++            self.context['packages'] = extrapackages + '\n' + self.context['packages']
+ 
+         # Apply user settings to context
+         self.context.update(self.config.latex_elements)

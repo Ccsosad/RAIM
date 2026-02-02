@@ -1,0 +1,47 @@
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index b79bffd..7fcb1bf 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -1835,13 +1835,15 @@ class MultipleLocator(Locator):
+     interval.
+     """
+ 
+-    def __init__(self, base=1.0):
+-        self._edge = _Edge_integer(base, 0)
++    def __init__(self, base=1.0, offset=0.0):
++        self._edge = _Edge_integer(base, offset)
+ 
+-    def set_params(self, base):
++    def set_params(self, base=None, offset=None):
+         """Set parameters within this locator."""
+         if base is not None:
+-            self._edge = _Edge_integer(base, 0)
++            self._edge = _Edge_integer(base, self._edge.offset)
++        if offset is not None:
++            self._edge = _Edge_integer(self._edge.step, offset)
+ 
+     def __call__(self):
+         """Return the locations of the ticks."""
+@@ -1852,9 +1854,9 @@ class MultipleLocator(Locator):
+         if vmax < vmin:
+             vmin, vmax = vmax, vmin
+         step = self._edge.step
+-        vmin = self._edge.ge(vmin) * step
++        vmin = self._edge.ge(vmin) * step + self._edge.offset
+         n = (vmax - vmin + 0.001 * step) // step
+-        locs = vmin - step + np.arange(n + 3) * step
++        locs = vmin - step + np.arange(n + 3) * step + self._edge.offset
+         return self.raise_if_exceeds(locs)
+ 
+     def view_limits(self, dmin, dmax):
+@@ -1863,8 +1865,8 @@ class MultipleLocator(Locator):
+         contain the data.
+         """
+         if mpl.rcParams['axes.autolimit_mode'] == 'round_numbers':
+-            vmin = self._edge.le(dmin) * self._edge.step
+-            vmax = self._edge.ge(dmax) * self._edge.step
++            vmin = self._edge.le(dmin) * self._edge.step + self._edge.offset
++            vmax = self._edge.ge(dmax) * self._edge.step + self._edge.offset
+             if vmin == vmax:
+                 vmin -= 1
+                 vmax += 1

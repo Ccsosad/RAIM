@@ -1,0 +1,438 @@
+diff --git a/seaborn/categorical.py b/seaborn/categorical.py
+index 8858341..5e5a40e 100644
+--- a/seaborn/categorical.py
++++ b/seaborn/categorical.py
+@@ -1435,112 +1435,36 @@ class _CategoricalStatPlotter(_CategoricalPlotter):
+             width = self.width
+         return width
+ 
+-    def estimate_statistic(self, estimator, ci, n_boot, seed):
+-
+-        if self.hue_names is None:
+-            statistic = []
+-            confint = []
+-        else:
+-            statistic = [[] for _ in self.plot_data]
+-            confint = [[] for _ in self.plot_data]
+-
+-        for i, group_data in enumerate(self.plot_data):
+-
+-            # Option 1: we have a single layer of grouping
+-            # --------------------------------------------
+-
+-            if self.plot_hues is None:
+-
+-                if self.plot_units is None:
+-                    stat_data = remove_na(group_data)
+-                    unit_data = None
+-                else:
+-                    unit_data = self.plot_units[i]
+-                    have = pd.notnull(np.c_[group_data, unit_data]).all(axis=1)
+-                    stat_data = group_data[have]
+-                    unit_data = unit_data[have]
+-
+-                # Estimate a statistic from the vector of data
+-                if not stat_data.size:
+-                    statistic.append(np.nan)
+-                else:
+-                    statistic.append(estimator(stat_data))
+-
+-                # Get a confidence interval for this estimate
+-                if ci is not None:
+-
+-                    if stat_data.size < 2:
+-                        confint.append([np.nan, np.nan])
+-                        continue
+-
+-                    if ci == "sd":
+-
+-                        estimate = estimator(stat_data)
+-                        sd = np.std(stat_data)
+-                        confint.append((estimate - sd, estimate + sd))
+-
+-                    else:
+-
+-                        boots = bootstrap(stat_data, func=estimator,
+-                                          n_boot=n_boot,
+-                                          units=unit_data,
+-                                          seed=seed)
+-                        confint.append(utils.ci(boots, ci))
+-
+-            # Option 2: we are grouping by a hue layer
+-            # ----------------------------------------
+-
++    def estimate_statistic(self, estimator, errorbar, n_boot, seed, func_kwargs=None):
++        
++        # Import here to avoid circular imports
++        from .errors import compute_errorbars
++        
++        if func_kwargs is None:
++            func_kwargs = {}
++        
++        # Handle deprecated ci parameter (for backward compatibility)
++        if errorbar is not None and not isinstance(errorbar, str) and not isinstance(errorbar, tuple) and not callable(errorbar):
++            # This is likely the old ci parameter
++            import warnings
++            warnings.warn(
++                "The `ci` parameter is deprecated. Use `errorbar` instead.",
++                FutureWarning
++            )
++            # Convert old ci to new errorbar format
++            if errorbar == "sd":
++                errorbar = "sd"
+             else:
+-                for j, hue_level in enumerate(self.hue_names):
+-
+-                    if not self.plot_hues[i].size:
+-                        statistic[i].append(np.nan)
+-                        if ci is not None:
+-                            confint[i].append((np.nan, np.nan))
+-                        continue
+-
+-                    hue_mask = self.plot_hues[i] == hue_level
+-                    if self.plot_units is None:
+-                        stat_data = remove_na(group_data[hue_mask])
+-                        unit_data = None
+-                    else:
+-                        group_units = self.plot_units[i]
+-                        have = pd.notnull(
+-                            np.c_[group_data, group_units]
+-                        ).all(axis=1)
+-                        stat_data = group_data[hue_mask & have]
+-                        unit_data = group_units[hue_mask & have]
+-
+-                    # Estimate a statistic from the vector of data
+-                    if not stat_data.size:
+-                        statistic[i].append(np.nan)
+-                    else:
+-                        statistic[i].append(estimator(stat_data))
+-
+-                    # Get a confidence interval for this estimate
+-                    if ci is not None:
+-
+-                        if stat_data.size < 2:
+-                            confint[i].append([np.nan, np.nan])
+-                            continue
+-
+-                        if ci == "sd":
+-
+-                            estimate = estimator(stat_data)
+-                            sd = np.std(stat_data)
+-                            confint[i].append((estimate - sd, estimate + sd))
+-
+-                        else:
+-
+-                            boots = bootstrap(stat_data, func=estimator,
+-                                              n_boot=n_boot,
+-                                              units=unit_data,
+-                                              seed=seed)
+-                            confint[i].append(utils.ci(boots, ci))
+-
++                errorbar = ("ci", errorbar)
++        
++        statistic, confint = compute_errorbars(
++            self.plot_data, estimator, errorbar, n_boot, seed,
++            self.hue_names, self.plot_hues, self.plot_units, func_kwargs
++        )
++        
+         # Save the resulting values for plotting
+-        self.statistic = np.array(statistic)
+-        self.confint = np.array(confint)
++        self.statistic = statistic
++        self.confint = confint
+ 
+     def draw_confints(self, ax, at_group, confint, colors,
+                       errwidth=None, capsize=None, **kws):
+@@ -1575,14 +1499,14 @@ class _BarPlotter(_CategoricalStatPlotter):
+     """Show point estimates and confidence intervals with bars."""
+ 
+     def __init__(self, x, y, hue, data, order, hue_order,
+-                 estimator, ci, n_boot, units, seed,
++                 estimator, errorbar, n_boot, units, seed,
+                  orient, color, palette, saturation, width,
+                  errcolor, errwidth, capsize, dodge):
+         """Initialize the plotter."""
+         self.establish_variables(x, y, hue, data, orient,
+                                  order, hue_order, units)
+         self.establish_colors(color, palette, saturation)
+-        self.estimate_statistic(estimator, ci, n_boot, seed)
++        self.estimate_statistic(estimator, errorbar, n_boot, seed)
+ 
+         self.dodge = dodge
+         self.width = width
+@@ -1647,14 +1571,14 @@ class _PointPlotter(_CategoricalStatPlotter):
+ 
+     """Show point estimates and confidence intervals with (joined) points."""
+     def __init__(self, x, y, hue, data, order, hue_order,
+-                 estimator, ci, n_boot, units, seed,
++                 estimator, errorbar, n_boot, units, seed,
+                  markers, linestyles, dodge, join, scale,
+                  orient, color, palette, errwidth=None, capsize=None):
+         """Initialize the plotter."""
+         self.establish_variables(x, y, hue, data, orient,
+                                  order, hue_order, units)
+         self.establish_colors(color, palette, 1)
+-        self.estimate_statistic(estimator, ci, n_boot, seed)
++        self.estimate_statistic(estimator, errorbar, n_boot, seed)
+ 
+         # Override the default palette for single-color plots
+         if hue is None and color is None and palette is None:
+@@ -1794,6 +1718,26 @@ class _CountPlotter(_BarPlotter):
+     require_numeric = False
+ 
+ 
++def _deprecate_ci(ci, errorbar):
++    """Handle backward compatibility for ci parameter."""
++    if ci is not None and errorbar is not None:
++        raise ValueError("Cannot use both `ci` and `errorbar`.")
++    
++    if ci is not None:
++        import warnings
++        warnings.warn(
++            "The `ci` parameter is deprecated. Use `errorbar` instead.",
++            FutureWarning
++        )
++        if ci == "sd":
++            return "sd"
++        else:
++            # ci is a number like 95
++            return ("ci", ci)
++    
++    return errorbar
++
++
+ class _LVPlotter(_CategoricalPlotter):
+ 
+     def __init__(self, x, y, hue, data, order, hue_order,
+diff --git a/seaborn/errors.py b/seaborn/errors.py
+new file mode 100644
+index 0000000..ca940a8
+--- /dev/null
++++ b/seaborn/errors.py
+@@ -0,0 +1,226 @@
++"""
++Utilities for computing error bars for aggregate statistics.
++"""
++import numpy as np
++import pandas as pd
++from .utils import bootstrap
++from .algorithms import percentile_of_score
++
++
++def _get_errorbar_range(errorbar, data, estimator, n_boot, seed, func_kwargs):
++    """
++    Compute error bar range given data and estimator.
++    
++    Parameters
++    ----------
++    errorbar : str, tuple, or callable
++        Specification for how to compute the error bars.
++    data : array-like
++        Data vector from which to compute the estimate.
++    estimator : callable
++        Function to compute the statistic.
++    n_boot : int
++        Number of bootstrap samples.
++    seed : int or None
++        Random seed for bootstrap.
++    func_kwargs : dict
++        Additional keyword arguments to pass to estimator.
++        
++    Returns
++    -------
++    ci_low, ci_high : float
++        Lower and upper bounds of the error bar.
++    """
++    if errorbar is None:
++        return np.nan, np.nan
++    
++    # Handle string specifications
++    if isinstance(errorbar, str):
++        if errorbar == "sd":
++            estimate = estimator(data, **func_kwargs)
++            sd = np.std(data)
++            return estimate - sd, estimate + sd
++        elif errorbar == "se":
++            estimate = estimator(data, **func_kwargs)
++            se = np.std(data) / np.sqrt(len(data))
++            return estimate - se, estimate + se
++        elif errorbar == "ci":
++            # Default 95% confidence interval
++            boots = bootstrap(data, func=estimator, n_boot=n_boot, 
++                            seed=seed, func_kwargs=func_kwargs)
++            return np.percentile(boots, 2.5), np.percentile(boots, 97.5)
++        else:
++            raise ValueError(f"Invalid errorbar method: {errorbar}")
++    
++    # Handle tuple specifications like ("ci", 95) or ("pi", 50)
++    elif isinstance(errorbar, tuple):
++        method, level = errorbar
++        
++        if method == "ci":
++            # Confidence interval
++            boots = bootstrap(data, func=estimator, n_boot=n_boot,
++                            seed=seed, func_kwargs=func_kwargs)
++            low = (100 - level) / 2
++            high = 100 - low
++            return np.percentile(boots, low), np.percentile(boots, high)
++        
++        elif method == "pi":
++            # Percentile interval (predictive interval)
++            if not 0 <= level <= 100:
++                raise ValueError("Level must be between 0 and 100")
++            low = (100 - level) / 2
++            high = 100 - low
++            return np.percentile(data, low), np.percentile(data, high)
++        
++        elif method == "se":
++            # Scaled standard error
++            estimate = estimator(data, **func_kwargs)
++            se = np.std(data) / np.sqrt(len(data))
++            scale = level / 1  # level is the multiplier
++            return estimate - se * scale, estimate + se * scale
++        
++        elif method == "sd":
++            # Scaled standard deviation
++            estimate = estimator(data, **func_kwargs)
++            sd = np.std(data)
++            scale = level / 1
++            return estimate - sd * scale, estimate + sd * scale
++        
++        else:
++            raise ValueError(f"Invalid errorbar method: {method}")
++    
++    # Handle callable
++    elif callable(errorbar):
++        result = errorbar(data)
++        try:
++            ci_low, ci_high = result
++        except (TypeError, ValueError):
++            raise ValueError(
++                "Custom errorbar function must return a tuple of (low, high)"
++            )
++        return ci_low, ci_high
++    
++    else:
++        raise TypeError(f"Invalid errorbar type: {type(errorbar)}")
++
++
++def compute_errorbars(plot_data, estimator, errorbar, n_boot, seed, 
++                     hue_names=None, plot_hues=None, plot_units=None,
++                     func_kwargs=None):
++    """
++    Compute statistics and error bars for categorical plots.
++    
++    Parameters
++    ----------
++    plot_data : list of arrays
++        Data for each categorical group.
++    estimator : callable
++        Function to compute the statistic.
++    errorbar : str, tuple, or callable
++        Specification for error bars.
++    n_boot : int
++        Number of bootstrap samples.
++    seed : int or None
++        Random seed for bootstrap.
++    hue_names : list or None
++        Names of hue levels.
++    plot_hues : list of arrays or None
++        Hue assignments for each data point.
++    plot_units : list of arrays or None
++        Unit identifiers for multilevel data.
++    func_kwargs : dict or None
++        Additional keyword arguments to pass to estimator.
++        
++    Returns
++    -------
++    statistic : array
++        Estimated statistic for each group/hue combination.
++    confint : array
++        Confidence intervals for each estimate.
++    """
++    if func_kwargs is None:
++        func_kwargs = {}
++    
++    def remove_na(arr):
++        return arr[pd.notnull(arr)]
++    
++    if hue_names is None:
++        statistic = []
++        confint = []
++    else:
++        statistic = [[] for _ in plot_data]
++        confint = [[] for _ in plot_data]
++    
++    for i, group_data in enumerate(plot_data):
++        
++        # Option 1: single layer of grouping
++        if plot_hues is None:
++            
++            if plot_units is None:
++                stat_data = remove_na(group_data)
++                unit_data = None
++            else:
++                unit_data = plot_units[i]
++                have = pd.notnull(np.c_[group_data, unit_data]).all(axis=1)
++                stat_data = group_data[have]
++                unit_data = unit_data[have]
++            
++            # Estimate statistic
++            if not stat_data.size:
++                statistic.append(np.nan)
++            else:
++                statistic.append(estimator(stat_data, **func_kwargs))
++            
++            # Get error bar range
++            if errorbar is not None:
++                if stat_data.size < 2:
++                    confint.append([np.nan, np.nan])
++                else:
++                    ci_low, ci_high = _get_errorbar_range(
++                        errorbar, stat_data, estimator, n_boot, seed, func_kwargs
++                    )
++                    confint.append((ci_low, ci_high))
++        
++        # Option 2: grouping by hue layer
++        else:
++            for j, hue_level in enumerate(hue_names):
++                
++                if not plot_hues[i].size:
++                    statistic[i].append(np.nan)
++                    if errorbar is not None:
++                        confint[i].append((np.nan, np.nan))
++                    continue
++                
++                hue_mask = plot_hues[i] == hue_level
++                if plot_units is None:
++                    stat_data = remove_na(group_data[hue_mask])
++                    unit_data = None
++                else:
++                    group_units = plot_units[i]
++                    have = pd.notnull(
++                        np.c_[group_data, group_units]
++                    ).all(axis=1)
++                    stat_data = group_data[hue_mask & have]
++                    unit_data = group_units[hue_mask & have]
++                
++                # Estimate statistic
++                if not stat_data.size:
++                    statistic[i].append(np.nan)
++                else:
++                    statistic[i].append(estimator(stat_data, **func_kwargs))
++                
++                # Get error bar range
++                if errorbar is not None:
++                    if stat_data.size < 2:
++                        confint[i].append([np.nan, np.nan])
++                    else:
++                        ci_low, ci_high = _get_errorbar_range(
++                            errorbar, stat_data, estimator, n_boot, seed, func_kwargs
++                        )
++                        confint[i].append((ci_low, ci_high))
++    
++    # Convert to arrays
++    statistic = np.array(statistic)
++    confint = np.array(confint)
++    
++    return statistic, confint

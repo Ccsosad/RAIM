@@ -1,0 +1,63 @@
+diff --git a/seaborn/legend.py b/seaborn/legend.py
+new file mode 100644
+index 0000000..087e43e
+--- /dev/null
++++ b/seaborn/legend.py
+@@ -0,0 +1,57 @@
++"""
++Functions for working with legends.
++"""
++
++import matplotlib as mpl
++
++def move_legend(obj, loc, **kwargs):
++    """
++    Move an existing legend to a new location or update its properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.FacetGrid
++        The object with the legend.
++    loc : str or int
++        The new location of the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid values.
++    **kwargs : dict
++        Additional keyword arguments are passed to :meth:`matplotlib.legend.Legend.set`
++        and can be used to set other properties, such as `bbox_to_anchor`.
++
++    Returns
++    -------
++    None
++
++    Examples
++    --------
++    .. include:: ../doc/docstrings/move_legend.ipynb
++    """
++    # Get the legend from the object
++    if hasattr(obj, "legend"):
++        legend = obj.legend
++    elif hasattr(obj, "legend_"):
++        legend = obj.legend_
++    else:
++        raise ValueError("The object does not have a legend.")
++
++    if legend is None:
++        raise ValueError("The object does not have a legend.")
++
++    # Update the legend properties
++    legend.set(loc=loc, **kwargs)
++
++    # If the legend is a figure legend, we need to update the figure's layout?
++    # Actually, we don't change the layout automatically.
++    # But we should update the figure's subplot adjustment if the legend is outside?
++    # The user should handle that.
++
++    # For FacetGrid with legend_out=True, the legend is a figure legend.
++    # We might need to update the _tight_layout_rect? But that's internal.
++    # We leave it as is.
++
++    # Redraw the figure to update the changes
++    if hasattr(obj, "figure"):
++        obj.figure.canvas.draw_idle()
++    elif hasattr(obj, "get_figure"):
++        obj.get_figure().canvas.draw_idle()

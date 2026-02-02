@@ -1,0 +1,75 @@
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+index 9e23fee..399b68e 100644
+--- a/astropy/cosmology/parameter.py
++++ b/astropy/cosmology/parameter.py
+@@ -1,3 +1,4 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ import astropy.units as u
+@@ -46,8 +47,10 @@ class Parameter:
+ 
+     _registry_validators = {}
+ 
+-    def __init__(self, fvalidate="default", doc=None, *,
++    def __init__(self, *, fvalidate="default", doc=None,
+                  unit=None, equivalencies=[], fmt=".3g", derived=False):
++        # Store the original fvalidate argument for repr
++        self._fvalidate_arg = fvalidate
+         # parse registered fvalidate
+         if callable(fvalidate):
+             pass
+@@ -209,9 +212,52 @@ class Parameter:
+         return register
+ 
+     # -------------------------------------------
++    # cloning
++
++    def clone(self, **kwargs):
++        """Return a copy of this Parameter with changed values.
++
++        Parameters
++        ----------
++        **kwargs
++            Arguments to change in the new Parameter. Valid arguments are
++            those of `__init__`.
++
++        Returns
++        -------
++        `~astropy.cosmology.Parameter`
++            A new Parameter instance.
++        """
++        # Get current arguments
++        current = dict(fvalidate=self._fvalidate_arg,
++                       doc=self.__doc__,
++                       unit=self._unit,
++                       equivalencies=self._equivalencies,
++                       fmt=self._fmt,
++                       derived=self._derived)
++        # Update with any changes
++        current.update(kwargs)
++        return self.__class__(**current)
++
++    # -------------------------------------------
++
++    def __eq__(self, other):
++        if not isinstance(other, Parameter):
++            return NotImplemented
++        return (self._fvalidate_arg == other._fvalidate_arg and
++                self.__doc__ == other.__doc__ and
++                self._unit == other._unit and
++                self._equivalencies == other._equivalencies and
++                self._fmt == other._fmt and
++                self._derived == other._derived)
+ 
+     def __repr__(self):
+-        return f"<Parameter {self._attr_name!r} at {hex(id(self))}>"
++        # Build a string that can be used to recreate the object.
++        # Use the stored original fvalidate argument.
++        return (f"{self.__class__.__name__}(fvalidate={self._fvalidate_arg!r}, "
++                f"doc={self.__doc__!r}, unit={self._unit!r}, "
++                f"equivalencies={self._equivalencies!r}, fmt={self._fmt!r}, "
++                f"derived={self._derived!r})")
+ 
+ 
+ # ===================================================================

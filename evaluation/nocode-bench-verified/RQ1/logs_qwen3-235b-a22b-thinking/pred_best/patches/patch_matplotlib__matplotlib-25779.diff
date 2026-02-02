@@ -1,0 +1,93 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..7c79ccf 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1654,6 +1654,33 @@ class Ellipse(Patch):
+         return self.get_patch_transform().transform(
+             [(-1, -1), (1, -1), (1, 1), (-1, 1)])
+ 
++    def get_vertices(self):
++        """
++        Return the coordinates of the vertices of the major axis.
++
++        Returns
++        -------
++        tuple
++            A tuple of two points (x1, y1), (x2, y2) representing the endpoints
++            of the major axis.
++        """
++        # Points on the unit circle corresponding to the major axis vertices
++        points = [(-1, 0), (1, 0)]
++        return self.get_patch_transform().transform(points)
++
++    def get_co_vertices(self):
++        """
++        Return the coordinates of the co-vertices of the minor axis.
++
++        Returns
++        -------
++        tuple
++            A tuple of two points (x1, y1), (x2, y2) representing the endpoints
++            of the minor axis.
++        """
++        # Points on the unit circle corresponding to the co-vertices
++        points = [(0, -1), (0, 1)]
++        return self.get_patch_transform().transform(points)
+ 
+ class Annulus(Patch):
+     """
+diff --git a/galleries/examples/shapes_and_collections/ellipse_arrow.py b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+new file mode 100644
+index 0000000..47a3042
+--- /dev/null
++++ b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+@@ -0,0 +1,49 @@
++"""
++==================
++Ellipse with Arrow
++==================
++
++This example shows how to add an arrow to an ellipse showing a clockwise
++or counter-clockwise rotation of the ellipse. The coordinates of the
++vertices are used to place the arrow exactly on the ellipse.
++"""
++
++import matplotlib.pyplot as plt
++from matplotlib.patches import Ellipse
++
++# Create a figure and axis
++fig, ax = plt.subplots(figsize=(8, 6))
++
++# Create an ellipse with width 4, height 2, rotated by 30 degrees
++ellipse = Ellipse((0, 0), width=4, height=2, angle=30, 
++                  edgecolor='b', facecolor='none', linewidth=2)
++ax.add_patch(ellipse)
++
++# Get the vertices of the major axis
++vertices = ellipse.get_vertices()
++# Get the co-vertices of the minor axis
++co_vertices = ellipse.get_co_vertices()
++
++# For demonstration, let's add an arrow showing counter-clockwise rotation
++# We'll place the arrow at the end of the major axis
++arrow_start = vertices[1]  # End of major axis
++arrow_end = co_vertices[1]  # End of minor axis (for counter-clockwise rotation)
++
++# Calculate the direction vector
++dx = arrow_end[0] - arrow_start[0]
++dy = arrow_end[1] - arrow_start[1]
++
++# Add the arrow
++ax.arrow(arrow_start[0], arrow_start[1], dx, dy, 
++         head_width=0.2, head_length=0.3, fc='red', ec='red', 
++         length_includes_head=True)
++
++# Set limits and labels
++ax.set_xlim(-3, 3)
++ax.set_ylim(-3, 3)
++ax.set_aspect('equal')
++ax.set_title('Ellipse with Rotation Arrow')
++ax.set_xlabel('X')
++ax.set_ylabel('Y')
++
++plt.show()

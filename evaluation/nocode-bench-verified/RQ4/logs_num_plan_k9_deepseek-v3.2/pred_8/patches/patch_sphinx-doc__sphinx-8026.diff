@@ -1,0 +1,43 @@
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+index 796b7ad..82670fe 100644
+--- a/sphinx/builders/__init__.py
++++ b/sphinx/builders/__init__.py
+@@ -107,6 +107,8 @@ class Builder:
+         self.imagedir = ""
+         # relative path to image directory from current docname (used at writing docs)
+         self.imgpath = ""
++        # current document name
++        self.current_docname = None  # type: str
+ 
+         # these get set later
+         self.parallel_ok = False
+@@ -617,4 +619,4 @@ class Builder:
+             return getattr(self.config, optname)
+         except AttributeError:
+             optname = '%s_%s' % (default, option)
+-            return getattr(self.config, optname)
++            return getattr(self.config, optname)
+diff --git a/sphinx/builders/html/__init__.py b/sphinx/builders/html/__init__.py
+index c052c27..3d2018c 100644
+--- a/sphinx/builders/html/__init__.py
++++ b/sphinx/builders/html/__init__.py
+@@ -603,6 +603,7 @@ class StandaloneHTMLBuilder(Builder):
+         self.handle_page(docname, ctx, event_arg=doctree)
+ 
+     def write_doc_serialized(self, docname: str, doctree: nodes.document) -> None:
++        self.current_docname = docname
+         self.imgpath = relative_uri(self.get_target_uri(docname), self.imagedir)
+         self.post_process_images(doctree)
+         title_node = self.env.longtitles.get(docname)
+@@ -766,7 +767,10 @@ class StandaloneHTMLBuilder(Builder):
+ 
+     def copy_html_logo(self) -> None:
+         if self.config.html_logo:
+-            copy_asset(path.join(self.confdir, self.config.html_logo),
++            # Expand tokens in the logo filename
++            from sphinx.util.images import get_image_filename_for_language
++            logo = get_image_filename_for_language(self.config.html_logo, self.config.language)
++            copy_asset(path.join(self.confdir, logo),
+                        path.join(self.outdir, '_static'))
+ 
+     def copy_html_favicon(self) -> None:

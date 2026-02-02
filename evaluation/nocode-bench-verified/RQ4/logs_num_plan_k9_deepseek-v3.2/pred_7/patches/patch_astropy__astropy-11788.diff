@@ -1,0 +1,22 @@
+diff --git a/astropy/units/format/ogip.py b/astropy/units/format/ogip.py
+index 1200a82..3ab1897 100644
+--- a/astropy/units/format/ogip.py
++++ b/astropy/units/format/ogip.py
+@@ -88,6 +88,11 @@ class OGIP(generic.Generic):
+         for unit in simple_units:
+             names[unit] = getattr(u, unit)
+ 
++        # Add milli- prefix to Angstrom
++        mAngstrom = u.Unit(10**-3 * u.Angstrom)
++        names['mAngstrom'] = mAngstrom
++        names['mangstrom'] = mAngstrom
++
+         # Create a separate, disconnected unit for the special case of
+         # Crab and mCrab, since OGIP doesn't define their quantities.
+         Crab = u.def_unit(['Crab'], prefixes=False, doc='Crab (X-ray flux)')
+@@ -442,4 +447,4 @@ class OGIP(generic.Generic):
+                 return '{} (with data multiplied by {})'.format(
+                     generic._to_string(cls, unit), scale)
+ 
+-        return generic._to_string(unit)
++        return generic._to_string(unit)

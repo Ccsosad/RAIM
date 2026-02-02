@@ -1,0 +1,142 @@
+diff --git a/astropy/visualization/wcsaxes/coordinates_map.py b/astropy/visualization/wcsaxes/coordinates_map.py
+index 54139f3..408cd6f 100644
+--- a/astropy/visualization/wcsaxes/coordinates_map.py
++++ b/astropy/visualization/wcsaxes/coordinates_map.py
+@@ -1,3 +1,4 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ from textwrap import indent
+@@ -49,7 +50,12 @@ class CoordinatesMap:
+         self._axes = axes
+         self._transform = transform
+ 
+-        self.frame = frame_class(axes, self._transform, path=previous_frame_path)
++        # Check if the frame class is specified in coord_meta
++        if 'frame_class' in coord_meta:
++            frame_class_to_use = coord_meta['frame_class']
++        else:
++            frame_class_to_use = frame_class
++        self.frame = frame_class_to_use(axes, self._transform, path=previous_frame_path)
+ 
+         # Set up coordinates
+         self._coords = []
+@@ -144,8 +150,13 @@ class CoordinatesMap:
+     def get_coord_range(self):
+         xmin, xmax = self._axes.get_xlim()
+         ymin, ymax = self._axes.get_ylim()
++        # For 1D transforms, we only need x limits
++        if hasattr(self._transform, 'input_dims') and self._transform.input_dims == 1:
++            limits = [xmin, xmax]
++        else:
++            limits = [xmin, xmax, ymin, ymax]
+         return find_coordinate_range(self._transform,
+-                                     [xmin, xmax, ymin, ymax],
++                                     limits,
+                                      [coord.coord_type for coord in self if coord.coord_index is not None],
+                                      [coord.coord_unit for coord in self if coord.coord_index is not None])
+ 
+@@ -168,4 +179,4 @@ class CoordinatesMap:
+     def __repr__(self):
+         s = f'<CoordinatesMap with {len(self._coords)} world coordinates:\n\n'
+         table = indent(str(self._as_table()), '  ')
+-        return s + table + '\n\n>'
++        return s + table + '\n\n>'
+diff --git a/astropy/visualization/wcsaxes/core.py b/astropy/visualization/wcsaxes/core.py
+index 573033c..5fa2206 100644
+--- a/astropy/visualization/wcsaxes/core.py
++++ b/astropy/visualization/wcsaxes/core.py
+@@ -355,6 +355,13 @@ class WCSAxes(Axes):
+ 
+             transform, coord_meta = transform_coord_meta_from_wcs(self.wcs, self.frame_class, slices=slices)
+ 
++            # Change frame class to RectangularFrame1D if we have only one visible axis
++            visible_count = sum(coord_meta['visible'])
++            if visible_count == 1:
++                self.frame_class = RectangularFrame1D
++            else:
++                self.frame_class = RectangularFrame
++
+         self.coords = CoordinatesMap(self,
+                                      transform=transform,
+                                      coord_meta=coord_meta,
+diff --git a/astropy/visualization/wcsaxes/frame.py b/astropy/visualization/wcsaxes/frame.py
+index e6627e8..9b87e3d 100644
+--- a/astropy/visualization/wcsaxes/frame.py
++++ b/astropy/visualization/wcsaxes/frame.py
+@@ -197,6 +197,21 @@ class BaseFrame(OrderedDict, metaclass=abc.ABCMeta):
+         raise NotImplementedError("")
+ 
+ 
++class RectangularFrame1D(BaseFrame):
++    """
++    A classic rectangular frame for 1D plots.
++    """
++
++    spine_names = 'b'
++
++    def update_spines(self):
++
++        xmin, xmax = self.parent_axes.get_xlim()
++        ymin, ymax = self.parent_axes.get_ylim()
++
++        self['b'].data = np.array(([xmin, ymin], [xmax, ymin]))
++
++
+ class RectangularFrame(BaseFrame):
+     """
+     A classic rectangular frame.
+diff --git a/astropy/visualization/wcsaxes/wcsapi.py b/astropy/visualization/wcsaxes/wcsapi.py
+index 18817a1..a0416e5 100644
+--- a/astropy/visualization/wcsaxes/wcsapi.py
++++ b/astropy/visualization/wcsaxes/wcsapi.py
+@@ -33,10 +33,10 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+             raise ValueError("'slices' should have as many elements as WCS "
+                              "has pixel dimensions (should be {})"
+                              .format(wcs.pixel_n_dim))
+-    elif wcs.pixel_n_dim < 2:
+-        raise ValueError("WCS should have at least 2 pixel dimensions")
+-    elif slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
+-        raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    elif wcs.pixel_n_dim == 2:
++        if slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
++            raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    # For 1D, we don't need to check slices because it should be a single 'x' or 'y'
+ 
+     is_fits_wcs = isinstance(wcs, WCS)
+ 
+@@ -158,6 +158,14 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+         if len(world_keep) == 2:
+             for index in world_keep:
+                 coord_meta['default_ticks_position'][index] = 'bltr'
++    elif frame_class is RectangularFrame1D:
++        # For 1D, we only have one spine: 'b'
++        for i in range(len(coord_meta['type'])):
++            if i in world_keep:
++                index = world_keep[i]
++                coord_meta['default_axislabel_position'][index] = 'b'
++                coord_meta['default_ticklabel_position'][index] = 'b'
++                coord_meta['default_ticks_position'][index] = 'b'
+ 
+     elif frame_class is EllipticalFrame:
+ 
+@@ -182,6 +190,19 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+                 coord_meta['default_ticklabel_position'][index] = frame_class.spine_names
+                 coord_meta['default_ticks_position'][index] = frame_class.spine_names
+ 
++    # Determine the frame class based on the number of visible axes
++    if len(world_keep) == 1:
++        coord_meta['frame_class'] = RectangularFrame1D
++    else:
++        coord_meta['frame_class'] = RectangularFrame
++
++    # Determine the frame class based on the number of visible axes
++    if len(world_keep) == 1:
++        from .frame import RectangularFrame1D
++        coord_meta['frame_class'] = RectangularFrame1D
++    else:
++        coord_meta['frame_class'] = RectangularFrame
++
+     return transform, coord_meta
+ 
+ 

@@ -1,0 +1,76 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1017cc4..b36366f 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1744,7 +1744,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_config_value('autodoc_default_options', {}, True)
+     app.add_config_value('autodoc_docstring_signature', True, True)
+     app.add_config_value('autodoc_mock_imports', [], True)
+-    app.add_config_value('autodoc_typehints', "signature", True, ENUM("signature", "none"))
++    app.add_config_value('autodoc_typehints', "signature", True, ENUM("signature", "description", "none"))
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
+     app.add_event('autodoc-before-process-signature')
+diff --git a/sphinx/ext/autodoc/typehints_mixin.py b/sphinx/ext/autodoc/typehints_mixin.py
+new file mode 100644
+index 0000000..ef4799a
+--- /dev/null
++++ b/sphinx/ext/autodoc/typehints_mixin.py
+@@ -0,0 +1,57 @@
++"""
++A mixin for autodoc that adds type hints to the description.
++"""
++
++from typing import Any, List, Tuple
++
++from sphinx.application import Sphinx
++from sphinx.util import inspect
++
++
++class TypeHintsMixin:
++    """Mixin for Documenter to add type hints to the description."""
++
++    def format_type_hints(self, annotations: dict) -> str:
++        """Format type hints as a string.
++
++        :param annotations: A dictionary of parameter names to annotations.
++        :return: A string representation of the type hints.
++        """
++        if not annotations:
++            return ''
++
++        lines = []
++        for param, ann in annotations.items():
++            if ann is not inspect.Parameter.empty:
++                lines.append(':type %s: %s' % (param, inspect.stringify(ann)))
++        return_ann = annotations.get('return')
++        if return_ann is not None and return_ann is not inspect.Parameter.empty:
++            lines.append(':rtype: %s' % inspect.stringify(return_ann))
++
++        if lines:
++            return '\n'.join(lines)
++        else:
++            return ''
++
++    def get_type_hints(self) -> dict:
++        """Get type hints for the object.
++
++        This method should be overridden by subclasses.
++        """
++        return {}
++
++    def add_type_hints_to_description(self) -> None:
++        """Add type hints to the description if autodoc_typehints is 'description'."""
++        if self.env.config.autodoc_typehints != 'description':
++            return
++
++        type_hints = self.get_type_hints()
++        if not type_hints:
++            return
++
++        formatted = self.format_type_hints(type_hints)
++        if formatted:
++            sourcename = self.get_sourcename()
++            for line in formatted.split('\n'):
++                self.add_line(line, sourcename)
++            self.add_line('', sourcename)

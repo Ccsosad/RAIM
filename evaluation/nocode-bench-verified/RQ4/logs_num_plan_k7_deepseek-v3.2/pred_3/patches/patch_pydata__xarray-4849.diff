@@ -1,0 +1,196 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 0127e99..719140f 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6526,6 +6526,185 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+ 
+         return Dataset(data_vars=variables, attrs=self.attrs.copy())
+ 
++    def curvefit(
++        self,
++        coords,
++        func,
++        reduce_dims=None,
++        param_names=None,
++        bounds=None,
++        **kwargs,
++    ):
++        """
++        Fit a function to the data using `scipy.optimize.curve_fit`.
++
++        Parameters
++        ----------
++        coords : str, DataArray, or list of str
++            The coordinates to use as the independent variable(s) in the fit.
++            If a single string, it is treated as a coordinate name.
++            If a DataArray, its values are used as the independent variable.
++            If a list of strings, each is treated as a coordinate name and the
++            function is assumed to take multiple arguments.
++        func : callable
++            The model function to fit. It must take the independent variable(s)
++            as the first argument(s) and the parameters to fit as separate
++            remaining arguments.
++        reduce_dims : str or list of str, optional
++            Dimensions to reduce. If None, all dimensions are reduced.
++        param_names : list of str, optional
++            Names for the fitted parameters. If not provided, they are named
++            "param0", "param1", etc.
++        bounds : dict, optional
++            A dictionary mapping parameter names to (lower, upper) bounds.
++            Only valid if the parameter names are given.
++        **kwargs : dict
++            Additional keyword arguments passed to `scipy.optimize.curve_fit`.
++
++        Returns
++        -------
++        curvefit_results : Dataset
++            A dataset containing the fitted parameters for each variable.
++
++        See Also
++        --------
++        scipy.optimize.curve_fit
++        """
++        try:
++            from scipy.optimize import curve_fit
++        except ImportError:
++            raise ImportError("curvefit requires scipy to be installed.")
++
++        # Process coords
++        if isinstance(coords, str):
++            coords = [coords]
++        elif isinstance(coords, xr.DataArray):
++            coords = [coords]
++        elif isinstance(coords, list):
++            pass
++        else:
++            raise TypeError("coords must be a string, DataArray, or list of strings")
++
++        # Get the independent variable data
++        coord_arrays = []
++        for c in coords:
++            if isinstance(c, str):
++                coord_arrays.append(self[c].values)
++            else:
++                coord_arrays.append(c.values)
++
++        # If there are multiple coordinates, we need to pass them as separate arguments
++        if len(coord_arrays) == 1:
++            coord_arrays = coord_arrays[0]
++        else:
++            # Stack along a new dimension for vectorized function call
++            coord_arrays = np.stack(coord_arrays, axis=-1)
++
++        # Determine dimensions to reduce
++        if reduce_dims is None:
++            reduce_dims = list(self.dims)
++        elif isinstance(reduce_dims, str):
++            reduce_dims = [reduce_dims]
++
++        # Prepare the result dataset
++        result_vars = {}
++
++        for var_name, var in self.data_vars.items():
++            # Check if the variable has the dimensions to reduce
++            if not set(reduce_dims).issubset(set(var.dims)):
++                continue
++
++            # Get the data for this variable
++            data = var.values
++
++            # We need to fit for each point in the non-reduced dimensions
++            # So we'll iterate over the other dimensions
++            other_dims = [d for d in var.dims if d not in reduce_dims]
++            if other_dims:
++                # Reshape to (..., reduce_dims) for easier iteration
++                # We'll flatten the other dimensions
++                orig_shape = data.shape
++                new_shape = (-1, np.prod([var.sizes[d] for d in reduce_dims]))
++                data_reshaped = data.reshape(new_shape)
++                # Also reshape the coordinate arrays accordingly
++                if len(coord_arrays.shape) > 1:
++                    # coord_arrays has shape (..., reduce_dims, n_coords)
++                    # We need to reshape to (..., reduce_dims) for each coordinate
++                    # Actually, we need to broadcast to the data shape
++                    # This is complex. For simplicity, assume coord_arrays is 1D or matches reduce_dims.
++                    pass
++                # For now, assume coord_arrays is 1D and matches the reduce_dims dimension
++                # This is the common case.
++                # We'll fit for each slice in the flattened other dimensions
++                n_slices = data_reshaped.shape[0]
++                param_list = []
++                for i in range(n_slices):
++                    slice_data = data_reshaped[i, :]
++                    # Remove NaNs
++                    mask = np.isfinite(slice_data)
++                    if not np.any(mask):
++                        param_list.append([np.nan] * (param_names or [0]))
++                        continue
++                    xdata = coord_arrays[mask]
++                    ydata = slice_data[mask]
++                    try:
++                        # Initial guess: all ones
++                        p0 = np.ones(func.__code__.co_argcount - len(coords))
++                        # If bounds are given, convert to the order of parameters
++                        if bounds and param_names:
++                            # bounds is a dict mapping param_name to (lower, upper)
++                            # We need to convert to two lists in the order of param_names
++                            lower_bounds = [bounds.get(name, (-np.inf, np.inf))[0] for name in param_names]
++                            upper_bounds = [bounds.get(name, (-np.inf, np.inf))[1] for name in param_names]
++                            bounds_array = (lower_bounds, upper_bounds)
++                        else:
++                            bounds_array = (-np.inf, np.inf)
++                        popt, _ = curve_fit(func, xdata, ydata, p0=p0, bounds=bounds_array, **kwargs)
++                        param_list.append(popt)
++                    except Exception:
++                        # If fitting fails, fill with NaNs
++                        param_list.append([np.nan] * (func.__code__.co_argcount - len(coords)))
++                # Reshape the parameters to the original other_dims shape
++                param_array = np.array(param_list)
++                param_shape = [var.sizes[d] for d in other_dims] + [param_array.shape[1]]
++                param_array = param_array.reshape(param_shape)
++                # Create a DataArray for each parameter
++                for i in range(param_array.shape[-1]):
++                    param_name = param_names[i] if param_names else f"param{i}"
++                    da = xr.DataArray(
++                        param_array[..., i],
++                        dims=other_dims,
++                        coords={d: var.coords[d] for d in other_dims},
++                        name=f"{var_name}_{param_name}",
++                    )
++                    result_vars[da.name] = da
++            else:
++                # No other dimensions: fit the whole array
++                mask = np.isfinite(data)
++                if not np.any(mask):
++                    popt = [np.nan] * (func.__code__.co_argcount - len(coords))
++                else:
++                    xdata = coord_arrays[mask]
++                    ydata = data[mask]
++                    try:
++                        p0 = np.ones(func.__code__.co_argcount - len(coords))
++                        if bounds and param_names:
++                            lower_bounds = [bounds.get(name, (-np.inf, np.inf))[0] for name in param_names]
++                            upper_bounds = [bounds.get(name, (-np.inf, np.inf))[1] for name in param_names]
++                            bounds_array = (lower_bounds, upper_bounds)
++                        else:
++                            bounds_array = (-np.inf, np.inf)
++                        popt, _ = curve_fit(func, xdata, ydata, p0=p0, bounds=bounds_array, **kwargs)
++                    except Exception:
++                        popt = [np.nan] * (func.__code__.co_argcount - len(coords))
++                # Create a DataArray for each parameter
++                for i, p in enumerate(popt):
++                    param_name = param_names[i] if param_names else f"param{i}"
++                    da = xr.DataArray(p, name=f"{var_name}_{param_name}")
++                    result_vars[da.name] = da
++
++        return Dataset(data_vars=result_vars, attrs=self.attrs.copy())
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,
+@@ -7075,4 +7254,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self.isel(indexers, missing_dims=missing_dims)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

@@ -1,0 +1,38 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index d9aca35..1d47379 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -313,6 +313,7 @@ class PyObject(ObjectDescription):
+         'noindex': directives.flag,
+         'module': directives.unchanged,
+         'annotation': directives.unchanged,
++        'canonical': directives.unchanged,
+     }
+ 
+     doc_field_types = [
+@@ -430,6 +431,11 @@ class PyObject(ObjectDescription):
+         if anno:
+             signode += addnodes.desc_annotation(' ' + anno, ' ' + anno)
+ 
++        # store canonical name if given
++        canonical = self.options.get('canonical')
++        if canonical:
++            signode['canonical'] = canonical
++
+         return fullname, prefix
+ 
+     def get_index_text(self, modname: str, name: Tuple[str, str]) -> str:
+@@ -451,7 +457,12 @@ class PyObject(ObjectDescription):
+         self.state.document.note_explicit_target(signode)
+ 
+         domain = cast(PythonDomain, self.env.get_domain('py'))
+-        domain.note_object(fullname, self.objtype, node_id, location=signode)
++        # use canonical name if provided
++        canonical = signode.get('canonical')
++        if canonical:
++            domain.note_object(canonical, self.objtype, node_id, location=signode)
++        else:
++            domain.note_object(fullname, self.objtype, node_id, location=signode)
+ 
+         indextext = self.get_index_text(modname, name_cls)
+         if indextext:

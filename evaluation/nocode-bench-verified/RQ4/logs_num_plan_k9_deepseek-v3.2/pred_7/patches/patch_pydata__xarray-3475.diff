@@ -1,0 +1,186 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f8247e8..0a30470 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1890,6 +1890,52 @@ class DataArray(AbstractArray, DataWithCoords):
+     def T(self) -> "DataArray":
+         return self.transpose()
+ 
++    def drop_vars(
++        self, labels: Union[Hashable, Iterable[Hashable]], *, errors: str = "raise"
++    ) -> "DataArray":
++        """Drop variables (including coordinates) from this DataArray.
++
++        Parameters
++        ----------
++        labels : hashable or sequence of hashables
++            Name(s) of variables (including coordinates) to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the variables passed are not in the array.
++            If 'ignore', any given labels that are in the array are dropped
++            and no error is raised.
++        Returns
++        -------
++        dropped : DataArray
++        """
++        ds = self._to_temp_dataset().drop_vars(labels, errors=errors)
++        return self._from_temp_dataset(ds)
++
++    def drop_sel(
++        self, labels: Any, dim: Hashable = None, *, errors: str = "raise"  # array-like
++    ) -> "DataArray":
++        """Drop index labels along a dimension.
++
++        Parameters
++        ----------
++        labels : array-like
++            Index labels to drop.
++        dim : hashable
++            Dimension along which to drop index labels.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the index labels passed are not in the array.
++            If 'ignore', any given labels that are in the array are dropped
++            and no error is raised.
++        Returns
++        -------
++        dropped : DataArray
++        """
++        if dim is None:
++            raise TypeError("drop_sel() missing 1 required argument: 'dim'")
++        ds = self._to_temp_dataset().drop_sel(labels, dim, errors=errors)
++        return self._from_temp_dataset(ds)
++
+     # Drop coords
+     @overload
+     def drop(
+@@ -1923,9 +1969,23 @@ class DataArray(AbstractArray, DataWithCoords):
+         Returns
+         -------
+         dropped : DataArray
+-        """
+-        ds = self._to_temp_dataset().drop(labels, dim, errors=errors)
+-        return self._from_temp_dataset(ds)
++
++        .. deprecated:: 0.15
++           The ``drop`` method is deprecated. Use ``drop_vars`` to drop
++           variables (including coordinates) and ``drop_sel`` to drop index
++           labels.
++        """
++        warnings.warn(
++            "The `drop` method is deprecated. Use `drop_vars` to drop "
++            "variables (including coordinates) and `drop_sel` to drop index "
++            "labels.",
++            PendingDeprecationWarning,
++            stacklevel=2,
++        )
++        if dim is None:
++            return self.drop_vars(labels, errors=errors)
++        else:
++            return self.drop_sel(labels, dim, errors=errors)
+ 
+     def dropna(
+         self, dim: Hashable, how: str = "any", thresh: int = None
+@@ -3118,4 +3178,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c07f9e0..7e3bee5 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3519,6 +3519,58 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+                 "cannot be found in this dataset"
+             )
+ 
++    def drop_vars(
++        self, labels: Union[Hashable, Iterable[Hashable]], *, errors: str = "raise"
++    ) -> "Dataset":
++        """Drop variables (including coordinates) from this dataset.
++
++        Parameters
++        ----------
++        labels : hashable or iterable of hashables
++            Name(s) of variables (including coordinates) to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the variables passed are not in the dataset.
++            If 'ignore', any given labels that are in the dataset are dropped
++            and no error is raised.
++        Returns
++        -------
++        dropped : Dataset
++        """
++        if errors not in ["raise", "ignore"]:
++            raise ValueError('errors must be either "raise" or "ignore"')
++        if isinstance(labels, str) or not isinstance(labels, Iterable):
++            labels = {labels}
++        else:
++            labels = set(labels)
++        return self._drop_vars(labels, errors=errors)
++
++    def drop_sel(
++        self, labels: Any, dim: Hashable = None, *, errors: str = "raise"  # array-like
++    ) -> "Dataset":
++        """Drop index labels along a dimension.
++
++        Parameters
++        ----------
++        labels : array-like
++            Index labels to drop.
++        dim : hashable
++            Dimension along which to drop index labels.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the index labels passed are not in the dataset.
++            If 'ignore', any given labels that are in the dataset are dropped
++            and no error is raised.
++        Returns
++        -------
++        dropped : Dataset
++        """
++        if dim is None:
++            raise TypeError("drop_sel() missing 1 required argument: 'dim'")
++        if errors not in ["raise", "ignore"]:
++            raise ValueError('errors must be either "raise" or "ignore"')
++        return self._drop_labels(labels, dim, errors=errors)
++
+     # Drop variables
+     @overload  # noqa: F811
+     def drop(
+@@ -3557,6 +3609,11 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         -------
+         dropped : Dataset
+ 
++        .. deprecated:: 0.15
++           The ``drop`` method is deprecated. Use ``drop_vars`` to drop
++           variables (including coordinates) and ``drop_sel`` to drop index
++           labels.
++
+         Examples
+         --------
+         >>> data = np.random.randn(2, 3)
+@@ -3579,6 +3636,14 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         Data variables:
+             A        (x, y) float64 -0.3944 -1.418 1.423 -1.041
+         """
++        warnings.warn(
++            "The `drop` method is deprecated. Use `drop_vars` to drop "
++            "variables (including coordinates) and `drop_sel` to drop index "
++            "labels.",
++            PendingDeprecationWarning,
++            stacklevel=2,
++        )
++
+         if errors not in ["raise", "ignore"]:
+             raise ValueError('errors must be either "raise" or "ignore"')
+ 
+@@ -5478,4 +5543,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

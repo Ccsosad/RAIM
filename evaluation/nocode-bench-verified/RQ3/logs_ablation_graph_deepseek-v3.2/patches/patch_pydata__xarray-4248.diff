@@ -1,0 +1,15 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 91a7f67..6e8b303 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -168,6 +168,10 @@ def format_array_flat(array, max_width: int):
+     """Return a formatted string for as many items in the flattened version of
+     array that will fit within max_width characters.
+     """
++    # If the array has a _repr_inline_ method, use it.
++    if hasattr(array, '_repr_inline_'):
++        return array._repr_inline_(max_width)
++
+     # every item will take up at least two characters, but we always want to
+     # print at least first and last items
+     max_possibly_relevant = min(

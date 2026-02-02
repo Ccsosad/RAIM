@@ -1,0 +1,57 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..a6154c9 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -192,6 +192,11 @@ def context(style, after_reset=False):
+         yield
+ 
+ 
++try:
++    from importlib import resources as importlib_resources
++except ImportError:
++    import importlib_resources
++
+ def update_user_library(library):
+     """Update style library with user-defined rc files."""
+     for stylelib_path in map(os.path.expanduser, USER_LIBRARY_PATHS):
+@@ -202,6 +207,10 @@ def update_user_library(library):
+ 
+ def read_style_directory(style_dir):
+     """Return dictionary of styles defined in *style_dir*."""
++    # If style_dir is not a path, treat it as a package name.
++    if not os.path.exists(style_dir):
++        # Assume it's a package name.
++        return read_style_from_package(style_dir)
+     styles = dict()
+     for path in Path(style_dir).glob(f"*.{STYLE_EXTENSION}"):
+         with warnings.catch_warnings(record=True) as warns:
+@@ -212,6 +221,29 @@ def read_style_directory(style_dir):
+     return styles
+ 
+ 
++def read_style_from_package(package_name):
++    """Return dictionary of styles defined in *package_name*."""
++    styles = {}
++    try:
++        # Use importlib.resources to list resources in the package.
++        # We are looking for files with the extension .mplstyle.
++        package = importlib_resources.files(package_name)
++        for resource in package.iterdir():
++            if resource.suffix == f'.{STYLE_EXTENSION}':
++                with warnings.catch_warnings(record=True) as warns:
++                    # Read the style file without importing the package.
++                    with importlib_resources.as_file(resource) as path:
++                        style = rc_params_from_file(
++                            path, use_default_template=False)
++                    styles[resource.stem] = style
++                for w in warns:
++                    _log.warning('In %s: %s', resource, w.message)
++    except Exception as e:
++        _log.warning('Failed to read styles from package %s: %s',
++                     package_name, e)
++    return styles
++
++
+ def update_nested_dict(main_dict, new_dict):
+     """
+     Update nested dict (only level of nesting) with new values.

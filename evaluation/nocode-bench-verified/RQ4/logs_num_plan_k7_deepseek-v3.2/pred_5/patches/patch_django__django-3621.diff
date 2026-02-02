@@ -1,0 +1,47 @@
+diff --git a/django/template/defaulttags.py b/django/template/defaulttags.py
+index 8c6c1d4..ae3defa 100644
+--- a/django/template/defaulttags.py
++++ b/django/template/defaulttags.py
+@@ -419,12 +419,17 @@ class LoadNode(Node):
+ 
+ 
+ class NowNode(Node):
+-    def __init__(self, format_string):
++    def __init__(self, format_string, varname=None):
+         self.format_string = format_string
++        self.varname = varname
+ 
+     def render(self, context):
+         tzinfo = timezone.get_current_timezone() if settings.USE_TZ else None
+-        return date(datetime.now(tz=tzinfo), self.format_string)
++        formatted_date = date(datetime.now(tz=tzinfo), self.format_string)
++        if self.varname is not None:
++            context[self.varname] = formatted_date
++            return ''
++        return formatted_date
+ 
+ 
+ class SpacelessNode(Node):
+@@ -1198,11 +1203,20 @@ def now(parser, token):
+     Sample usage::
+ 
+         It is {% now "jS F Y H:i" %}
++
++    You can also store the result in a context variable::
++
++        {% now "jS F Y H:i" as current_date %}
+     """
+     bits = token.split_contents()
+-    if len(bits) != 2:
+-        raise TemplateSyntaxError("'now' statement takes one argument")
++    if len(bits) not in (2, 4):
++        raise TemplateSyntaxError("'now' statement takes one or three arguments")
+     format_string = bits[1][1:-1]
++    if len(bits) == 4:
++        if bits[2] != 'as':
++            raise TemplateSyntaxError("'now' statement second argument must be 'as'")
++        varname = bits[3]
++        return NowNode(format_string, varname)
+     return NowNode(format_string)
+ 
+ 

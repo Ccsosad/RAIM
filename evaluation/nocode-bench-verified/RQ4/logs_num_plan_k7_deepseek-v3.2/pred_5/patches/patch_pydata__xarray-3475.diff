@@ -1,0 +1,10 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c07f9e0..978242e 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5478,4 +5478,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

@@ -1,0 +1,57 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..72108c6 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -137,7 +137,7 @@ def _solve_sparse_cg(
+     return coefs
+ 
+ 
+-def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
++def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3, X_offset=None, X_scale=None):
+     n_samples, n_features = X.shape
+     coefs = np.empty((y.shape[1], n_features), dtype=X.dtype)
+     n_iter = np.empty(y.shape[1], dtype=np.int32)
+@@ -145,6 +145,12 @@ def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
+     # According to the lsqr documentation, alpha = damp^2.
+     sqrt_alpha = np.sqrt(alpha)
+ 
++    # Center the data if needed
++    if X_offset is not None:
++        X = X - X_offset
++        if X_scale is not None:
++            X = X / X_scale
++
+     for i in range(y.shape[1]):
+         y_column = y[:, i]
+         info = sp_linalg.lsqr(
+@@ -552,10 +558,10 @@ def _ridge_regression(
+             "Please use another solver."
+         )
+ 
+-    if return_intercept and solver != "sag":
++    if return_intercept and solver not in ["sag", "lsqr"]:
+         raise ValueError(
+-            "In Ridge, only 'sag' solver can directly fit the "
+-            "intercept. Please change solver to 'sag' or set "
++            "In Ridge, only 'sag' and 'lsqr' solvers can directly fit the "
++            "intercept. Please change solver to 'sag' or 'lsqr' or set "
+             "return_intercept=False."
+         )
+ 
+@@ -629,7 +635,15 @@ def _ridge_regression(
+         )
+ 
+     elif solver == "lsqr":
+-        coef, n_iter = _solve_lsqr(X, y, alpha, max_iter, tol)
++        coef, n_iter = _solve_lsqr(
++            X,
++            y,
++            alpha,
++            max_iter,
++            tol,
++            X_offset=X_offset,
++            X_scale=X_scale,
++        )
+ 
+     elif solver == "cholesky":
+         if n_features > n_samples:

@@ -1,0 +1,12 @@
+diff --git a/xarray/coding/cf_decode.py b/xarray/coding/cf_decode.py
+new file mode 100644
+index 0000000..c994e52
+--- /dev/null
++++ b/xarray/coding/cf_decode.py
+@@ -0,0 +1,6 @@
++        try:
++            variables[name] = decode_cf_variable(
++                name, var, concat_characters, mask_and_scale, decode_times, decode_coords, use_cftime=use_cftime
++            )
++        except Exception as e:
++            raise ValueError(f"could not decode {name!r}: {e}") from e

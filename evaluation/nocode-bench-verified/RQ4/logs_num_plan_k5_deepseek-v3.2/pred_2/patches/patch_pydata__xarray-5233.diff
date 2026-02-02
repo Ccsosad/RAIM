@@ -1,0 +1,160 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index 469c69b..92a2243 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -412,6 +412,10 @@ class DatetimeAccessor(Properties):
+         "date", "Date corresponding to datetimes", object
+     )
+ 
++    calendar = Properties._tslib_field_accessor(
++        "calendar", "Calendar of the datetime", object
++    )
++
+     is_month_start = Properties._tslib_field_accessor(
+         "is_month_start",
+         "Indicates whether the date is the first day of the month.",
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index e6fae2b..cee79cb 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1804,6 +1804,60 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def convert_calendar(
++        self,
++        calendar: str,
++        use_cftime: bool = None,
++        align_on: str = "date",
++        missing: str = None,
++    ) -> "DataArray":
++        """Convert the DataArray to another calendar.
++
++        Parameters
++        ----------
++        calendar : str
++            Target calendar.
++        use_cftime : bool, optional
++            Whether to use cftime for the output. If None, use cftime for non-standard calendars.
++        align_on : {"date", "year", "dayofyear"}, optional
++            How to align the dates when converting.
++        missing : str, optional
++            How to handle missing dates.
++
++        Returns
++        -------
++        DataArray
++            Converted DataArray.
++        """
++        from ..coding.calendar_ops import convert_calendar
++        ds = self._to_temp_dataset().convert_calendar(
++            calendar, use_cftime=use_cftime, align_on=align_on, missing=missing
++        )
++        return self._from_temp_dataset(ds)
++
++    def interp_calendar(
++        self,
++        target: "DataArray",
++        use_cftime: bool = None,
++    ) -> "DataArray":
++        """Interpolate the DataArray to another calendar.
++
++        Parameters
++        ----------
++        target : DataArray
++            Target time coordinate.
++        use_cftime : bool, optional
++            Whether to use cftime for the output.
++
++        Returns
++        -------
++        DataArray
++            Interpolated DataArray.
++        """
++        from ..coding.calendar_ops import interp_calendar
++        ds = self._to_temp_dataset().interp_calendar(target, use_cftime=use_cftime)
++        return self._from_temp_dataset(ds)
++
+     def rename(
+         self,
+         new_name_or_name_dict: Union[Hashable, Mapping[Any, Hashable]] = None,
+@@ -4658,4 +4712,4 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..47549cf
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1,68 @@
++"""
++Calendar-aware operations for xarray.
++"""
++import numpy as np
++import pandas as pd
++from .times import cftime_range, infer_calendar_name, convert_calendar as _convert_calendar
++from .cftimeindex import CFTimeIndex
++from .frequencies import infer_freq
++
++def _should_cftime_be_used(source, target, use_cftime=None):
++    """
++    Determine whether to use cftime or pandas for datetime operations.
++    """
++    if use_cftime is None:
++        # Use cftime if the source calendar is non-standard or dates are out of pandas range
++        if hasattr(source, 'calendar'):
++            calendar = infer_calendar_name(source)
++            if calendar not in _STANDARD_CALENDARS:
++                return True
++        # Check if dates are within pandas range
++        if hasattr(source, 'values'):
++            dates = source.values
++            if dates.dtype.kind == 'O':
++                # cftime objects
++                return True
++            elif dates.dtype.kind == 'M':
++                # numpy datetime64
++                return False
++        return False
++    else:
++        return use_cftime
++
++def convert_calendar(source, target_calendar, use_cftime=None, align_on='date', missing=None):
++    """
++    Convert a time series from one calendar to another.
++    """
++    from .times import convert_calendar as _convert_calendar
++    return _convert_calendar(source, target_calendar, align_on=align_on, missing=missing)
++
++def interp_calendar(source, target, use_cftime=None):
++    """
++    Interpolate data from one calendar to another.
++    """
++    # This is a placeholder. Actual implementation would involve
++    # converting both to a common time basis and interpolating.
++    raise NotImplementedError("interp_calendar is not yet implemented")
++
++def date_range(start, end, periods=None, freq='D', calendar='gregorian', use_cftime=None):
++    """
++    Generate a range of dates with a given frequency and calendar.
++    """
++    if _should_cftime_be_used(start, end, use_cftime):
++        return cftime_range(start=start, end=end, periods=periods, freq=freq, calendar=calendar)
++    else:
++        return pd.date_range(start=start, end=end, periods=periods, freq=freq)
++
++def date_range_like(source, target, use_cftime=None):
++    """
++    Generate a date range similar to the source but with the frequency of the target.
++    """
++    freq = infer_freq(source)
++    if freq is None:
++        raise ValueError('`date_range_like` was unable to generate a range as the source frequency was not inferrable.')
++    if not hasattr(target, 'dtype'):
++        raise ValueError("'target' must be a 1D array of datetime objects for inferring its range.")
++    start = target[0]
++    end = target[-1]
++    return date_range(start=start, end=end, freq=freq, use_cftime=use_cftime)

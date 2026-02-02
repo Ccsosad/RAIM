@@ -1,0 +1,161 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..7cedd01 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4052,6 +4052,52 @@ class DataArray(AbstractArray, DataWithCoords):
+             keep_attrs=keep_attrs,
+         )
+ 
++    def query(self, query, parser='pandas', engine=None):
++        """
++        Return a new DataArray indexed along the specified dimension(s)
++        by evaluating a query string.
++
++        Parameters
++        ----------
++        query : str
++            A query string to evaluate. The query string must be a valid expression
++            that can be evaluated by the pandas eval function. The expression can
++            refer to the DataArray itself as 'self'.
++        parser : {'pandas'}, optional
++            The parser to use. Currently only 'pandas' is supported.
++        engine : {None, 'numexpr', 'python'}, optional
++            The engine to use for evaluation. If None, defaults to 'numexpr' if installed,
++            otherwise 'python'.
++
++        Returns
++        -------
++        queried : DataArray
++            A new DataArray with the same variables as the original, but with only the
++            indices where the query condition is True.
++
++        Examples
++        --------
++        >>> da = xr.DataArray([15, 20, 18, 25, 22], dims='time')
++        >>> da.query('self > 20')
++        <xarray.DataArray (time: 2)>
++        array([25, 22])
++        Dimensions without coordinates: time
++
++        See Also
++        --------
++        Dataset.query
++        """
++        # Convert the DataArray to a Dataset with a temporary name.
++        from .dataset import Dataset
++        temp_name = '__temp__'
++        ds = self.to_dataset(name=temp_name)
++        # Replace 'self' in the query with the temporary name.
++        query = query.replace('self', temp_name)
++        # Now query the dataset.
++        result_ds = ds.query(query, parser=parser, engine=engine)
++        # Convert back to DataArray.
++        return result_ds[temp_name]
++
+     def idxmax(
+         self,
+         dim: Hashable = None,
+@@ -4360,4 +4406,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..d76d136 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -7002,4 +7002,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query.py b/xarray/core/query.py
+new file mode 100644
+index 0000000..a62deb6
+--- /dev/null
++++ b/xarray/core/query.py
+@@ -0,0 +1,74 @@
++import numpy as np
++import pandas as pd
++
++from .common import _contains_datetime_like_objects
++from .utils import is_scalar
++
++def evaluate_query(dataset, query, parser='pandas', engine=None):
++    """
++    Evaluate a query string on a dataset.
++
++    Parameters
++    ----------
++    dataset : Dataset
++        The dataset to query.
++    query : str
++        The query string to evaluate.
++    parser : {'pandas'}, optional
++        The parser to use. Currently only 'pandas' is supported.
++    engine : {None, 'numexpr', 'python'}, optional
++        The engine to use for evaluation. If None, defaults to 'numexpr' if installed,
++        otherwise 'python'.
++
++    Returns
++    -------
++    mask : DataArray
++        A boolean DataArray with the same dimensions as the dataset's data variables.
++    """
++    if parser != 'pandas':
++        raise ValueError(f"Parser {parser} not supported. Only 'pandas' is supported.")
++
++    # We'll use pandas eval to evaluate the query.
++    # First, we need to collect the variables in the dataset that are used in the query.
++    # We'll create a dictionary of local variables for eval.
++    local_dict = {}
++    for name, var in dataset.data_vars.items():
++        # Convert to a pandas Series-like object? Actually, we can use the underlying array.
++        # But note: the query might involve multi-dimensional variables.
++        # We'll flatten the variable to a 1D array for evaluation? That doesn't make sense.
++        # Instead, we should only allow queries on 1D variables? Or we can broadcast.
++        # For simplicity, we'll only allow queries on 1D variables for now.
++        if var.ndim != 1:
++            raise ValueError(f"Variable {name} is {var.ndim}-dimensional. "
++                             "Only 1-dimensional variables are supported in queries.")
++        local_dict[name] = var.values
++
++    # Also include coordinates? The requirement says "data variables", so we don't include coordinates.
++    # But in pandas, query includes columns. So we only include data variables.
++
++    # Use pandas eval
++    try:
++        result = pd.eval(query, local_dict=local_dict, engine=engine)
++    except Exception as e:
++        raise ValueError(f"Error evaluating query: {e}")
++
++    # The result should be a boolean array.
++    if not isinstance(result, np.ndarray):
++        if is_scalar(result):
++            result = np.array(result)
++        else:
++            raise ValueError("Query must evaluate to a boolean array.")
++
++    if result.dtype != bool:
++        raise ValueError("Query must evaluate to a boolean array.")
++
++    # We need to return a DataArray with the same dimensions as the dataset.
++    # Since all variables are 1D, we can create a DataArray with the same dimension.
++    # We'll use the first data variable's dimension.
++    if len(dataset.data_vars) == 0:
++        raise ValueError("No data variables to query.")
++    first_var = next(iter(dataset.data_vars.values()))
++    dim = first_var.dims[0]
++
++    from .dataarray import DataArray
++    return DataArray(result, dims=dim, coords={dim: dataset.coords[dim]})
+diff --git a/xarray/core/query/dask_query.py b/xarray/core/query/dask_query.py
+new file mode 100644
+index 0000000..61961ad
+--- /dev/null
++++ b/xarray/core/query/dask_query.py
+@@ -0,0 +1,2 @@
++# This file is intentionally left blank for now.
++# It may contain dask-specific query functionality in the future.

@@ -1,0 +1,103 @@
+diff --git a/xarray/coding/times.py b/xarray/coding/times.py
+index 3885b1c..d631c85 100644
+--- a/xarray/coding/times.py
++++ b/xarray/coding/times.py
+@@ -685,14 +685,18 @@ class CFDatetimeCoder(VariableCoder):
+         if isinstance(units, str) and "since" in units:
+             units = pop_to(attrs, encoding, "units")
+             calendar = pop_to(attrs, encoding, "calendar")
+-            dtype = _decode_cf_datetime_dtype(data, units, calendar, self.use_cftime)
+-            transform = partial(
+-                decode_cf_datetime,
+-                units=units,
+-                calendar=calendar,
+-                use_cftime=self.use_cftime,
+-            )
+-            data = lazy_elemwise_func(data, transform, dtype)
++            try:
++                dtype = _decode_cf_datetime_dtype(data, units, calendar, self.use_cftime)
++                transform = partial(
++                    decode_cf_datetime,
++                    units=units,
++                    calendar=calendar,
++                    use_cftime=self.use_cftime,
++                )
++                data = lazy_elemwise_func(data, transform, dtype)
++            except Exception as e:
++                from .errors import CFDecodingError
++                raise CFDecodingError(str(e), variable_name=name) from e
+ 
+         return Variable(dims, data, attrs, encoding)
+ 
+diff --git a/xarray/coding/variables.py b/xarray/coding/variables.py
+index 9592ba1..071eb18 100644
+--- a/xarray/coding/variables.py
++++ b/xarray/coding/variables.py
+@@ -204,13 +204,17 @@ class CFMaskCoder(VariableCoder):
+             dtype, decoded_fill_value = dtypes.maybe_promote(data.dtype)
+ 
+             if encoded_fill_values:
+-                transform = partial(
+-                    _apply_mask,
+-                    encoded_fill_values=encoded_fill_values,
+-                    decoded_fill_value=decoded_fill_value,
+-                    dtype=dtype,
+-                )
+-                data = lazy_elemwise_func(data, transform, dtype)
++                try:
++                    transform = partial(
++                        _apply_mask,
++                        encoded_fill_values=encoded_fill_values,
++                        decoded_fill_value=decoded_fill_value,
++                        dtype=dtype,
++                    )
++                    data = lazy_elemwise_func(data, transform, dtype)
++                except Exception as e:
++                    from .errors import CFDecodingError
++                    raise CFDecodingError(str(e), variable_name=name) from e
+ 
+         return Variable(dims, data, attrs, encoding)
+ 
+@@ -274,13 +278,17 @@ class CFScaleOffsetCoder(VariableCoder):
+                 scale_factor = np.asarray(scale_factor).item()
+             if np.ndim(add_offset) > 0:
+                 add_offset = np.asarray(add_offset).item()
+-            transform = partial(
+-                _scale_offset_decoding,
+-                scale_factor=scale_factor,
+-                add_offset=add_offset,
+-                dtype=dtype,
+-            )
+-            data = lazy_elemwise_func(data, transform, dtype)
++            try:
++                transform = partial(
++                    _scale_offset_decoding,
++                    scale_factor=scale_factor,
++                    add_offset=add_offset,
++                    dtype=dtype,
++                )
++                data = lazy_elemwise_func(data, transform, dtype)
++            except Exception as e:
++                from .errors import CFDecodingError
++                raise CFDecodingError(str(e), variable_name=name) from e
+ 
+         return Variable(dims, data, attrs, encoding)
+ 
+diff --git a/xarray/coding/errors.py b/xarray/coding/errors.py
+new file mode 100644
+index 0000000..5845720
+--- /dev/null
++++ b/xarray/coding/errors.py
+@@ -0,0 +1,12 @@
++"""
++Custom exceptions for CF decoding.
++"""
++
++
++class CFDecodingError(Exception):
++    """Raised when CF decoding fails."""
++
++    def __init__(self, message, variable_name=None):
++        if variable_name is not None:
++            message = f"Failed to decode variable {variable_name!r}. {message}"
++        super().__init__(message)

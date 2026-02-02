@@ -1,0 +1,80 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..ae67681 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -1048,24 +1048,61 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             Any arguments required for the operator (typically, what is to
+             be multiplied with, divided by).
+         """
++        # If there are no differentials, use the old logic.
++        if not self.differentials:
++            self._raise_if_has_differentials(op.__name__)
++
++            results = []
++            for component, cls in self.attr_classes.items():
++                value = getattr(self, component)
++                if issubclass(cls, Angle):
++                    results.append(value)
++                else:
++                    results.append(op(value, *args))
+ 
+-        self._raise_if_has_differentials(op.__name__)
++            # try/except catches anything that cannot initialize the class, such
++            # as operations that returned NotImplemented or a representation
++            # instead of a quantity (as would happen for, e.g., rep * rep).
++            try:
++                return self.__class__(*results)
++            except Exception:
++                return NotImplemented
++        else:
++            # We have differentials. Transform to Cartesian, apply the operation,
++            # and transform back.
++            # First, transform to Cartesian.
++            crep = self.to_cartesian()
++            # Apply the operation to the Cartesian representation.
++            scaled_crep = crep._scale_operation(op, *args)
++            if scaled_crep is NotImplemented:
++                return NotImplemented
+ 
+-        results = []
+-        for component, cls in self.attr_classes.items():
+-            value = getattr(self, component)
+-            if issubclass(cls, Angle):
+-                results.append(value)
++            # Scale the differentials as well.
++            scaled_diffs = {}
++            for key, diff in crep.differentials.items():
++                scaled_diff = diff._scale_operation(op, *args)
++                if scaled_diff is NotImplemented:
++                    return NotImplemented
++                scaled_diffs[key] = scaled_diff
++
++            # Determine if it's a scale change.
++            import operator
++            is_scale_change = op in (operator.mul, operator.truediv)
++            if is_scale_change and self.__class__.__name__ == 'UnitSphericalRepresentation':
++                from . import SphericalRepresentation
++                target_rep_class = SphericalRepresentation
+             else:
+-                results.append(op(value, *args))
++                target_rep_class = self.__class__
+ 
+-        # try/except catches anything that cannot initialize the class, such
+-        # as operations that returned NotImplemented or a representation
+-        # instead of a quantity (as would happen for, e.g., rep * rep).
+-        try:
+-            return self.__class__(*results)
+-        except Exception:
+-            return NotImplemented
++            # Create a Cartesian representation with the scaled differentials.
++            crep_with_diffs = scaled_crep.with_differentials(scaled_diffs)
++            # Transform back to the target representation class.
++            # We want to keep the same differential types as the original.
++            diff_classes = {key: diff.__class__ for key, diff in self.differentials.items()}
++            try:
++                return crep_with_diffs.represent_as(target_rep_class, diff_classes)
++            except Exception:
++                return NotImplemented
+ 
+     def _combine_operation(self, op, other, reverse=False):
+         """Combine two representation.

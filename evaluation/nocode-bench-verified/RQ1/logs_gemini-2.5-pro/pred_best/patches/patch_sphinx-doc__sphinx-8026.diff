@@ -1,0 +1,15 @@
+diff --git a/sphinx/util/i18n.py b/sphinx/util/i18n.py
+index 539ba29..e3d2dd0 100644
+--- a/sphinx/util/i18n.py
++++ b/sphinx/util/i18n.py
+@@ -307,6 +307,10 @@ def get_image_filename_for_language(filename: str, env: "BuildEnvironment") -> s
+     if dirname and not dirname.endswith(path.sep):
+         dirname += path.sep
+     d['path'] = dirname
++    docpath = path.dirname(env.docname)
++    if docpath and not docpath.endswith(path.sep):
++        docpath += path.sep
++    d['docpath'] = docpath
+     d['basename'] = path.basename(d['root'])
+     d['language'] = env.config.language
+     try:

@@ -1,0 +1,59 @@
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index daf5951..7fb0c0b 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1380,13 +1380,18 @@ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+                 return value
+ 
+     def __setitem__(self, key, value):
+-        raise TypeError(
+-            "this variable's data is stored in a dask array, "
+-            "which does not support item assignment. To "
+-            "assign to this variable, you must first load it "
+-            "into memory explicitly using the .load() "
+-            "method or accessing its .values attribute."
+-        )
++        from .pycompat import dask_supports_item_assignment
++
++        if dask_supports_item_assignment:
++            self.array[key] = value
++        else:
++            raise TypeError(
++                "this variable's data is stored in a dask array, "
++                "which does not support item assignment. To "
++                "assign to this variable, you must first load it "
++                "into memory explicitly using the .load() "
++                "method or accessing its .values attribute."
++            )
+ 
+     def transpose(self, order):
+         return self.array.transpose(order)
+diff --git a/xarray/core/pycompat.py b/xarray/core/pycompat.py
+index d98e14a..82f4256 100644
+--- a/xarray/core/pycompat.py
++++ b/xarray/core/pycompat.py
+@@ -7,6 +7,7 @@ integer_types = (int, np.integer)
+ try:
+     import dask.array
+     from dask.base import is_dask_collection
++    from distutils.version import LooseVersion
+ 
+     # solely for isinstance checks
+     dask_array_type = (dask.array.Array,)
+@@ -14,11 +15,16 @@ try:
+     def is_duck_dask_array(x):
+         return is_duck_array(x) and is_dask_collection(x)
+ 
++    # Check if dask version supports item assignment
++    # Item assignment was added in dask 2021.03.0
++    _dask_version = LooseVersion(dask.__version__)
++    dask_supports_item_assignment = _dask_version >= LooseVersion("2021.03.0")
+ 
+ except ImportError:  # pragma: no cover
+     dask_array_type = ()
+     is_duck_dask_array = lambda _: False
+     is_dask_collection = lambda _: False
++    dask_supports_item_assignment = False
+ 
+ try:
+     # solely for isinstance checks

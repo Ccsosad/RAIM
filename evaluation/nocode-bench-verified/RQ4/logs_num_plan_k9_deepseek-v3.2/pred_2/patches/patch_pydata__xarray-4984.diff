@@ -1,0 +1,251 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..1bf8327 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6692,6 +6692,168 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+ 
+         return self._replace_vars_and_dims(variables)
+ 
++    def query(self, expr, parser='pandas', engine='numexpr'):
++        """Query the dataset with a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            A boolean expression to evaluate against the data variables in the
++            dataset. The expression can refer to any data variable by name.
++        parser : {'pandas'}, default: 'pandas'
++            The parser to use for evaluating the expression. Currently only
++            'pandas' is supported.
++        engine : {'numexpr'}, default: 'numexpr'
++            The engine to use for evaluation. Currently only 'numexpr' is
++            supported.
++
++        Returns
++        -------
++        filtered : Dataset
++            A new dataset containing only the elements that satisfy the query.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({'a': ('x', [1, 2, 3]), 'b': ('x', [4, 5, 6])})
++        >>> ds.query('a > 1 and b < 6')
++        <xarray.Dataset>
++        Dimensions:  (x: 1)
++        Dimensions without coordinates: x
++        Data variables:
++            a        (x) int64 2
++            b        (x) int64 5
++
++        Notes
++        -----
++        This method requires pandas and numexpr to be installed.
++        """
++        from .query_engine import QueryEngine
++
++        # Create the query engine
++        qe = QueryEngine(expr, parser=parser, engine=engine)
++        # Evaluate the expression against the data variables
++        mask = qe.evaluate(self.data_vars)
++
++        # Use the mask to filter the dataset
++        filtered = self.where(mask, drop=True)
++        return filtered
++
++    def query(self, expr, parser='pandas', engine='numexpr'):
++        """Query the dataset with a boolean expression.
++
++        Parameters
++        ----------
++        expr : str
++            A boolean expression to evaluate against the data variables in the
++            dataset. The expression can refer to any data variable by name.
++        parser : {'pandas'}, default: 'pandas'
++            The parser to use for evaluating the expression. Currently only
++            'pandas' is supported.
++        engine : {'numexpr'}, default: 'numexpr'
++            The engine to use for evaluation. Currently only 'numexpr' is
++            supported.
++
++        Returns
++        -------
++        filtered : Dataset
++            A new dataset containing only the elements that satisfy the query.
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({'a': ('x', [1, 2, 3]), 'b': ('x', [4, 5, 6])})
++        >>> ds.query('a > 1 and b < 6')
++        <xarray.Dataset>
++        Dimensions:  (x: 1)
++        Dimensions without coordinates: x
++        Data variables:
++            a        (x) int64 2
++            b        (x) int64 5
++
++        Notes
++        -----
++        This method requires pandas and numexpr to be installed.
++        """
++        from .query_engine import QueryEngine
++
++        # Create the query engine
++        qe = QueryEngine(expr, parser=parser, engine=engine)
++        # Evaluate the expression against the data variables
++        mask = qe.evaluate(self.data_vars)
++
++        # The mask should be a boolean array. We need to check its shape.
++        # It should be broadcastable to the dataset's dimensions.
++        # We'll use the mask to index the dataset.
++        # First, we need to find the dimensions of the mask.
++        if is_scalar(mask):
++            # If the mask is a scalar, we need to broadcast it.
++            if mask:
++                return self
++            else:
++                # Return an empty dataset with the same structure.
++                return self.isel({dim: [] for dim in self.dims})
++
++        # Convert mask to a boolean array if it isn't already
++        mask = np.asarray(mask, dtype=bool)
++
++        # We need to index the dataset with the mask.
++        # The mask should have the same shape as the dataset or be broadcastable.
++        # We'll use the mask to select along the first dimension? Actually, we should
++        # treat the mask as a boolean index for all dimensions.
++        # We'll use the mask to index each variable.
++        # This is similar to how pandas DataFrame.query works.
++        # We'll use the mask to index the dataset by flattening the dimensions.
++        # But note: the dataset might have multiple dimensions.
++        # We'll use the mask to index along the first dimension? That's not correct.
++
++        # Instead, we should use the mask to index the dataset as if it were a 1D array.
++        # We'll flatten the mask and the dataset along all dimensions.
++        # However, that would change the structure.
++
++        # Actually, the query should be applied elementwise, and the result should
++        # be a dataset with the same dimensions, but with only the elements where
++        # the mask is True. This is similar to numpy boolean indexing.
++
++        # We'll use the mask to index each variable along its dimensions.
++        # The mask should be broadcastable to each variable's shape.
++        # We'll do this by using `where` and then dropping the NaN values.
++        # But that would change the dimensions.
++
++        # Alternatively, we can use the mask to index the dataset as if it were a
++        # 1D array, and then reshape? That would be complex.
++
++        # Given the complexity, we'll require that the mask has the same shape as
++        # the dataset. We'll check that.
++        if mask.shape != self.shape:
++            raise ValueError(
++                f"Mask shape {mask.shape} does not match dataset shape {self.shape}. "
++                "The query expression must return a boolean array with the same shape as the dataset."
++            )
++
++        # Now, we can use the mask to index the dataset.
++        # We'll create a new dataset by indexing each variable.
++        variables = {}
++        for name, var in self._variables.items():
++            if name in self.data_vars:
++                # For data variables, we apply the mask.
++                # We need to index the variable with the mask.
++                # The mask might have fewer dimensions than the variable.
++                # We'll use the mask to index the variable along all dimensions.
++                # We'll use `var.where(mask, drop=True)` to get the masked values.
++                masked_var = var.where(mask, drop=True)
++                variables[name] = masked_var
++            else:
++                # For coordinates, we need to index them appropriately.
++                # If the coordinate is 1D and its dimension is reduced by the mask,
++                # we should index it as well.
++                # We'll use the same approach: index with the mask along its dimension.
++                # But note: the mask might have multiple dimensions.
++                # We'll use `var.where(mask, drop=True)` for coordinates too.
++                masked_var = var.where(mask, drop=True)
++                variables[name] = masked_var
++
++        # Rebuild the dataset
++        return self._replace_with_new_dims(variables)
++
+     def idxmin(
+         self,
+         dim: Hashable = None,
+@@ -7002,4 +7164,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/query_engine.py b/xarray/core/query_engine.py
+new file mode 100644
+index 0000000..0880847
+--- /dev/null
++++ b/xarray/core/query_engine.py
+@@ -0,0 +1,66 @@
++"""
++Query engine for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from .utils import is_scalar
++
++class QueryEngine:
++    """Engine for evaluating query expressions on xarray objects.
++
++    This class parses a query string and evaluates it against the data variables
++    in a Dataset or DataArray.
++
++    Parameters
++    ----------
++    expr : str
++        The query expression to evaluate.
++    parser : str, default: 'pandas'
++        The parser to use for evaluating the query. Currently only 'pandas' is
++        supported.
++    engine : str, default: 'numexpr'
++        The engine to use for evaluation. Currently only 'numexpr' is supported.
++    """
++
++    def __init__(self, expr, parser='pandas', engine='numexpr'):
++        self.expr = expr
++        self.parser = parser
++        self.engine = engine
++
++    def evaluate(self, data_vars):
++        """Evaluate the query expression against the given data variables.
++
++        Parameters
++        ----------
++        data_vars : dict-like
++            Mapping from variable names to arrays (DataArray, Variable, or numpy-like).
++
++        Returns
++        -------
++        mask : array-like
++            Boolean mask indicating which elements satisfy the query.
++        """
++        if self.parser != 'pandas':
++            raise ValueError(f"Unsupported parser: {self.parser}")
++        if self.engine != 'numexpr':
++            raise ValueError(f"Unsupported engine: {self.engine}")
++
++        # We use pandas.eval to evaluate the expression.
++        # First, we need to convert the data variables to a format that pandas.eval can handle.
++        local_dict = {}
++        for name, var in data_vars.items():
++            # Extract the underlying numpy array
++            if hasattr(var, 'values'):
++                local_dict[name] = var.values
++            else:
++                local_dict[name] = var
++
++        # Use pandas.eval to evaluate the expression
++        try:
++            import pandas as pd
++        except ImportError:
++            raise ImportError("The query method requires pandas to be installed.")
++
++        # pandas.eval with engine='numexpr' is the default
++        result = pd.eval(self.expr, local_dict=local_dict, engine=self.engine)
++        return result

@@ -1,0 +1,161 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..71b3da4 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -2083,7 +2083,118 @@ def _freedman_diaconis_bins(a):
+         return int(np.ceil((a.max() - a.min()) / h))
+ 
+ 
++from ._deprecation import deprecated
++from .axisgrid import FacetGrid
++
++
++@_deprecate_positional_args
++def displot(
++    data=None, *,
++    x=None, y=None, hue=None, row=None, col=None,
++    kind="hist", rug=False, rug_kws=None,
++    log_scale=None, legend=True,
++    **kwargs
++):
++    """Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several axes-level functions that show
++    univariate or bivariate distributions with subsets of the data. The
++    `kind` parameter selects the underlying axes-level function to use:
++
++    - :func:`histplot` (with `kind="hist"`)
++    - :func:`kdeplot` (with `kind="kde"`)
++    - :func:`ecdfplot` (with `kind="ecdf"`)
++
++    Additionally, a `rug` can be added to any kind of plot.
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure.
++    x, y : vectors or keys in `data`
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in `data`
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in `data`
++        Variables that define subsets to plot on different facets.
++    kind : {"hist", "kde", "ecdf"}
++        Kind of plot to draw.
++    rug : bool
++        If True, show each observation with a marginal rug.
++    rug_kws : dict
++        Keyword arguments for `rugplot`.
++    log_scale : bool or number, or pair of bools or numbers
++        Set axis scale(s) to log. A single value sets the data axis for any
++        numeric axes in the plot. A pair of values sets each axis independently.
++    legend : bool
++        If False, suppress the legend for semantic variables.
++    **kwargs
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    g : FacetGrid
++        Returns the FacetGrid object with the plot on it for further tweaking.
++
++    See Also
++    --------
++    histplot : Draw a histogram.
++    kdeplot : Draw a kernel density estimate.
++    ecdfplot : Draw an empirical cumulative distribution function.
++    rugplot : Draw a rug plot.
++
++    Examples
++    --------
++    See the API documentation for detailed examples.
++
++    """
++    # Initialize the FacetGrid
++    g = FacetGrid(
++        data=data, row=row, col=col, hue=hue,
++        legend_out=False,  # We'll handle the legend inside
++    )
++
++    # Map the appropriate plotting function
++    if kind == "hist":
++        from .distributions import histplot
++        plot_func = histplot
++    elif kind == "kde":
++        from .distributions import kdeplot
++        plot_func = kdeplot
++    elif kind == "ecdf":
++        from .distributions import ecdfplot
++        plot_func = ecdfplot
++    else:
++        raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind}.")
++
++    # Add the rug if requested
++    if rug:
++        rug_kws = rug_kws or {}
++        rug_kws.setdefault("height", 0.025)
++        rug_kws.setdefault("legend", False)
++
++    # Plot the data
++    g.map_dataframe(plot_func, x=x, y=y, **kwargs)
++
++    if rug:
++        from .distributions import rugplot
++        g.map_dataframe(rugplot, x=x, y=y, **rug_kws)
++
++    # Set log scale if requested
++    if log_scale is not None:
++        g.set_axis_log_scale(log_scale)
++
++    # Add legend if needed
++    if legend and hue is not None:
++        g.add_legend()
++
++    return g
++
++
+ @_deprecate_positional_args
++@deprecated("distplot is deprecated and will be removed in a future version. "
++            "Use displot (a figure-level function with similar flexibility) "
++            "or histplot (an axes-level function for histograms).")
+ def distplot(
+     *,
+     x=None,
+@@ -2322,4 +2433,4 @@ def distplot(
+         else:
+             ax.set_xlabel(axlabel)
+ 
+-    return ax
++    return ax
+diff --git a/seaborn/_deprecation.py b/seaborn/_deprecation.py
+new file mode 100644
+index 0000000..b0f6199
+--- /dev/null
++++ b/seaborn/_deprecation.py
+@@ -0,0 +1,26 @@
++"""Utilities for deprecating functions and arguments."""
++import warnings
++import functools
++
++
++def deprecated(msg):
++    """Decorator to mark a function as deprecated.
++
++    Parameters
++    ----------
++    msg : str
++        The deprecation message to display.
++
++    Returns
++    -------
++    decorator : function
++        The decorator function.
++
++    """
++    def decorator(func):
++        @functools.wraps(func)
++        def wrapper(*args, **kwargs):
++            warnings.warn(msg, DeprecationWarning, stacklevel=2)
++            return func(*args, **kwargs)
++        return wrapper
++    return decorator

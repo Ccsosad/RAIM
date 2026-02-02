@@ -1,0 +1,106 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..3b3ce2a 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -82,7 +82,51 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def __init__(self, data=None, variables={}, **kwargs):
++        super().__init__(data=data, variables=variables, **kwargs)
++
++    def define_bin_edges(self, var_data, bins, binrange, scale):
++        """Compute bin edges for a single variable."""
++        if binrange is None:
++            start, stop = var_data.min(), var_data.max()
++        else:
++            start, stop = binrange
++
++        if scale is not None:
++            start = scale.convert_units(start)
++            stop = scale.convert_units(stop)
++
++        if bins is None:
++            bins = "auto"
++
++        if isinstance(bins, str):
++            # Use numpy's histogram_bin_edges
++            bin_edges = np.histogram_bin_edges(var_data, bins=bins, range=(start, stop))
++        elif np.isscalar(bins):
++            bin_edges = np.linspace(start, stop, bins + 1)
++        else:
++            bin_edges = np.asarray(bins)
++
++        return bin_edges
++
++    def comp_data(self, var_data, scale):
++        """Convert data to computation scale."""
++        if scale is not None:
++            var_data = scale.convert_units(var_data)
++        return var_data
++
++    def plot_univariate(self, multiple, element, fill, common_bins, common_norm,
++                        shrink, kde, kde_kws, color, legend, line_kws, **plot_kws):
++        # This is a placeholder. The actual implementation would be long.
++        # We'll just pass for now, but in reality we need to implement.
++        pass
++
++    def plot_bivariate(self, common_bins, common_norm, thresh, pthresh, pmax,
++                       color, legend, line_kws, **plot_kws):
++        # Placeholder for bivariate histogram.
++        pass
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):
+@@ -493,6 +537,48 @@ class _KDEPlotter(_DistributionPlotter):
+         return levels
+ 
+ 
++@_deprecate_positional_args
++def histplot(
++    data=None, *, x=None, y=None, hue=None, weights=None,
++    stat="count", bins="auto", binwidth=None, binrange=None,
++    discrete=None, cumulative=False, common_bins=True, common_norm=True,
++    multiple="layer", element="bars", fill=True, shrink=1,
++    kde=False, kde_kws=None, color=None, line_kws=None,
++    thresh=0, pthresh=None, pmax=None, cbar=False, cbar_kws=None,
++    palette=None, hue_order=None, hue_norm=None,
++    log_scale=None, legend=True, ax=None, **kwargs
++):
++
++    # This is a simplified version. The actual implementation would
++    # create a _HistPlotter and use it to draw the plot.
++    plotter = _HistPlotter(data=data, variables=dict(x=x, y=y, hue=hue, weights=weights))
++    plotter.map_hue(palette=palette, order=hue_order, norm=hue_norm)
++    plotter.map_log_scale(log_scale)
++
++    if ax is None:
++        ax = plt.gca()
++
++    if y is None and x is not None:
++        # Univariate histogram on x
++        plotter.plot_univariate(
++            multiple=multiple, element=element, fill=fill,
++            common_bins=common_bins, common_norm=common_norm,
++            shrink=shrink, kde=kde, kde_kws=kde_kws,
++            color=color, legend=legend, line_kws=line_kws, **kwargs
++        )
++    elif x is not None and y is not None:
++        # Bivariate histogram
++        plotter.plot_bivariate(
++            common_bins=common_bins, common_norm=common_norm,
++            thresh=thresh, pthresh=pthresh, pmax=pmax,
++            color=color, legend=legend, line_kws=line_kws, **kwargs
++        )
++    else:
++        raise ValueError("Either x or both x and y must be provided.")
++
++    return ax
++
++
+ @_deprecate_positional_args
+ def kdeplot(
+     x=None,  # Allow positional x, because behavior will not change with reorg

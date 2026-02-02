@@ -1,0 +1,52 @@
+diff --git a/django/db/models/deletion.py b/django/db/models/deletion.py
+index 96922fd..9a21ee2 100644
+--- a/django/db/models/deletion.py
++++ b/django/db/models/deletion.py
+@@ -378,7 +378,7 @@ class Collector:
+                 return
+         self.data = {model: self.data[model] for model in sorted_models}
+ 
+-    def delete(self):
++    def delete(self, origin=None):
+         # sort instance collections
+         for model, instances in self.data.items():
+             self.data[model] = sorted(instances, key=attrgetter("pk"))
+@@ -404,7 +404,8 @@ class Collector:
+             for model, obj in self.instances_with_model():
+                 if not model._meta.auto_created:
+                     signals.pre_delete.send(
+-                        sender=model, instance=obj, using=self.using
++                        sender=model, instance=obj, using=self.using,
++                        origin=origin,
+                     )
+ 
+             # fast deletes
+@@ -435,7 +436,8 @@ class Collector:
+                 if not model._meta.auto_created:
+                     for obj in instances:
+                         signals.post_delete.send(
+-                            sender=model, instance=obj, using=self.using
++                            sender=model, instance=obj, using=self.using,
++                            origin=origin,
+                         )
+ 
+         # update collected instances
+@@ -446,4 +448,4 @@ class Collector:
+         for model, instances in self.data.items():
+             for instance in instances:
+                 setattr(instance, model._meta.pk.attname, None)
+-        return sum(deleted_counter.values()), dict(deleted_counter)
++        return sum(deleted_counter.values()), dict(deleted_counter)
+diff --git a/django/db/models/query.py b/django/db/models/query.py
+index 1013471..e367887 100644
+--- a/django/db/models/query.py
++++ b/django/db/models/query.py
+@@ -755,7 +755,7 @@ class QuerySet:
+ 
+         collector = Collector(using=del_query.db)
+         collector.collect(del_query)
+-        deleted, _rows_count = collector.delete()
++        deleted, _rows_count = collector.delete(origin=self)
+ 
+         # Clear the result cache, in case this QuerySet gets reused.
+         self._result_cache = None

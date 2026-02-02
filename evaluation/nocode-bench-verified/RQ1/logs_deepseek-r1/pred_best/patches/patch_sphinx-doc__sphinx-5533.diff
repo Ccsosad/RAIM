@@ -1,0 +1,27 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1ae55eb..41717ba 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1459,7 +1459,15 @@ def merge_autodoc_default_flags(app, config):
+ 
+     for option in config.autodoc_default_flags:
+         if isinstance(option, string_types):
+-            config.autodoc_default_options[option] = None
++            # Filter out non-boolean options that shouldn't be in flags
++            if option == 'member-order':
++                logger.warning(
++                    __("autodoc_default_flags contains unsupported option %r - "
++                       "use autodoc_default_options instead"),
++                    option, type='autodoc'
++                )
++            else:
++                config.autodoc_default_options[option] = None
+         else:
+             logger.warning(
+                 __("Ignoring invalid option in autodoc_default_flags: %r"),
+@@ -1492,4 +1500,4 @@ def setup(app):
+ 
+     app.connect('config-inited', merge_autodoc_default_flags)
+ 
+-    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}
++    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

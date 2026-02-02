@@ -1,0 +1,15 @@
+diff --git a/astropy/units/core.py b/astropy/units/core.py
+index 2b12b30..8af58c1 100644
+--- a/astropy/units/core.py
++++ b/astropy/units/core.py
+@@ -2413,6 +2413,10 @@ def _add_prefixes(u, excludes=[], namespace=None, prefixes=False):
+         prefixes = si_prefixes
+     elif prefixes is False:
+         prefixes = []
++    
++    # Special case: add milli- prefix for Angstrom
++    if u.name == 'Angstrom' and prefixes == []:
++        prefixes = [(['m'], ['milli'], 0.001)]
+ 
+     for short, full, factor in prefixes:
+         names = []

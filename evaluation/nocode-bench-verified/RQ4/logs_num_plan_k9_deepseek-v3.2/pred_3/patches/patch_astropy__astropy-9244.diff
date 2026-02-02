@@ -1,0 +1,41 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..1d83132 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -109,6 +109,36 @@ class Conf(_config.ConfigNamespace):
+ conf = Conf()
+ 
+ 
++class earth_orientation_table(ScienceState):
++    """
++    Global setting for the Earth orientation table (IERS) used by astropy.
++
++    This can be set to any IERS table instance (e.g., ``IERS_B``, ``IERS_A``,
++    or ``IERS_Auto``).  When set to `None` (the default), it will use
++    ``IERS_Auto.open()`` to automatically download and use the latest IERS
++    data.
++
++    Examples
++    --------
++    >>> from astropy.utils import iers
++    >>> iers.earth_orientation_table.set(iers.IERS_B.open())
++    >>> iers.earth_orientation_table.get()
++    <IERS_B length=...>
++    >>> iers.earth_orientation_table.set(None)
++    >>> iers.earth_orientation_table.get()
++    <IERS_Auto length=...>
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            from .iers import IERS_Auto
++            return IERS_Auto.open()
++        else:
++            return value
++
++
+ class IERSRangeError(IndexError):
+     """
+     Any error for when dates are outside of the valid range for IERS

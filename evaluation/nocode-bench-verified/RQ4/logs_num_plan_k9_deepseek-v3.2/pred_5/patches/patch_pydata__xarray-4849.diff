@@ -1,0 +1,393 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 0127e99..e88ce5d 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -1,3 +1,4 @@
++
+ import copy
+ import datetime
+ import functools
+@@ -6334,6 +6335,383 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+ 
+         return map_blocks(func, self, args, kwargs, template)
+ 
++    def curvefit(
++        self,
++        coords: Union[Hashable, List[Hashable], DataArray, List[DataArray]],
++        func: Callable,
++        reduce_dims: Union[Hashable, List[Hashable]] = None,
++        bounds: Dict[str, Tuple[float, float]] = None,
++        param_names: List[str] = None,
++        **kwargs,
++    ):
++        """
++        Least squares curve fit using scipy.optimize.curve_fit.
++
++        Parameters
++        ----------
++        coords : hashable, list of hashable, DataArray, or list of DataArray
++            Independent variable(s) for the curve fitting. If a hashable or
++            list of hashable, then these are coordinate names. If a DataArray
++            or list of DataArray, then these are the data for the independent
++            variable(s).
++        func : callable
++            The model function to fit. It must take the independent variable(s)
++            as the first argument(s) and the parameters to fit as separate
++            remaining arguments.
++        reduce_dims : hashable or list of hashable, optional
++            Dimensions to reduce (fit over). If None, fit over all dimensions.
++        bounds : dict, optional
++            Dictionary mapping parameter names to (lower, upper) bounds. Only
++            used if the parameter names are given via `param_names`.
++        param_names : list of str, optional
++            Names of the parameters. If not given, they are named p0, p1, ...
++        **kwargs
++            Additional keyword arguments passed to scipy.optimize.curve_fit.
++
++        Returns
++        -------
++        curvefit_results : Dataset
++            A dataset containing the fitted parameters for each data variable.
++            Each parameter is stored as a separate variable with name
++            '{var}_{param}' for each input variable.
++        """
++        try:
++            from scipy.optimize import curve_fit
++        except ImportError:
++            raise ImportError(
++                "curvefit requires scipy to be installed."
++            )
++
++        # Normalize coords to a list of DataArrays
++        if isinstance(coords, (str, DataArray)):
++            coords = [coords]
++        elif coords is None:
++            raise ValueError("coords must be provided")
++
++        coord_arrays = []
++        for coord in coords:
++            if isinstance(coord, str):
++                if coord in self.coords:
++                    coord_arrays.append(self.coords[coord])
++                elif coord in self.data_vars:
++                    coord_arrays.append(self[coord])
++                else:
++                    raise ValueError(f"Coordinate {coord} not found in dataset.")
++            else:
++                coord_arrays.append(coord)
++
++        # Normalize reduce_dims
++        if reduce_dims is None:
++            reduce_dims = list(self.dims)
++        elif isinstance(reduce_dims, str):
++            reduce_dims = [reduce_dims]
++
++        # Determine the dimensions to fit over
++        fit_dims = set(reduce_dims)
++
++        # For each data variable, we will fit the function
++        results = {}
++        for name, var in self.data_vars.items():
++            # Check that the variable has the dimensions we are fitting over
++            if not fit_dims.issubset(set(var.dims)):
++                raise ValueError(
++                    f"Variable {name} does not have all the dimensions in reduce_dims."
++                )
++
++            # Prepare the independent data
++            # We need to broadcast the coord_arrays to the shape of var
++            # and then flatten along the fit dimensions.
++            broadcast_coords = []
++            for coord in coord_arrays:
++                # Align the coord to the variable
++                aligned_coord = coord.broadcast_like(var)
++                # Flatten along the fit dimensions
++                flat_coord = aligned_coord.stack(fit=fit_dims)
++                broadcast_coords.append(flat_coord.values)
++
++            # Flatten the dependent variable
++            flat_data = var.stack(fit=fit_dims).values
++
++            # Remove NaNs
++            mask = np.isfinite(flat_data)
++            for coord in broadcast_coords:
++                mask = mask & np.isfinite(coord)
++            y_data = flat_data[mask]
++            x_data = [coord[mask] for coord in broadcast_coords]
++
++            # Prepare bounds
++            if bounds is not None and param_names is not None:
++                # Convert bounds to the order of parameters
++                bounds_lower = []
++                bounds_upper = []
++                for param in param_names:
++                    if param in bounds:
++                        low, high = bounds[param]
++                        bounds_lower.append(low)
++                        bounds_upper.append(high)
++                    else:
++                        bounds_lower.append(-np.inf)
++                        bounds_upper.append(np.inf)
++                bounds_array = (bounds_lower, bounds_upper)
++            else:
++                bounds_array = (-np.inf, np.inf)
++
++            # Determine initial guess (p0) from kwargs or use default
++            p0 = kwargs.pop('p0', None)
++            if p0 is None:
++                # We need to know the number of parameters.
++                if param_names is not None:
++                    num_params = len(param_names)
++                else:
++                    # Try to guess by calling the function with a dummy input
++                    try:
++                        test_args = [data[0] for data in x_data]
++                        # Add a reasonable number of dummy parameters
++                        test_result = func(*test_args, *[1.0] * 10)
++                    except TypeError:
++                        raise ValueError(
++                            "Cannot determine the number of parameters. "
++                            "Please provide param_names or p0."
++                        )
++                    # We don't know the exact number, so we rely on param_names
++                    raise ValueError(
++                        "Cannot determine the number of parameters. "
++                        "Please provide param_names."
++                    )
++                p0 = [1.0] * num_params
++
++            # Perform the fit
++            try:
++                popt, pcov = curve_fit(
++                    func,
++                    x_data,
++                    y_data,
++                    p0=p0,
++                    bounds=bounds_array,
++                    **kwargs,
++                )
++            except Exception as e:
++                raise RuntimeError(f"Curve fitting failed for variable {name}: {e}")
++
++            # Store the results
++            if param_names is None:
++                param_names = [f"p{i}" for i in range(len(popt))]
++            for param_name, param_value in zip(param_names, popt):
++                results[(name, param_name)] = param_value
++
++        # Create a new dataset with the fitted parameters
++        # We need to determine the non-fit dimensions for each variable.
++        # We'll use the first variable as a template.
++        first_var = next(iter(self.data_vars.values()))
++        non_fit_dims = [dim for dim in first_var.dims if dim not in fit_dims]
++        # Build a dictionary of coordinates for the non-fit dimensions
++        non_fit_coords = {dim: self.coords[dim] for dim in non_fit_dims if dim in self.coords}
++
++        # Group the results by variable
++        out_vars = {}
++        for (var_name, param_name), param_value in results.items():
++            # Create a DataArray for this parameter
++            out_vars[f"{var_name}_{param_name}"] = DataArray(
++                param_value,
++                dims=non_fit_dims,
++                coords=non_fit_coords,
++            )
++
++        return Dataset(out_vars)
++
++    def curvefit(
++        self,
++        coords: Union[Hashable, List[Hashable], DataArray, List[DataArray]],
++        func: Callable,
++        reduce_dims: Union[Hashable, List[Hashable]] = None,
++        bounds: Dict[str, Tuple[float, float]] = None,
++        param_names: List[str] = None,
++        **kwargs,
++    ):
++        """
++        Least squares curve fit using scipy.optimize.curve_fit.
++
++        Parameters
++        ----------
++        coords : hashable, list of hashable, DataArray, or list of DataArray
++            Independent variable(s) for the curve fitting. If a hashable or
++            list of hashable, then these are coordinate names. If a DataArray
++            or list of DataArray, then these are the data for the independent
++            variable(s).
++        func : callable
++            The model function to fit. It must take the independent variable(s)
++            as the first argument(s) and the parameters to fit as separate
++            remaining arguments.
++        reduce_dims : hashable or list of hashable, optional
++            Dimensions to reduce (fit over). If None, fit over all dimensions.
++        bounds : dict, optional
++            Dictionary mapping parameter names to (lower, upper) bounds. Only
++            used if the parameter names are given via `param_names`.
++        param_names : list of str, optional
++            Names of the parameters. If not given, they are named p0, p1, ...
++        **kwargs
++            Additional keyword arguments passed to scipy.optimize.curve_fit.
++
++        Returns
++        -------
++        curvefit_results : Dataset
++            A dataset containing the fitted parameters for each data variable.
++        """
++        try:
++            from scipy.optimize import curve_fit
++        except ImportError:
++            raise ImportError(
++                "curvefit requires scipy to be installed."
++            )
++
++        # Normalize coords to a list of DataArrays
++        if isinstance(coords, (str, DataArray)):
++            coords = [coords]
++        elif coords is None:
++            raise ValueError("coords must be provided")
++
++        coord_arrays = []
++        for coord in coords:
++            if isinstance(coord, str):
++                if coord in self.coords:
++                    coord_arrays.append(self.coords[coord])
++                elif coord in self.data_vars:
++                    coord_arrays.append(self[coord])
++                else:
++                    raise ValueError(f"Coordinate {coord} not found in dataset.")
++            else:
++                coord_arrays.append(coord)
++
++        # Normalize reduce_dims
++        if reduce_dims is None:
++            reduce_dims = list(self.dims)
++        elif isinstance(reduce_dims, str):
++            reduce_dims = [reduce_dims]
++
++        # Determine the dimensions to fit over
++        fit_dims = set(reduce_dims)
++
++        # For each data variable, we will fit the function
++        results = {}
++        for name, var in self.data_vars.items():
++            # Check that the variable has the dimensions we are fitting over
++            if not fit_dims.issubset(set(var.dims)):
++                raise ValueError(
++                    f"Variable {name} does not have all the dimensions in reduce_dims."
++                )
++
++            # Prepare the independent data
++            # We need to broadcast the coord_arrays to the shape of var
++            # and then flatten along the fit dimensions.
++            # We'll use xarray's broadcasting.
++            broadcast_coords = []
++            for coord in coord_arrays:
++                # Align the coord to the variable
++                aligned_coord = coord.broadcast_like(var)
++                # Flatten along the fit dimensions
++                flat_coord = aligned_coord.stack(fit=fit_dims)
++                broadcast_coords.append(flat_coord.values)
++
++            # Flatten the dependent variable
++            flat_data = var.stack(fit=fit_dims).values
++
++            # Remove NaNs
++            mask = np.isfinite(flat_data)
++            for coord in broadcast_coords:
++                mask = mask & np.isfinite(coord)
++            y_data = flat_data[mask]
++            x_data = [coord[mask] for coord in broadcast_coords]
++
++            # Prepare bounds
++            if bounds is not None and param_names is not None:
++                # Convert bounds to the order of parameters
++                bounds_lower = []
++                bounds_upper = []
++                for param in param_names:
++                    if param in bounds:
++                        low, high = bounds[param]
++                        bounds_lower.append(low)
++                        bounds_upper.append(high)
++                    else:
++                        bounds_lower.append(-np.inf)
++                        bounds_upper.append(np.inf)
++                bounds_array = (bounds_lower, bounds_upper)
++            else:
++                bounds_array = (-np.inf, np.inf)
++
++            # Determine initial guess (p0) from kwargs or use default
++            p0 = kwargs.pop('p0', None)
++            if p0 is None:
++                # Use a simple initial guess: all ones
++                # We need to know the number of parameters.
++                # We can try to call the function with a dummy input.
++                try:
++                    # Use the first data point to get the number of parameters
++                    test_args = [data[0] for data in x_data]
++                    # Add dummy parameters
++                    test_result = func(*test_args, *[1.0] * 10)
++                except TypeError:
++                    # If we cannot determine, use 1.0 for each parameter
++                    # We'll guess the number of parameters from param_names
++                    if param_names is not None:
++                        num_params = len(param_names)
++                    else:
++                        # We cannot determine, so raise an error
++                        raise ValueError(
++                            "Cannot determine the number of parameters. "
++                            "Please provide param_names or p0."
++                        )
++                else:
++                    # We don't know the number of parameters from the test.
++                    # So we rely on param_names.
++                    if param_names is not None:
++                        num_params = len(param_names)
++                    else:
++                        raise ValueError(
++                            "Cannot determine the number of parameters. "
++                            "Please provide param_names."
++                        )
++                p0 = [1.0] * num_params
++
++            # Perform the fit
++            try:
++                popt, pcov = curve_fit(
++                    func,
++                    x_data,
++                    y_data,
++                    p0=p0,
++                    bounds=bounds_array,
++                    **kwargs,
++                )
++            except Exception as e:
++                raise RuntimeError(f"Curve fitting failed for variable {name}: {e}")
++
++            # Store the results
++            if param_names is None:
++                param_names = [f"p{i}" for i in range(len(popt))]
++            for param_name, param_value in zip(param_names, popt):
++                results.setdefault(param_name, []).append(param_value)
++
++        # Create a new dataset with the fitted parameters
++        # Each parameter becomes a data variable with the same dimensions as the original
++        # but without the reduced dimensions.
++        out_vars = {}
++        for param_name, param_values in results.items():
++            # We need to reconstruct the shape of the non-reduced dimensions.
++            # We'll create a new DataArray with the same dimensions as the original
++            # but without the reduced dimensions.
++            # We'll use the first variable as a template.
++            template_var = next(iter(self.data_vars.values()))
++            non_fit_dims = [dim for dim in template_var.dims if dim not in fit_dims]
++            # Create a new DataArray with the non_fit_dims and the param_values
++            out_vars[param_name] = DataArray(
++                param_values,
++                dims=non_fit_dims,
++                coords={dim: self.coords[dim] for dim in non_fit_dims if dim in self.coords},
++            )
++
++        return Dataset(out_vars)
++
+     def polyfit(
+         self,
+         dim: Hashable,

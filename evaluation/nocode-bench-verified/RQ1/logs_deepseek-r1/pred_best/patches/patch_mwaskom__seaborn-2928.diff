@@ -1,0 +1,139 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..51ffc99 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -1113,6 +1113,44 @@ class FacetGrid(Grid):
+                     axes.append(ax)
+             return np.array(axes, object).flat
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid and return self.
++
++        Parameters
++        ----------
++        func : callable
++            Function that takes the grid as its first argument and returns a grid.
++        args, kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid and return the function's result.
++
++        Parameters
++        ----------
++        func : callable
++            Function that takes the grid as its first argument and returns an arbitrary object.
++        args, kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        object : the return value of the function.
++
++        """
++        return func(self, *args, **kwargs)
++
+ 
+ class PairGrid(Grid):
+     """Subplot grid for plotting pairwise relationships in a dataset.
+@@ -1618,6 +1656,44 @@ class PairGrid(Grid):
+                 numeric_cols.append(col)
+         return numeric_cols
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid and return self.
++
++        Parameters
++        ----------
++        func : callable
++            Function that takes the grid as its first argument and returns a grid.
++        args, kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid and return the function's result.
++
++        Parameters
++        ----------
++        func : callable
++            Function that takes the grid as its first argument and returns an arbitrary object.
++        args, kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        object : the return value of the function.
++
++        """
++        return func(self, *args, **kwargs)
++
+ 
+ class JointGrid(_BaseGrid):
+     """Grid for drawing a bivariate plot with marginal univariate plots.
+@@ -1883,6 +1959,44 @@ class JointGrid(_BaseGrid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid and return self.
++
++        Parameters
++        ----------
++        func : callable
++            Function that takes the grid as its first argument and returns a grid.
++        args, kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid and return the function's result.
++
++        Parameters
++        ----------
++        func : callable
++            Function that takes the grid as its first argument and returns an arbitrary object.
++        args, kwargs
++            Additional arguments and keyword arguments are passed to the function.
++
++        Returns
++        -------
++        object : the return value of the function.
++
++        """
++        return func(self, *args, **kwargs)
++
+     def set_axis_labels(self, xlabel="", ylabel="", **kwargs):
+         """Set axis labels on the bivariate axes.
+ 

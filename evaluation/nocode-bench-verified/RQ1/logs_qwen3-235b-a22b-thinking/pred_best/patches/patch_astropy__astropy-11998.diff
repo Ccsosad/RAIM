@@ -1,0 +1,93 @@
+diff --git a/astropy/cosmology/io/__init__.py b/astropy/cosmology/io/__init__.py
+new file mode 100644
+index 0000000..fe8666e
+--- /dev/null
++++ b/astropy/cosmology/io/__init__.py
+@@ -0,0 +1 @@
++from . import mapping
+diff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py
+new file mode 100644
+index 0000000..846a8c2
+--- /dev/null
++++ b/astropy/cosmology/io/mapping.py
+@@ -0,0 +1,80 @@
++"""Mapping format for Cosmology I/O"""
++
++from astropy.cosmology import Cosmology
++from astropy.io import registry as io_registry
++
++def from_mapping(mapping, *, move_to_meta=False, cosmology=None):
++    """Convert a mapping (dict) to a Cosmology object.
++    
++    Parameters
++    ----------
++    mapping : dict
++        The dictionary representation of a Cosmology.
++    move_to_meta : bool (optional, keyword-only)
++        Whether to move unrecognized parameters to meta.
++    cosmology : type (optional, keyword-only)
++        The Cosmology class to use. If not provided, will be inferred from
++        the 'cosmology' key in the mapping.
++    
++    Returns
++    -------
++    cosmology : `~astropy.cosmology.Cosmology`
++        The Cosmology object.
++    """
++    # Get the cosmology class if not provided
++    if cosmology is None:
++        cosmology = mapping['cosmology']
++    
++    # Extract name and meta
++    name = mapping.get('name')
++    meta = mapping.get('meta', {})
++    
++    # Create a copy of the mapping to avoid modifying the original
++    params = mapping.copy()
++    
++    # Remove special keys
++    for key in ['cosmology', 'name', 'meta']:
++        params.pop(key, None)
++    
++    # Create the cosmology
++    return cosmology(name=name, meta=meta, **params)
++
++def to_mapping(cosmology, *args):
++    """Convert a Cosmology object to a mapping (dict).
++    
++    Parameters
++    ----------
++    cosmology : `~astropy.cosmology.Cosmology`
++        The Cosmology object to convert.
++    *args
++        Additional arguments (ignored).
++    
++    Returns
++    -------
++    mapping : dict
++        The dictionary representation of the Cosmology.
++    """
++    # Get the parameters from the cosmology
++    params = {k: v for k, v in cosmology.parameters.items()}
++    
++    # Add cosmology class, name, and meta
++    params['cosmology'] = cosmology.__class__
++    params['name'] = cosmology.name
++    params['meta'] = cosmology.meta
++    
++    return params
++
++def mapping_identify(origin, format, *args, **kwargs):
++    """Identify if object uses the mapping format."""
++    if origin == "read":
++        # For reading, we expect a dict as the first argument
++        return isinstance(args[0], dict) and (format in (None, "mapping"))
++    elif origin == "write":
++        # For writing, we expect a Cosmology object as the first argument
++        return isinstance(args[0], Cosmology) and (format in (None, "mapping"))
++    return False
++
++# Register the format
++io_registry.register_reader("mapping", Cosmology, from_mapping)
++io_registry.register_writer("mapping", Cosmology, to_mapping)
++io_registry.register_identifier("mapping", Cosmology, mapping_identify)

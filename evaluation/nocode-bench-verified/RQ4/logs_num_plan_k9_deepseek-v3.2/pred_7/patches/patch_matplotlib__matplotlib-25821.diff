@@ -1,0 +1,98 @@
+diff --git a/lib/mpl_toolkits/mplot3d/axes3d.py b/lib/mpl_toolkits/mplot3d/axes3d.py
+index 7e611ff..d6c65fd 100644
+--- a/lib/mpl_toolkits/mplot3d/axes3d.py
++++ b/lib/mpl_toolkits/mplot3d/axes3d.py
+@@ -56,6 +56,7 @@ class Axes3D(Axes):
+ 
+     _axis_names = ("x", "y", "z")
+     Axes._shared_axes["z"] = cbook.Grouper()
++    _shared_views = cbook.Grouper()
+ 
+     vvec = _api.deprecate_privatize_attribute("3.7")
+     eye = _api.deprecate_privatize_attribute("3.7")
+@@ -64,9 +65,9 @@ class Axes3D(Axes):
+ 
+     def __init__(
+             self, fig, rect=None, *args,
+-            elev=30, azim=-60, roll=0, sharez=None, proj_type='persp',
+-            box_aspect=None, computed_zorder=True, focal_length=None,
+-            **kwargs):
++            elev=30, azim=-60, roll=0, sharez=None, shareview=None,
++            proj_type='persp', box_aspect=None, computed_zorder=True,
++            focal_length=None, **kwargs):
+         """
+         Parameters
+         ----------
+@@ -142,6 +143,11 @@ class Axes3D(Axes):
+             self._shared_axes["z"].join(self, sharez)
+             self._adjustable = 'datalim'
+ 
++        self._shareview = shareview
++        if shareview is not None:
++            self._shared_views.join(self, shareview)
++        self._updating_view = False
++
+         if kwargs.pop('auto_add_to_figure', False):
+             raise AttributeError(
+                 'auto_add_to_figure is no longer supported for Axes3D. '
+@@ -805,6 +811,8 @@ class Axes3D(Axes):
+         vertical_axis : {"z", "x", "y"}, default: "z"
+             The axis to align vertically. *azim* rotates about this axis.
+         """
++        if self._updating_view:
++            return
+ 
+         self._dist = 10  # The camera distance from origin. Behaves like zoom
+ 
+@@ -827,6 +835,14 @@ class Axes3D(Axes):
+             dict(x=0, y=1, z=2), vertical_axis=vertical_axis
+         )
+ 
++        # Update shared views
++        if self._shareview is not None:
++            for ax in self._shared_views.get_siblings(self):
++                if ax is not self:
++                    ax._updating_view = True
++                    ax.view_init(elev, azim, roll, vertical_axis)
++                    ax._updating_view = False
++
+     def set_proj_type(self, proj_type, focal_length=None):
+         """
+         Set the projection type.
+@@ -975,6 +991,22 @@ class Axes3D(Axes):
+         self.set_zlim(z0, z1, emit=False, auto=other.get_autoscalez_on())
+         self.zaxis._scale = other.zaxis._scale
+ 
++    def shareview(self, other):
++        """
++        Share the view angles with *other*.
++
++        This is equivalent to passing ``shareview=other`` when constructing the
++        Axes, and cannot be used if the view is already being shared with
++        another Axes.
++        """
++        _api.check_isinstance(Axes3D, other=other)
++        if self._shareview is not None and other is not self._shareview:
++            raise ValueError("view is already shared")
++        self._shared_views.join(self, other)
++        self._shareview = other
++        # Sync the view angles
++        self.view_init(other.elev, other.azim, other.roll)
++
+     def clear(self):
+         # docstring inherited.
+         super().clear()
+@@ -1107,9 +1139,10 @@ class Axes3D(Axes):
+             roll = np.deg2rad(self.roll)
+             delev = -(dy/h)*180*np.cos(roll) + (dx/w)*180*np.sin(roll)
+             dazim = -(dy/h)*180*np.sin(roll) - (dx/w)*180*np.cos(roll)
+-            self.elev = self.elev + delev
+-            self.azim = self.azim + dazim
+-            self.stale = True
++            # Convert vertical axis index to string
++            vertical_axis = {0: 'x', 1: 'y', 2: 'z'}[self._vertical_axis]
++            self.view_init(self.elev + delev, self.azim + dazim,
++                           self.roll, vertical_axis)
+ 
+         elif self.button_pressed in self._pan_btn:
+             # Start the pan event with pixel coordinates

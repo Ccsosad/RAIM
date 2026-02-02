@@ -1,0 +1,62 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..ddbc928 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1863,6 +1864,13 @@ class DataArray(AbstractArray, DataWithCoords):
+         Dataset.transpose
+         """
+         if dims:
++            if Ellipsis in dims:
++                if dims.count(Ellipsis) > 1:
++                    raise ValueError("Can only use one ellipsis in transpose")
++                # Replace ... with all dims not explicitly listed
++                other_dims = [d for d in self.dims if d not in dims]
++                dims = tuple(d if d is not Ellipsis else other_dims for d in dims)
++                dims = sum(dims, ())  # flatten tuple of tuples
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+@@ -3122,4 +3130,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 873be99..9607952 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -1209,7 +1209,8 @@ class Variable(
+         ----------
+         *dims : str, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+ 
+         Returns
+         -------
+@@ -1228,6 +1229,13 @@ class Variable(
+         """
+         if len(dims) == 0:
+             dims = self.dims[::-1]
++        if Ellipsis in dims:
++            if dims.count(Ellipsis) > 1:
++                raise ValueError("Can only use one ellipsis in transpose")
++            # Replace ... with all dims not explicitly listed
++            other_dims = [d for d in self.dims if d not in dims]
++            dims = tuple(d if d is not Ellipsis else other_dims for d in dims)
++            dims = sum(dims, ())  # flatten tuple of tuples
+         axes = self.get_axis_num(dims)
+         if len(dims) < 2:  # no need to transpose if only one dimension
+             return self.copy(deep=False)

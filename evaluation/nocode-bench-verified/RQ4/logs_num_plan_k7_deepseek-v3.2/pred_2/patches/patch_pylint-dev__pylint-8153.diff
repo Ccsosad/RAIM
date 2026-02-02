@@ -1,0 +1,30 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..95dc977 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -67,6 +67,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -82,7 +83,10 @@ def expand_modules(
+         ):
+             continue
+         module_path = get_python_path(something)
+-        additional_search_path = [".", module_path] + path
++        additional_search_path = list(source_roots) + ["."]
++        if module_path:
++            additional_search_path.append(module_path)
++        additional_search_path += path
+         if os.path.exists(something):
+             # this is a file or a directory
+             try:
+@@ -160,4 +164,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors

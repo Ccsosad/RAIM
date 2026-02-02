@@ -1,0 +1,38 @@
+diff --git a/sklearn/datasets/_openml.py b/sklearn/datasets/_openml.py
+index 2578f63..8fb2858 100644
+--- a/sklearn/datasets/_openml.py
++++ b/sklearn/datasets/_openml.py
+@@ -725,6 +725,7 @@ def fetch_openml(
+     n_retries: int = 3,
+     delay: float = 1.0,
+     parser: Optional[str] = "warn",
++    read_csv_kwargs: Optional[Dict] = None,
+ ):
+     """Fetch dataset from openml by name or dataset id.
+ 
+@@ -829,6 +830,11 @@ def fetch_openml(
+            warning. Therefore, an `ImportError` will be raised from 1.4 if
+            the dataset is dense and pandas is not installed.
+ 
++    read_csv_kwargs : dict, default=None
++        Keyword arguments to pass to `pandas.read_csv` when using the pandas
++        parser. It allows to overwrite the default options. Only used when
++        `parser="pandas"`.
++
+     Returns
+     -------
+     data : :class:`~sklearn.utils.Bunch`
+@@ -1096,6 +1102,7 @@ def fetch_openml(
+         n_retries=n_retries,
+         delay=delay,
+         parser=parser_,
++        read_csv_kwargs=read_csv_kwargs,
+     )
+ 
+     if return_X_y:
+@@ -1111,4 +1118,4 @@ def fetch_openml(
+         url="https://www.openml.org/d/{}".format(data_id),
+     )
+ 
+-    return bunch
++    return bunch

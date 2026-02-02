@@ -1,0 +1,1099 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..c720ffa 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -84,6 +84,7 @@ class Grid(_BaseGrid):
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+         self._figure.tight_layout(*args, **kwargs)
++        return self
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -703,6 +704,45 @@ class FacetGrid(Grid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def map_dataframe(self, func, *args, **kwargs):
+         """Like ``.map`` but passes args as strings and inserts data in kwargs.
+ 
+@@ -774,6 +814,45 @@ class FacetGrid(Grid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def _facet_color(self, hue_index, kw_color):
+ 
+         color = self._colors[hue_index]
+@@ -821,6 +900,45 @@ class FacetGrid(Grid):
+         utils.despine(self._figure, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def set_axis_labels(self, x_var=None, y_var=None, clear_inner=True, **kwargs):
+         """Set axis labels on the left column and bottom row of the grid."""
+         if x_var is not None:
+@@ -832,6 +950,45 @@ class FacetGrid(Grid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def set_xlabels(self, label=None, clear_inner=True, **kwargs):
+         """Label the x axis on the bottom row of the grid."""
+         if label is None:
+@@ -843,6 +1000,45 @@ class FacetGrid(Grid):
+                 ax.set_xlabel("")
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def set_ylabels(self, label=None, clear_inner=True, **kwargs):
+         """Label the y axis on the left column of the grid."""
+         if label is None:
+@@ -854,6 +1050,45 @@ class FacetGrid(Grid):
+                 ax.set_ylabel("")
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def set_xticklabels(self, labels=None, step=None, **kwargs):
+         """Set x axis tick labels of the grid."""
+         for ax in self.axes.flat:
+@@ -870,6 +1105,45 @@ class FacetGrid(Grid):
+                 ax.set_xticklabels(labels, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def set_yticklabels(self, labels=None, **kwargs):
+         """Set y axis tick labels on the left column of the grid."""
+         for ax in self.axes.flat:
+@@ -882,6 +1156,45 @@ class FacetGrid(Grid):
+                 ax.set_yticklabels(labels, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def set_titles(self, template=None, row_template=None, col_template=None,
+                    **kwargs):
+         """Draw titles either above each facet or on the grid margins.
+@@ -974,6 +1287,45 @@ class FacetGrid(Grid):
+                 self.axes.flat[i].set_title(title, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def refline(self, *, x=None, y=None, color='.5', linestyle='--', **line_kws):
+         """Add a reference line(s) to each facet.
+ 
+@@ -1320,6 +1672,45 @@ class PairGrid(Grid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def map_lower(self, func, **kwargs):
+         """Plot with a bivariate function on the lower diagonal subplots.
+ 
+@@ -1335,6 +1726,45 @@ class PairGrid(Grid):
+         self._map_bivariate(func, indices, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def map_upper(self, func, **kwargs):
+         """Plot with a bivariate function on the upper diagonal subplots.
+ 
+@@ -1350,8 +1780,47 @@ class PairGrid(Grid):
+         self._map_bivariate(func, indices, **kwargs)
+         return self
+ 
+-    def map_offdiag(self, func, **kwargs):
+-        """Plot with a bivariate function on the off-diagonal subplots.
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def map_offdiag(self, func, **kwargs):
++        """Plot with a bivariate function on the off-diagonal subplots.
+ 
+         Parameters
+         ----------
+@@ -1374,6 +1843,45 @@ class PairGrid(Grid):
+             self._map_bivariate(func, indices, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def map_diag(self, func, **kwargs):
+         """Plot with a univariate function on each diagonal subplot.
+ 
+@@ -1459,6 +1967,45 @@ class PairGrid(Grid):
+         self._add_axis_labels()
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def _map_diag_iter_hue(self, func, **kwargs):
+         """Put marginal plot on each diagonal axes, iterating over hue."""
+         # Plot on each of the diagonal axes
+@@ -1498,6 +2045,45 @@ class PairGrid(Grid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def _map_bivariate(self, func, indices, **kwargs):
+         """Draw a bivariate plot on the indicated axes."""
+         # This is a hack to handle the fact that new distribution plots don't add
+@@ -1618,6 +2204,84 @@ class PairGrid(Grid):
+                 numeric_cols.append(col)
+         return numeric_cols
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+ 
+ class JointGrid(_BaseGrid):
+     """Grid for drawing a bivariate plot with marginal univariate plots.
+@@ -1742,6 +2406,45 @@ class JointGrid(_BaseGrid):
+         self.plot_joint(joint_func, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def plot_joint(self, func, **kwargs):
+         """Draw a bivariate plot on the joint axes of the grid.
+ 
+@@ -1778,6 +2481,45 @@ class JointGrid(_BaseGrid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def plot_marginals(self, func, **kwargs):
+         """Draw univariate plots on each marginal axes.
+ 
+@@ -1839,6 +2581,45 @@ class JointGrid(_BaseGrid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def refline(
+         self, *, x=None, y=None, joint=True, marginal=True,
+         color='.5', linestyle='--', **line_kws
+@@ -1883,6 +2664,45 @@ class JointGrid(_BaseGrid):
+ 
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+     def set_axis_labels(self, xlabel="", ylabel="", **kwargs):
+         """Set axis labels on the bivariate axes.
+ 
+@@ -1906,6 +2726,123 @@ class JointGrid(_BaseGrid):
+         self.ax_joint.set_ylabel(ylabel, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the result.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        result : any
++            The result of applying the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """Apply a function to the grid object and return the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object. It must take the grid object
++            as its first argument and return a value.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns self.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
+ 
+ JointGrid.__init__.__doc__ = """\
+ Set up the grid of subplots and store data internally for easy plotting.

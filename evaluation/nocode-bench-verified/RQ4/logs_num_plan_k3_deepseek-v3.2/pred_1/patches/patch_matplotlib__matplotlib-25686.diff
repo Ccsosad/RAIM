@@ -1,0 +1,29 @@
+diff --git a/lib/matplotlib/figure.py b/lib/matplotlib/figure.py
+index 6d7c2c5..219cee9 100644
+--- a/lib/matplotlib/figure.py
++++ b/lib/matplotlib/figure.py
+@@ -441,6 +441,24 @@ default: %(va)s
+         """
+         return self.patch.get_linewidth()
+ 
++    def get_suptitle(self):
++        """
++        Return the suptitle text string, or None if none has been set.
++        """
++        return self._suptitle.get_text() if self._suptitle is not None else None
++
++    def get_supxlabel(self):
++        """
++        Return the supxlabel text string, or None if none has been set.
++        """
++        return self._supxlabel.get_text() if self._supxlabel is not None else None
++
++    def get_supylabel(self):
++        """
++        Return the supylabel text string, or None if none has been set.
++        """
++        return self._supylabel.get_text() if self._supylabel is not None else None
++
+     def set_edgecolor(self, color):
+         """
+         Set the edge color of the Figure rectangle.

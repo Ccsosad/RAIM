@@ -1,0 +1,77 @@
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 38580cf..9744924 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -128,6 +128,27 @@ def validate_any(s):
+ validate_anylist = _listify_validator(validate_any)
+ 
+ 
++def validate_ndivs(s):
++    """
++    Validate ndivs: an integer >= 1 or 'auto'.
++    """
++    if s == 'auto':
++        return s
++    if isinstance(s, int) and s >= 1:
++        return s
++    raise ValueError(f"ndivs must be 'auto' or an integer >= 1, got {s!r}")
++
++
++def validate_ndivs(s):
++    """
++    Validate ndivs: an integer >= 1 or 'auto'.
++    """
++    if s == 'auto':
++        return s
++    if isinstance(s, int) and s >= 1:
++        return s
++    raise ValueError(f"ndivs must be 'auto' or an integer >= 1, got {s!r}")
++
+ def _validate_date(s):
+     try:
+         np.datetime64(s)
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..92680bf 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2890,14 +2890,28 @@ class AutoMinorLocator(Locator):
+             # no ticks at all.
+             return []
+ 
++        # Determine ndivs: if explicitly set, use that; otherwise, check rcParam.
+         if self.ndivs is None:
+-
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
++            # Get the axis name (x or y)
++            axis_name = self.axis.axis_name  # 'x' or 'y'
++            rc_ndivs = mpl.rcParams.get(f'{axis_name}tick.minor.ndivs', None)
++            if rc_ndivs is not None:
++                if rc_ndivs == 'auto':
++                    # Use the same logic as when ndivs is None originally
++                    majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                    if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                        ndivs = 5
++                    else:
++                        ndivs = 4
++                else:
++                    ndivs = rc_ndivs
+             else:
+-                ndivs = 4
++                # Fall back to the original logic
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+         else:
+             ndivs = self.ndivs
+ 
+@@ -2916,4 +2930,4 @@ class AutoMinorLocator(Locator):
+ 
+     def tick_values(self, vmin, vmax):
+         raise NotImplementedError('Cannot get tick locations for a '
+-                                  '%s type.' % type(self))
++                                  '%s type.' % type(self))

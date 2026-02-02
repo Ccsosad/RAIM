@@ -1,0 +1,14 @@
+diff --git a/sklearn/datasets/_samples_generator.py b/sklearn/datasets/_samples_generator.py
+index 3e148f7..54d504b 100644
+--- a/sklearn/datasets/_samples_generator.py
++++ b/sklearn/datasets/_samples_generator.py
+@@ -620,6 +620,9 @@ def make_circles(n_samples=100, shuffle=True, noise=None, random_state=None,
+         Pass an int for reproducible output across multiple function calls.
+         See :term:`Glossary <random_state>`.
+ 
++    return_centers : bool, default=False
++        If True, then return the centers of each cluster.
++
+     factor : 0 < double < 1 (default=.8)
+         Scale factor between inner and outer circle.
+ 

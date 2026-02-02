@@ -1,0 +1,32 @@
+diff --git a/pylint/message/message.py b/pylint/message/message.py
+index 7352ec1..3543710 100644
+--- a/pylint/message/message.py
++++ b/pylint/message/message.py
+@@ -59,7 +59,13 @@ class Message:  # pylint: disable=too-many-instance-attributes
+         The template format is the one of the format method :
+         cf. https://docs.python.org/2/library/string.html#formatstrings
+         """
+-        return template.format(**asdict(self))
++        data = asdict(self)
++        # Replace None with empty string for end_line and end_column
++        if data["end_line"] is None:
++            data["end_line"] = ""
++        if data["end_column"] is None:
++            data["end_column"] = ""
++        return template.format(**data)
+ 
+     @property
+     def location(self) -> MessageLocationTuple:
+@@ -72,4 +78,4 @@ class Message:  # pylint: disable=too-many-instance-attributes
+             self.column,
+             self.end_line,
+             self.end_column,
+-        )
++        )
+diff --git a/pylint/reporters/template_utils.py b/pylint/reporters/template_utils.py
+new file mode 100644
+index 0000000..1c9cfde
+--- /dev/null
++++ b/pylint/reporters/template_utils.py
+@@ -0,0 +1 @@
++"""Utilities for message template formatting."""

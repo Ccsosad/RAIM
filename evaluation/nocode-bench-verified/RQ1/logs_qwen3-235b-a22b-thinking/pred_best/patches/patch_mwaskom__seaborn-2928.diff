@@ -1,0 +1,73 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..1b57318 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -63,6 +63,52 @@ class _BaseGrid:
+         self.figure.savefig(*args, **kwargs)
+ 
+ 
++    def apply(self, func, *args, **kwargs):
++        """Apply a function to the grid and return self for chaining.
++        
++        This is useful for calling methods on the grid object as part of a chain.
++        
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid. Will be called as func(self, *args, **kwargs).
++        args : tuple
++            Positional arguments to pass to func.
++        kwargs : dict
++            Keyword arguments to pass to func.
++            
++        Returns
++        -------
++        self : object
++            Returns self for method chaining.
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """Pipe the grid through a function that returns a grid.
++        
++        This is useful for more complex operations that can't be expressed as
++        a simple method call.
++        
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid. Will be called as func(self, *args, **kwargs).
++        args : tuple
++            Positional arguments to pass to func.
++        kwargs : dict
++            Keyword arguments to pass to func.
++            
++        Returns
++        -------
++        result : object
++            The result of func(self, *args, **kwargs). For chaining to work,
++            this should be a grid object.
++        """
++        return func(self, *args, **kwargs)
++
++
+ class Grid(_BaseGrid):
+     """A grid that can have multiple subplots and an external legend."""
+     _margin_titles = False
+@@ -84,6 +130,7 @@ class Grid(_BaseGrid):
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+         self._figure.tight_layout(*args, **kwargs)
++        return self
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -1007,6 +1054,7 @@ class FacetGrid(Grid):
+             self.map(plt.axhline, y=y, **line_kws)
+ 
+     # ------ Properties that are part of the public API and documented by Sphinx
++        return self
+ 
+     @property
+     def axes(self):

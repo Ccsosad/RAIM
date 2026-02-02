@@ -1,0 +1,25 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..418514d 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -478,6 +478,10 @@ def def_physical_type(unit, name):
+         _name_physical_mapping[ptype_name] = physical_type
+ 
+ 
++# Mapping of attribute names to physical type names
++_attrname_physical_mapping = {name.replace(' ', '_'): name 
++                            for name in _unit_physical_mapping.keys()}
++
+ def get_physical_type(obj):
+     """
+     Return the physical type that corresponds to a unit (or another
+@@ -525,6 +529,9 @@ def get_physical_type(obj):
+         return obj
+ 
+     if isinstance(obj, str):
++        # Handle attribute-style access by converting underscores to spaces
++        if obj in _attrname_physical_mapping:
++            obj = _attrname_physical_mapping[obj]
+         return _physical_type_from_str(obj)
+ 
+     try:

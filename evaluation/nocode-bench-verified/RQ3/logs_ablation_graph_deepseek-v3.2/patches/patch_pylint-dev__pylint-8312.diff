@@ -1,0 +1,35 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 4def383..70c4154 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -90,11 +90,23 @@ def expand_modules(
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+     """
++    import glob
++
+     result: dict[str, ModuleDescriptionDict] = {}
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
+ 
+-    for something in files_or_modules:
++    # Expand glob patterns in the input list
++    expanded_items = []
++    for item in files_or_modules:
++        # Try to expand as a glob pattern
++        globbed = glob.glob(item, recursive=True)
++        if globbed:
++            expanded_items.extend(globbed)
++        else:
++            expanded_items.append(item)
++
++    for something in expanded_items:
+         basename = os.path.basename(something)
+         if _is_ignored_file(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+@@ -179,4 +191,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors

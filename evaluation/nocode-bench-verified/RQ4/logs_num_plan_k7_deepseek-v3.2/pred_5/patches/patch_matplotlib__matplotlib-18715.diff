@@ -1,0 +1,61 @@
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 38580cf..adbf36d 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -787,6 +787,22 @@ def validate_hist_bins(s):
+                      " a sequence of floats")
+ 
+ 
++def validate_ndivs(s):
++    """
++    Validate ndivs: either an integer >= 1 or the string 'auto'.
++    """
++    if s == 'auto':
++        return s
++    try:
++        n = int(s)
++        if n >= 1:
++            return n
++        else:
++            raise ValueError()
++    except (TypeError, ValueError):
++        raise ValueError("ndivs must be 'auto' or an integer >= 1")
++
++
+ class _ignorecase(list):
+     """A marker class indicating that a list-of-str is case-insensitive."""
+ 
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..a651da0 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2891,13 +2891,17 @@ class AutoMinorLocator(Locator):
+             return []
+ 
+         if self.ndivs is None:
+-
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
++            # Get the axis name (x or y)
++            axis_name = self.axis.axis_name
++            ndivs = mpl.rcParams[f'{axis_name}tick.minor.ndivs']
++            if ndivs == 'auto':
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+             else:
+-                ndivs = 4
++                ndivs = int(ndivs)
+         else:
+             ndivs = self.ndivs
+ 
+@@ -2916,4 +2920,4 @@ class AutoMinorLocator(Locator):
+ 
+     def tick_values(self, vmin, vmax):
+         raise NotImplementedError('Cannot get tick locations for a '
+-                                  '%s type.' % type(self))
++                                  '%s type.' % type(self))

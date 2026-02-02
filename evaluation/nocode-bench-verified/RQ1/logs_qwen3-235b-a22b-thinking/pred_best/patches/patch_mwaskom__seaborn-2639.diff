@@ -1,0 +1,185 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..40af49e 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -54,13 +54,32 @@ class Grid:
+         kwargs.setdefault("bbox_inches", "tight")
+         self.fig.savefig(*args, **kwargs)
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
++    @property
++    def fig(self):
++        """The :class:`matplotlib.figure.Figure` with the plot.
++
++        .. deprecated:: 0.11.2
++            Use `.figure` instead.
++        """
++        warnings.warn(
++            "The `fig` attribute is deprecated and will be removed in a future version. "
++            "Use `figure` instead.",
++            FutureWarning
++        )
++        return self.figure
++
+     def tight_layout(self, *args, **kwargs):
+         """Call fig.tight_layout within rect that exclude the legend."""
+         kwargs = kwargs.copy()
+-        kwargs.setdefault("rect", self._tight_layout_rect)
++        kwargs.setdefault("rect", self._tight_layout_rect) 
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+-        self.fig.tight_layout(*args, **kwargs)
++        self.figure.tight_layout(*args, **kwargs)
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -124,32 +143,37 @@ class Grid:
+             # Draw a full-figure legend outside the grid
+             figlegend = self.fig.legend(handles, labels, **kwargs)
+ 
++            # Draw a full-figure legend outside the grid
++            figlegend = self.figure.legend(handles, labels, **kwargs)
++
+             self._legend = figlegend
+             figlegend.set_title(title, prop={"size": title_size})
+-
+             if adjust_subtitles:
+                 adjust_legend_subtitles(figlegend)
+ 
+             # Draw the plot to set the bounding boxes correctly
+             _draw_figure(self.fig)
+ 
++            # Draw the plot to set the bounding boxes correctly
++            _draw_figure(self.figure)
++
+             # Calculate and set the new width of the figure so the legend fits
+-            legend_width = figlegend.get_window_extent().width / self.fig.dpi
+-            fig_width, fig_height = self.fig.get_size_inches()
+-            self.fig.set_size_inches(fig_width + legend_width, fig_height)
++            legend_width = figlegend.get_window_extent().width / self.figure.dpi
++            fig_width, fig_height = self.figure.get_size_inches()
++            self.figure.set_size_inches(fig_width + legend_width, fig_height)
+ 
+             # Draw the plot again to get the new transformations
+-            _draw_figure(self.fig)
++            _draw_figure(self.figure)
+ 
+             # Now calculate how much space we need on the right side
+-            legend_width = figlegend.get_window_extent().width / self.fig.dpi
++            legend_width = figlegend.get_window_extent().width / self.figure.dpi
+             space_needed = legend_width / (fig_width + legend_width)
+             margin = .04 if self._margin_titles else .01
+             self._space_needed = margin + space_needed
+             right = 1 - self._space_needed
+ 
+             # Place the subplot axes to give space for the legend
+-            self.fig.subplots_adjust(right=right)
++            self.figure.subplots_adjust(right=right)
+             self._tight_layout_rect[2] = right
+ 
+         else:
+@@ -419,6 +443,7 @@ class FacetGrid(Grid):
+         # Attributes that are part of the public API but accessed through
+         # a  property so that Sphinx adds them to the auto class doc
+         self._fig = fig
++        self._figure = fig
+         self._axes = axes
+         self._axes_dict = axes_dict
+         self._legend = None
+@@ -992,9 +1017,23 @@ class FacetGrid(Grid):
+     # ------ Properties that are part of the public API and documented by Sphinx
+ 
+     @property
+-    def fig(self):
++    def figure(self):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+-        return self._fig
++        return self._figure
++
++    @property
++    def fig(self):
++        """The :class:`matplotlib.figure.Figure` with the plot.
++
++        .. deprecated:: 0.11.2
++            Use `.figure` instead.
++        """
++        warnings.warn(
++            "The `fig` attribute is deprecated and will be removed in a future version. "
++            "Use `figure` instead.",
++            FutureWarning
++        )
++        return self.figure
+ 
+     @property
+     def axes(self):
+@@ -1236,6 +1275,7 @@ class PairGrid(Grid):
+         self.fig = fig
+         self.axes = axes
+         self.data = data
++        self._figure = fig
+ 
+         # Save what we are going to do with the diagonal
+         self.diag_sharey = diag_sharey
+@@ -1297,8 +1337,8 @@ class PairGrid(Grid):
+         self._tight_layout_rect = [.01, .01, .99, .99]
+         self._tight_layout_pad = layout_pad
+         self._despine = despine
+-        if despine:
+-            utils.despine(fig=fig)
++        if despine: 
++            utils.despine(fig=self.figure)
+         self.tight_layout(pad=layout_pad)
+ 
+     def map(self, func, **kwargs):
+@@ -1653,6 +1693,7 @@ class JointGrid(object):
+         self.fig = f
+         self.ax_joint = ax_joint
+         self.ax_marg_x = ax_marg_x
++        self._figure = f
+         self.ax_marg_y = ax_marg_y
+ 
+         # Turn off tick visibility for the measure axis on the marginal plots
+@@ -1708,6 +1749,7 @@ class JointGrid(object):
+         # Make the grid look nice
+         utils.despine(f)
+         if not marginal_ticks:
++            utils.despine(fig=self.figure)
+             utils.despine(ax=ax_marg_x, left=True)
+             utils.despine(ax=ax_marg_y, bottom=True)
+         for axes in [ax_marg_x, ax_marg_y]:
+@@ -1917,11 +1959,30 @@ class JointGrid(object):
+         """Save the figure using a "tight" bounding box by default.
+ 
+         Wraps :meth:`matplotlib.figure.Figure.savefig`.
+-
++        
+         """
+         kwargs.setdefault("bbox_inches", "tight")
+         self.fig.savefig(*args, **kwargs)
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
++    @property
++    def fig(self):
++        """The :class:`matplotlib.figure.Figure` with the plot.
++
++        .. deprecated:: 0.11.2
++            Use `.figure` instead.
++        """
++        warnings.warn(
++            "The `fig` attribute is deprecated and will be removed in a future version. "
++            "Use `figure` instead.",
++            FutureWarning
++        )
++        return self.figure
++
+ 
+ JointGrid.__init__.__doc__ = """\
+ Set up the grid of subplots and store data internally for easy plotting.

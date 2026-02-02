@@ -1,0 +1,194 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..97f5ba7 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1260,6 +1260,64 @@ class DataArray(AbstractArray, DataWithCoords):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def query(
++        self,
++        query_str: str,
++        *,
++        parser: str = "pandas",
++        engine: str = None,
++        **kwargs,
++    ) -> "DataArray":
++        """Return a new DataArray with data filtered by the query expression.
++
++        The query string is evaluated in the namespace of the DataArray's
++        variables (including coordinates). The result must be a boolean array.
++        The new DataArray contains only the points for which the expression is
++        True.
++
++        Parameters
++        ----------
++        query_str : str
++            Query expression to evaluate. Must be a valid Python expression
++            that can be evaluated in the context of the DataArray's variables.
++        parser : {"pandas", "python"}, default: "pandas"
++            Parser to use for evaluating the query. The default is "pandas",
++            which uses pandas.eval() if available. If "python", uses Python's
++            built-in eval() function.
++        engine : str, optional
++            Engine to use for evaluation. If parser="pandas", this is passed
++            to pandas.eval(). If None, the default engine is used.
++        **kwargs
++            Additional keyword arguments passed to the parser.
++
++        Returns
++        -------
++        filtered : DataArray
++            A new DataArray with the same dimensions as the original, but
++            containing only the data that satisfies the query.
++
++        See Also
++        --------
++        Dataset.query
++        pandas.DataFrame.query
++
++        Examples
++        --------
++        >>> da = xr.DataArray([1, 2, 3, 4], dims="x", coords={"x": [0, 1, 2, 3]})
++        >>> da.query("x > 1")
++        <xarray.DataArray (x: 2)>
++        array([3, 4])
++        Coordinates:
++          * x        (x) int64 2 3
++        """
++        from .dataset import Dataset
++
++        # Convert to Dataset to use its query method
++        ds = self._to_temp_dataset()
++        filtered_ds = ds.query(query_str, parser=parser, engine=engine, **kwargs)
++        # Convert back to DataArray
++        return self._from_temp_dataset(filtered_ds)
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -4360,4 +4418,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..19df028 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -2244,6 +2244,108 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         result = self.isel(indexers=pos_indexers, drop=drop)
+         return result._overwrite_indexes(new_indexes)
+ 
++    def query(
++        self,
++        query_str: str,
++        *,
++        parser: str = "pandas",
++        engine: str = None,
++        **kwargs,
++    ) -> "Dataset":
++        """Return a new Dataset with data filtered by the query expression.
++
++        The query string is evaluated in the namespace of the Dataset's
++        variables (including coordinates). The result must be a boolean array.
++        The new Dataset contains only the points for which the expression is
++        True.
++
++        Parameters
++        ----------
++        query_str : str
++            Query expression to evaluate. Must be a valid Python expression
++            that can be evaluated in the context of the Dataset's variables.
++        parser : {"pandas", "python"}, default: "pandas"
++            Parser to use for evaluating the query. The default is "pandas",
++            which uses pandas.eval() if available. If "python", uses Python's
++            built-in eval() function.
++        engine : str, optional
++            Engine to use for evaluation. If parser="pandas", this is passed
++            to pandas.eval(). If None, the default engine is used.
++        **kwargs
++            Additional keyword arguments passed to the parser.
++
++        Returns
++        -------
++        filtered : Dataset
++            A new Dataset with the same dimensions as the original, but
++            containing only the data that satisfies the query.
++
++        See Also
++        --------
++        DataArray.query
++        pandas.DataFrame.query
++
++        Examples
++        --------
++        >>> ds = xr.Dataset(
++        ...     {"a": ("x", [1, 2, 3, 4]), "b": ("x", [5, 6, 7, 8])},
++        ...     coords={"x": [0, 1, 2, 3]},
++        ... )
++        >>> ds.query("x > 1")
++        <xarray.Dataset>
++        Dimensions:  (x: 2)
++        Coordinates:
++          * x        (x) int64 2 3
++        Data variables:
++            a        (x) int64 3 4
++            b        (x) int64 7 8
++        """
++        # Evaluate the query string to produce a boolean mask
++        if parser == "pandas":
++            try:
++                import pandas as pd
++            except ImportError:
++                raise ImportError(
++                    "The pandas parser is not available. Please install pandas or use parser='python'."
++                )
++            # Build the environment for evaluation
++            env = {k: v.variable for k, v in self.variables.items()}
++            # Use pandas.eval
++            mask = pd.eval(query_str, engine=engine, local_dict=env, **kwargs)
++        elif parser == "python":
++            # Build the environment for evaluation
++            env = {k: v.variable for k, v in self.variables.items()}
++            # Use Python's eval
++            mask = eval(query_str, {}, env)
++        else:
++            raise ValueError(f"Invalid parser: {parser}")
++
++        # Convert mask to a Variable if it's not already
++        if not isinstance(mask, Variable):
++            # We assume the mask is a boolean array with the same shape as the dataset
++            # But actually, the mask might be 1D? We need to handle it properly.
++            # For simplicity, we assume it's a boolean array that can be broadcast to the dataset's dimensions.
++            # We'll create a Variable with the same dimensions as the first data variable?
++            # Actually, we should use the mask to index the dataset.
++            # We'll use the mask to select points along all dimensions? This is tricky.
++            # Instead, we can use the mask with where(drop=True) if the mask is a DataArray.
++            # So we should convert the mask to a DataArray with appropriate dimensions.
++            # But the mask might be a numpy array. We need to know its dimensions.
++            # Since the query is evaluated in the context of variables, the mask should have the same dimensions as the variables.
++            # However, the mask might be a scalar? We'll assume it's an array.
++            # We'll create a temporary DataArray for the mask.
++            from .dataarray import DataArray
++            # We need to assign dimensions to the mask. We'll use the dimensions of the first data variable.
++            # This is a heuristic. A better approach would be to require the mask to be a Variable.
++            # But for compatibility, we'll try to broadcast.
++            # Actually, we can use the mask with where if it's a DataArray. So we should convert to DataArray.
++            # We'll use the first variable's dimensions.
++            first_var = next(iter(self.data_vars.values()))
++            mask = DataArray(mask, dims=first_var.dims, coords=first_var.coords)
++
++        # Use where with drop=True to filter the dataset
++        return self.where(mask, drop=True)
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -7002,4 +7104,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

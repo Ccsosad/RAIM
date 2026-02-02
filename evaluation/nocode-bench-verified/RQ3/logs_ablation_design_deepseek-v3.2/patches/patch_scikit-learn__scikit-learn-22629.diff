@@ -1,0 +1,76 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..771d214 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -136,6 +136,13 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         if _num_samples(y) == 0:
+             return np.array([])
+ 
++        # Handle NaN values consistently with fit
++        # _encode_check_unknown handles NaN properly
++        from sklearn.utils._encode import _encode_check_unknown
++        
++        # Check for unknown values (including NaN handling)
++        _encode_check_unknown(y, self.classes_, return_mask=False)
++        
+         return _encode(y, uniques=self.classes_)
+ 
+     def inverse_transform(self, y):
+diff --git a/sklearn/utils/validation.py b/sklearn/utils/validation.py
+index 5a024da..c48c898 100644
+--- a/sklearn/utils/validation.py
++++ b/sklearn/utils/validation.py
+@@ -1140,7 +1140,7 @@ def _check_y(y, multi_output=False, y_numeric=False, estimator=None):
+     return y
+ 
+ 
+-def column_or_1d(y, *, warn=False):
++def column_or_1d(y, *, warn=False, dtype=None):
+     """Ravel column or 1d numpy array, else raises an error.
+ 
+     Parameters
+@@ -1151,6 +1151,10 @@ def column_or_1d(y, *, warn=False):
+     warn : bool, default=False
+        To control display of warnings.
+ 
++    dtype : data-type, default=None
++       The data-type of the returned array. If None, the dtype is inferred
++       from the input data.
++
+     Returns
+     -------
+     y : ndarray
+@@ -1165,8 +1169,8 @@ def column_or_1d(y, *, warn=False):
+     y = xp.asarray(y)
+     shape = y.shape
+     if len(shape) == 1:
+-        return _asarray_with_order(xp.reshape(y, -1), order="C", xp=xp)
+-    if len(shape) == 2 and shape[1] == 1:
++        result = _asarray_with_order(xp.reshape(y, -1), order="C", xp=xp)
++    elif len(shape) == 2 and shape[1] == 1:
+         if warn:
+             warnings.warn(
+                 "A column-vector y was passed when a 1d array was"
+@@ -1175,11 +1179,17 @@ def column_or_1d(y, *, warn=False):
+                 DataConversionWarning,
+                 stacklevel=2,
+             )
+-        return _asarray_with_order(xp.reshape(y, -1), order="C", xp=xp)
+-
+-    raise ValueError(
+-        "y should be a 1d array, got an array of shape {} instead.".format(shape)
+-    )
++        result = _asarray_with_order(xp.reshape(y, -1), order="C", xp=xp)
++    else:
++        raise ValueError(
++            "y should be a 1d array, got an array of shape {} instead.".format(shape)
++        )
++    
++    # Convert to specified dtype if provided
++    if dtype is not None:
++        result = xp.astype(result, dtype)
++    
++    return result
+ 
+ 
+ def check_random_state(seed):

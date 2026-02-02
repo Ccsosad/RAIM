@@ -1,0 +1,71 @@
+diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py
+index eb43231..ddeb016 100644
+--- a/django/urls/resolvers.py
++++ b/django/urls/resolvers.py
+@@ -41,10 +41,20 @@ class ResolverMatch:
+         namespaces=None,
+         route=None,
+         tried=None,
++        captured_kwargs=None,
++        extra_kwargs=None,
+     ):
+         self.func = func
+         self.args = args
+-        self.kwargs = kwargs
++        if captured_kwargs is not None and extra_kwargs is not None:
++            self.captured_kwargs = captured_kwargs
++            self.extra_kwargs = extra_kwargs
++            self.kwargs = {**captured_kwargs, **extra_kwargs}
++        else:
++            # For backward compatibility
++            self.captured_kwargs = kwargs
++            self.extra_kwargs = {}
++            self.kwargs = kwargs
+         self.url_name = url_name
+         self.route = route
+         self.tried = tried
+@@ -654,14 +664,24 @@ class URLResolver:
+                 else:
+                     if sub_match:
+                         # Merge captured arguments in match with submatch
+-                        sub_match_dict = {**kwargs, **self.default_kwargs}
+-                        # Update the sub_match_dict with the kwargs from the sub_match.
+-                        sub_match_dict.update(sub_match.kwargs)
++                        # Build captured and extra kwargs separately.
++                        captured_kwargs = {**kwargs}
++                        extra_kwargs = {**self.default_kwargs}
++                        # Merge with the sub_match's captured and extra kwargs.
++                        if hasattr(sub_match, 'captured_kwargs'):
++                            captured_kwargs.update(sub_match.captured_kwargs)
++                        else:
++                            # Fallback for old-style ResolverMatch
++                            captured_kwargs.update(sub_match.kwargs)
++                        if hasattr(sub_match, 'extra_kwargs'):
++                            extra_kwargs.update(sub_match.extra_kwargs)
++                        # The combined kwargs for backward compatibility.
++                        combined_kwargs = {**captured_kwargs, **extra_kwargs}
+                         # If there are *any* named groups, ignore all non-named groups.
+                         # Otherwise, pass all non-named arguments as positional
+                         # arguments.
+                         sub_match_args = sub_match.args
+-                        if not sub_match_dict:
++                        if not combined_kwargs:
+                             sub_match_args = args + sub_match.args
+                         current_route = (
+                             ""
+@@ -672,12 +692,14 @@ class URLResolver:
+                         return ResolverMatch(
+                             sub_match.func,
+                             sub_match_args,
+-                            sub_match_dict,
++                            combined_kwargs,
+                             sub_match.url_name,
+                             [self.app_name] + sub_match.app_names,
+                             [self.namespace] + sub_match.namespaces,
+                             self._join_route(current_route, sub_match.route),
+                             tried,
++                            captured_kwargs=captured_kwargs,
++                            extra_kwargs=extra_kwargs,
+                         )
+                     tried.append([pattern])
+             raise Resolver404({"tried": tried, "path": new_path})

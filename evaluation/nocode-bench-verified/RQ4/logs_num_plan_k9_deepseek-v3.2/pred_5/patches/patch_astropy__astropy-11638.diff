@@ -1,0 +1,15 @@
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 836039e..691a15c 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -576,6 +576,10 @@ class TimeBase(ShapedLikeNDArray):
+                     args.append(get_dt(jd1, jd2))
+                     break
+ 
++            # Update leap seconds if converting between TAI and UTC.
++            if (sys1, sys2) in (('tai', 'utc'), ('utc', 'tai')):
++                update_leap_seconds()
++
+             conv_func = getattr(erfa, sys1 + sys2)
+             jd1, jd2 = conv_func(*args)
+ 

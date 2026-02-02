@@ -1,0 +1,60 @@
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 873be99..ce22a92 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -1228,6 +1228,8 @@ class Variable(
+         """
+         if len(dims) == 0:
+             dims = self.dims[::-1]
++        elif ... in dims:
++            dims = infix_dims(self.dims, dims)
+         axes = self.get_axis_num(dims)
+         if len(dims) < 2:  # no need to transpose if only one dimension
+             return self.copy(deep=False)
+diff --git a/xarray/core/transpose_utils.py b/xarray/core/transpose_utils.py
+new file mode 100644
+index 0000000..c3aecac
+--- /dev/null
++++ b/xarray/core/transpose_utils.py
+@@ -0,0 +1,41 @@
++def infix_dims(current_dims, requested_dims):
++    """Replace ellipsis (...) in requested_dims with the 'other' dimensions.
++    
++    Parameters
++    ----------
++    current_dims : tuple of str
++        The current dimensions of the variable.
++    requested_dims : tuple of str or Ellipsis
++        The requested dimensions for transpose, which may include Ellipsis.
++    
++    Returns
++    -------
++    tuple of str
++        The complete list of dimensions for transpose.
++    
++    Raises
++    ------
++    ValueError
++        If there is more than one ellipsis in requested_dims.
++    """
++    if ... not in requested_dims:
++        return requested_dims
++    
++    # Check for multiple ellipses
++    if requested_dims.count(...) > 1:
++        raise ValueError("Only one ellipsis (...) is allowed in transpose dimensions")
++    
++    # Find the position of the ellipsis
++    ellipsis_pos = requested_dims.index(...)
++    
++    # Dimensions before the ellipsis
++    before = requested_dims[:ellipsis_pos]
++    
++    # Dimensions after the ellipsis
++    after = requested_dims[ellipsis_pos + 1:]
++    
++    # Dimensions not explicitly mentioned
++    other_dims = [dim for dim in current_dims if dim not in before + after]
++    
++    # Combine all dimensions
++    return before + tuple(other_dims) + after

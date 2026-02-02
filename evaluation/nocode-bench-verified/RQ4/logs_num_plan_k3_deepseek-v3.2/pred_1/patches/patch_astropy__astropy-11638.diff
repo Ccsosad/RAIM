@@ -1,0 +1,57 @@
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 836039e..9020508 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -1502,7 +1502,10 @@ class Time(TimeBase):
+                 #    lock to us, so initialization is complete.
+                 if _LEAP_SECONDS_CHECK == _LeapSecondsCheck.NOT_STARTED:
+                     _LEAP_SECONDS_CHECK = _LeapSecondsCheck.RUNNING
+-                    update_leap_seconds()
++                    # Only update leap seconds if auto_download is enabled.
++                    from astropy.utils.iers import conf
++                    if conf.auto_download:
++                        update_leap_seconds()
+                     _LEAP_SECONDS_CHECK = _LeapSecondsCheck.DONE
+ 
+         if isinstance(val, Time):
+diff --git a/astropy/utils/iers/conf.py b/astropy/utils/iers/conf.py
+new file mode 100644
+index 0000000..582ecc2
+--- /dev/null
++++ b/astropy/utils/iers/conf.py
+@@ -0,0 +1,35 @@
++"""
++Configuration for the IERS system.
++"""
++
++from astropy.config import ConfigNamespace, ConfigItem
++
++__all__ = ['conf']
++
++
++class Conf(ConfigNamespace):
++    """
++    Configuration for the IERS system.
++    """
++    auto_download = ConfigItem(
++        True,
++        'Enable auto-downloading of the latest IERS data. If set to False then '
++        'the local IERS-B file will be used by default. This parameter also '
++        'controls whether internet resources will be queried to update the leap '
++        'second table if the installed version is out of date.'
++    )
++    auto_max_age = ConfigItem(
++        30,
++        'Maximum age of predictive data before auto-downloading (days).'
++    )
++    iers_auto_url = ConfigItem(
++        'https://datacenter.iers.org/data/latestVersion/10_FINALS.DATA_IAU2000_V2013_0110.txt',
++        'URL for the IERS auto data file.'
++    )
++    iers_auto_url_mirror = ConfigItem(
++        'https://maia.usno.navy.mil/ser7/finals2000A.all',
++        'Mirror URL for the IERS auto data file.'
++    )
++
++
++conf = Conf()

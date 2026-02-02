@@ -1,0 +1,187 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..7b66ec0 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -262,6 +262,7 @@ def format_attrs(index, separator=", "):
+     attrs_str = f"{separator}".join(attrs_str)
+     return attrs_str
+ 
++from .cftime_parsing import _parse_iso8601_with_reso
+ 
+ class CFTimeIndex(pd.Index):
+     """Custom Index for working with CF calendars and dates
+@@ -415,6 +416,7 @@ class CFTimeIndex(pd.Index):
+ 
+     def _get_string_slice(self, key):
+         """Adapted from pandas.tseries.index.DatetimeIndex._get_string_slice"""
++        from .cftime_parsing import _parse_iso8601_with_reso
+         parsed, resolution = _parse_iso8601_with_reso(self.date_type, key)
+         try:
+             loc = self._partial_date_slice(resolution, parsed)
+@@ -459,6 +461,7 @@ class CFTimeIndex(pd.Index):
+         """Adapted from
+         pandas.tseries.index.DatetimeIndex._maybe_cast_slice_bound"""
+         if isinstance(label, str):
++            from .cftime_parsing import _parse_iso8601_with_reso
+             parsed, resolution = _parse_iso8601_with_reso(self.date_type, label)
+             start, end = _parsed_string_to_bounds(self.date_type, resolution, parsed)
+             if self.is_monotonic_decreasing and len(self) > 1:
+@@ -743,6 +746,7 @@ class CFTimeIndex(pd.Index):
+ 
+ 
+ def _parse_iso8601_without_reso(date_type, datetime_str):
++    from .cftime_parsing import _parse_iso8601_with_reso
+     date, _ = _parse_iso8601_with_reso(date_type, datetime_str)
+     return date
+ 
+diff --git a/xarray/coding/cftime_parsing.py b/xarray/coding/cftime_parsing.py
+new file mode 100644
+index 0000000..67ed542
+--- /dev/null
++++ b/xarray/coding/cftime_parsing.py
+@@ -0,0 +1,145 @@
++import re
++from datetime import datetime
++
++def parse_iso8601_like(datetime_str):
++    """Parse a datetime string in ISO 8601 basic or extended format,
++    or in the default cftime format (YYYY-MM-DD hh:mm:ss).
++
++    Parameters
++    ----------
++    datetime_str : str
++        The datetime string to parse.
++
++    Returns
++    -------
++    tuple
++        A tuple (components, resolution) where components is a tuple
++        (year, month, day, hour, minute, second, microsecond) and
++        resolution is a string indicating the resolution of the parsed
++        string (e.g., 'year', 'month', 'day', 'hour', 'minute', 'second').
++
++    Raises
++    ------
++    ValueError
++        If the string does not match any of the supported formats.
++    """
++    # Regular expressions for the supported formats.
++    # 1. Basic ISO8601: YYYYMMDDhhmmss...
++    basic_pattern = re.compile(
++        r'^(\d{4})'
++        r'(\d{2})?'
++        r'(\d{2})?'
++        r'(\d{2})?'
++        r'(\d{2})?'
++        r'(\d{2})?'
++        r'(\.\d+)?$'
++    )
++    # 2. Extended ISO8601: YYYY-MM-DDThh:mm:ss...
++    extended_pattern = re.compile(
++        r'^(\d{4})'
++        r'(?:-(\d{2}))?'
++        r'(?:-(\d{2}))?'
++        r'(?:T(\d{2}))?'
++        r'(?::(\d{2}))?'
++        r'(?::(\d{2}))?'
++        r'(\.\d+)?$'
++    )
++    # 3. Default cftime format: YYYY-MM-DD hh:mm:ss
++    cftime_pattern = re.compile(
++        r'^(\d{4})'
++        r'(?:-(\d{2}))?'
++        r'(?:-(\d{2}))?'
++        r'(?: (\d{2}))?'
++        r'(?::(\d{2}))?'
++        r'(?::(\d{2}))?'
++        r'(\.\d+)?$'
++    )
++
++    match = basic_pattern.match(datetime_str)
++    if match:
++        groups = match.groups()
++        # basic pattern has no separators, so we need to parse each group
++        year = int(groups[0]) if groups[0] else 1
++        month = int(groups[1]) if groups[1] else 1
++        day = int(groups[2]) if groups[2] else 1
++        hour = int(groups[3]) if groups[3] else 0
++        minute = int(groups[4]) if groups[4] else 0
++        second = int(groups[5]) if groups[5] else 0
++        microsecond = int(float(groups[6]) * 1e6) if groups[6] else 0
++    else:
++        match = extended_pattern.match(datetime_str)
++        if match:
++            groups = match.groups()
++            year = int(groups[0]) if groups[0] else 1
++            month = int(groups[1]) if groups[1] else 1
++            day = int(groups[2]) if groups[2] else 1
++            hour = int(groups[3]) if groups[3] else 0
++            minute = int(groups[4]) if groups[4] else 0
++            second = int(groups[5]) if groups[5] else 0
++            microsecond = int(float(groups[6]) * 1e6) if groups[6] else 0
++        else:
++            match = cftime_pattern.match(datetime_str)
++            if match:
++                groups = match.groups()
++                year = int(groups[0]) if groups[0] else 1
++                month = int(groups[1]) if groups[1] else 1
++                day = int(groups[2]) if groups[2] else 1
++                hour = int(groups[3]) if groups[3] else 0
++                minute = int(groups[4]) if groups[4] else 0
++                second = int(groups[5]) if groups[5] else 0
++                microsecond = int(float(groups[6]) * 1e6) if groups[6] else 0
++            else:
++                raise ValueError(
++                    f"Invalid datetime string: {datetime_str}. "
++                    "Must be in ISO 8601 basic or extended format, "
++                    "or in the default cftime format (YYYY-MM-DD hh:mm:ss)."
++                )
++
++    # Determine resolution
++    if groups[5] is not None:
++        resolution = 'second'
++    elif groups[4] is not None:
++        resolution = 'minute'
++    elif groups[3] is not None:
++        resolution = 'hour'
++    elif groups[2] is not None:
++        resolution = 'day'
++    elif groups[1] is not None:
++        resolution = 'month'
++    else:
++        resolution = 'year'
++
++    components = (year, month, day, hour, minute, second, microsecond)
++    return components, resolution
++
++
++def _parse_iso8601_with_reso(date_type, datetime_str):
++    """Parse a datetime string and return a cftime object and resolution.
++
++    This function is used for partial datetime string indexing.
++
++    Parameters
++    ----------
++    date_type : type
++        The cftime datetime class to use for creating the object.
++    datetime_str : str
++        The datetime string to parse.
++
++    Returns
++    -------
++    tuple
++        A tuple (parsed, resolution) where parsed is a cftime object
++        and resolution is a string.
++    """
++    from .cftimeindex import _parsed_string_to_bounds
++
++    components, resolution = parse_iso8601_like(datetime_str)
++    year, month, day, hour, minute, second, microsecond = components
++
++    # Create a cftime object with the parsed components.
++    # Note: we use the minimum values for any component not specified.
++    # But actually, the resolution will determine how we use it in bounds.
++    # However, for the parsed object we need to create a full datetime.
++    # The _parsed_string_to_bounds function will adjust based on resolution.
++    parsed = date_type(year, month, day, hour, minute, second, microsecond)
++    return parsed, resolution

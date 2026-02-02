@@ -1,0 +1,171 @@
+diff --git a/lib/mpl_toolkits/mplot3d/axes3d.py b/lib/mpl_toolkits/mplot3d/axes3d.py
+index 7e611ff..c77c1d8 100644
+--- a/lib/mpl_toolkits/mplot3d/axes3d.py
++++ b/lib/mpl_toolkits/mplot3d/axes3d.py
+@@ -37,12 +37,13 @@ from matplotlib.tri._triangulation import Triangulation
+ from . import art3d
+ from . import proj3d
+ from . import axis3d
++from .shareable_mixin import ShareableMixin
+ 
+ 
+ @_docstring.interpd
+ @_api.define_aliases({
+     "xlim": ["xlim3d"], "ylim": ["ylim3d"], "zlim": ["zlim3d"]})
+-class Axes3D(Axes):
++class Axes3D(ShareableMixin, Axes):
+     """
+     3D Axes object.
+ 
+@@ -64,9 +65,9 @@ class Axes3D(Axes):
+ 
+     def __init__(
+             self, fig, rect=None, *args,
+-            elev=30, azim=-60, roll=0, sharez=None, proj_type='persp',
+-            box_aspect=None, computed_zorder=True, focal_length=None,
+-            **kwargs):
++            elev=30, azim=-60, roll=0, sharez=None, shareview=None,
++            proj_type='persp', box_aspect=None, computed_zorder=True,
++            focal_length=None, **kwargs):
+         """
+         Parameters
+         ----------
+@@ -89,6 +90,8 @@ class Axes3D(Axes):
+             scene to rotate counter-clockwise.
+         sharez : Axes3D, optional
+             Other Axes to share z-limits with.
++        shareview : Axes3D, optional
++            Other Axes to share view angles with.
+         proj_type : {'persp', 'ortho'}
+             The projection type, default 'persp'.
+         box_aspect : 3-tuple of floats, default: None
+@@ -142,6 +145,8 @@ class Axes3D(Axes):
+             self._shared_axes["z"].join(self, sharez)
+             self._adjustable = 'datalim'
+ 
++        self._init_shareable(shareview)
++
+         if kwargs.pop('auto_add_to_figure', False):
+             raise AttributeError(
+                 'auto_add_to_figure is no longer supported for Axes3D. '
+@@ -811,17 +816,17 @@ class Axes3D(Axes):
+         if elev is None:
+             self.elev = self.initial_elev
+         else:
+-            self.elev = elev
++            self._update_shared_views('elev', elev)
+ 
+         if azim is None:
+             self.azim = self.initial_azim
+         else:
+-            self.azim = azim
++            self._update_shared_views('azim', azim)
+ 
+         if roll is None:
+             self.roll = self.initial_roll
+         else:
+-            self.roll = roll
++            self._update_shared_views('roll', roll)
+ 
+         self._vertical_axis = _api.check_getitem(
+             dict(x=0, y=1, z=2), vertical_axis=vertical_axis
+@@ -1012,9 +1017,9 @@ class Axes3D(Axes):
+         # docstring inherited
+         props, (elev, azim, roll) = view
+         self.set(**props)
+-        self.elev = elev
+-        self.azim = azim
+-        self.roll = roll
++        self._update_shared_views('elev', elev)
++        self._update_shared_views('azim', azim)
++        self._update_shared_views('roll', roll)
+ 
+     def format_zdata(self, z):
+         """
+@@ -1107,8 +1112,10 @@ class Axes3D(Axes):
+             roll = np.deg2rad(self.roll)
+             delev = -(dy/h)*180*np.cos(roll) + (dx/w)*180*np.sin(roll)
+             dazim = -(dy/h)*180*np.sin(roll) - (dx/w)*180*np.cos(roll)
+-            self.elev = self.elev + delev
+-            self.azim = self.azim + dazim
++            new_elev = self.elev + delev
++            new_azim = self.azim + dazim
++            self._update_shared_views('elev', new_elev)
++            self._update_shared_views('azim', new_azim)
+             self.stale = True
+ 
+         elif self.button_pressed in self._pan_btn:
+diff --git a/lib/mpl_toolkits/mplot3d/shareable_mixin.py b/lib/mpl_toolkits/mplot3d/shareable_mixin.py
+new file mode 100644
+index 0000000..3eabb0f
+--- /dev/null
++++ b/lib/mpl_toolkits/mplot3d/shareable_mixin.py
+@@ -0,0 +1,68 @@
++"""
++Mixin class for shareable view in 3D axes.
++"""
++
++import numpy as np
++from matplotlib import cbook
++
++
++class ShareableMixin:
++    """
++    Mixin class to enable view sharing between 3D axes.
++    """
++
++    # A grouper for shared views
++    _shared_views = cbook.Grouper()
++
++    def _init_shareable(self, shareview=None):
++        """
++        Initialize shareable view.
++
++        Parameters
++        ----------
++        shareview : Axes3D, optional
++            Other Axes to share view angles with.
++        """
++        self._shareview = shareview
++        if shareview is not None:
++            self._shared_views.join(self, shareview)
++            # Synchronize initial view
++            self.elev = shareview.elev
++            self.azim = shareview.azim
++            self.roll = shareview.roll
++
++    def shareview(self, other):
++        """
++        Share the view angles with *other*.
++
++        This is equivalent to passing ``shareview=other`` when constructing the
++        Axes, and cannot be used if the view is already being shared with
++        another Axes.
++
++        Parameters
++        ----------
++        other : Axes3D
++            The other Axes to share view angles with.
++        """
++        if self._shareview is not None and other is not self._shareview:
++            raise ValueError("view is already shared")
++        self._shared_views.join(self, other)
++        self._shareview = other
++        # Synchronize current view
++        self.elev = other.elev
++        self.azim = other.azim
++        self.roll = other.roll
++
++    def _update_shared_views(self, prop, value):
++        """
++        Update the given property in all shared axes.
++
++        Parameters
++        ----------
++        prop : str
++            The property to update ('elev', 'azim', or 'roll').
++        value : float
++            The new value.
++        """
++        for ax in self._shared_views.get_siblings(self):
++            setattr(ax, prop, value)

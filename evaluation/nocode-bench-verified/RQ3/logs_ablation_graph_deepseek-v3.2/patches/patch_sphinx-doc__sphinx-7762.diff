@@ -1,0 +1,58 @@
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index 31d7f5b..6adf0b5 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -139,11 +139,28 @@ class CheckExternalLinksBuilder(Builder):
+             else:
+                 auth_info = None
+ 
++            # Build headers for this request
++            request_headers = kwargs.get('headers', {}).copy()
++            headers_config = self.app.config.linkcheck_request_headers
++            if headers_config:
++                # First, try to match the URL with base URLs (excluding "*")
++                matched = False
++                for base_url, base_headers in headers_config.items():
++                    if base_url == "*":
++                        continue
++                    if req_url.startswith(base_url):
++                        request_headers.update(base_headers)
++                        matched = True
++                        break
++                # If no match, try the wildcard
++                if not matched and "*" in headers_config:
++                    request_headers.update(headers_config["*"])
++
+             try:
+                 if anchor and self.app.config.linkcheck_anchors:
+                     # Read the whole document and see if #anchor exists
+                     response = requests.get(req_url, stream=True, config=self.app.config,
+-                                            auth=auth_info, **kwargs)
++                                            auth=auth_info, headers=request_headers, **kwargs)
+                     found = check_anchor(response, unquote(anchor))
+ 
+                     if not found:
+@@ -153,13 +170,13 @@ class CheckExternalLinksBuilder(Builder):
+                         # try a HEAD request first, which should be easier on
+                         # the server and the network
+                         response = requests.head(req_url, config=self.app.config,
+-                                                 auth=auth_info, **kwargs)
++                                                 auth=auth_info, headers=request_headers, **kwargs)
+                         response.raise_for_status()
+                     except HTTPError:
+                         # retry with GET request if that fails, some servers
+                         # don't like HEAD requests.
+                         response = requests.get(req_url, stream=True, config=self.app.config,
+-                                                auth=auth_info, **kwargs)
++                                                auth=auth_info, headers=request_headers, **kwargs)
+                         response.raise_for_status()
+             except HTTPError as err:
+                 if err.response.status_code == 401:
+@@ -340,6 +357,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_config_value('linkcheck_retries', 1, None)
+     app.add_config_value('linkcheck_timeout', None, None, [int])
+     app.add_config_value('linkcheck_workers', 5, None)
++    app.add_config_value('linkcheck_request_headers', {}, None)
+     app.add_config_value('linkcheck_anchors', True, None)
+     # Anchors starting with ! are ignored since they are
+     # commonly used for dynamic pages

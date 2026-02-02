@@ -1,0 +1,25 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index e770a09..632db62 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -932,6 +932,14 @@ class LeapSeconds(QTable):
+             return cls.from_erfa()
+ 
+         if urlparse(file).netloc:
++            if not conf.auto_download:
++                if not is_url_in_cache(file):
++                    raise ValueError(
++                        f"Auto-download is disabled and {file} is not in cache. "
++                        "Enable auto-download to retrieve the file."
++                    )
++                # Use the cached file, even if cache=False was passed.
++                cache = True
+             file = download_file(file, cache=cache)
+ 
+         # Just try both reading methods.
+@@ -1173,4 +1181,4 @@ class LeapSeconds(QTable):
+             if initialize_erfa == 'only':
+                 return 0
+ 
+-        return erfa.leap_seconds.update(self)
++        return erfa.leap_seconds.update(self)

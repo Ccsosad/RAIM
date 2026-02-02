@@ -1,0 +1,26 @@
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..91422d3 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -108,6 +108,15 @@ class set_options:
+       Default: ``'default'``.
+     - ``display_style``: display style to use in jupyter for xarray objects.
+       Default: ``'text'``. Other options are ``'html'``.
++    - ``display_expand_attrs``: whether to expand the attributes section in the
++      display. One of ``True`` (always expand), ``False`` (always collapse), or
++      ``'default'`` (expand unless over a pre-defined limit). Default: ``'default'``.
++    - ``display_expand_coords``: whether to expand the coordinates section.
++      Same values as above. Default: ``'default'``.
++    - ``display_expand_data``: whether to expand the data section for DataArray.
++      Same values as above. Default: ``'default'``.
++    - ``display_expand_data_vars``: whether to expand the data variables section
++      for Dataset. Same values as above. Default: ``'default'``.
+ 
+ 
+     You can use ``set_options`` either as a context manager:
+@@ -160,4 +169,4 @@ class set_options:
+         return
+ 
+     def __exit__(self, type, value, traceback):
+-        self._apply_update(self.old)
++        self._apply_update(self.old)

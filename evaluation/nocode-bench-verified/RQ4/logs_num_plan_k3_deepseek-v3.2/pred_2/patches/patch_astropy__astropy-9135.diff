@@ -1,0 +1,140 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..db74bd0 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -510,6 +510,135 @@ class _ModelMeta(abc.ABCMeta):
+             return parts[0]
+ 
+ 
++class _FixedInputModel(Model):
++    """
++    A model that fixes some inputs of another model.
++
++    Parameters
++    ----------
++    model : `Model`
++        The model to fix inputs of.
++    fixed_inputs : dict
++        A dictionary mapping input names or indices to constant values.
++
++    Notes
++    -----
++    This class is not intended to be used directly. Use `fix_inputs` instead.
++    """
++    def __init__(self, model, fixed_inputs):
++        self._model = model
++        self._fixed_inputs = fixed_inputs
++
++        # Convert fixed_inputs to a dictionary with integer keys
++        self._fixed = {}
++        for key, value in fixed_inputs.items():
++            if isinstance(key, int):
++                idx = key
++            else:
++                if key not in model.inputs:
++                    raise ValueError(f"Input {key} not found in model inputs {model.inputs}")
++                idx = model.inputs.index(key)
++            self._fixed[idx] = value
++
++        # Determine the new inputs
++        new_inputs = []
++        for i, inp in enumerate(model.inputs):
++            if i not in self._fixed:
++                new_inputs.append(inp)
++        self._input_index_map = {i: j for j, i in enumerate([i for i in range(len(model.inputs)) if i not in self._fixed])}
++
++        super().__init__()
++        self._n_inputs = len(new_inputs)
++        self._n_outputs = model.n_outputs
++        self._inputs = tuple(new_inputs)
++        self._outputs = model.outputs
++        self._param_names = model.param_names
++        self._n_models = len(model)
++        self._model_set_axis = model.model_set_axis
++
++        # Copy parameters from the original model
++        for name in self.param_names:
++            param = getattr(model, name)
++            new_param = copy.deepcopy(param)
++            new_param.model = self
++            self.__dict__[name] = new_param
++
++        # Initialize constraints
++        self._initialize_constraints({})
++        self._initialize_slices()
++
++    def evaluate(self, *args):
++        # Build the full input list
++        full_args = []
++        arg_idx = 0
++        for i in range(self._model.n_inputs):
++            if i in self._fixed:
++                full_args.append(self._fixed[i])
++            else:
++                full_args.append(args[self._input_index_map[i]])
++                arg_idx += 1
++        return self._model.evaluate(*full_args)
++
++    def __call__(self, *args, **kwargs):
++        # We override __call__ to handle the input fixing
++        # We don't call the parent's __call__ because we need to insert the fixed inputs
++        # Instead, we call the underlying model's __call__ with the full arguments
++        full_args = []
++        arg_idx = 0
++        for i in range(self._model.n_inputs):
++            if i in self._fixed:
++                full_args.append(self._fixed[i])
++            else:
++                full_args.append(args[arg_idx])
++                arg_idx += 1
++        return self._model(*full_args, **kwargs)
++
++    @property
++    def bounding_box(self):
++        if self._model.bounding_box is None:
++            return None
++        # Remove the fixed dimensions from the bounding box
++        bbox = self._model.bounding_box
++        if self._model.n_inputs == 1:
++            # 1D bounding box is a tuple
++            if 0 in self._fixed:
++                return None
++            else:
++                return bbox
++        else:
++            new_bbox = []
++            for i, bb in enumerate(bbox):
++                if i not in self._fixed:
++                    new_bbox.append(bb)
++            return tuple(new_bbox)
++
++    @bounding_box.setter
++    def bounding_box(self, value):
++        self._user_bounding_box = value
++
++    @bounding_box.deleter
++    def bounding_box(self):
++        self._user_bounding_box = None
++
++    @property
++    def has_user_bounding_box(self):
++        return self._user_bounding_box is not None
++
++    # Forward other properties to the underlying model
++    @property
++    def linear(self):
++        return self._model.linear
++
++    @property
++    def fittable(self):
++        return self._model.fittable
++
++    @property
++    def standard_broadcasting(self):
++        return self._model.standard_broadcasting
++
++    # ... and so on for other properties
++
+ class Model(metaclass=_ModelMeta):
+     """
+     Base class for all models.

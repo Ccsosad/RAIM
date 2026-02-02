@@ -1,0 +1,113 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..ee9aaaa 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,81 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array, or scalar
++            Object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A Table of booleans with the same shape as this table.
++
++        Raises
++        ------
++        ValueError
++            If comparing to a table with different column names.
++        """
++        from .mixins.compare import column_values_equal
++        from .column import Column, MaskedColumn
++
++        if isinstance(other, Table):
++            # Check column names
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # Compare column by column
++            out_cols = []
++            for name in self.colnames:
++                col1 = self[name]
++                col2 = other[name]
++                eq = column_values_equal(col1, col2)
++                # Ensure the result is a Column or MaskedColumn
++                if not isinstance(eq, (Column, MaskedColumn)):
++                    eq = Column(eq, name=name, dtype=bool)
++                else:
++                    eq = eq.copy()
++                    eq.info.name = name
++                out_cols.append(eq)
++            return self.__class__(out_cols, copy=False)
++        else:
++            # other is array or scalar
++            # Broadcast appropriately
++            if np.isscalar(other):
++                # Compare each column to the scalar
++                out_cols = []
++                for name in self.colnames:
++                    col = self[name]
++                    eq = column_values_equal(col, other)
++                    if not isinstance(eq, (Column, MaskedColumn)):
++                        eq = Column(eq, name=name, dtype=bool)
++                    else:
++                        eq = eq.copy()
++                        eq.info.name = name
++                    out_cols.append(eq)
++                return self.__class__(out_cols, copy=False)
++            else:
++                # Assume it's an array
++                other = np.asarray(other)
++                if other.shape == (len(self.colnames),):
++                    # Column-wise comparison
++                    out_cols = []
++                    for name, val in zip(self.colnames, other):
++                        col = self[name]
++                        eq = column_values_equal(col, val)
++                        if not isinstance(eq, (Column, MaskedColumn)):
++                            eq = Column(eq, name=name, dtype=bool)
++                        else:
++                            eq = eq.copy()
++                            eq.info.name = name
++                        out_cols.append(eq)
++                    return self.__class__(out_cols, copy=False)
++                else:
++                    raise ValueError('Array must have length equal to number of columns')
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):
+diff --git a/astropy/table/mixins/compare.py b/astropy/table/mixins/compare.py
+new file mode 100644
+index 0000000..c7b7e57
+--- /dev/null
++++ b/astropy/table/mixins/compare.py
+@@ -0,0 +1,21 @@
++"""
++Comparison functionality for tables and columns.
++"""
++
++def column_values_equal(col1, col2):
++    """
++    Compare two column objects element-wise.
++
++    Parameters
++    ----------
++    col1 : column-like
++        First column.
++    col2 : column-like or scalar
++        Second column or scalar.
++
++    Returns
++    -------
++    equal : array of bool
++        Element-wise comparison result.
++    """
++    return col1 == col2

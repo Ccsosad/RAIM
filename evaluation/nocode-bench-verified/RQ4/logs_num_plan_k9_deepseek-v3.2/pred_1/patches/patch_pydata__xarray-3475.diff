@@ -1,0 +1,187 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f8247e8..0d469a7 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1924,9 +1924,80 @@ class DataArray(AbstractArray, DataWithCoords):
+         -------
+         dropped : DataArray
+         """
++        warnings.warn(
++            "DataArray.drop is deprecated. Use DataArray.drop_vars or "
++            "DataArray.drop_sel for more specific dropping.",
++            PendingDeprecationWarning,
++            stacklevel=2,
++        )
+         ds = self._to_temp_dataset().drop(labels, dim, errors=errors)
+         return self._from_temp_dataset(ds)
+ 
++    def drop_sel(
++        self,
++        indexers: Mapping[Hashable, Any] = None,
++        *,
++        errors: str = "raise",
++        **indexers_kwargs: Any,
++    ) -> "DataArray":
++        """Drop index labels from this DataArray.
++
++        Parameters
++        ----------
++        indexers : dict, optional
++            A dict with keys matching dimensions and values given
++            by scalars, slices or arrays of tick labels. For dimensions with
++            multi-index, the indexer may also be a dict-like object with keys
++            matching index level names.
++            If DataArrays are passed as indexers, xarray-style indexing will be
++            carried out. See :ref:`indexing` for the details.
++            One of indexers or indexers_kwargs must be provided.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the index labels passed are not in the array.
++            If 'ignore', any given labels that are in the array are dropped
++            and no error is raised.
++        **indexers_kwarg : {dim: indexer, ...}, optional
++            The keyword arguments form of ``indexers``.
++            One of indexers or indexers_kwargs must be provided.
++
++        Returns
++        -------
++        dropped : DataArray
++        """
++        indexers = either_dict_or_kwargs(indexers, indexers_kwargs, "drop_sel")
++        ds = self._to_temp_dataset().drop_sel(indexers, errors=errors)
++        return self._from_temp_dataset(ds)
++
++    def drop_vars(
++        self,
++        names: Union[Hashable, Iterable[Hashable]],
++        *,
++        errors: str = "raise",
++    ) -> "DataArray":
++        """Drop variables (including coordinates) from this DataArray.
++
++        Parameters
++        ----------
++        names : hashable or iterable of hashables
++            Name(s) of variables to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the variables passed are not in the array.
++            If 'ignore', any given variables that are in the array are dropped
++            and no error is raised.
++
++        Returns
++        -------
++        dropped : DataArray
++        """
++        if isinstance(names, str) or not isinstance(names, Iterable):
++            names = {names}
++        else:
++            names = set(names)
++        ds = self._to_temp_dataset().drop_vars(names, errors=errors)
++        return self._from_temp_dataset(ds)
++
+     def dropna(
+         self, dim: Hashable, how: str = "any", thresh: int = None
+     ) -> "DataArray":
+@@ -3118,4 +3189,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c07f9e0..f78b469 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3579,6 +3579,12 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         Data variables:
+             A        (x, y) float64 -0.3944 -1.418 1.423 -1.041
+         """
++        warnings.warn(
++            "Dataset.drop is deprecated. Use Dataset.drop_vars or "
++            "Dataset.drop_sel for more specific dropping.",
++            PendingDeprecationWarning,
++            stacklevel=2,
++        )
+         if errors not in ["raise", "ignore"]:
+             raise ValueError('errors must be either "raise" or "ignore"')
+ 
+@@ -3614,6 +3620,72 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         else:
+             return self._drop_labels(labels, dim, errors=errors)
+ 
++    def drop_sel(
++        self,
++        indexers: Mapping[Hashable, Any] = None,
++        *,
++        errors: str = "raise",
++        **indexers_kwargs: Any,
++    ) -> "Dataset":
++        """Drop index labels from this dataset.
++
++        Parameters
++        ----------
++        indexers : dict, optional
++            A dict with keys matching dimensions and values given
++            by scalars, slices or arrays of tick labels. For dimensions with
++            multi-index, the indexer may also be a dict-like object with keys
++            matching index level names.
++            If DataArrays are passed as indexers, xarray-style indexing will be
++            carried out. See :ref:`indexing` for the details.
++            One of indexers or indexers_kwargs must be provided.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the index labels passed are not in the dataset.
++            If 'ignore', any given labels that are in the dataset are dropped
++            and no error is raised.
++        **indexers_kwarg : {dim: indexer, ...}, optional
++            The keyword arguments form of ``indexers``.
++            One of indexers or indexers_kwargs must be provided.
++
++        Returns
++        -------
++        dropped : Dataset
++        """
++        indexers = either_dict_or_kwargs(indexers, indexers_kwargs, "drop_sel")
++        ds = self
++        for dim, labels in indexers.items():
++            ds = ds._drop_labels(labels, dim, errors=errors)
++        return ds
++
++    def drop_vars(
++        self,
++        names: Union[Hashable, Iterable[Hashable]],
++        *,
++        errors: str = "raise",
++    ) -> "Dataset":
++        """Drop variables (including coordinates) from this dataset.
++
++        Parameters
++        ----------
++        names : hashable or iterable of hashables
++            Name(s) of variables to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the variables passed are not in the dataset.
++            If 'ignore', any given variables that are in the dataset are dropped
++            and no error is raised.
++
++        Returns
++        -------
++        dropped : Dataset
++        """
++        if isinstance(names, str) or not isinstance(names, Iterable):
++            names = {names}
++        else:
++            names = set(names)
++        return self._drop_vars(names, errors=errors)
++
+     def _drop_labels(self, labels=None, dim=None, errors="raise"):
+         # Don't cast to set, as it would harm performance when labels
+         # is a large numpy array
+@@ -5478,4 +5550,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

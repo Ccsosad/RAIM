@@ -1,0 +1,88 @@
+diff --git a/xarray/core/formatting_html.py b/xarray/core/formatting_html.py
+index 87f3bcf..dcac9ad 100644
+--- a/xarray/core/formatting_html.py
++++ b/xarray/core/formatting_html.py
+@@ -105,9 +105,24 @@ def summarize_variable(name, var, is_index=False, dtype=None, preview=None):
+     dtype = dtype or escape(str(var.dtype))
+ 
+     # "unique" ids required to expand/collapse subsections
++    from xarray.core.formatting_context import get_options
++    opts = get_options()
++    
+     attrs_id = "attrs-" + str(uuid.uuid4())
+     data_id = "data-" + str(uuid.uuid4())
+     disabled = "" if len(var.attrs) else "disabled"
++    
++    # Apply display options
++    attrs_checked = ""
++    data_checked = ""
++    if opts.display_expand_attrs is True:
++        attrs_checked = "checked"
++    elif opts.display_expand_attrs is False:
++        disabled = "disabled"
++    if opts.display_expand_data is True:
++        data_checked = "checked"
++    elif opts.display_expand_data is False:
++        data_checked = "disabled"
+ 
+     preview = preview or escape(inline_variable_array_repr(variable, 35))
+     attrs_ul = summarize_attrs(var.attrs)
+@@ -122,10 +137,10 @@ def summarize_variable(name, var, is_index=False, dtype=None, preview=None):
+         f"<div class='xr-var-dtype'>{dtype}</div>"
+         f"<div class='xr-var-preview xr-preview'>{preview}</div>"
+         f"<input id='{attrs_id}' class='xr-var-attrs-in' "
+-        f"type='checkbox' {disabled}>"
++        f"type='checkbox' {disabled} {attrs_checked}>"
+         f"<label for='{attrs_id}' title='Show/Hide attributes'>"
+         f"{attrs_icon}</label>"
+-        f"<input id='{data_id}' class='xr-var-data-in' type='checkbox'>"
++        f"<input id='{data_id}' class='xr-var-data-in' type='checkbox' {data_checked}>"
+         f"<label for='{data_id}' title='Show/Hide data repr'>"
+         f"{data_icon}</label>"
+         f"<div class='xr-var-attrs'>{attrs_ul}</div>"
+diff --git a/xarray/core/formatting_context.py b/xarray/core/formatting_context.py
+new file mode 100644
+index 0000000..441d926
+--- /dev/null
++++ b/xarray/core/formatting_context.py
+@@ -0,0 +1,40 @@
++from dataclasses import dataclass
++
++@dataclass
++class FormattingOptions:
++    """Options controlling display formatting of xarray objects."""
++    display_expand_attrs: str = "default"
++    display_expand_coords: str = "default"
++    display_expand_data: str = "default"
++    display_expand_data_vars: str = "default"
++
++_formatting_options = FormattingOptions()
++
++def set_options(**kwargs):
++    """Set display formatting options.
++    
++    Parameters
++    ----------
++    display_expand_attrs : {"default", True, False}, optional
++        Control expansion of attributes section
++    display_expand_coords : {"default", True, False}, optional
++        Control expansion of coordinates section
++    display_expand_data : {"default", True, False}, optional
++        Control expansion of data section
++    display_expand_data_vars : {"default", True, False}, optional
++        Control expansion of data variables section
++    """
++    global _formatting_options
++    valid_options = {"default", True, False}
++    
++    for key, value in kwargs.items():
++        if not hasattr(_formatting_options, key):
++            raise ValueError(f"Invalid option: {key}")
++        if value not in valid_options:
++            raise ValueError(f"Invalid value for {key}: {value!r}")
++    
++    _formatting_options = FormattingOptions(**_formatting_options.__dict__, **kwargs)
++
++def get_options():
++    """Get current display formatting options."""
++    return _formatting_options

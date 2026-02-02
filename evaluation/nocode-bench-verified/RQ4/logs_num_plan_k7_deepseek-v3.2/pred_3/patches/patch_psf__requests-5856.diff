@@ -1,0 +1,63 @@
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..caf4ec4 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -882,14 +882,12 @@ class Response(object):
+         r"""Returns the json-encoded content of a response, if any.
+ 
+         :param \*\*kwargs: Optional arguments that ``json.loads`` takes.
+-        :raises simplejson.JSONDecodeError: If the response body does not
+-            contain valid json and simplejson is installed.
+-        :raises json.JSONDecodeError: If the response body does not contain
+-            valid json and simplejson is not installed on Python 3.
+-        :raises ValueError: If the response body does not contain valid
+-            json and simplejson is not installed on Python 2.        
++        :raises requests.exceptions.JSONDecodeError: If the response body does not
++            contain valid json.
+         """
+ 
++        from .exceptions import JSONDecodeError
++
+         if not self.encoding and self.content and len(self.content) > 3:
+             # No encoding set. JSON RFC 4627 section 3 states we should expect
+             # UTF-8, -16 or -32. Detect which one to use; If the detection or
+@@ -907,7 +905,16 @@ class Response(object):
+                     # and the server didn't bother to tell us what codec *was*
+                     # used.
+                     pass
+-        return complexjson.loads(self.text, **kwargs)
++        try:
++            return complexjson.loads(self.text, **kwargs)
++        except (complexjson.JSONDecodeError, ValueError) as e:
++            # Catch JSON decoding errors and re-raise as requests.exceptions.JSONDecodeError
++            # If the exception has msg, doc, pos attributes, use them.
++            # Otherwise, use default values.
++            msg = getattr(e, 'msg', str(e))
++            doc = getattr(e, 'doc', None)
++            pos = getattr(e, 'pos', None)
++            raise JSONDecodeError(msg, doc, pos)
+ 
+     @property
+     def links(self):
+diff --git a/requests/exceptions.py b/requests/exceptions.py
+new file mode 100644
+index 0000000..8fed1df
+--- /dev/null
++++ b/requests/exceptions.py
+@@ -0,0 +1,16 @@
++class RequestsWarning(Warning):
++    """Base warning for Requests."""
++    pass
++
++
++class JSONDecodeError(ValueError):
++    """Wrapper for JSON decode errors.
++
++    This exception provides interoperability between multiple JSON libraries
++    and Python versions.
++    """
++    def __init__(self, msg, doc, pos):
++        super().__init__(msg)
++        self.msg = msg
++        self.doc = doc
++        self.pos = pos

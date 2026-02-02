@@ -1,0 +1,88 @@
+diff --git a/sklearn/datasets/_openml.py b/sklearn/datasets/_openml.py
+index 2578f63..7d050e6 100644
+--- a/sklearn/datasets/_openml.py
++++ b/sklearn/datasets/_openml.py
+@@ -428,6 +428,7 @@ def _load_arff_response(
+     md5_checksum: str,
+     n_retries: int = 3,
+     delay: float = 1.0,
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Load the ARFF data associated with the OpenML URL.
+ 
+@@ -514,12 +515,17 @@ def _load_arff_response(
+         target_names_to_select=target_names_to_select,
+         shape=shape,
+     )
++    if read_csv_kwargs:
++        arff_params["read_csv_kwargs"] = read_csv_kwargs
++
+     try:
+         X, y, frame, categories = _open_url_and_load_gzip_file(
+             url, data_home, n_retries, delay, arff_params
+         )
+     except Exception as exc:
+-        if parser != "pandas":
++        # If the user provides `read_csv_kwargs`, we do not try to be smart and
++        # raise the error.
++        if parser != "pandas" or read_csv_kwargs is not None:
+             raise
+ 
+         from pandas.errors import ParserError
+@@ -552,6 +558,7 @@ def _download_data_to_bunch(
+     n_retries: int = 3,
+     delay: float = 1.0,
+     parser: str,
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Download ARFF data, load it to a specific container and create to Bunch.
+ 
+@@ -657,6 +664,7 @@ def _download_data_to_bunch(
+         md5_checksum=md5_checksum,
+         n_retries=n_retries,
+         delay=delay,
++        read_csv_kwargs=read_csv_kwargs,
+     )
+ 
+     return Bunch(
+@@ -725,6 +733,7 @@ def fetch_openml(
+     n_retries: int = 3,
+     delay: float = 1.0,
+     parser: Optional[str] = "warn",
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Fetch dataset from openml by name or dataset id.
+ 
+@@ -829,6 +838,11 @@ def fetch_openml(
+            warning. Therefore, an `ImportError` will be raised from 1.4 if
+            the dataset is dense and pandas is not installed.
+ 
++    read_csv_kwargs : dict, default=None
++        Keyword arguments to pass to :func:`pandas.read_csv` when `parser='pandas'`.
++
++        .. versionadded:: 1.3
++
+     Returns
+     -------
+     data : :class:`~sklearn.utils.Bunch`
+@@ -991,6 +1005,12 @@ def fetch_openml(
+     else:
+         parser_ = parser
+ 
++    if read_csv_kwargs and parser_ != "pandas":
++        raise ValueError(
++            "`read_csv_kwargs` is only supported when `parser` is 'pandas', but "
++            f"got {parser_!r}."
++        )
++
+     if as_frame or parser_ == "pandas":
+         try:
+             check_pandas_support("`fetch_openml`")
+@@ -1096,6 +1116,7 @@ def fetch_openml(
+         n_retries=n_retries,
+         delay=delay,
+         parser=parser_,
++        read_csv_kwargs=read_csv_kwargs,
+     )
+ 
+     if return_X_y:

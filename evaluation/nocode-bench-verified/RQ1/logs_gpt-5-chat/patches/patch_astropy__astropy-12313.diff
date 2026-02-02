@@ -1,0 +1,82 @@
+diff --git a/astropy/cosmology/io/row.py b/astropy/cosmology/io/row.py
+new file mode 100644
+index 0000000..1b32dea
+--- /dev/null
++++ b/astropy/cosmology/io/row.py
+@@ -0,0 +1,76 @@
++"""I/O utilities for converting Cosmology instances to and from Astropy Table Rows."""
++
++from astropy.table import Row, Table
++from astropy.io.registry import register_reader, register_writer, register_identifier
++from astropy.cosmology import Cosmology
++
++
++def from_row(row, *, move_to_meta=False):
++    """Convert an Astropy Table Row to a Cosmology instance.
++
++    Parameters
++    ----------
++    row : astropy.table.Row
++        The row to convert.
++    move_to_meta : bool, optional
++        Whether to move non-Cosmology parameters into metadata.
++
++    Returns
++    -------
++    Cosmology
++        The cosmology represented by the row.
++    """
++    # Extract metadata and name
++    meta = dict(getattr(row, "meta", None) or {})
++    name = meta.pop("name", None)
++
++    # Build mapping from data columns
++    mapping = dict(row)
++    mapping["name"] = name
++    mapping.setdefault("cosmology", meta.pop("cosmology", None))
++    mapping["meta"] = meta
++
++    # Use the standard Cosmology reader
++    return Cosmology.from_format(mapping, move_to_meta=move_to_meta, format="mapping")
++
++
++def to_row(cosmology, *, table=None):
++    """Convert a Cosmology instance to an Astropy Table Row.
++
++    Parameters
++    ----------
++    cosmology : Cosmology
++        Instance to serialize.
++    table : astropy.table.Table, optional
++        Optionally provide an existing Table to append the row to.
++
++    Returns
++    -------
++    astropy.table.Row
++    """
++    # Use to_format('mapping') to get data for the row
++    data = cosmology.to_format("mapping")
++    meta = data.pop("meta", {})
++    meta["cosmology"] = cosmology.__class__.__name__
++    meta.setdefault("name", cosmology.name)
++
++    # Make a table if not provided
++    if table is None:
++        table = Table([data], meta=meta)
++    else:
++        table.add_row(data)
++
++    return table[-1]
++
++
++def row_identify(origin, format, *args, **kwargs):
++    """Identify if object is an Astropy Table Row."""
++    if origin == "read":
++        return isinstance(args[1], Row) and (format in (None, "astropy.row"))
++    return False
++
++
++# Register formats into the I/O registry
++register_reader("astropy.row", Cosmology, from_row)
++register_writer("astropy.row", Cosmology, to_row)
++register_identifier("astropy.row", Cosmology, row_identify)

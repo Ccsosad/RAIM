@@ -1,0 +1,170 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..84f5a97 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -262,6 +262,8 @@ def format_attrs(index, separator=", "):
+     attrs_str = f"{separator}".join(attrs_str)
+     return attrs_str
+ 
++from .cftime_parsing import parse_iso8601_like
++
+ 
+ class CFTimeIndex(pd.Index):
+     """Custom Index for working with CF calendars and dates
+@@ -415,7 +417,7 @@ class CFTimeIndex(pd.Index):
+ 
+     def _get_string_slice(self, key):
+         """Adapted from pandas.tseries.index.DatetimeIndex._get_string_slice"""
+-        parsed, resolution = _parse_iso8601_with_reso(self.date_type, key)
++        parsed, resolution = parse_iso8601_like(key)
+         try:
+             loc = self._partial_date_slice(resolution, parsed)
+         except KeyError:
+@@ -459,7 +461,7 @@ class CFTimeIndex(pd.Index):
+         """Adapted from
+         pandas.tseries.index.DatetimeIndex._maybe_cast_slice_bound"""
+         if isinstance(label, str):
+-            parsed, resolution = _parse_iso8601_with_reso(self.date_type, label)
++            parsed, resolution = parse_iso8601_like(label)
+             start, end = _parsed_string_to_bounds(self.date_type, resolution, parsed)
+             if self.is_monotonic_decreasing and len(self) > 1:
+                 return end if side == "left" else start
+@@ -743,7 +745,7 @@ class CFTimeIndex(pd.Index):
+ 
+ 
+ def _parse_iso8601_without_reso(date_type, datetime_str):
+-    date, _ = _parse_iso8601_with_reso(date_type, datetime_str)
++    date, _ = parse_iso8601_like(datetime_str)
+     return date
+ 
+ 
+diff --git a/xarray/coding/cftime_parsing.py b/xarray/coding/cftime_parsing.py
+new file mode 100644
+index 0000000..5d5cf75
+--- /dev/null
++++ b/xarray/coding/cftime_parsing.py
+@@ -0,0 +1,124 @@
++"""
++Parsing functions for cftime datetime strings.
++"""
++
++import re
++from datetime import datetime
++
++# Regular expressions for the three formats:
++# 1. Basic ISO8601: YYYYMMDDhhmmss
++# 2. Extended ISO8601: YYYY-MM-DDThh:mm:ss
++# 3. Default cftime: YYYY-MM-DD hh:mm:ss
++
++# We break the string into components.
++# The regex should capture year, month, day, hour, minute, second, microsecond?
++# But note: the current parsing function may not handle microseconds.
++# We'll follow the existing behavior.
++
++# The existing _parse_iso8601_with_reso function returns a tuple (parsed, resolution)
++# where parsed is a tuple (year, month, day, hour, minute, second, microsecond)
++# and resolution is a string like 'year', 'month', etc.
++
++# We'll write a function that does the same.
++
++def parse_iso8601_like(datetime_str):
++    """
++    Parse a datetime string that may be in one of three formats:
++    - Basic ISO8601: YYYYMMDDhhmmss
++    - Extended ISO8601: YYYY-MM-DDThh:mm:ss
++    - Default cftime: YYYY-MM-DD hh:mm:ss
++
++    Returns a tuple (parsed, resolution) where parsed is a tuple
++    (year, month, day, hour, minute, second, microsecond) and resolution
++    is a string indicating the resolution of the parsed string.
++
++    This function is intended to be used internally by xarray.
++    """
++    # First, try the basic ISO8601 pattern
++    pattern_basic = re.compile(
++        r'^(\d{4})(\d{2})(\d{2})?(?:(\d{2})(?:(\d{2})(?:(\d{2})(?:\.(\d+))?)?)?)?$'
++    )
++    # Then, the extended ISO8601 pattern (with T)
++    pattern_extended = re.compile(
++        r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$'
++    )
++    # Then, the default cftime pattern (with space)
++    pattern_cftime = re.compile(
++        r'^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$'
++    )
++
++    match = pattern_basic.match(datetime_str)
++    if match:
++        groups = match.groups()
++        # groups: year, month, day, hour, minute, second, microsecond
++        # Note: the basic pattern may have missing components.
++        # We need to fill in defaults.
++        year = int(groups[0])
++        month = int(groups[1]) if groups[1] else 1
++        day = int(groups[2]) if groups[2] else 1
++        hour = int(groups[3]) if groups[3] else 0
++        minute = int(groups[4]) if groups[4] else 0
++        second = int(groups[5]) if groups[5] else 0
++        microsecond = int(groups[6]) if groups[6] else 0
++        # Determine resolution
++        if groups[1] is None:
++            resolution = 'year'
++        elif groups[2] is None:
++            resolution = 'month'
++        elif groups[3] is None:
++            resolution = 'day'
++        elif groups[4] is None:
++            resolution = 'hour'
++        elif groups[5] is None:
++            resolution = 'minute'
++        elif groups[6] is None:
++            resolution = 'second'
++        else:
++            resolution = 'microsecond'
++        parsed = (year, month, day, hour, minute, second, microsecond)
++        return parsed, resolution
++
++    match = pattern_extended.match(datetime_str)
++    if match:
++        groups = match.groups()
++        year = int(groups[0])
++        month = int(groups[1])
++        day = int(groups[2])
++        hour = int(groups[3])
++        minute = int(groups[4])
++        second = int(groups[5])
++        microsecond = int(groups[6]) if groups[6] else 0
++        # In extended format, all components are present up to seconds.
++        # But the string might be truncated? Actually, the regex requires the full time.
++        # However, the original function might handle partial strings.
++        # We'll assume the string is complete.
++        # Determine resolution based on which components are present in the string?
++        # Actually, the extended format requires the full date and time.
++        # But we might have been given a shorter string? The regex above requires the full pattern.
++        # We'll set resolution to 'second' or 'microsecond'
++        if groups[6] is None:
++            resolution = 'second'
++        else:
++            resolution = 'microsecond'
++        parsed = (year, month, day, hour, minute, second, microsecond)
++        return parsed, resolution
++
++    match = pattern_cftime.match(datetime_str)
++    if match:
++        groups = match.groups()
++        year = int(groups[0])
++        month = int(groups[1])
++        day = int(groups[2])
++        hour = int(groups[3])
++        minute = int(groups[4])
++        second = int(groups[5])
++        microsecond = int(groups[6]) if groups[6] else 0
++        if groups[6] is None:
++            resolution = 'second'
++        else:
++            resolution = 'microsecond'
++        parsed = (year, month, day, hour, minute, second, microsecond)
++        return parsed, resolution
++
++    # If none of the patterns match, raise an error.
++    raise ValueError(f"Unrecognized datetime string: {datetime_str}")

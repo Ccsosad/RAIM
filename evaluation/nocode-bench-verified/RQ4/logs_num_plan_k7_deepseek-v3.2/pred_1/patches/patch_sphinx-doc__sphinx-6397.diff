@@ -1,0 +1,15 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..4920b7a 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -410,6 +410,10 @@ class Documenter:
+ 
+         retann = self.retann
+ 
++        # If the configuration autodoc_typehints is set to 'none', remove the return annotation
++        if self.env.config.autodoc_typehints == 'none':
++            retann = None
++
+         result = self.env.events.emit_firstresult('autodoc-process-signature',
+                                                   self.objtype, self.fullname,
+                                                   self.object, self.options, args, retann)

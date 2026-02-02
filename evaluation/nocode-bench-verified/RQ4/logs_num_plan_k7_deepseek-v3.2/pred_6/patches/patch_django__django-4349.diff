@@ -1,0 +1,59 @@
+diff --git a/django/db/models/__init__.py b/django/db/models/__init__.py
+index a8721f9..7bdf708 100644
+--- a/django/db/models/__init__.py
++++ b/django/db/models/__init__.py
+@@ -1,8 +1,9 @@
++
+ from functools import wraps
+ 
+ from django.core.exceptions import ObjectDoesNotExist, ImproperlyConfigured  # NOQA
+ from django.db.models.query import Q, QuerySet, Prefetch  # NOQA
+-from django.db.models.expressions import Expression, F, Value, Func, Case, When  # NOQA
++from django.db.models.expressions import Expression, ExpressionWrapper, F, Value, Func, Case, When  # NOQA
+ from django.db.models.manager import Manager  # NOQA
+ from django.db.models.base import Model  # NOQA
+ from django.db.models.aggregates import *  # NOQA
+diff --git a/django/db/models/expressions.py b/django/db/models/expressions.py
+index bf6e882..79da749 100644
+--- a/django/db/models/expressions.py
++++ b/django/db/models/expressions.py
+@@ -340,6 +340,39 @@ class BaseExpression(object):
+         return self
+ 
+ 
++class ExpressionWrapper(Expression):
++    """
++    An expression that wraps another expression and provides an output_field.
++    """
++    def __init__(self, expression, output_field):
++        super(ExpressionWrapper, self).__init__(output_field=output_field)
++        self.expression = expression
++
++    def __repr__(self):
++        return "<{}: {}>".format(self.__class__.__name__, self)
++
++    def __str__(self):
++        return str(self.expression)
++
++    def get_source_expressions(self):
++        return [self.expression]
++
++    def set_source_expressions(self, exprs):
++        self.expression, = exprs
++
++    def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
++        c = self.copy()
++        c.is_summary = summarize
++        c.expression = c.expression.resolve_expression(query, allow_joins, reuse, summarize, for_save)
++        return c
++
++    def as_sql(self, compiler, connection):
++        return compiler.compile(self.expression)
++
++    def get_group_by_cols(self):
++        return self.expression.get_group_by_cols()
++
++
+ class Expression(BaseExpression, Combinable):
+     """
+     An expression that can be combined with other expressions.

@@ -1,0 +1,153 @@
+diff --git a/sklearn/decomposition/_kernel_pca.py b/sklearn/decomposition/_kernel_pca.py
+index 6f0266a..e1f9cae 100644
+--- a/sklearn/decomposition/_kernel_pca.py
++++ b/sklearn/decomposition/_kernel_pca.py
+@@ -8,7 +8,7 @@ from scipy import linalg
+ from scipy.sparse.linalg import eigsh
+ 
+ from ..utils._arpack import _init_arpack_v0
+-from ..utils.extmath import svd_flip
++from ..utils.extmath import svd_flip, randomized_svd
+ from ..utils.validation import check_is_fitted, _check_psd_eigenvalues
+ from ..utils.deprecation import deprecated
+ from ..exceptions import NotFittedError
+@@ -59,10 +59,11 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+         Learn the inverse transform for non-precomputed kernels.
+         (i.e. learn to find the pre-image of a point)
+ 
+-    eigen_solver : {'auto', 'dense', 'arpack'}, default='auto'
++    eigen_solver : {'auto', 'dense', 'arpack', 'randomized'}, default='auto'
+         Select eigensolver to use. If n_components is much less than
+         the number of training samples, arpack may be more efficient
+-        than the dense eigensolver.
++        than the dense eigensolver. The randomized solver can be much faster
++        for large number of samples and a small number of components.
+ 
+     tol : float, default=0
+         Convergence tolerance for arpack.
+@@ -215,6 +216,27 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+                                                 tol=self.tol,
+                                                 maxiter=self.max_iter,
+                                                 v0=v0)
++        elif eigen_solver == 'randomized':
++            from ..utils.extmath import randomized_svd
++            # Randomized SVD is applied to the centered kernel matrix K.
++            # We compute the top n_components singular values and vectors.
++            # Note: K is symmetric positive semi-definite, so SVD and EVD coincide.
++            # We use randomized_svd with n_components, and then square the singular
++            # values to get eigenvalues, and use the right singular vectors as eigenvectors.
++            # However, randomized_svd returns U, s, Vt, where Vt are the right singular vectors.
++            # For a symmetric matrix, the left and right singular vectors are the same up to sign.
++            # We use Vt.T as the eigenvectors.
++            n_oversamples = min(10, max(2 * n_components, K.shape[0] - n_components))
++            n_iter = 'auto'
++            U, s, Vt = randomized_svd(K, n_components=n_components,
++                                      n_oversamples=n_oversamples,
++                                      n_iter=n_iter,
++                                      random_state=self.random_state,
++                                      flip_sign=False)
++            self.lambdas_ = s ** 2
++            self.alphas_ = Vt.T
++        else:
++            raise ValueError("Unsupported eigen solver: %s" % eigen_solver)
+ 
+         # make sure that the eigenvalues are ok and fix numerical issues
+         self.lambdas_ = _check_psd_eigenvalues(self.lambdas_,
+@@ -388,4 +410,4 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+ 
+     def _more_tags(self):
+         return {'preserves_dtype': [np.float64, np.float32],
+-                'pairwise': self.kernel == 'precomputed'}
++                'pairwise': self.kernel == 'precomputed'}
+diff --git a/benchmarks/bench_kernel_pca_solvers_time_vs_n_components.py b/benchmarks/bench_kernel_pca_solvers_time_vs_n_components.py
+new file mode 100644
+index 0000000..bb93ac0
+--- /dev/null
++++ b/benchmarks/bench_kernel_pca_solvers_time_vs_n_components.py
+@@ -0,0 +1,40 @@
++"""Benchmark Kernel PCA solvers with varying number of components."""
++import numpy as np
++import time
++from sklearn.decomposition import KernelPCA
++from sklearn.datasets import make_circles
++
++def benchmark_kernel_pca_solvers():
++    """Benchmark different eigen_solver options in KernelPCA."""
++    solvers = ['dense', 'arpack', 'randomized']
++    n_components_list = [5, 10, 20, 50, 100]
++    n_samples = 2000
++    n_features = 20
++    n_repeats = 3
++
++    print("Benchmarking KernelPCA solvers with varying number of components")
++    print("=" * 60)
++    print(f"n_samples = {n_samples}, n_features = {n_features}")
++    print()
++
++    for n_components in n_components_list:
++        print(f"n_components = {n_components}")
++        X, _ = make_circles(n_samples=n_samples, noise=0.1, factor=0.5, random_state=0)
++        X = X + np.random.randn(*X.shape) * 0.1  # Add some extra noise
++
++        for solver in solvers:
++            times = []
++            for _ in range(n_repeats):
++                kpca = KernelPCA(n_components=n_components, kernel='rbf',
++                                 eigen_solver=solver, random_state=0)
++                start = time.time()
++                kpca.fit(X)
++                end = time.time()
++                times.append(end - start)
++            avg_time = np.mean(times)
++            std_time = np.std(times)
++            print(f"  {solver:12s}: {avg_time:.3f}s ± {std_time:.3f}s")
++        print()
++
++if __name__ == "__main__":
++    benchmark_kernel_pca_solvers()
+diff --git a/benchmarks/bench_kernel_pca_solvers_time_vs_n_samples.py b/benchmarks/bench_kernel_pca_solvers_time_vs_n_samples.py
+new file mode 100644
+index 0000000..2a45a42
+--- /dev/null
++++ b/benchmarks/bench_kernel_pca_solvers_time_vs_n_samples.py
+@@ -0,0 +1,40 @@
++"""Benchmark Kernel PCA solvers with varying number of samples."""
++import numpy as np
++import time
++from sklearn.decomposition import KernelPCA
++from sklearn.datasets import make_circles
++
++def benchmark_kernel_pca_solvers():
++    """Benchmark different eigen_solver options in KernelPCA."""
++    solvers = ['dense', 'arpack', 'randomized']
++    n_samples_list = [100, 500, 1000, 2000, 5000]
++    n_components = 10
++    n_features = 20
++    n_repeats = 3
++
++    print("Benchmarking KernelPCA solvers with varying number of samples")
++    print("=" * 60)
++    print(f"n_components = {n_components}, n_features = {n_features}")
++    print()
++
++    for n_samples in n_samples_list:
++        print(f"n_samples = {n_samples}")
++        X, _ = make_circles(n_samples=n_samples, noise=0.1, factor=0.5, random_state=0)
++        X = X + np.random.randn(*X.shape) * 0.1  # Add some extra noise
++
++        for solver in solvers:
++            times = []
++            for _ in range(n_repeats):
++                kpca = KernelPCA(n_components=n_components, kernel='rbf',
++                                 eigen_solver=solver, random_state=0)
++                start = time.time()
++                kpca.fit(X)
++                end = time.time()
++                times.append(end - start)
++            avg_time = np.mean(times)
++            std_time = np.std(times)
++            print(f"  {solver:12s}: {avg_time:.3f}s ± {std_time:.3f}s")
++        print()
++
++if __name__ == "__main__":
++    benchmark_kernel_pca_solvers()

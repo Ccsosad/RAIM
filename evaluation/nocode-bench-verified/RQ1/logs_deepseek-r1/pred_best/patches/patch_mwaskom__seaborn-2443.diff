@@ -1,0 +1,84 @@
+diff --git a/seaborn/categorical.py b/seaborn/categorical.py
+index 27d5801..fc288ef 100644
+--- a/seaborn/categorical.py
++++ b/seaborn/categorical.py
+@@ -1367,6 +1367,7 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+         # Set object attributes
+         self.dodge = dodge
+         self.width = .8
++        self.beeswarms = []
+ 
+     def could_overlap(self, xy_i, swarm, d):
+         """Return a list of all swarm points that could overlap with target.
+@@ -1556,10 +1557,7 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                 swarm_data = np.asarray(group_data[hue_mask])
+                 point_colors = np.asarray(self.point_colors[i][hue_mask])
+ 
+-                # Sort the points for the beeswarm algorithm
+-                sorter = np.argsort(swarm_data)
+-                swarm_data = swarm_data[sorter]
+-                point_colors = point_colors[sorter]
++                # Keep original order (no sorting)
+ 
+                 # Plot the points in centered positions
+                 cat_pos = np.ones(swarm_data.size) * i
+@@ -1571,6 +1569,14 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+ 
+                 centers.append(i)
+                 swarms.append(points)
++                # Store original positions and parameters for draw-time swarming
++                if self.orient == "v":
++                    orig_x = cat_pos
++                    orig_y = swarm_data
++                else:
++                    orig_x = swarm_data
++                    orig_y = cat_pos
++                self.beeswarms.append((points, i, width, s, kws.copy(), orig_x, orig_y))
+ 
+             else:
+                 offsets = self.hue_offsets
+@@ -1581,10 +1587,7 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                     swarm_data = np.asarray(group_data[hue_mask])
+                     point_colors = np.asarray(self.point_colors[i][hue_mask])
+ 
+-                    # Sort the points for the beeswarm algorithm
+-                    sorter = np.argsort(swarm_data)
+-                    swarm_data = swarm_data[sorter]
+-                    point_colors = point_colors[sorter]
++                    # Keep original order (no sorting)
+ 
+                     # Plot the points in centered positions
+                     center = i + offsets[j]
+@@ -1597,6 +1600,14 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+ 
+                     centers.append(center)
+                     swarms.append(points)
++                    # Store original positions and parameters for draw-time swarming
++                    if self.orient == "v":
++                        orig_x = cat_pos
++                        orig_y = swarm_data
++                    else:
++                        orig_x = swarm_data
++                        orig_y = cat_pos
++                    self.beeswarms.append((points, center, width, s, kws.copy(), orig_x, orig_y))
+ 
+         # Autoscale the valus axis to set the data/axes transforms properly
+         ax.autoscale_view(scalex=self.orient == "h", scaley=self.orient == "v")
+@@ -1615,6 +1626,17 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+         if self.orient == "h":
+             ax.invert_yaxis()
+ 
++        # Connect draw callback to swarm points at draw time
++        def on_draw(event):
++            for (points, center, width, s, kws, orig_x, orig_y) in self.beeswarms:
++                if points.get_offsets().size:
++                    # Reset to original positions
++                    points.set_offsets(np.c_[orig_x, orig_y])
++                    # Swarm the points with current axes state
++                    self.swarm_points(ax, points, center, width, s, **kws)
++
++        ax.figure.canvas.mpl_connect('draw_event', on_draw)
++
+ 
+ class _CategoricalStatPlotter(_CategoricalPlotter):
+ 

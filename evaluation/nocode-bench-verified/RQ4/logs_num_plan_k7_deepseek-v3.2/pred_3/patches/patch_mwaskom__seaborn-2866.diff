@@ -1,0 +1,256 @@
+diff --git a/seaborn/categorical.py b/seaborn/categorical.py
+index 8858341..c060c47 100644
+--- a/seaborn/categorical.py
++++ b/seaborn/categorical.py
+@@ -1435,7 +1435,7 @@ class _CategoricalStatPlotter(_CategoricalPlotter):
+             width = self.width
+         return width
+ 
+-    def estimate_statistic(self, estimator, ci, n_boot, seed):
++    def estimate_statistic(self, estimator, errorbar, n_boot, seed):
+ 
+         if self.hue_names is None:
+             statistic = []
+@@ -1466,26 +1466,13 @@ class _CategoricalStatPlotter(_CategoricalPlotter):
+                 else:
+                     statistic.append(estimator(stat_data))
+ 
+-                # Get a confidence interval for this estimate
+-                if ci is not None:
+-
+-                    if stat_data.size < 2:
+-                        confint.append([np.nan, np.nan])
+-                        continue
+-
+-                    if ci == "sd":
+-
+-                        estimate = estimator(stat_data)
+-                        sd = np.std(stat_data)
+-                        confint.append((estimate - sd, estimate + sd))
+-
+-                    else:
+-
+-                        boots = bootstrap(stat_data, func=estimator,
+-                                          n_boot=n_boot,
+-                                          units=unit_data,
+-                                          seed=seed)
+-                        confint.append(utils.ci(boots, ci))
++                # Get an error bar for this estimate
++                if errorbar is not None:
++                    from seaborn._errorbars import compute_errorbar
++                    _, (low, high) = compute_errorbar(
++                        stat_data, estimator, errorbar, n_boot, seed, unit_data
++                    )
++                    confint.append((low, high))
+ 
+             # Option 2: we are grouping by a hue layer
+             # ----------------------------------------
+@@ -1517,26 +1504,13 @@ class _CategoricalStatPlotter(_CategoricalPlotter):
+                     else:
+                         statistic[i].append(estimator(stat_data))
+ 
+-                    # Get a confidence interval for this estimate
+-                    if ci is not None:
+-
+-                        if stat_data.size < 2:
+-                            confint[i].append([np.nan, np.nan])
+-                            continue
+-
+-                        if ci == "sd":
+-
+-                            estimate = estimator(stat_data)
+-                            sd = np.std(stat_data)
+-                            confint[i].append((estimate - sd, estimate + sd))
+-
+-                        else:
+-
+-                            boots = bootstrap(stat_data, func=estimator,
+-                                              n_boot=n_boot,
+-                                              units=unit_data,
+-                                              seed=seed)
+-                            confint[i].append(utils.ci(boots, ci))
++                    # Get an error bar for this estimate
++                    if errorbar is not None:
++                        from seaborn._errorbars import compute_errorbar
++                        _, (low, high) = compute_errorbar(
++                            stat_data, estimator, errorbar, n_boot, seed, unit_data
++                        )
++                        confint[i].append((low, high))
+ 
+         # Save the resulting values for plotting
+         self.statistic = np.array(statistic)
+@@ -1575,10 +1549,11 @@ class _BarPlotter(_CategoricalStatPlotter):
+     """Show point estimates and confidence intervals with bars."""
+ 
+     def __init__(self, x, y, hue, data, order, hue_order,
+-                 estimator, ci, n_boot, units, seed,
++                 estimator, errorbar, n_boot, units, seed,
+                  orient, color, palette, saturation, width,
+                  errcolor, errwidth, capsize, dodge):
+         """Initialize the plotter."""
++        self.errorbar = errorbar
+         self.establish_variables(x, y, hue, data, orient,
+                                  order, hue_order, units)
+         self.establish_colors(color, palette, saturation)
+@@ -2743,15 +2718,30 @@ swarmplot.__doc__ = dedent("""\
+ 
+ def barplot(
+     data=None, *, x=None, y=None, hue=None, order=None, hue_order=None,
+-    estimator=np.mean, ci=95, n_boot=1000, units=None, seed=None,
++    estimator=np.mean, errorbar=("ci", 95), n_boot=1000, units=None, seed=None,
+     orient=None, color=None, palette=None, saturation=.75, width=.8,
+     errcolor=".26", errwidth=None, capsize=None, dodge=True,
+     ax=None,
+     **kwargs,
+ ):
+ 
++    # Handle deprecated ci parameter
++    ci = kwargs.pop("ci", None)
++    if ci is not None:
++        import warnings
++        warnings.warn(
++            "The `ci` parameter is deprecated. Use `errorbar` instead.",
++            FutureWarning
++        )
++        if errorbar != ("ci", 95):
++            raise ValueError("Cannot set both `ci` and `errorbar`.")
++        if isinstance(ci, str):
++            errorbar = ci
++        else:
++            errorbar = ("ci", ci)
++
+     plotter = _BarPlotter(x, y, hue, data, order, hue_order,
+-                          estimator, ci, n_boot, units, seed,
++                          estimator, errorbar, n_boot, units, seed,
+                           orient, color, palette, saturation,
+                           width, errcolor, errwidth, capsize, dodge)
+ 
+@@ -2826,14 +2816,29 @@ barplot.__doc__ = dedent("""\
+ 
+ def pointplot(
+     data=None, *, x=None, y=None, hue=None, order=None, hue_order=None,
+-    estimator=np.mean, ci=95, n_boot=1000, units=None, seed=None,
++    estimator=np.mean, errorbar=("ci", 95), n_boot=1000, units=None, seed=None,
+     markers="o", linestyles="-", dodge=False, join=True, scale=1,
+     orient=None, color=None, palette=None, errwidth=None,
+     capsize=None, ax=None,
+ ):
+ 
++    # Handle deprecated ci parameter
++    ci = kwargs.pop("ci", None)
++    if ci is not None:
++        import warnings
++        warnings.warn(
++            "The `ci` parameter is deprecated. Use `errorbar` instead.",
++            FutureWarning
++        )
++        if errorbar != ("ci", 95):
++            raise ValueError("Cannot set both `ci` and `errorbar`.")
++        if isinstance(ci, str):
++            errorbar = ci
++        else:
++            errorbar = ("ci", ci)
++
+     plotter = _PointPlotter(x, y, hue, data, order, hue_order,
+-                            estimator, ci, n_boot, units, seed,
++                            estimator, errorbar, n_boot, units, seed,
+                             markers, linestyles, dodge, join, scale,
+                             orient, color, palette, errwidth, capsize)
+ 
+diff --git a/seaborn/_errorbars.py b/seaborn/_errorbars.py
+new file mode 100644
+index 0000000..c9b835f
+--- /dev/null
++++ b/seaborn/_errorbars.py
+@@ -0,0 +1,91 @@
++"""
++Utilities for computing error bars.
++"""
++import numpy as np
++import pandas as pd
++from seaborn.utils import bootstrap
++from seaborn.algorithms import percentile
++
++
++def compute_errorbar(data, estimator, errorbar, n_boot, seed, units=None):
++    """
++    Compute error bars for a given dataset.
++
++    Parameters
++    ----------
++    data : array-like
++        Input data.
++    estimator : callable
++        Function to compute the central tendency.
++    errorbar : str, tuple, or callable
++        Specification for the error bars.
++    n_boot : int
++        Number of bootstrap samples.
++    seed : int or None
++        Random seed for bootstrap.
++    units : array-like, optional
++        Unit identifiers for multilevel bootstrap.
++
++    Returns
++    -------
++    central_tendency : float
++        The estimated central tendency.
++    error_bar : tuple
++        The lower and upper bounds of the error bar.
++    """
++    # Remove missing values
++    data = np.asarray(data)
++    if units is not None:
++        units = np.asarray(units)
++        valid = pd.notnull(np.c_[data, units]).all(axis=1)
++        data = data[valid]
++        units = units[valid]
++    else:
++        data = data[pd.notnull(data)]
++
++    if not data.size:
++        return np.nan, (np.nan, np.nan)
++
++    # Compute central tendency
++    central = estimator(data)
++
++    # Parse errorbar specification
++    if errorbar is None:
++        return central, (np.nan, np.nan)
++
++    if callable(errorbar):
++        # User-provided function
++        low, high = errorbar(data)
++        return central, (low, high)
++
++    if isinstance(errorbar, str):
++        method = errorbar
++        level = 95  # default for ci
++    elif isinstance(errorbar, tuple):
++        method, level = errorbar
++    else:
++        raise ValueError(f"Invalid errorbar specification: {errorbar}")
++
++    if method == "sd":
++        sd = np.std(data)
++        return central, (central - sd, central + sd)
++
++    if method == "se":
++        se = np.std(data) / np.sqrt(len(data))
++        return central, (central - se, central + se)
++
++    if method == "ci":
++        # Bootstrap confidence interval
++        if len(data) < 2:
++            return central, (np.nan, np.nan)
++        boots = bootstrap(data, func=estimator, n_boot=n_boot,
++                          units=units, seed=seed)
++        low, high = percentile(boots, level)
++        return central, (low, high)
++
++    if method == "pi":
++        # Percentile interval (nonparametric)
++        low, high = percentile(data, level)
++        return central, (low, high)
++
++    raise ValueError(f"Unknown errorbar method: {method}")

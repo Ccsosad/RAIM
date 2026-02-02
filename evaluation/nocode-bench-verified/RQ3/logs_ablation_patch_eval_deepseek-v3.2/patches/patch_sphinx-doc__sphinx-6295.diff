@@ -1,0 +1,30 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index 612ff28..86ed83c 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -573,6 +573,7 @@ class PyMethod(PyObject):
+ 
+     option_spec = PyObject.option_spec.copy()
+     option_spec.update({
++        'async': directives.flag,
+         'classmethod': directives.flag,
+         'staticmethod': directives.flag,
+     })
+@@ -587,6 +588,8 @@ class PyMethod(PyObject):
+             return 'static '
+         elif 'classmethod' in self.options:
+             return 'classmethod '
++        elif 'async' in self.options:
++            return 'async '
+         else:
+             return ''
+ 
+@@ -607,6 +610,8 @@ class PyMethod(PyObject):
+             return _('%s() (%s static method)') % (methname, clsname)
+         elif 'classmethod' in self.options:
+             return _('%s() (%s class method)') % (methname, clsname)
++        elif 'async' in self.options:
++            return _('%s() (%s async method)') % (methname, clsname)
+         else:
+             return _('%s() (%s method)') % (methname, clsname)
+ 

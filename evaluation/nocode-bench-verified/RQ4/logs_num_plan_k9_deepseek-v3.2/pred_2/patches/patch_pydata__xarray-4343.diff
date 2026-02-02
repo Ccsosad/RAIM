@@ -1,0 +1,16 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..6cc765d 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -99,6 +99,11 @@ def parse_iso8601(datetime_string):
+         match = re.match(pattern, datetime_string)
+         if match:
+             return match.groupdict()
++    # Try the cftime default format: YYYY-MM-DD hh:mm:ss
++    cftime_pattern = r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2}) (?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})"
++    match = re.match(cftime_pattern, datetime_string)
++    if match:
++        return match.groupdict()
+     raise ValueError("no ISO-8601 match for string: %s" % datetime_string)
+ 
+ 

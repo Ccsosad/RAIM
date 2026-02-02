@@ -1,0 +1,27 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..a71cf15 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -717,10 +717,22 @@ class Legend(Artist):
+         """Set the number of columns."""
+         self._ncols = ncols
+ 
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++
++        Parameters
++        ----------
++        loc : str or int or tuple of floats
++            The location of the legend. See `~matplotlib.legend.Legend` for details.
++        """
++        self._set_loc(loc)
++
+     def _get_loc(self):
+         return self._loc_real
+ 
+     _loc = property(_get_loc, _set_loc)
++    loc = property(_get_loc, _set_loc, doc="The location of the legend.")
+ 
+     def _findoffset(self, width, height, xdescent, ydescent, renderer):
+         """Helper function to locate the legend."""

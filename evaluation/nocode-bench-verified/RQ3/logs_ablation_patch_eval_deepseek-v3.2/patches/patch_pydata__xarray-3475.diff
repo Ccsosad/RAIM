@@ -1,0 +1,43 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c07f9e0..978242e 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5478,4 +5478,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/deprecation.py b/xarray/core/deprecation.py
+new file mode 100644
+index 0000000..9548f43
+--- /dev/null
++++ b/xarray/core/deprecation.py
+@@ -0,0 +1,27 @@
++"""
++Helpers for deprecation warnings.
++"""
++import warnings
++from typing import Any
++
++
++def warn_deprecation(
++    message: str,
++    version: str = None,
++    stacklevel: int = 3,
++) -> None:
++    """
++    Issue a deprecation warning.
++
++    Parameters
++    ----------
++    message : str
++        The deprecation message.
++    version : str, optional
++        The version in which the deprecation was made.
++    stacklevel : int, optional
++        The stacklevel for the warning.
++    """
++    if version is not None:
++        message = f"Deprecated since version {version}: {message}"
++    warnings.warn(message, PendingDeprecationWarning, stacklevel=stacklevel)

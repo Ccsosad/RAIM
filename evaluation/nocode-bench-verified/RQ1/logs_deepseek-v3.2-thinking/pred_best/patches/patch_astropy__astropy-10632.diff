@@ -1,0 +1,29 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..b534285 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -69,9 +69,13 @@ class Conf(_config.ConfigNamespace):
+         'This only provides the default value when not set by https_headers.')
+     remote_timeout = _config.ConfigItem(
+         10.,
+-        'Time to wait for remote data queries (in seconds). Set this to zero '
+-        'to prevent any attempt to download anything.',
++        'Time to wait for remote data queries (in seconds).',
+         aliases=['astropy.coordinates.name_resolve.name_resolve_timeout'])
++    allow_internet = _config.ConfigItem(
++        True,
++        'If True, allow internet connections for downloading remote data. '
++        'If False, no internet connection will be attempted and any remote '
++        'data access will fail unless the file is already in the cache.')
+     compute_hash_block_size = _config.ConfigItem(
+         2 ** 16,  # 64K
+         'Block size for computing file hashes.')
+@@ -1395,6 +1399,8 @@ def download_files_in_parallel(urls,
+ 
+     if timeout is None:
+         timeout = conf.remote_timeout
++    if not conf.allow_internet:
++        timeout = 0.0
+     if sources is None:
+         sources = {}
+ 

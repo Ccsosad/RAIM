@@ -1,0 +1,27 @@
+diff --git a/astropy/units/core.py b/astropy/units/core.py
+index 2b12b30..3b5aaef 100644
+--- a/astropy/units/core.py
++++ b/astropy/units/core.py
+@@ -2516,6 +2516,14 @@ def def_unit(s, represents=None, doc=None, format=None, prefixes=False,
+                       prefixes=prefixes)
+     return result
+ 
++# Add milli-Angstrom aliases
++try:
++    Angstrom = Unit("Angstrom")
++    def_unit(["mAngstrom", "mangstrom"], 0.001 * Angstrom)
++except ValueError:
++    # The Angstrom unit might not be defined yet. This will be handled elsewhere.
++    pass
++
+ 
+ def _condition_arg(value):
+     """
+diff --git a/astropy/units/__init__.py b/astropy/units/__init__.py
+new file mode 100644
+index 0000000..c930003
+--- /dev/null
++++ b/astropy/units/__init__.py
+@@ -0,0 +1,2 @@
++# Define the Angstrom unit
++Angstrom = def_unit(['Angstrom', 'angstrom'], ..., prefixes=True)

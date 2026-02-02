@@ -1,0 +1,214 @@
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 2679d1e..eb80599 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -2450,6 +2450,47 @@ class Variable(AbstractArray, NdimSizeLenMixin, VariableArithmetic):
+         )
+         return type(self)(self.dims, numeric_array, self._attrs)
+ 
++    @property
++    def calendar(self):
++        """Return the calendar of the datetime variable.
++
++        Returns
++        -------
++        str or None
++            The calendar name if the variable is datetime-like and uses cftime,
++            otherwise None.
++        """
++        from xarray.coding.times import _get_calendar
++        if self.dtype.kind in 'M':
++            # This is a datetime variable
++            try:
++                return _get_calendar(self.data)
++            except (AttributeError, ValueError):
++                return None
++        else:
++            return None
++
++    @property
++    def calendar(self):
++        """Return the calendar of the datetime variable.
++
++        Returns
++        -------
++        str or None
++            The calendar name if the variable is datetime-like and uses cftime,
++            otherwise None.
++        """
++        from xarray.coding.times import _get_calendar
++        if self.dtype.kind in 'M':
++            # This is a datetime variable
++            try:
++                return _get_calendar(self.data)
++            except (AttributeError, ValueError):
++                # If it's a pandas datetime, return 'standard'
++                return 'standard'
++        else:
++            return None
++
+     def _unravel_argminmax(
+         self,
+         argminmax: str,
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..858cdac
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1,156 @@
++"""
++Calendar operations for xarray.
++"""
++import numpy as np
++import pandas as pd
++from datetime import datetime
++from typing import Optional, Union, Literal
++import warnings
++
++from xarray.core.common import _contains_datetime_like_objects
++from xarray.core.types import T_DuckArray
++from xarray.core.utils import is_duck_dask_array
++from xarray.coding.times import (
++    _should_cftime_be_used as _should_cftime_be_used_from_times,
++    CFTimeCoder,
++    _decode_datetime_with_cftime,
++    _encode_datetime_with_cftime,
++)
++from xarray.core.variable import Variable
++
++def _should_cftime_be_used(
++    dates: Union[np.ndarray, pd.DatetimeIndex, "CFTimeIndex"],
++    use_cftime: Optional[bool] = None,
++) -> bool:
++    """
++    Determine whether to use cftime for calendar operations.
++
++    Parameters
++    ----------
++    dates : array-like
++        Array of datetime-like objects.
++    use_cftime : bool, optional
++        If provided, force the use of cftime (True) or pandas (False).
++        If None, determine automatically.
++
++    Returns
++    -------
++    bool
++        True if cftime should be used, False otherwise.
++    """
++    if use_cftime is not None:
++        return use_cftime
++    # Reuse the logic from xarray.coding.times
++    return _should_cftime_be_used_from_times(dates)
++
++def convert_calendar(
++    source: Union[Variable, np.ndarray, pd.DatetimeIndex, "CFTimeIndex"],
++    target_calendar: str,
++    use_cftime: Optional[bool] = None,
++    align_on: Optional[str] = None,
++    missing: Optional[Union[float, int]] = None,
++) -> Union[Variable, np.ndarray]:
++    """
++    Convert datetime array from one calendar to another.
++
++    Parameters
++    ----------
++    source : Variable, np.ndarray, pd.DatetimeIndex or CFTimeIndex
++        Source datetime array.
++    target_calendar : str
++        Target calendar name (e.g., 'standard', 'noleap', '360_day').
++    use_cftime : bool, optional
++        Whether to use cftime for the output. If None, determine automatically.
++    align_on : str, optional
++        For 360_day calendar, how to align dates: 'year' or 'day'.
++    missing : float or int, optional
++        Value to use for missing dates (e.g., when converting from 360_day to standard).
++
++    Returns
++    -------
++    converted : same type as source
++        Converted datetime array.
++    """
++    # This is a placeholder. The actual implementation would be more complex.
++    raise NotImplementedError("convert_calendar is not yet implemented.")
++
++def interp_calendar(
++    source: Union[Variable, np.ndarray, pd.DatetimeIndex, "CFTimeIndex"],
++    target: Union[Variable, np.ndarray, pd.DatetimeIndex, "CFTimeIndex"],
++    use_cftime: Optional[bool] = None,
++) -> Union[Variable, np.ndarray]:
++    """
++    Interpolate data from one calendar to another.
++
++    Parameters
++    ----------
++    source : Variable, np.ndarray, pd.DatetimeIndex or CFTimeIndex
++        Source datetime array.
++    target : Variable, np.ndarray, pd.DatetimeIndex or CFTimeIndex
++        Target datetime array.
++    use_cftime : bool, optional
++        Whether to use cftime for the output. If None, determine automatically.
++
++    Returns
++    -------
++    interpolated : same type as source
++        Interpolated data.
++    """
++    # This is a placeholder.
++    raise NotImplementedError("interp_calendar is not yet implemented.")
++
++def date_range(
++    start: Union[str, datetime, pd.Timestamp, "cftime.datetime"],
++    end: Union[str, datetime, pd.Timestamp, "cftime.datetime"],
++    freq: str,
++    calendar: str = "standard",
++    use_cftime: Optional[bool] = None,
++) -> Union[pd.DatetimeIndex, "CFTimeIndex"]:
++    """
++    Generate a range of dates with a given frequency and calendar.
++
++    Parameters
++    ----------
++    start : str, datetime, pd.Timestamp or cftime.datetime
++        Start date.
++    end : str, datetime, pd.Timestamp or cftime.datetime
++        End date.
++    freq : str
++        Frequency string (e.g., 'D', 'MS').
++    calendar : str
++        Calendar name (e.g., 'standard', 'noleap', '360_day').
++    use_cftime : bool, optional
++        Whether to use cftime for the output. If None, determine automatically.
++
++    Returns
++    -------
++    dates : pd.DatetimeIndex or CFTimeIndex
++        Generated date range.
++    """
++    # This is a placeholder.
++    raise NotImplementedError("date_range is not yet implemented.")
++
++def date_range_like(
++    source: Union[Variable, np.ndarray, pd.DatetimeIndex, "CFTimeIndex"],
++    calendar: str = "standard",
++    use_cftime: Optional[bool] = None,
++) -> Union[pd.DatetimeIndex, "CFTimeIndex"]:
++    """
++    Generate a date range with the same frequency and length as a source array.
++
++    Parameters
++    ----------
++    source : Variable, np.ndarray, pd.DatetimeIndex or CFTimeIndex
++        Source datetime array.
++    calendar : str
++        Target calendar name.
++    use_cftime : bool, optional
++        Whether to use cftime for the output. If None, determine automatically.
++
++    Returns
++    -------
++    dates : pd.DatetimeIndex or CFTimeIndex
++        Generated date range.
++    """
++    # This is a placeholder.
++    raise NotImplementedError("date_range_like is not yet implemented.")

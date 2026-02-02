@@ -1,0 +1,36 @@
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index daf5951..69ecfcc 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1380,6 +1380,31 @@ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+                 return value
+ 
+     def __setitem__(self, key, value):
++        # Try to assign to the dask array if it supports item assignment.
++        # Convert the key to a form that dask array understands.
++        if isinstance(key, BasicIndexer):
++            dask_key = key.tuple
++            try:
++                self.array[dask_key] = value
++                return
++            except (TypeError, NotImplementedError):
++                pass
++        elif isinstance(key, VectorizedIndexer):
++            dask_key = key.tuple
++            try:
++                self.array.vindex[dask_key] = value
++                return
++            except (TypeError, NotImplementedError):
++                pass
++        elif isinstance(key, OuterIndexer):
++            dask_key = key.tuple
++            try:
++                self.array[dask_key] = value
++                return
++            except NotImplementedError:
++                # manual orthogonal indexing might not be supported for assignment
++                pass
++        # If we get here, assignment failed.
+         raise TypeError(
+             "this variable's data is stored in a dask array, "
+             "which does not support item assignment. To "

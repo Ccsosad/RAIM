@@ -1,0 +1,158 @@
+diff --git a/_pytest/capture.py b/_pytest/capture.py
+index 2a7dde5..56fbb3c 100644
+--- a/_pytest/capture.py
++++ b/_pytest/capture.py
+@@ -29,7 +29,9 @@ def pytest_addoption(parser):
+     group._addoption(
+         '-s', action="store_const", const="no", dest="capture",
+         help="shortcut for --capture=no.")
+-
++    
++    # Add logging options group
++    parser.getgroup("logging")
+ 
+ @pytest.hookimpl(hookwrapper=True)
+ def pytest_load_initial_conftests(early_config, parser, args):
+diff --git a/_pytest/logging.py b/_pytest/logging.py
+new file mode 100644
+index 0000000..387da89
+--- /dev/null
++++ b/_pytest/logging.py
+@@ -0,0 +1,137 @@
++import logging
++import sys
++from contextlib import contextmanager
++from logging import LogRecord
++
++import pytest
++
++class LogCaptureHandler(logging.Handler):
++    def __init__(self):
++        super().__init__()
++        self.records = []
++    
++    def emit(self, record):
++        self.records.append(record)
++    
++    def reset(self):
++        self.records = []
++    
++    def handle(self, record):
++        self.emit(record)
++        return True
++
++class LogCaptureFixture:
++    def __init__(self, handler):
++        self._handler = handler
++        self._initial_logger_levels = {}
++    
++    def set_level(self, level, logger=None):
++        logger_obj = logging.getLogger(logger)
++        self._initial_logger_levels.setdefault(logger_obj, logger_obj.level)
++        logger_obj.setLevel(level)
++    
++    @contextmanager
++    def at_level(self, level, logger=None):
++        logger_obj = logging.getLogger(logger)
++        original_level = logger_obj.level
++        logger_obj.setLevel(level)
++        try:
++            yield
++        finally:
++            logger_obj.setLevel(original_level)
++    
++    @property
++    def records(self):
++        return self._handler.records
++    
++    @property
++    def record_tuples(self):
++        return [(r.name, r.levelno, r.getMessage()) for r in self.records]
++    
++    @property
++    def text(self):
++        return "\n".join(self._handler.format(r) for r in self.records)
++    
++    def clear(self):
++        self._handler.reset()
++
++@pytest.fixture
++def caplog(request):
++    """Access and control log capturing."""
++    handler = LogCaptureHandler()
++    request.node.handler = handler
++    fixture = LogCaptureFixture(handler)
++    return fixture
++
++def pytest_addoption(parser):
++    group = parser.getgroup("logging")
++    group.addoption(
++        "--log-format",
++        default="%(levelname)-8s %(name)s %(message)s",
++        help="Log message format"
++    )
++    group.addoption(
++        "--log-date-format",
++        default="%H:%M:%S",
++        help="Log date format"
++    )
++    group.addoption(
++        "--log-cli-level",
++        default=None,
++        help="Log level for the console"
++    )
++    group.addoption(
++        "--log-file",
++        default=None,
++        help="Path to log file"
++    )
++    group.addoption(
++        "--log-file-level",
++        default=None,
++        help="Log level for the file"
++    )
++    group.addoption(
++        "--log-cli-format",
++        default=None,
++        help="Console log message format"
++    )
++    group.addoption(
++        "--log-cli-date-format",
++        default=None,
++        help="Console log date format"
++    )
++    group.addoption(
++        "--no-print-logs",
++        action="store_false",
++        default=True,
++        dest="log_print",
++        help="Disable printing logs for failed tests"
++    )
++
++def pytest_configure(config):
++    # Register the plugin name for -p no:logging
++    config.pluginmanager.register(LoggingPlugin(config), "logging-plugin")
++
++class LoggingPlugin:
++    def __init__(self, config):
++        self.config = config
++        self.handler = None
++    
++    def pytest_runtest_setup(self, item):
++        handler = getattr(item, 'handler', None)
++        if handler:
++            logging.root.addHandler(handler)
++    
++    def pytest_runtest_teardown(self, item, nextitem):
++        handler = getattr(item, 'handler', None)
++        if handler:
++            logging.root.removeHandler(handler)
++    
++    def pytest_runtest_logreport(self, report):
++        if report.failed and self.config.getoption("log_print"):
++            handler = getattr(report.node, 'handler', None)
++            if handler and handler.records:
++                section = report.sections.append((
++                    "Captured log", 
++                    "\n".join(handler.format(r) for r in handler.records)
++                ))

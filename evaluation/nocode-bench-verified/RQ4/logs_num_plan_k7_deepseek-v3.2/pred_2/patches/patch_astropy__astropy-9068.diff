@@ -1,0 +1,166 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..5f728b2 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3000,6 +3000,8 @@ class Table:
+     def __eq__(self, other):
+ 
+         if isinstance(other, Table):
++            if self.colnames != other.colnames:
++                raise ValueError("cannot compare tables with different column names")
+             other = other.as_array()
+ 
+         if self.has_masked_columns:
+@@ -3024,6 +3026,152 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array-like, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A table with the same shape as self, with boolean values indicating
++            element-wise equality.
++        """
++        from . import Table, MaskedColumn, Column
++
++        if isinstance(other, Table):
++            # Compare two tables column by column
++            if self.colnames != other.colnames:
++                raise ValueError("cannot compare tables with different column names")
++            result = self.__class__(masked=self.masked or other.masked)
++            for name in self.colnames:
++                col_self = self[name]
++                col_other = other[name]
++                # For masked columns, we need to consider the mask
++                if hasattr(col_self, 'mask') or hasattr(col_other, 'mask'):
++                    # Use np.ma.array to handle masks
++                    arr_self = np.ma.array(col_self, copy=False)
++                    arr_other = np.ma.array(col_other, copy=False)
++                    eq = (arr_self == arr_other)
++                    # If both are masked, then the result is masked where either is masked?
++                    # Actually, we want to return a boolean table, so we should treat masked as False?
++                    # But the example doesn't show masked tables. Let's follow the behavior of __eq__:
++                    # If one is masked and the other is not, then the result is False.
++                    # So we can use the filled method with a unique value to avoid accidental matches.
++                    # However, it's simpler to use the np.ma.masked_equal function.
++                    # Actually, we want element-wise equality, so we can do:
++                    #   eq = (arr_self == arr_other)
++                    # which returns a masked array. Then we convert to a boolean column.
++                    # But we want a plain boolean column (with False for masked?).
++                    # The example doesn't specify. Let's assume we want to return a boolean column
++                    # with False where either is masked.
++                    # So we can do:
++                    eq_data = eq.data if hasattr(eq, 'data') else eq
++                    eq_mask = eq.mask if hasattr(eq, 'mask') else np.zeros_like(eq_data, dtype=bool)
++                    eq_result = np.where(eq_mask, False, eq_data)
++                else:
++                    eq_result = (col_self == col_other)
++                # Create a column for the result
++                if self.masked or (isinstance(other, Table) and other.masked):
++                    result[name] = MaskedColumn(eq_result, name=name)
++                else:
++                    result[name] = Column(eq_result, name=name)
++        else:
++            # Compare to an array or scalar
++            # First, check if other is an array-like with length equal to number of columns
++            try:
++                len_other = len(other)
++            except TypeError:
++                # scalar
++                len_other = 1
++            if len_other == len(self.colnames):
++                # Column-wise comparison
++                result = self.__class__(masked=self.masked)
++                for name, val in zip(self.colnames, other):
++                    col = self[name]
++                    if hasattr(col, 'mask'):
++                        arr = np.ma.array(col, copy=False)
++                        eq = (arr == val)
++                        eq_data = eq.data if hasattr(eq, 'data') else eq
++                        eq_mask = eq.mask if hasattr(eq, 'mask') else np.zeros_like(eq_data, dtype=bool)
++                        eq_result = np.where(eq_mask, False, eq_data)
++                    else:
++                        eq_result = (col == val)
++                    if self.masked:
++                        result[name] = MaskedColumn(eq_result, name=name)
++                    else:
++                        result[name] = Column(eq_result, name=name)
++            else:
++                # Scalar comparison
++                result = self.__class__(masked=self.masked)
++                for name in self.colnames:
++                    col = self[name]
++                    if hasattr(col, 'mask'):
++                        arr = np.ma.array(col, copy=False)
++                        eq = (arr == other)
++                        eq_data = eq.data if hasattr(eq, 'data') else eq
++                        eq_mask = eq.mask if hasattr(eq, 'mask') else np.zeros_like(eq_data, dtype=bool)
++                        eq_result = np.where(eq_mask, False, eq_data)
++                    else:
++                        eq_result = (col == other)
++                    if self.masked:
++                        result[name] = MaskedColumn(eq_result, name=name)
++                    else:
++                        result[name] = Column(eq_result, name=name)
++        return result
++
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array-like, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A table with the same shape as self, with boolean values indicating
++            element-wise equality.
++        """
++        from . import Table
++
++        if isinstance(other, Table):
++            # Compare two tables
++            if self.colnames != other.colnames:
++                raise ValueError("cannot compare tables with different column names")
++            # Convert both to masked arrays for comparison
++            self_arr = self.as_array()
++            other_arr = other.as_array()
++            # This does element-wise comparison and returns a masked array if either is masked
++            eq_arr = (self_arr == other_arr)
++            # Convert to a Table with the same column names
++            # We use the Table constructor with the structured array and copy=False
++            result = self.__class__(eq_arr, names=self.colnames, copy=False)
++        else:
++            # Compare to an array or scalar
++            # We'll create a temporary table for 'other' and then compare
++            if np.isscalar(other):
++                # Broadcast scalar to all elements
++                other_table = self.__class__({name: np.full(len(self), other)
++                                              for name in self.colnames})
++            else:
++                # Assume other is an array with length equal to number of columns
++                other = np.asarray(other)
++                if len(other) == len(self.colnames):
++                    other_table = self.__class__({name: np.full(len(self), val)
++                                                  for name, val in zip(self.colnames, other)})
++                else:
++                    raise ValueError("Length of array must match number of columns")
++            result = self.values_equal(other_table)
++
++        return result
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

@@ -1,0 +1,49 @@
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 38580cf..de4f59f 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -1244,6 +1244,10 @@ _validators = {
+      # Additional arguments for convert movie writer (using pipes)
+     "animation.convert_args": validate_stringlist,
+ 
++    # Number of divisions for the auto minor locator
++    "xtick.minor.ndivs": validate_auto_minor_ndivs,
++    "ytick.minor.ndivs": validate_auto_minor_ndivs,
++
+     # Classic (pre 2.0) compatibility mode
+     # This is used for things that are hard to make backward compatible
+     # with a sane rcParam alone.  This does *not* turn on classic mode
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..df9af09 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2891,13 +2891,17 @@ class AutoMinorLocator(Locator):
+             return []
+ 
+         if self.ndivs is None:
+-
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
++            # Get the rcParam for this axis
++            axis_name = self.axis._get_axis_name()  # 'x' or 'y'
++            ndivs_rc = mpl.rcParams[f'{axis_name}tick.minor.ndivs']
++            if ndivs_rc == 'auto':
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+             else:
+-                ndivs = 4
++                ndivs = ndivs_rc
+         else:
+             ndivs = self.ndivs
+ 
+@@ -2916,4 +2920,4 @@ class AutoMinorLocator(Locator):
+ 
+     def tick_values(self, vmin, vmax):
+         raise NotImplementedError('Cannot get tick locations for a '
+-                                  '%s type.' % type(self))
++                                  '%s type.' % type(self))

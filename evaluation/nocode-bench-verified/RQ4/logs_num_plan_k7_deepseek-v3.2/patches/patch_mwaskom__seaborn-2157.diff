@@ -1,0 +1,274 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 637a7b1..de8eb10 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -2083,6 +2083,243 @@ def _freedman_diaconis_bins(a):
+         return int(np.ceil((a.max() - a.min()) / h))
+ 
+ 
++@_deprecate_positional_args
++def displot(
++    data=None, *,
++    # Vector variables
++    x=None, y=None, hue=None, row=None, col=None, weights=None,
++    # Faceting parameters
++    col_wrap=None, height=5, aspect=1,
++    # Distribution plotting parameters
++    kind="hist", rug=False, rug_kws=None,
++    # Histogram parameters
++    stat="count", bins="auto", binwidth=None, binrange=None,
++    discrete=None, cumulative=False, common_bins=True, common_norm=True,
++    # Histogram appearance parameters
++    multiple="layer", element="bars", fill=True, shrink=1,
++    # Histogram smoothing with a kernel density estimate
++    kde=False, kde_kws=None,
++    # Kernel density estimate parameters
++    bw_method="scott", bw_adjust=1, bw_kws=None,
++    cut=3, clip=None,
++    # ECDF parameters
++    complementary=False,
++    # Generic distribution parameters
++    log_scale=None,
++    # FacetGrid parameters
++    facet_kws=None,
++    **kwargs,
++):
++    """
++    Figure-level interface for drawing distribution plots onto a FacetGrid.
++
++    This function provides access to several approaches for visualizing the
++    univariate or bivariate distribution of data, including subsets of data
++    defined by semantic mapping and faceting across multiple subplots. The
++    ``kind`` parameter selects the approach to use:
++
++    - :func:`histplot` (with ``kind="hist"``; the default)
++    - :func:`kdeplot` (with ``kind="kde"``)
++    - :func:`ecdfplot` (with ``kind="ecdf"``)
++
++    Extra keyword arguments are passed to the underlying plotting function,
++    so you should refer to the documentation for each to see type-specific
++    options.
++
++    Parameters
++    ----------
++    data : DataFrame, Series, dict, or array
++        Input data structure. Either a long-form collection of vectors that
++        can be assigned to named variables or a wide-form dataset that will
++        be internally reshaped.
++    x, y : vectors or keys in ``data``
++        Variables that specify positions on the x and y axes.
++    hue : vector or key in ``data``
++        Semantic variable that is mapped to determine the color of plot elements.
++    row, col : vectors or keys in ``data``
++        Variables that define subsets to plot on different facets.
++    weights : vector or key in ``data``
++        Observation weights for weighted histograms or density estimates.
++    col_wrap : int
++        "Wrap" the column variable at this width, so that the column facets
++        span multiple rows. Incompatible with a ``row`` facet.
++    height : scalar
++        Height (in inches) of each facet. See also: ``aspect``.
++    aspect : scalar
++        Aspect ratio of each facet, so that ``aspect * height`` gives the width
++        of each facet in inches.
++    kind : {"hist", "kde", "ecdf"}
++        Approach for visualizing the distribution. Currently only ``"hist"``
++        supports bivariate plots.
++    rug : bool
++        If True, show each observation with marginal ticks (as in ``rugplot``).
++    rug_kws : dict
++        Keyword arguments for ``rugplot``.
++    stat : {"count", "frequency", "density", "probability"}
++        Aggregate statistic to compute in each bin.
++    bins : str, number, vector, or a pair of such values
++        Generic bin parameter that can be the name of a reference rule,
++        the number of bins, or the breaks of the bins.
++    binwidth : number or pair of numbers
++        Width of each bin, overrides ``bins`` but can be used with
++        ``binrange``.
++    binrange : pair of numbers or a pair of pairs
++        Lowest and highest value for bin edges; can be used either
++        with ``bins`` or ``binwidth``.
++    discrete : bool
++        If True, set ``binwidth`` to 1 and use exact bin edges for unique values.
++    cumulative : bool
++        If True, plot the cumulative counts / densities / statistics.
++    common_bins : bool
++        If True, use the same bins when semantic mapping creates subsets.
++    common_norm : bool
++        If True, normalize each subset independently when semantic mapping
++        creates subsets.
++    multiple : {"layer", "stack", "fill", "dodge"}
++        Approach to resolving multiple elements when semantic mapping creates subsets.
++    element : {"bars", "step", "poly"}
++        Visual representation of the histogram statistic.
++    fill : bool
++        If True, fill in the space under the histogram or density curve.
++    shrink : number
++        Scale the width of each bar relative to the binwidth.
++    kde : bool
++        If True, compute a kernel density estimate to smooth the distribution
++        and show on the plot as (one or more) line(s). Only relevant with
++        univariate data.
++    kde_kws : dict
++        Keyword arguments for ``kdeplot``.
++    bw_method : str, scalar, or callable
++        Method for determining the smoothing bandwidth to use; passed to
++        :class:`scipy.stats.gaussian_kde`.
++    bw_adjust : number
++        Factor that multiplicatively scales the value chosen using
++        ``bw_method``. Increasing will make the curve smoother.
++    bw_kws : dict
++        Additional keyword arguments for ``bw_method``.
++    cut : number
++        Factor, multiplied by the smoothing bandwidth, that determines how
++        far the evaluation grid extends past the extreme datapoints. When
++        set to 0, truncate the curve at the data limits.
++    clip : pair of numbers or None
++        Do not evaluate the density outside of this interval.
++    complementary : bool
++        If True, the ECDF will show the complementary probabilities
++        (1 - ECDF(x)) instead of ECDF(x). Only relevant with ``kind="ecdf"``.
++    log_scale : bool or number, or pair of same
++        Set axis scale(s) to log. A single value sets the data axis for
++        univariate distributions and both axes for bivariate distributions.
++        A pair of values sets each axis independently.
++    facet_kws : dict
++        Additional keyword arguments passed to :class:`FacetGrid`.
++    kwargs : key, value pairings
++        Other keyword arguments are passed to the underlying plotting function.
++
++    Returns
++    -------
++    :class:`FacetGrid`
++        Returns the :class:`FacetGrid` object with the plot on it for further
++        tweaking.
++
++    See Also
++    --------
++    histplot : Plot a histogram with optional kernel density estimation.
++    kdeplot : Plot univariate or bivariate distributions using kernel
++              density estimation.
++    ecdfplot : Plot empirical cumulative distribution functions.
++    rugplot : Plot marginal ticks.
++
++    Examples
++    --------
++
++    .. include:: ../docstrings/displot.rst
++
++    """
++    # Handle deprecation of ``a`` parameter (from old distplot)
++    if "a" in kwargs:
++        msg = "The `a` parameter is now called `x`. Please update your code."
++        warnings.warn(msg)
++        x = kwargs.pop("a")
++
++    # Initialize the FacetGrid object
++    facet_kws = {} if facet_kws is None else facet_kws.copy()
++    g = FacetGrid(
++        data=data,
++        row=row, col=col, hue=hue,
++        col_wrap=col_wrap, height=height, aspect=aspect,
++        **facet_kws,
++    )
++
++    # Define the function that will be mapped
++    def plot_func(x=None, y=None, hue=None, weights=None, **kwargs):
++
++        # Determine which plotting function to use
++        if kind == "hist":
++            plot_func = histplot
++        elif kind == "kde":
++            plot_func = kdeplot
++        elif kind == "ecdf":
++            plot_func = ecdfplot
++        else:
++            raise ValueError(f"kind must be one of {{'hist', 'kde', 'ecdf'}}, got {kind}")
++
++        # Prepare keyword arguments for the plotting function
++        plot_kws = kwargs.copy()
++        
++        # Add distribution-specific parameters
++        if kind == "hist":
++            plot_kws.update(
++                stat=stat,
++                bins=bins,
++                binwidth=binwidth,
++                binrange=binrange,
++                discrete=discrete,
++                cumulative=cumulative,
++                common_bins=common_bins,
++                common_norm=common_norm,
++                multiple=multiple,
++                element=element,
++                fill=fill,
++                shrink=shrink,
++                kde=kde,
++                kde_kws=kde_kws,
++                log_scale=log_scale,
++            )
++        elif kind == "kde":
++            plot_kws.update(
++                bw_method=bw_method,
++                bw_adjust=bw_adjust,
++                cut=cut,
++                clip=clip,
++                log_scale=log_scale,
++            )
++            if bw_kws is not None:
++                plot_kws.update(bw_kws)
++        elif kind == "ecdf":
++            plot_kws.update(
++                stat=stat,
++                complementary=complementary,
++                log_scale=log_scale,
++            )
++
++        # Call the plotting function
++        ax = plt.gca()
++        plot_func(
++            x=x, y=y, hue=hue, weights=weights,
++            ax=ax, **plot_kws,
++        )
++
++        # Add rug plot if requested
++        if rug:
++            rug_kws = {} if rug_kws is None else rug_kws.copy()
++            rugplot(x=x, y=y, hue=hue, ax=ax, **rug_kws)
++
++    # Map the plotting function to the FacetGrid
++    g.map_dataframe(plot_func, x=x, y=y, hue=hue, weights=weights, **kwargs)
++
++    return g
++
++
+ @_deprecate_positional_args
+ def distplot(
+     *,
+@@ -2216,6 +2453,14 @@ def distplot(
+         ...                             "alpha": 1, "color": "g"})
+ 
+     """
++    # Show deprecation warning
++    msg = (
++        "`distplot` is a deprecated function and will be removed in a future version. "
++        "Please adapt your code to use either `displot` (a figure-level function with "
++        "similar flexibility) or `histplot` (an axes-level function for histograms)."
++    )
++    warnings.warn(msg, FutureWarning)
++    
+     # Handle deprecation of ``a```
+     if a is not None:
+         msg = "The `a` parameter is now called `x`. Please update your code."
+@@ -2322,4 +2567,9 @@ def distplot(
+         else:
+             ax.set_xlabel(axlabel)
+ 
+-    return ax
++    return ax
++
++
++# Add displot to the module's __all__ list (if it exists)
++# This is typically at the top of the file, but we'll add it here for completeness
++# Note: The actual __all__ list might be defined elsewhere

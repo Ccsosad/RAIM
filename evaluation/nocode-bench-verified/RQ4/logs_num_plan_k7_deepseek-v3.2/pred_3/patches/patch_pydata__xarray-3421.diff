@@ -1,0 +1,114 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..3f3c7f1 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1862,7 +1863,15 @@ class DataArray(AbstractArray, DataWithCoords):
+         numpy.transpose
+         Dataset.transpose
+         """
++        from .transpose import infix_dims
++
+         if dims:
++            # Expand the ellipsis if present
++            if ... in dims:
++                dims = infix_dims(dims, self.dims)
++            else:
++                dims = list(dims)
++
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+@@ -3122,4 +3131,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..55ac0bc 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5449,4 +5449,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/transpose.py b/xarray/core/transpose.py
+new file mode 100644
+index 0000000..af51720
+--- /dev/null
++++ b/xarray/core/transpose.py
+@@ -0,0 +1,62 @@
++"""
++Helper functions for transpose operations.
++"""
++
++from typing import Hashable, Sequence, Union
++import itertools
++
++from .utils import is_ellipsis
++
++
++def infix_dims(
++    dims: Sequence[Hashable], all_dims: Sequence[Hashable]
++) -> Sequence[Hashable]:
++    """
++    Replace an ellipsis (if present) with the missing dimensions.
++
++    Parameters
++    ----------
++    dims : sequence of hashable
++        The input dimensions, possibly containing an ellipsis.
++    all_dims : sequence of hashable
++        All dimensions of the array.
++
++    Returns
++    -------
++    expanded_dims : list
++        The dimensions with the ellipsis replaced by the missing dimensions.
++
++    Examples
++    --------
++    >>> infix_dims(('x', ...), ('x', 'y', 'z'))
++    ['x', 'y', 'z']
++    >>> infix_dims((..., 'x'), ('x', 'y', 'z'))
++    ['y', 'z', 'x']
++    >>> infix_dims(('x', 'y', 'z'), ('x', 'y', 'z'))
++    ['x', 'y', 'z']
++    """
++    if ... not in dims:
++        return list(dims)
++
++    if sum(is_ellipsis(d) for d in dims) > 1:
++        raise ValueError("Only one ellipsis is allowed.")
++
++    # Split the dims at the ellipsis
++    ellipsis_index = dims.index(...)
++    left = dims[:ellipsis_index]
++    right = dims[ellipsis_index + 1 :]
++
++    # The missing dimensions are those in all_dims not in left or right
++    missing = [d for d in all_dims if d not in left and d not in right]
++
++    # Insert the missing dimensions in place of the ellipsis
++    expanded = list(left) + missing + list(right)
++
++    # Check that the result is a permutation of all_dims
++    if set(expanded) != set(all_dims) or len(expanded) != len(all_dims):
++        raise ValueError(
++            "The dimensions after expanding the ellipsis must be a "
++            "permutation of the original dimensions."
++        )
++
++    return expanded

@@ -1,0 +1,22 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ae23792..59141c4 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1452,6 +1452,11 @@ def merge_autodoc_default_flags(app, config):
+                 __("Ignoring invalid option in autodoc_default_flags: %r"),
+                 option, type='autodoc'
+             )
++    
++    # Normalize autodoc_default_options: convert True to None
++    for option, value in list(config.autodoc_default_options.items()):
++        if value is True:
++            config.autodoc_default_options[option] = None
+ 
+ 
+ def setup(app):
+@@ -1479,4 +1484,4 @@ def setup(app):
+ 
+     app.connect('config-inited', merge_autodoc_default_flags)
+ 
+-    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}
++    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

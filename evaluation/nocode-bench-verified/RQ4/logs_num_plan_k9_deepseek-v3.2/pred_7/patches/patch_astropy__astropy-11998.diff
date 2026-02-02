@@ -1,0 +1,174 @@
+diff --git a/astropy/cosmology/core.py b/astropy/cosmology/core.py
+index 775db70..0dc1ecb 100644
+--- a/astropy/cosmology/core.py
++++ b/astropy/cosmology/core.py
+@@ -85,6 +85,8 @@ class Cosmology(metaclass=ABCMeta):
+     # Unified I/O read and write methods
+     read = UnifiedReadWriteMethod(CosmologyRead)
+     write = UnifiedReadWriteMethod(CosmologyWrite)
++    to_format = UnifiedReadWriteMethod(CosmologyToFormat)
++    from_format = UnifiedReadWriteMethod(CosmologyFromFormat)
+ 
+     def __init_subclass__(cls):
+         super().__init_subclass__()
+diff --git a/astropy/cosmology/io/__init__.py b/astropy/cosmology/io/__init__.py
+new file mode 100644
+index 0000000..d38e465
+--- /dev/null
++++ b/astropy/cosmology/io/__init__.py
+@@ -0,0 +1,12 @@
++"""
++I/O subpackage for Cosmology.
++"""
++
++from . import mapping
++from astropy.io import registry as io_registry
++from astropy.cosmology import Cosmology
++
++# Register the mapping format
++io_registry.register_reader("mapping", Cosmology, mapping.from_mapping)
++io_registry.register_writer("mapping", Cosmology, mapping.to_mapping)
++io_registry.register_identifier("mapping", Cosmology, mapping.identify_mapping)
+diff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py
+new file mode 100644
+index 0000000..e6dae80
+--- /dev/null
++++ b/astropy/cosmology/io/mapping.py
+@@ -0,0 +1,137 @@
++"""
++Mapping (dictionary) format for Cosmology.
++"""
++
++import copy
++
++import astropy.units as u
++from astropy.cosmology.core import Cosmology, _COSMOLOGY_CLASSES
++
++__all__ = ["from_mapping", "to_mapping", "identify_mapping"]
++
++
++def from_mapping(mapping, *, move_to_meta=False, cosmology=None):
++    """
++    Load a Cosmology from a mapping (dictionary).
++
++    Parameters
++    ----------
++    mapping : dict
++        A mapping (dictionary) with cosmology information.
++    move_to_meta : bool, optional
++        Whether to move unrecognized parameters to metadata. Default is False.
++    cosmology : str, class, or None, optional
++        The cosmology class to use. If None, the class is taken from the
++        mapping. If a string, it should be the class name. If a class, it
++        should be a subclass of Cosmology.
++
++    Returns
++    -------
++    cosmology : Cosmology instance
++        The cosmology instance.
++
++    Raises
++    ------
++    TypeError
++        If the cosmology class is invalid.
++    """
++    # Deep copy the mapping to avoid modifying the input
++    mapping = copy.deepcopy(mapping)
++
++    # Get the cosmology class
++    if cosmology is None:
++        cosmology = mapping.pop("cosmology")
++    if isinstance(cosmology, str):
++        cosmology = _COSMOLOGY_CLASSES.get(cosmology)
++        if cosmology is None:
++            raise ValueError(f"Unknown cosmology class: {cosmology}")
++
++    # Check if cosmology is a class
++    if not (isinstance(cosmology, type) and issubclass(cosmology, Cosmology)):
++        raise TypeError("'cosmology' must be a Cosmology subclass.")
++
++    # Get the name
++    name = mapping.pop("name", None)
++
++    # Separate metadata
++    meta = mapping.pop("meta", {})
++
++    # Handle unrecognized parameters
++    if move_to_meta:
++        # Move all unrecognized parameters to metadata
++        init_signature = cosmology._init_signature
++        for key in list(mapping.keys()):
++            if key not in init_signature.parameters:
++                meta[key] = mapping.pop(key)
++    else:
++        # Check for unrecognized parameters
++        init_signature = cosmology._init_signature
++        for key in mapping.keys():
++            if key not in init_signature.parameters:
++                raise TypeError(
++                    f"Unrecognized parameter: {key}. "
++                    "Use 'move_to_meta=True' to add to metadata."
++                )
++
++    # Create the cosmology instance
++    return cosmology(name=name, meta=meta, **mapping)
++
++
++def to_mapping(cosmology, *args):
++    """
++    Convert a Cosmology to a mapping (dictionary).
++
++    Parameters
++    ----------
++    cosmology : Cosmology instance
++        The cosmology to convert.
++    *args : tuple
++        Ignored. Present for compatibility with the Unified I/O.
++
++    Returns
++    -------
++    mapping : dict
++        A dictionary with cosmology information.
++
++    Notes
++    -----
++    The mapping includes the cosmology class, name, parameters, and metadata.
++    """
++    # Start with the initialization arguments
++    mapping = copy.deepcopy(cosmology._init_arguments)
++
++    # Add the cosmology class
++    mapping["cosmology"] = cosmology.__class__
++
++    # Add the name (already in _init_arguments, but ensure it's there)
++    mapping["name"] = cosmology.name
++
++    # Add metadata (already in _init_arguments, but ensure it's there)
++    mapping["meta"] = cosmology.meta
++
++    return mapping
++
++
++def identify_mapping(origin, format, *args, **kwargs):
++    """
++    Identify if an object uses the mapping format.
++
++    Parameters
++    ----------
++    origin : str
++        The origin of the data (e.g., 'read', 'write').
++    format : str or None
++        The format string.
++    *args, **kwargs
++        Additional arguments.
++
++    Returns
++    -------
++    is_mapping : bool
++        True if the object is a mapping and format is None or 'mapping'.
++    """
++    if origin == "read":
++        # For reading, the first argument after origin and format is the object
++        obj = args[1] if len(args) > 1 else None
++        return isinstance(obj, dict) and (format in (None, "mapping"))
++    return False

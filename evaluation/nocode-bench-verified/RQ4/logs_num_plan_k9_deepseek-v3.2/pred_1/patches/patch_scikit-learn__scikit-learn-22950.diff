@@ -1,0 +1,33 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..0f07c8a 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -526,8 +526,12 @@ def _ridge_regression(
+         if positive:
+             solver = "lbfgs"
+         elif return_intercept:
+-            # sag supports fitting intercept directly
+-            solver = "sag"
++            if sparse.issparse(X):
++                # lsqr supports fitting intercept with sparse input
++                solver = "lsqr"
++            else:
++                # sag supports fitting intercept directly
++                solver = "sag"
+         elif not sparse.issparse(X):
+             solver = "cholesky"
+         else:
+@@ -552,10 +556,10 @@ def _ridge_regression(
+             "Please use another solver."
+         )
+ 
+-    if return_intercept and solver != "sag":
++    if return_intercept and solver not in ["sag", "lsqr"]:
+         raise ValueError(
+-            "In Ridge, only 'sag' solver can directly fit the "
+-            "intercept. Please change solver to 'sag' or set "
++            "In Ridge, only 'sag' and 'lsqr' solvers can directly fit the "
++            "intercept. Please change solver to 'sag' or 'lsqr' or set "
+             "return_intercept=False."
+         )
+ 

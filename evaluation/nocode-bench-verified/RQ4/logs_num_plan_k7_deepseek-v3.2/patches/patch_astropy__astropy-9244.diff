@@ -1,0 +1,24 @@
+diff --git a/astropy/utils/iers/__init__.py b/astropy/utils/iers/__init__.py
+index c88b0b3..9cf1d78 100644
+--- a/astropy/utils/iers/__init__.py
++++ b/astropy/utils/iers/__init__.py
+@@ -1,2 +1,18 @@
+ 
+-from .iers import *
++
++from .iers import *
++from astropy.utils.state import ScienceState
++
++class earth_orientation_table(ScienceState):
++    """
++    Global setting for the Earth orientation table (IERS) used in time and coordinate transformations.
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError('earth_orientation_table must be an IERS instance')
++        return value

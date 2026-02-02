@@ -1,0 +1,742 @@
+diff --git a/seaborn/_statistics.py b/seaborn/_statistics.py
+index 82d1ff9..7f96d11 100644
+--- a/seaborn/_statistics.py
++++ b/seaborn/_statistics.py
+@@ -1,3 +1,4 @@
++
+ from distutils.version import LooseVersion
+ import numpy as np
+ import scipy as sp
+@@ -157,4 +158,162 @@ class KDE:
+         if x2 is None:
+             return self._eval_univariate(x1, weights)
+         else:
+-            return self._eval_bivariate(x1, x2, weights)
++            return self._eval_bivariate(x1, x2, weights)
++
++
++class Histogram:
++    """Univariate and bivariate histogram estimator."""
++    def __init__(
++        self,
++        bins="auto",
++        binwidth=None,
++        binrange=None,
++        stat="count",
++        cumulative=False,
++        common_bins=True,
++        discrete=False,
++    ):
++        self.bins = bins
++        self.binwidth = binwidth
++        self.binrange = binrange
++        self.stat = stat
++        self.cumulative = cumulative
++        self.common_bins = common_bins
++        self.discrete = discrete
++
++        self.bin_edges = None
++
++    def _define_bin_edges(
++        self, x, weights, bins, binwidth, binrange, discrete,
++    ):
++        """Given data and binning parameters, return bin edges."""
++        if self.bin_edges is not None and self.common_bins:
++            return self.bin_edges
++
++        if binwidth is not None:
++            if binrange is None:
++                start, stop = x.min(), x.max()
++            else:
++                start, stop = binrange
++            if np.isinf(start) or np.isinf(stop):
++                err = "Cannot use `binwidth` when range is not finite."
++                raise ValueError(err)
++
++            if discrete:
++                # Center bins on integer values
++                edges = np.arange(start - .5, stop + binwidth, binwidth)
++            else:
++                # Follow numpy convention for half-open intervals
++                edges = np.arange(start, stop + binwidth, binwidth)
++
++        elif discrete:
++            # Bins for discrete data are centered on the unique values
++            unique_x = np.unique(x)
++            edges = np.concatenate([
++                unique_x - 0.5,
++                unique_x[-1:] + 0.5,
++            ])
++
++        else:
++            # Let numpy do the work for continuous data
++            edges = np.histogram_bin_edges(x, bins, binrange, weights)
++
++        if self.common_bins:
++            self.bin_edges = edges
++
++        return edges
++
++    def __call__(self, x1, x2=None, weights=None):
++        """Fit and evaluate on univariate or bivariate data."""
++        if x2 is None:
++            heights, edges = self._eval_univariate(x1, weights)
++            return heights, (edges,)
++        else:
++            heights, x_edges, y_edges = self._eval_bivariate(x1, x2, weights)
++            return heights, (x_edges, y_edges)
++
++    def _eval_univariate(self, x, weights):
++        """Compute the histogram of a single variable."""
++        edges = self._define_bin_edges(
++            x, weights, self.bins, self.binwidth, self.binrange, self.discrete,
++        )
++
++        hist, _ = np.histogram(x, edges, weights=weights)
++
++        if self.stat == "count":
++            heights = hist.astype(float)
++        elif self.stat == "frequency":
++            heights = hist.astype(float) / np.diff(edges)
++        elif self.stat in ["density", "probability"]:
++            area = hist.sum()
++            if self.stat == "density":
++                area *= np.diff(edges)
++            heights = hist.astype(float) / area
++        elif self.stat == "percent":
++            heights = hist.astype(float) / hist.sum() * 100
++
++        if self.cumulative:
++            heights = heights.cumsum()
++
++        return heights, edges
++
++    def _eval_bivariate(self, x, y, weights):
++        """Compute the histogram of two variables."""
++        # TODO this duplicates code from univariate, could be cleaner
++        # Handle bin parameterization
++        if np.isscalar(self.bins):
++            x_bins, y_bins = self.bins, self.bins
++        else:
++            x_bins, y_bins = self.bins
++
++        if self.binwidth is None:
++            x_binwidth, y_binwidth = None, None
++        elif np.isscalar(self.binwidth):
++            x_binwidth, y_binwidth = self.binwidth, self.binwidth
++        else:
++            x_binwidth, y_binwidth = self.binwidth
++
++        if self.binrange is None:
++            x_binrange, y_binrange = None, None
++        else:
++            x_binrange, y_binrange = self.binrange
++
++        if np.isscalar(self.discrete):
++            x_discrete, y_discrete = self.discrete, self.discrete
++        else:
++            x_discrete, y_discrete = self.discrete
++
++        # Define the bin edges
++        x_edges = self._define_bin_edges(
++            x, weights, x_bins, x_binwidth, x_binrange, x_discrete,
++        )
++        y_edges = self._define_bin_edges(
++            y, weights, y_bins, y_binwidth, y_binrange, y_discrete,
++        )
++
++        # Core histogram calculation
++        hist, _, _ = np.histogram2d(x, y, (x_edges, y_edges), weights=weights)
++
++        # Normalize the histogram
++        if self.stat == "count":
++            heights = hist.astype(float)
++        elif self.stat == "frequency":
++            x_diffs = np.diff(x_edges)
++            y_diffs = np.diff(y_edges)
++            areas = np.outer(x_diffs, y_diffs)
++            heights = hist.astype(float) / areas.T
++        elif self.stat in ["density", "probability"]:
++            area = hist.sum()
++            if self.stat == "density":
++                x_diffs = np.diff(x_edges)
++                y_diffs = np.diff(y_edges)
++                areas = np.outer(x_diffs, y_diffs)
++                area *= areas.T
++            heights = hist.astype(float) / area
++        elif self.stat == "percent":
++            heights = hist.astype(float) / hist.sum() * 100
++
++        if self.cumulative:
++            heights = heights.cumsum(axis=0).cumsum(axis=1)
++
++        return heights, x_edges, y_edges
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..e0e2c5d 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -82,7 +82,563 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    def __init__(
++        self,
++        data=None,
++        variables=None,
++        palette=None,
++        hue_order=None,
++        hue_norm=None,
++        color=None,
++        log_scale=None,
++        legend=True,
++    ):
++
++        super().__init__(
++            data=data,
++            variables=variables,
++            palette=palette,
++            hue_order=hue_order,
++            hue_norm=hue_norm,
++            color=color,
++            legend=legend,
++        )
++
++        if self.univariate:
++            for var in "xy":
++                if var in self.variables:
++                    self.data_variable = var
++        if log_scale:
++            self.log_scale = log_scale
++        else:
++            self.log_scale = False
++
++    def plot(self, ax, kws):
++        """Plot the histogram."""
++        if self.univariate:
++            self.plot_univariate(ax=ax, **kws)
++        else:
++            self.plot_bivariate(ax=ax, **kws)
++
++    def plot_univariate(
++        self,
++        multiple,
++        element,
++        fill,
++        shrink,
++        common_norm,
++        kde,
++        kde_kws,
++        line_kws,
++        estimate_kws,
++        ax,
++    ):
++
++        # Pre-process the data
++        plot_data = self.plot_data.copy()
++        if self.log_scale:
++            plot_data[self.data_variable] = np.log10(
++                plot_data[self.data_variable]
++            )
++
++        # Initialize the estimator
++        from ._statistics import Histogram
++        estimator = Histogram(**estimate_kws)
++
++        # Define a single set of bins for all distributions
++        if estimator.common_bins:
++            all_observations = remove_na(plot_data[self.data_variable])
++            estimator.bin_edges = estimator._define_bin_edges(
++                all_observations,
++                weights=None,
++                **{
++                    k: v for k, v in estimate_kws.items()
++                    if k in ["bins", "binwidth", "binrange", "discrete"]
++                }
++            )
++
++        # Estimate the density of observations in each subset
++        # TODO could we get away with one loop?
++        hist_data = {}
++        for sub_vars, sub_data in self._semantic_subsets("hue"):
++            key = tuple(sub_vars.items())
++            observations = remove_na(sub_data[self.data_variable])
++            weights = sub_data.get("weights", None)
++            heights, (edges,) = estimator(observations, weights=weights)
++            hist_data[key] = pd.Series(heights, index=edges[:-1])
++
++        # Get a dataframe with heights and edges for all histograms
++        hist_df = pd.DataFrame(hist_data).sort_index(axis=1, ascending=False)
++        if not hist_df.shape[1]:
++            # Don't plot anything if we don't have any data
++            # E.g. all weights are 0, or all data is null
++            return
++
++        # Normalize across all subsets
++        if common_norm:
++            if estimator.stat in ["density", "probability"]:
++                hist_df /= hist_df.shape[1]
++
++        # Rescale the bar widths for dodged plots
++        if multiple == "dodge":
++            n_levels = hist_df.shape[1]
++            if element == "bars":
++                bar_widths = np.diff(hist_df.index) / n_levels
++                bar_widths = np.append(bar_widths, bar_widths[-1])
++                hist_df.index = hist_df.index + (n_levels - 1) / (2 * n_levels)
++            else:
++                err = "`multiple='dodge'` is only supported for `element='bars'`"
++                raise ValueError(err)
++        else:
++            bar_widths = np.diff(hist_df.index)
++            bar_widths = np.append(bar_widths, bar_widths[-1])
++
++        # Apply the multiple rule
++        if multiple == "stack":
++            hist_df = hist_df.cumsum(axis=1)
++        elif multiple == "fill":
++            hist_df = hist_df.divide(hist_df.sum(axis=1), axis=0).fillna(0)
++        elif multiple == "layer":
++            pass
++        elif multiple == "dodge":
++            pass
++        else:
++            msg = f"multiple must be one of {{layer, stack, fill, dodge}}, not {multiple}"
++            raise ValueError(msg)
++
++        # Transform the data back out of log space
++        if self.log_scale:
++            hist_df.index = np.power(10, hist_df.index)
++            if multiple != "dodge":
++                bar_widths = np.power(10, hist_df.index + bar_widths) - hist_df.index
++            else:
++                # TODO not quite right
++                bar_widths = np.power(10, bar_widths)
++
++        # Draw the histograms
++        if element == "bars":
++            self._plot_univariate_bars(
++                ax, hist_df, bar_widths, multiple, fill, shrink
++            )
++        elif element == "step":
++            self._plot_univariate_steps(ax, hist_df, multiple, fill)
++        elif element == "poly":
++            self._plot_univariate_poly(ax, hist_df, multiple, fill)
++        else:
++            msg = f"element must be one of {{bars, step, poly}}, not {element}"
++            raise ValueError(msg)
++
++        # Draw the KDE
++        if kde:
++            kde_kws = {} if kde_kws is None else kde_kws.copy()
++            line_kws = {} if line_kws is None else line_kws.copy()
++            if "color" not in line_kws and "c" not in line_kws:
++                if element == "step" and not fill:
++                    line_kws["color"] = self.color
++                else:
++                    line_kws["color"] = "k"  # TODO something better?
++            kdeplot(
++                data=self.plot_data, x=self.data_variable, hue="hue",
++                cumulative=estimator.cumulative,
++                common_norm=common_norm,
++                log_scale=self.log_scale,
++                legend=False, ax=ax,
++                **kde_kws, **line_kws,
++            )
++
++        # Finalize the plot
++        if self.data_variable == "x":
++            ax.set_xticks(ax.get_xticks())  # Workaround for matplotlib bug
++            if multiple == "fill":
++                ax.set_yticklabels([f"{t:.0%}" for t in ax.get_yticks()])
++                ax.set_ylabel(estimator.stat.capitalize())
++        if self.data_variable == "y":
++            ax.set_yticks(ax.get_yticks())  # Workaround for matplotlib bug
++            if multiple == "fill":
++                ax.set_xticklabels([f"{t:.0%}" for t in ax.get_xticks()])
++                ax.set_xlabel(estimator.stat.capitalize())
++
++        if self.legend:
++            # TODO this is getting messy
++            # TODO what to do about artists for step/poly?
++            artist_kws = {}
++            if element == "bars":
++                artist = partial(mpl.patches.Patch)
++                if multiple == "layer":
++                    artist_kws["alpha"] = .75
++                if not fill:
++                    artist_kws.update(fill=False, edgecolor=self.color)
++            elif element == "step":
++                artist = partial(mpl.lines.Line2D, [], [])
++                if fill:
++                    artist_kws["alpha"] = .75
++            elif element == "poly":
++                artist = partial(mpl.patches.Patch)
++                artist_kws["alpha"] = .75
++
++            self._add_legend(
++                ax, artist, fill, multiple, 1, artist_kws, {},
++            )
++
++    def _plot_univariate_bars(self, ax, hist_df, bar_widths, multiple, fill, shrink):
++        """Draw a bar-style histogram."""
++        for i, (key, heights) in enumerate(hist_df.iteritems()):
++
++            if "hue" in self.variables:
++                color = self._hue_map(key)
++            else:
++                color = self.color
++
++            if multiple == "dodge":
++                edges = hist_df.index - bar_widths * (hist_df.shape[1] - 1 - 2 * i) / 2
++            else:
++                edges = hist_df.index
++
++            if multiple == "stack":
++                baseline = hist_df.iloc[:, i - 1] if i > 0 else 0
++            else:
++                baseline = 0
++
++            if self.data_variable == "x":
++                ax.bar(
++                    x=edges,
++                    height=heights - baseline,
++                    width=bar_widths * shrink,
++                    bottom=baseline,
++                    align="edge",
++                    color=color if fill else "none",
++                    edgecolor=color,
++                    **self.kws,
++                )
++            else:
++                ax.barh(
++                    y=edges,
++                    width=heights - baseline,
++                    height=bar_widths * shrink,
++                    left=baseline,
++                    align="edge",
++                    color=color if fill else "none",
++                    edgecolor=color,
++                    **self.kws,
++                )
++
++    def _plot_univariate_steps(self, ax, hist_df, multiple, fill):
++        """Draw a step-style histogram."""
++        for i, (key, heights) in enumerate(hist_df.iteritems()):
++
++            if "hue" in self.variables:
++                color = self._hue_map(key)
++            else:
++                color = self.color
++
++            if multiple == "stack":
++                baseline = hist_df.iloc[:, i - 1] if i > 0 else 0
++            else:
++                baseline = np.zeros_like(heights)
++
++            edges = hist_df.index
++            x = np.c_[edges, edges].ravel()
++            y = np.c_[heights, heights].ravel()
++            y = np.roll(y, 1)
++            y[0] = 0
++
++            b = np.c_[baseline, baseline].ravel()
++            b = np.roll(b, 1)
++            b[0] = 0
++
++            if self.data_variable == "x":
++                ax.plot(x, y, color=color, **self.kws)
++                if fill:
++                    ax.fill_between(x, y, b, color=color, alpha=.2)
++            else:
++                ax.plot(y, x, color=color, **self.kws)
++                if fill:
++                    ax.fill_betweenx(x, y, b, color=color, alpha=.2)
++
++    def _plot_univariate_poly(self, ax, hist_df, multiple, fill):
++        """Draw a polygon-style histogram."""
++        for i, (key, heights) in enumerate(hist_df.iteritems()):
++
++            if "hue" in self.variables:
++                color = self._hue_map(key)
++            else:
++                color = self.color
++
++            if multiple == "stack":
++                baseline = hist_df.iloc[:, i - 1] if i > 0 else 0
++            else:
++                baseline = np.zeros_like(heights)
++
++            edges = hist_df.index
++            width = np.diff(edges)
++            centers = edges[:-1] + width / 2
++            x = np.c_[centers, centers].ravel()
++            y = np.c_[heights, heights].ravel()
++            y = np.roll(y, 1)
++            y[0] = 0
++
++            b = np.c_[baseline, baseline].ravel()
++            b = np.roll(b, 1)
++            b[0] = 0
++
++            if self.data_variable == "x":
++                ax.plot(centers, heights, color=color, **self.kws)
++                if fill:
++                    ax.fill_between(centers, heights, baseline, color=color, alpha=.2)
++            else:
++                ax.plot(heights, centers, color=color, **self.kws)
++                if fill:
++                    ax.fill_betweenx(
++                        centers, heights, baseline, color=color, alpha=.2
++                    )
++
++    def plot_bivariate(
++        self,
++        common_norm,
++        thresh,
++        pthresh,
++        pmax,
++        cbar,
++        cbar_ax,
++        cbar_kws,
++        estimate_kws,
++        ax,
++    ):
++
++        # Pre-process the data
++        plot_data = self.plot_data.copy()
++        if self.log_scale:
++            if self.log_scale[0]:
++                plot_data["x"] = np.log10(plot_data["x"])
++            if self.log_scale[1]:
++                plot_data["y"] = np.log10(plot_data["y"])
++
++        # Initialize the estimator
++        from ._statistics import Histogram
++        estimator = Histogram(**estimate_kws)
++
++        # Define a single set of bins for all distributions
++        if estimator.common_bins:
++            all_x = remove_na(plot_data["x"])
++            all_y = remove_na(plot_data["y"])
++
++            bins = estimate_kws["bins"]
++            if np.isscalar(bins):
++                x_bins, y_bins = bins, bins
++            else:
++                x_bins, y_bins = bins
++
++            binwidth = estimate_kws["binwidth"]
++            if binwidth is None:
++                x_binwidth, y_binwidth = None, None
++            elif np.isscalar(binwidth):
++                x_binwidth, y_binwidth = binwidth, binwidth
++            else:
++                x_binwidth, y_binwidth = binwidth
++
++            binrange = estimate_kws["binrange"]
++            if binrange is None:
++                x_binrange, y_binrange = None, None
++            else:
++                x_binrange, y_binrange = binrange
++
++            discrete = estimate_kws["discrete"]
++            if np.isscalar(discrete):
++                x_discrete, y_discrete = discrete, discrete
++            else:
++                x_discrete, y_discrete = discrete
++
++            x_edges = estimator._define_bin_edges(
++                all_x, None, x_bins, x_binwidth, x_binrange, x_discrete,
++            )
++            y_edges = estimator._define_bin_edges(
++                all_y, None, y_bins, y_binwidth, y_binrange, y_discrete,
++            )
++            estimator.bin_edges = x_edges, y_edges
++
++        # Estimate the density of observations in each subset
++        hist_data = {}
++        for sub_vars, sub_data in self._semantic_subsets("hue"):
++            key = tuple(sub_vars.items())
++            x = remove_na(sub_data["x"])
++            y = remove_na(sub_data["y"])
++            weights = sub_data.get("weights", None)
++            heights, _ = estimator(x, y, weights=weights)
++            hist_data[key] = heights
++
++        # Get the union of all bins
++        x_edges, y_edges = estimator.bin_edges
++
++        # Get a default single color from the attribute cycle
++        scout, = ax.plot([], color=self.color)
++        default_color = scout.get_color()
++        scout.remove()
++
++        # Handle the color mapping
++        if "hue" in self.variables:
++            for param in ["cmap", "color"]:
++                if param in self.kws:
++                    msg = f"{param} parameter ignored when using hue mapping."
++                    warnings.warn(msg, UserWarning)
++                    self.kws.pop(param)
++            cmap = None
++        else:
++            cmap = self.kws.pop("cmap", None)
++            if cmap is None:
++                from .palettes import light_palette
++                cmap = light_palette(default_color, as_cmap=True)
++            self.kws.pop("color", None)
++
++        # Plot the heatmap(s)
++        for sub_vars, _ in self._semantic_subsets("hue"):
++
++            key = tuple(sub_vars.items())
++            heights = hist_data[key]
++
++            if self.log_scale:
++                if self.log_scale[0]:
++                    x_edges = np.power(10, x_edges)
++                if self.log_scale[1]:
++                    y_edges = np.power(10, y_edges)
++
++            xx, yy = np.meshgrid(x_edges, y_edges)
++
++            # Normalize within this subset
++            if pthresh is not None:
++                sorter = heights.ravel().argsort()
++                cumsum = heights.ravel()[sorter].cumsum()
++                total = cumsum[-1]
++                indices = np.searchsorted(cumsum, total * pthresh, side="right")
++                min_val = heights.ravel()[sorter][indices]
++            else:
++                min_val = thresh
++
++            if pmax is not None:
++                sorter = heights.ravel().argsort()
++                cumsum = heights.ravel()[sorter].cumsum()
++                total = cumsum[-1]
++                indices = np.searchsorted(cumsum, total * pmax, side="right")
++                max_val = heights.ravel()[sorter][indices]
++            else:
++                max_val = None
++
++            if "hue" in self.variables:
++                color = self._hue_map(sub_vars["hue"])
++                from .palettes import light_palette
++                cmap = light_palette(color, as_cmap=True)
++
++            mesh = ax.pcolormesh(
++                xx, yy, heights.T,
++                cmap=cmap, vmin=min_val, vmax=max_val,
++                **self.kws,
++            )
++            mesh.set_edgecolor("face")
++
++            if cbar:
++                cbar_kws = {} if cbar_kws is None else cbar_kws
++                ax.figure.colorbar(mesh, cbar_ax, ax, **cbar_kws)
++
++        if self.legend:
++            # TODO
++            pass
++
++
++@_deprecate_positional_args
++def histplot(
++    data=None, *,
++    x=None, y=None, hue=None, weights=None,
++    stat="count", bins="auto", binwidth=None, binrange=None, discrete=None,
++    cumulative=False, common_bins=True, common_norm=True,
++    multiple="layer", element="bars", fill=True, shrink=1,
++    kde=False, kde_kws=None, line_kws=None,
++    thresh=0, pthresh=None, pmax=None,
++    cbar=False, cbar_ax=None, cbar_kws=None,
++    palette=None, hue_order=None, hue_norm=None,
++    color=None, log_scale=None, legend=True,
++    ax=None, **kwargs,
++):
++
++    variables = _DistributionPlotter.get_semantics(locals())
++    p = _HistPlotter(
++        data=data,
++        variables=variables,
++        palette=palette,
++        hue_order=hue_order,
++        hue_norm=hue_norm,
++        color=color,
++        log_scale=log_scale,
++        legend=legend,
++    )
++
++    if ax is None:
++        import matplotlib.pyplot as plt
++        ax = plt.gca()
++
++    p.kws = kwargs
++
++    # TODO handle this better
++    if discrete is None:
++        if p.univariate:
++            vartype = p.plot_data[p.data_variable].infer_objects().dtype.kind
++            discrete = vartype not in "if"
++        else:
++            x_vartype = p.plot_data["x"].infer_objects().dtype.kind
++            y_vartype = p.plot_data["y"].infer_objects().dtype.kind
++            discrete = (x_vartype not in "if", y_vartype not in "if")
++
++    # TODO handle this better
++    if p.univariate and isinstance(log_scale, (list, tuple)):
++        log_scale = log_scale[0]
++
++    estimate_kws = dict(
++        stat=stat,
++        bins=bins,
++        binwidth=binwidth,
++        binrange=binrange,
++        discrete=discrete,
++        cumulative=cumulative,
++        common_bins=common_bins,
++    )
++
++    if p.univariate:
++        plot_kws = dict(
++            multiple=multiple,
++            element=element,
++            fill=fill,
++            shrink=shrink,
++            common_norm=common_norm,
++            kde=kde,
++            kde_kws=kde_kws,
++            line_kws=line_kws,
++        )
++    else:
++        plot_kws = dict(
++            common_norm=common_norm,
++            thresh=thresh,
++            pthresh=pthresh,
++            pmax=pmax,
++            cbar=cbar,
++            cbar_ax=cbar_ax,
++            cbar_kws=cbar_kws,
++        )
++
++    p.plot(ax, {"estimate_kws": estimate_kws, **plot_kws})
++
++    # Finalize the plot
++    if p.univariate:
++        if p.data_variable == "x":
++            default_x = p.variables["x"]
++            default_y = stat.capitalize()
++        else:
++            default_x = stat.capitalize()
++            default_y = p.variables["y"]
++    else:
++        default_x = p.variables["x"]
++        default_y = p.variables["y"]
++
++    p._add_axis_labels(ax, default_x, default_y)
++
++    return ax
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):

@@ -1,0 +1,27 @@
+diff --git a/sphinx/ext/autosummary/__init__.py b/sphinx/ext/autosummary/__init__.py
+index 381c3e6..d0fcd07 100644
+--- a/sphinx/ext/autosummary/__init__.py
++++ b/sphinx/ext/autosummary/__init__.py
+@@ -780,5 +780,6 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_config_value('autosummary_mock_imports',
+                          lambda config: config.autodoc_mock_imports, 'env')
+     app.add_config_value('autosummary_imported_members', [], False, [bool])
++    app.add_config_value('autosummary_context', {}, 'env')
+ 
+-    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}
++    return {'version': sphinx.__display_version__, 'parallel_read_safe': True}
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index a906241..faa025f 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -256,6 +256,10 @@ def generate_autosummary_content(name: str, obj: Any, parent: Any,
+     ns['objtype'] = doc.objtype
+     ns['underline'] = len(name) * '='
+ 
++    # Add user-defined context
++    if app and hasattr(app.config, 'autosummary_context'):
++        ns.update(app.config.autosummary_context)
++
+     return template.render(template_name, ns)
+ 
+ 

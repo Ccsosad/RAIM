@@ -1,0 +1,129 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..fb919c6 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1644,6 +1644,124 @@ class Ellipse(Patch):
+ 
+     angle = property(get_angle, set_angle)
+ 
++    def get_vertices(self):
++        """
++        Return the vertices of the ellipse (endpoints of the major axis).
++
++        Returns
++        -------
++        vertices : (2, 2) array
++            The coordinates of the two vertices.
++        """
++        # Determine which axis is major in data coordinates
++        width = self.convert_xunits(self._width)
++        height = self.convert_yunits(self._height)
++        if width >= height:
++            # Horizontal axis is major
++            points = [(1, 0), (-1, 0)]
++        else:
++            # Vertical axis is major
++            points = [(0, 1), (0, -1)]
++        return self.get_patch_transform().transform(points)
++
++    def get_co_vertices(self):
++        """
++        Return the co-vertices of the ellipse (endpoints of the minor axis).
++
++        Returns
++        -------
++        co_vertices : (2, 2) array
++            The coordinates of the two co-vertices.
++        """
++        # Determine which axis is minor in data coordinates
++        width = self.convert_xunits(self._width)
++        height = self.convert_yunits(self._height)
++        if width < height:
++            # Horizontal axis is minor
++            points = [(1, 0), (-1, 0)]
++        else:
++            # Vertical axis is minor
++            points = [(0, 1), (0, -1)]
++        return self.get_patch_transform().transform(points)
++
++    def get_vertices(self):
++        """
++        Return the vertices of the ellipse (endpoints of the major axis).
++
++        Returns
++        -------
++        vertices : (2, 2) array
++            The coordinates of the two vertices.
++        """
++        # Determine which axis is major in data coordinates
++        width = self.convert_xunits(self._width)
++        height = self.convert_yunits(self._height)
++        if width >= height:
++            # Horizontal axis is major
++            points = [(1, 0), (-1, 0)]
++        else:
++            # Vertical axis is major
++            points = [(0, 1), (0, -1)]
++        return self.get_patch_transform().transform(points)
++
++    def get_co_vertices(self):
++        """
++        Return the co-vertices of the ellipse (endpoints of the minor axis).
++
++        Returns
++        -------
++        co_vertices : (2, 2) array
++            The coordinates of the two co-vertices.
++        """
++        # Determine which axis is minor in data coordinates
++        width = self.convert_xunits(self._width)
++        height = self.convert_yunits(self._height)
++        if width < self._height:
++            # Horizontal axis is minor
++            points = [(1, 0), (-1, 0)]
++        else:
++            # Vertical axis is minor
++            points = [(0, 1), (0, -1)]
++        return self.get_patch_transform().transform(points)
++
++    def get_vertices(self):
++        """
++        Return the vertices of the ellipse (endpoints of the major axis).
++
++        Returns
++        -------
++        vertices : (2, 2) array
++            The coordinates of the two vertices, in the order (positive, negative)
++            along the major axis.
++        """
++        # Determine which axis is major
++        if self._width >= self._height:
++            # Horizontal axis is major
++            points = [(1, 0), (-1, 0)]
++        else:
++            # Vertical axis is major
++            points = [(0, 1), (0, -1)]
++        return self.get_patch_transform().transform(points)
++
++    def get_co_vertices(self):
++        """
++        Return the co-vertices of the ellipse (endpoints of the minor axis).
++
++        Returns
++        -------
++        co_vertices : (2, 2) array
++            The coordinates of the two co-vertices, in the order (positive, negative)
++            along the minor axis.
++        """
++        # Determine which axis is minor
++        if self._width < self._height:
++            # Horizontal axis is minor
++            points = [(1, 0), (-1, 0)]
++        else:
++            # Vertical axis is minor
++            points = [(0, 1), (0, -1)]
++        return self.get_patch_transform().transform(points)
++
+     def get_corners(self):
+         """
+         Return the corners of the ellipse bounding box.

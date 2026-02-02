@@ -1,0 +1,42 @@
+diff --git a/pylint/lint/base_options.py b/pylint/lint/base_options.py
+index 055eb4f..ce6799c 100644
+--- a/pylint/lint/base_options.py
++++ b/pylint/lint/base_options.py
+@@ -103,7 +103,7 @@ def _make_linter_options(linter: PyLinter) -> Options:
+                 "short": "f",
+                 "group": "Reports",
+                 "help": "Set the output format. Available formats are text,"
+-                " parseable, colorized, json and msvs (visual studio)."
++                " parseable, colorized, json, msvs (visual studio) and no-header."
+                 " You can also give a reporter class, e.g. mypackage.mymodule."
+                 "MyReporterClass.",
+                 "kwargs": {"linter": linter},
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 4db1264..9e2044e 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -238,6 +238,17 @@ class VSTextReporter(ParseableTextReporter):
+     line_format = "{path}({line}): [{msg_id}({symbol}){obj}] {msg}"
+ 
+ 
++class NoHeaderTextReporter(TextReporter):
++    """TextReporter that does not print the module header."""
++
++    name = "no-header"
++
++    def handle_message(self, msg: Message) -> None:
++        """Manage message of different types, but skip the module header."""
++        # Skip the module header entirely
++        self.write_message(msg)
++
++
+ class ColorizedTextReporter(TextReporter):
+     """Simple TextReporter that colorizes text output."""
+ 
+@@ -315,4 +326,5 @@ def register(linter: PyLinter) -> None:
+     linter.register_reporter(TextReporter)
+     linter.register_reporter(ParseableTextReporter)
+     linter.register_reporter(VSTextReporter)
+-    linter.register_reporter(ColorizedTextReporter)
++    linter.register_reporter(ColorizedTextReporter)
++    linter.register_reporter(NoHeaderTextReporter)

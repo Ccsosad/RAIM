@@ -1,0 +1,33 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..504f509 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -136,7 +136,27 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         if _num_samples(y) == 0:
+             return np.array([])
+ 
+-        return _encode(y, uniques=self.classes_)
++        classes_ = self.classes_
++        # Check if classes_ contains any NaN (only for numeric types)
++        if classes_.dtype.kind in ('f', 'c'):  # float or complex
++            nan_mask = np.isnan(classes_)
++            if np.any(nan_mask):
++                # Handle NaN values
++                non_nan_classes = classes_[~nan_mask]
++                non_nan_mapping = {val: i for i, val in enumerate(non_nan_classes)}
++                nan_index = np.where(nan_mask)[0][0]
++                
++                y_array = np.asarray(y)
++                result = np.empty(len(y_array), dtype=int)
++                for i, val in enumerate(y_array):
++                    if np.isnan(val):
++                        result[i] = nan_index
++                    else:
++                        result[i] = non_nan_mapping[val]
++                return result
++        
++        # For non-numeric or numeric without NaN, use the original _encode
++        return _encode(y, uniques=classes_)
+ 
+     def inverse_transform(self, y):
+         """Transform labels back to original encoding.

@@ -1,0 +1,153 @@
+diff --git a/sklearn/random_projection.py b/sklearn/random_projection.py
+index d06dfcd..7f36092 100644
+--- a/sklearn/random_projection.py
++++ b/sklearn/random_projection.py
+@@ -302,12 +302,19 @@ class BaseRandomProjection(
+ 
+     @abstractmethod
+     def __init__(
+-        self, n_components="auto", *, eps=0.1, dense_output=False, random_state=None
++        self,
++        n_components="auto",
++        *,
++        eps=0.1,
++        dense_output=False,
++        random_state=None,
++        compute_inverse_components=False,
+     ):
+         self.n_components = n_components
+         self.eps = eps
+         self.dense_output = dense_output
+         self.random_state = random_state
++        self.compute_inverse_components = compute_inverse_components
+ 
+     @abstractmethod
+     def _make_random_matrix(self, n_components, n_features):
+@@ -399,6 +406,15 @@ class BaseRandomProjection(
+             " not the proper shape."
+         )
+ 
++        # Compute inverse components if requested
++        if self.compute_inverse_components:
++            # Compute the pseudo-inverse of the components matrix
++            # Note: components_ is of shape (n_components, n_features)
++            # We want inverse_components_ of shape (n_features, n_components)
++            self.inverse_components_ = np.linalg.pinv(self.components_.T)
++        else:
++            self.inverse_components_ = None
++
+         return self
+ 
+     def transform(self, X):
+@@ -437,6 +453,96 @@ class BaseRandomProjection(
+         """
+         return self.n_components
+ 
++    def inverse_transform(self, X):
++        """Project data back to its original space.
++
++        Parameters
++        ----------
++        X : {ndarray, sparse matrix} of shape (n_samples, n_components)
++            Data to transform back.
++
++        Returns
++        ----------
++        X_original : ndarray of shape (n_samples, n_features)
++            Data projected back to the original space.
++        """
++        check_is_fitted(self)
++        X = self._validate_data(
++            X,
++            accept_sparse=["csr", "csc"],
++            reset=False,
++            dtype=[np.float64, np.float32],
++        )
++
++        if X.shape[1] != self.n_components_:
++            raise ValueError(
++                "X has %d features, but the transformer was fit with "
++                "%d components." % (X.shape[1], self.n_components_)
++            )
++
++        # If inverse_components_ is not precomputed, compute it now
++        if self.inverse_components_ is None:
++            inv_comp = np.linalg.pinv(self.components_.T)
++        else:
++            inv_comp = self.inverse_components_
++
++        # Note: inverse_components_ is of shape (n_features, n_components)
++        # We want to compute X @ inv_comp.T
++        # But inv_comp is already the pseudo-inverse of components_.T, so we need to transpose?
++        # Actually, we stored inverse_components_ as the pseudo-inverse of components_.T.
++        # So inverse_components_ = pinv(components_.T) -> shape (n_features, n_components)
++        # Then the reconstruction is X @ inverse_components_.T
++        # But the documentation says: "it computes the product of the input X and the transpose of the inverse components."
++        # So we do X @ inv_comp.T
++        X_original = safe_sparse_dot(X, inv_comp.T, dense_output=True)
++
++        return X_original
++
++    def inverse_transform(self, X):
++        """Project data back to its original space.
++
++        Parameters
++        ----------
++        X : {ndarray, sparse matrix} of shape (n_samples, n_components)
++            Data to transform back.
++
++        Returns
++        -------
++        X_original : ndarray of shape (n_samples, n_features)
++            Data projected back to the original space.
++        """
++        check_is_fitted(self)
++        X = self._validate_data(
++            X,
++            accept_sparse=["csr", "csc"],
++            reset=False,
++            dtype=[np.float64, np.float32],
++        )
++
++        if X.shape[1] != self.n_components_:
++            raise ValueError(
++                "X has %d features, but the transformer was fit with "
++                "%d components." % (X.shape[1], self.n_components_)
++            )
++
++        # If inverse_components_ is not precomputed, compute it now
++        if self.inverse_components_ is None:
++            inv_comp = np.linalg.pinv(self.components_.T)
++        else:
++            inv_comp = self.inverse_components_
++
++        # Note: inverse_components_ is of shape (n_features, n_components)
++        # We want to compute X @ inv_comp.T
++        # But inv_comp is already the pseudo-inverse of components_.T, so we need to transpose?
++        # Actually, we stored inverse_components_ as the pseudo-inverse of components_.T.
++        # So inverse_components_ = pinv(components_.T) -> shape (n_features, n_components)
++        # Then the reconstruction is X @ inverse_components_.T
++        # But the documentation says: "it computes the product of the input X and the transpose of the inverse components."
++        # So we do X @ inv_comp.T
++        X_original = safe_sparse_dot(X, inv_comp.T, dense_output=True)
++
++        return X_original
++
+     def _more_tags(self):
+         return {
+             "preserves_dtype": [np.float64, np.float32],
+@@ -677,12 +783,14 @@ class SparseRandomProjection(BaseRandomProjection):
+         eps=0.1,
+         dense_output=False,
+         random_state=None,
++        compute_inverse_components=False,
+     ):
+         super().__init__(
+             n_components=n_components,
+             eps=eps,
+             dense_output=dense_output,
+             random_state=random_state,
++            compute_inverse_components=compute_inverse_components,
+         )
+ 
+         self.density = density

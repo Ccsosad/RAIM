@@ -1,0 +1,49 @@
+diff --git a/astropy/cosmology/flrw.py b/astropy/cosmology/flrw.py
+index ecb617a..c0d50db 100644
+--- a/astropy/cosmology/flrw.py
++++ b/astropy/cosmology/flrw.py
+@@ -337,6 +337,15 @@ class FLRW(Cosmology):
+         """Omega nu; the density/critical density of neutrinos at z=0."""
+         return self._Onu0
+ 
++    @property
++    def Otot0(self):
++        """Omega total; the total density/critical density at z=0.
++
++        This is the sum of all real energy densities (matter, dark energy,
++        radiation, neutrinos) and does not include the curvature term.
++        """
++        return 1.0 - self._Ok0
++
+     # ---------------------------------------------------------------
+ 
+     @abstractmethod
+@@ -527,6 +536,28 @@ class FLRW(Cosmology):
+             return np.zeros(z.shape) if hasattr(z, "shape") else 0.0
+         return self.Ogamma(z) * self.nu_relative_density(z)
+ 
++    def Otot(self, z):
++        r"""Return the total density parameter at redshift ``z``.
++
++        This is the sum of the density parameters for all real energy
++        components: matter (including baryons and dark matter), dark energy,
++        photons, and neutrinos. It does not include the curvature term.
++
++        Parameters
++        ----------
++        z : Quantity-like ['redshift'], array-like, or `~numbers.Number`
++            Input redshift.
++
++        Returns
++        -------
++        Otot : ndarray or float
++            The total energy density relative to the critical density at
++            each redshift.
++            Returns `float` if the input is scalar.
++        """
++        z = aszarr(z)
++        return self.Om(z) + self.Ode(z) + self.Ogamma(z) + self.Onu(z)
++
+     def Tcmb(self, z):
+         """Return the CMB temperature at redshift ``z``.
+ 

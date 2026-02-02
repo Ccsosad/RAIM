@@ -1,0 +1,238 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 0127e99..a47cf85 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6344,6 +6344,133 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         full: bool = False,
+         cov: Union[bool, str] = False,
+     ):
++
++    def curvefit(
++        self,
++        coords: Union[Hashable, Sequence[Hashable], DataArray],
++        func: Callable,
++        reduce_dims: Optional[Union[Hashable, Sequence[Hashable]]] = None,
++        p0: Optional[Union[Dict[str, float], Sequence[float]]] = None,
++        bounds: Optional[Union[Dict[str, Tuple[float, float]], Sequence[Tuple[float, float]]]] = None,
++        param_names: Optional[Sequence[str]] = None,
++        errors: str = "raise",
++        **kwargs: Any,
++    ) -> "Dataset":
++        """
++        Fit a function to data along specified dimensions.
++
++        Parameters
++        ----------
++        coords : hashable, sequence of hashable, or DataArray
++            Independent variable(s) to use for fitting. If a DataArray is provided,
++            it is used directly. Otherwise, the coordinate(s) with these name(s)
++            will be used.
++        func : callable
++            Function to fit to the data. Must have signature `func(x, *params)`
++            where `x` is the independent variable and `params` are the parameters
++            to be optimized.
++        reduce_dims : hashable or sequence of hashable, optional
++            Dimensions to reduce by fitting along. If not provided, all dimensions
++            not in `coords` will be reduced.
++        p0 : dict or sequence, optional
++            Initial guesses for parameters. If a sequence, must match the order
++            of parameters in `func`. If a dict, maps parameter names to initial
++            values.
++        bounds : dict or sequence, optional
++            Lower and upper bounds on parameters. If a sequence, must be of length
++            2 where each element is either a scalar or array-like. If a dict, maps
++            parameter names to (lower, upper) bounds.
++        param_names : sequence of str, optional
++            Names to assign to the fitted parameters. If not provided, names will
++            be generated as 'param0', 'param1', etc.
++        errors : {"raise", "ignore"}, default: "raise"
++            If "raise", any errors during fitting will raise an exception.
++            If "ignore", invalid values will be replaced with NaNs.
++        **kwargs
++            Additional keyword arguments passed to scipy.optimize.curve_fit.
++
++        Returns
++        -------
++        fit_result : Dataset
++            Dataset containing the fitted parameters and covariance matrices.
++
++        Examples
++        --------
++        >>> def exponential(x, a, b):
++        ...     return a * np.exp(b * x)
++        >>> ds = xr.Dataset({"data": ("x", [1, 2, 3, 4])}, coords={"x": [0.1, 0.2, 0.3, 0.4]})
++        >>> result = ds.curvefit(coords="x", func=exponential)
++        """
++        from .fitting import _get_func_args, _initialize_curvefit_params, apply_curvefit
++
++        # Convert coords to DataArray if names are provided
++        if not isinstance(coords, DataArray):
++            if isinstance(coords, (str, bytes)):
++                coords = [coords]
++            coord_arrays = [self[coord] for coord in coords]
++            if len(coord_arrays) > 1:
++                # Combine multiple coordinates into a single DataArray
++                coords = xr.DataArray(
++                    np.stack([arr.data for arr in coord_arrays], axis=-1),
++                    dims=coord_arrays[0].dims + ("_coords",),
++                    coords=coord_arrays[0].coords,
++                )
++            else:
++                coords = coord_arrays[0]
++
++        # Determine dimensions to reduce
++        if reduce_dims is None:
++            reduce_dims = list(set(self.dims) - set(coords.dims))
++        if isinstance(reduce_dims, (str, bytes)):
++            reduce_dims = [reduce_dims]
++
++        # Align data and coordinates
++        aligned = xr.align(self, coords, join="inner")
++        ds = aligned[0]
++        coords = aligned[1]
++
++        # Prepare parameter initialization
++        param_names, p0, bounds = _initialize_curvefit_params(func, p0, param_names, bounds)
++
++        # Apply curve fitting to each data variable
++        result_vars = {}
++        for name, var in ds.data_vars.items():
++            # Stack non-reduced dimensions
++            stacked = var.stack(sample=reduce_dims)
++            x_stacked = coords.stack(sample=reduce_dims)
++
++            # Apply curve fitting
++            popt, pcov = apply_curvefit(
++                func=func,
++                xdata=x_stacked,
++                ydata=stacked,
++                p0=p0,
++                bounds=bounds,
++                **kwargs,
++            )
++
++            # Create variables for parameters and covariance
++            param_da = DataArray(
++                popt,
++                dims=("sample", "param"),
++                coords={"param": param_names, **stacked.coords},
++                name=f"{name}_params",
++            )
++            cov_da = DataArray(
++                pcov,
++                dims=("sample", "param", "param_cov"),
++                coords={"param": param_names, "param_cov": param_names, **stacked.coords},
++                name=f"{name}_covariance",
++            )
++
++            # Unstack the parameters
++            param_da = param_da.unstack("sample")
++            cov_da = cov_da.unstack("sample")
++
++            result_vars[f"{name}_params"] = param_da
++            result_vars[f"{name}_covariance"] = cov_da
++
++        return Dataset(result_vars, attrs=self.attrs.copy())
+         """
+         Least squares polynomial fit.
+ 
+@@ -7075,4 +7202,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self.isel(indexers, missing_dims=missing_dims)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/fitting.py b/xarray/core/fitting.py
+new file mode 100644
+index 0000000..33d3795
+--- /dev/null
++++ b/xarray/core/fitting.py
+@@ -0,0 +1,88 @@
++import numpy as np
++import scipy.optimize as opt
++from collections.abc import Callable
++from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
++
++from . import duck_array_ops
++from .utils import is_duck_dask_array
++from .variable import Variable
++from .dataarray import DataArray
++
++def _get_func_args(func: Callable) -> int:
++    """Get the number of function arguments excluding the independent variable(s)."""
++    from inspect import signature
++    sig = signature(func)
++    return len(sig.parameters) - 1  # Subtract independent variable
++
++def _initialize_curvefit_params(
++    func: Callable,
++    p0: Optional[Union[Dict[str, float], Sequence[float]]] = None,
++    param_names: Optional[Sequence[str]] = None,
++    bounds: Optional[Union[Dict[str, Tuple[float, float]], Sequence[Tuple[float, float]]]] = None
++) -> Tuple[List[str], List[float], Tuple[List[float], List[float]]]:
++    """Initialize and validate parameters for curve fitting."""
++    n_params = _get_func_args(func)
++    
++    # Handle parameter names
++    if param_names is None:
++        param_names = [f'param{i}' for i in range(n_params)]
++    elif len(param_names) != n_params:
++        raise ValueError(f"param_names must have length {n_params}")
++    
++    # Handle initial parameter guesses
++    if p0 is None:
++        p0 = [1.0] * n_params
++    elif isinstance(p0, dict):
++        p0 = [p0.get(name, 1.0) for name in param_names]
++    elif len(p0) != n_params:
++        raise ValueError(f"p0 must have length {n_params}")
++    
++    # Handle bounds
++    bounds_defaults = (-np.inf, np.inf)
++    if bounds is None:
++        bounds = [bounds_defaults] * n_params
++    elif isinstance(bounds, dict):
++        bounds = [bounds.get(name, bounds_defaults) for name in param_names]
++    
++    if len(bounds) != n_params:
++        raise ValueError(f"bounds must have length {n_params}")
++    
++    # Split bounds into lower and upper bounds
++    lower_bounds = [b[0] if isinstance(b, tuple) else b for b in bounds]
++    upper_bounds = [b[1] if isinstance(b, tuple) else np.inf for b in bounds]
++    
++    return param_names, p0, (lower_bounds, upper_bounds)
++
++def apply_curvefit(
++    func: Callable,
++    xdata: DataArray,
++    ydata: DataArray,
++    p0: Optional[Sequence[float]] = None,
++    bounds: Tuple[Sequence[float], Sequence[float]] = (-np.inf, np.inf),
++    **kwargs: Any
++) -> Tuple[np.ndarray, np.ndarray]:
++    """Apply curve fitting to DataArrays using scipy.optimize.curve_fit."""
++    # Flatten the independent and dependent variables
++    xdata_flat = xdata.data.reshape(-1, xdata.shape[-1])
++    ydata_flat = ydata.data.reshape(-1)
++    
++    # Prepare output arrays
++    n_samples = xdata_flat.shape[0]
++    n_params = _get_func_args(func)
++    popt = np.full((n_samples, n_params), np.nan)
++    pcov = np.full((n_samples, n_params, n_params), np.nan)
++    
++    # Perform curve fitting for each sample
++    for i in range(n_samples):
++        x = xdata_flat[i]
++        y = ydata_flat[i]
++        valid = ~np.isnan(y)
++        if np.any(valid):
++            try:
++                params, cov = opt.curve_fit(func, x[valid], y[valid], p0=p0, bounds=bounds, **kwargs)
++                popt[i] = params
++                pcov[i] = cov
++            except RuntimeError:
++                pass  # Fit failed, leave as NaN
++    
++    return popt, pcov

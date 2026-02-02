@@ -1,0 +1,178 @@
+diff --git a/astropy/cosmology/io/__init__.py b/astropy/cosmology/io/__init__.py
+new file mode 100644
+index 0000000..6847b43
+--- /dev/null
++++ b/astropy/cosmology/io/__init__.py
+@@ -0,0 +1,9 @@
++# Licensed under a 3-clause BSD style license - see LICENSE.rst
++"""
++This subpackage contains classes and functions for reading and writing
++Cosmology objects to/from various formats.
++"""
++from .registry import register_row
++
++# Register the row format
++register_row()
+diff --git a/astropy/cosmology/io/registry.py b/astropy/cosmology/io/registry.py
+new file mode 100644
+index 0000000..c7ebbe3
+--- /dev/null
++++ b/astropy/cosmology/io/registry.py
+@@ -0,0 +1,37 @@
++"""
++Registry for Cosmology I/O formats.
++"""
++from astropy.io.registry import IORegistryError, _get_format_table
++
++from astropy.cosmology import Cosmology
++from astropy.cosmology.io.row import from_row, to_row
++
++__all__ = ["register_row", "unregister_row"]
++
++def register_row():
++    """Register the Row format with the Cosmology I/O registry."""
++    try:
++        # Check if already registered
++        _get_format_table(base=Cosmology, readwrite="read").loc["astropy.row"]
++    except IORegistryError:
++        # Not registered, so register
++        Cosmology.register_reader("astropy.row", from_row)
++        Cosmology.register_writer("astropy.row", to_row)
++        Cosmology.register_identifier("astropy.row", row_identify)
++
++def unregister_row():
++    """Unregister the Row format from the Cosmology I/O registry."""
++    try:
++        Cosmology._io_registry._unregister("astropy.row", Cosmology)
++    except (AttributeError, IORegistryError):
++        pass
++
++def row_identify(origin, format, *args, **kwargs):
++    """Identify if object uses the Table Row format."""
++    from astropy.table import Row
++
++    if origin == "read":
++        # For reading, the second argument is the data object.
++        if len(args) >= 2:
++            return isinstance(args[1], Row) and (format in (None, "astropy.row"))
++    return False
+diff --git a/astropy/cosmology/io/row.py b/astropy/cosmology/io/row.py
+new file mode 100644
+index 0000000..abfc9d6
+--- /dev/null
++++ b/astropy/cosmology/io/row.py
+@@ -0,0 +1,114 @@
++"""
++IO support for Astropy Table Row objects.
++"""
++import copy
++
++from astropy.cosmology.core import Cosmology
++from astropy.table import Row
++
++__all__ = ["from_row", "to_row"]
++
++def from_row(row, move_to_meta=False, cosmology=None, rename=None, **kwargs):
++    """Instantiate a Cosmology from a :class:`astropy.table.Row`.
++
++    Parameters
++    ----------
++    row : `astropy.table.Row`
++        The row to parse.
++    move_to_meta : bool (optional, keyword-only)
++        Whether to move keyword arguments that are not in the Cosmology
++        constructor to the Cosmology's metadata. Default is `False`.
++    cosmology : str, `astropy.cosmology.Cosmology` class, or None (optional, keyword-only)
++        The cosmology class to use when constructing the cosmology instance.
++        If `None`, the class is automatically detected from the row's metadata.
++        If a string, it should be the name of a cosmology class.
++        If a cosmology class, it is used directly.
++    rename : dict or None (optional, keyword-only)
++        A dictionary mapping column names to cosmology parameter names.
++        This is used to rename columns in the row to the cosmology parameters.
++    **kwargs
++        Additional keyword arguments are passed to the cosmology constructor.
++
++    Returns
++    -------
++    `astropy.cosmology.Cosmology`
++        The cosmology instance.
++
++    Raises
++    ------
++    TypeError
++        If the row is not an instance of `astropy.table.Row`.
++    """
++    if not isinstance(row, Row):
++        raise TypeError("row must be an instance of astropy.table.Row")
++
++    # Get the cosmology class
++    if cosmology is None:
++        cosmology = row.meta.pop("cosmology", None)
++        if cosmology is None:
++            raise ValueError("cosmology not found in row metadata and no "
++                             "cosmology specified.")
++    if isinstance(cosmology, str):
++        cosmology = Cosmology._cosmology_classes[cosmology]
++
++    # Convert row to a dictionary
++    mapping = dict(row)
++    # Get the name from the row if not already in mapping
++    name = mapping.pop("name", None)
++    if name is not None:
++        mapping["name"] = name
++
++    # Merge with metadata
++    meta = row.meta.copy()
++    mapping.setdefault("meta", meta)
++
++    # Remove the cosmology from meta if present
++    meta.pop("cosmology", None)
++
++    # Build the cosmology
++    return Cosmology.from_format(
++        mapping,
++        move_to_meta=move_to_meta,
++        cosmology=cosmology,
++        rename=rename,
++        **kwargs
++    )
++
++def to_row(cosmology, *args, copy=False, cosmology_in_meta=False, **kwargs):
++    """Convert a Cosmology to a :class:`astropy.table.Row`.
++
++    Parameters
++    ----------
++    cosmology : `astropy.cosmology.Cosmology`
++        The cosmology instance to convert.
++    *args
++        Not used. Present for compatibility with the to_format interface.
++    copy : bool (optional, keyword-only)
++        Whether to copy the data. Default is `False`.
++    cosmology_in_meta : bool (optional, keyword-only)
++        Whether to put the cosmology class in the row's metadata.
++        Default is `False`.
++    **kwargs
++        Additional keyword arguments are passed to the Table constructor.
++
++    Returns
++    -------
++    `astropy.table.Row`
++        The row representation of the cosmology.
++
++    Notes
++    -----
++    This function first converts the cosmology to a Table and then returns the
++    first row of that table. The table is constructed using the
++    `astropy.cosmology.Cosmology.to_format("astropy.table")` method.
++    """
++    # Convert to table
++    table = cosmology.to_format("astropy.table", copy=copy, **kwargs)
++    # Get the first row
++    row = table[0]
++
++    # Add cosmology class to metadata if requested
++    if cosmology_in_meta:
++        row.meta["cosmology"] = cosmology.__class__.__qualname__
++
++    return row

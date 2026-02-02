@@ -1,0 +1,54 @@
+diff --git a/django/db/models/deletion.py b/django/db/models/deletion.py
+index 96922fd..f78e11b 100644
+--- a/django/db/models/deletion.py
++++ b/django/db/models/deletion.py
+@@ -76,8 +76,9 @@ def get_candidate_relations_to_delete(opts):
+ 
+ 
+ class Collector:
+-    def __init__(self, using):
++    def __init__(self, using, origin=None):
+         self.using = using
++        self.origin = origin
+         # Initially, {model: {instances}}, later values become lists.
+         self.data = defaultdict(set)
+         # {model: {(field, value): {instances}}}
+@@ -404,7 +405,8 @@ class Collector:
+             for model, obj in self.instances_with_model():
+                 if not model._meta.auto_created:
+                     signals.pre_delete.send(
+-                        sender=model, instance=obj, using=self.using
++                        sender=model, instance=obj, using=self.using,
++                        origin=self.origin
+                     )
+ 
+             # fast deletes
+@@ -435,7 +437,8 @@ class Collector:
+                 if not model._meta.auto_created:
+                     for obj in instances:
+                         signals.post_delete.send(
+-                            sender=model, instance=obj, using=self.using
++                            sender=model, instance=obj, using=self.using,
++                            origin=self.origin
+                         )
+ 
+         # update collected instances
+@@ -446,4 +449,4 @@ class Collector:
+         for model, instances in self.data.items():
+             for instance in instances:
+                 setattr(instance, model._meta.pk.attname, None)
+-        return sum(deleted_counter.values()), dict(deleted_counter)
++        return sum(deleted_counter.values()), dict(deleted_counter)
+diff --git a/django/db/models/query.py b/django/db/models/query.py
+index 1013471..530ad04 100644
+--- a/django/db/models/query.py
++++ b/django/db/models/query.py
+@@ -753,7 +753,7 @@ class QuerySet:
+         del_query.query.select_related = False
+         del_query.query.clear_ordering(force=True)
+ 
+-        collector = Collector(using=del_query.db)
++        collector = Collector(using=del_query.db, origin=self)
+         collector.collect(del_query)
+         deleted, _rows_count = collector.delete()
+ 

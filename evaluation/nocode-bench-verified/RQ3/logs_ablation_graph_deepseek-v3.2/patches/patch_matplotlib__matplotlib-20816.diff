@@ -1,0 +1,99 @@
+diff --git a/lib/matplotlib/cbook.py b/lib/matplotlib/cbook.py
+new file mode 100644
+index 0000000..4d149f4
+--- /dev/null
++++ b/lib/matplotlib/cbook.py
+@@ -0,0 +1,93 @@
++class CallbackRegistry:
++    """
++    Handle registering, disconnecting, and calling a set of signals and callbacks:
++
++        >>> def oneat(x):
++        ...    print('eat', x)
++        >>> def ondrink(x):
++        ...    print('drink', x)
++
++        >>> from matplotlib.cbook import CallbackRegistry
++        >>> callbacks = CallbackRegistry()
++        >>> id_eat = callbacks.connect('eat', oneat)
++        >>> id_drink = callbacks.connect('drink', ondrink)
++        >>> callbacks.process('drink', 33)
++        drink 33
++        >>> callbacks.process('eat', 44)
++        eat 44
++        >>> callbacks.process('be merry', 55)   # nothing will be called
++        >>> callbacks.disconnect(id_eat)
++        >>> callbacks.process('eat', 44)        # nothing will be called
++        >>> callbacks.disconnect(id_drink)
++    """
++    def __init__(self, exception_handler=None):
++        self.exception_handler = exception_handler
++        self.callbacks = dict()
++        self._cid = 0
++        self._func_cid_map = {}
++        self._blocked = set()
++
++    def connect(self, signal, func):
++        """Connect *func* to be called when signal *signal* is generated."""
++        self._cid += 1
++        cid = self._cid
++        self.callbacks.setdefault(signal, {})
++        self.callbacks[signal][cid] = func
++        self._func_cid_map.setdefault(signal, {})
++        self._func_cid_map[signal][func] = cid
++        return cid
++
++    def disconnect(self, cid):
++        """Disconnect the callback registered with callback id *cid*."""
++        for signal in self.callbacks:
++            if cid in self.callbacks[signal]:
++                del self.callbacks[signal][cid]
++                for func, func_cid in list(self._func_cid_map[signal].items()):
++                    if func_cid == cid:
++                        del self._func_cid_map[signal][func]
++                break
++
++    def process(self, s, *args, **kwargs):
++        """
++        Process signal *s*.
++
++        All of the functions registered to receive callbacks on *s* will be
++        called with ``*args`` and ``**kwargs``.
++        """
++        # Check if the signal is blocked.
++        if None in self._blocked or s in self._blocked:
++            return
++        if self.exception_handler is None:
++            for cid, func in list(self.callbacks.get(s, {}).items()):
++                func(*args, **kwargs)
++        else:
++            for cid, func in list(self.callbacks.get(s, {}).items()):
++                try:
++                    func(*args, **kwargs)
++                except Exception as e:
++                    self.exception_handler(e)
++
++    def blocked(self, signal=None):
++        """
++        Return a context manager that temporarily blocks callback signals.
++
++        Parameters
++        ----------
++        signal : str, optional
++            The signal to block. If not provided, all signals are blocked.
++
++        Returns
++        -------
++        contextmanager
++            A context manager that blocks the specified signal(s) for its duration.
++        """
++        class blocker:
++            def __init__(self, registry, signal):
++                self.registry = registry
++                self.signal = signal
++            def __enter__(self):
++                self.registry._blocked.add(self.signal if self.signal is not None else None)
++            def __exit__(self, *args):
++                self.registry._blocked.discard(self.signal if self.signal is not None else None)
++
++        return blocker(self, signal)

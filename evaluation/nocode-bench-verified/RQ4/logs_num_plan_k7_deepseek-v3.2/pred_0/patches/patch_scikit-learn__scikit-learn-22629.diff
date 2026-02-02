@@ -1,0 +1,51 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..4f5ce2f 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -97,7 +97,15 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+             Fitted label encoder.
+         """
+         y = column_or_1d(y, warn=True)
+-        self.classes_ = _unique(y)
++        # Handle NaN values by converting them to a special string
++        # so that they are included in the unique values.
++        y_processed = np.asarray(y)
++        nan_mask = np.isnan(y_processed)
++        if nan_mask.any():
++            # Convert to object type to hold the string for NaN
++            y_processed = y_processed.astype(object)
++            y_processed[nan_mask] = 'NaN'
++        self.classes_ = _unique(y_processed)
+         return self
+ 
+     def fit_transform(self, y):
+@@ -114,7 +122,13 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+             Encoded labels.
+         """
+         y = column_or_1d(y, warn=True)
+-        self.classes_, y = _unique(y, return_inverse=True)
++        # Handle NaN values similarly to fit
++        y_processed = np.asarray(y)
++        nan_mask = np.isnan(y_processed)
++        if nan_mask.any():
++            y_processed = y_processed.astype(object)
++            y_processed[nan_mask] = 'NaN'
++        self.classes_, y = _unique(y_processed, return_inverse=True)
+         return y
+ 
+     def transform(self, y):
+@@ -136,7 +150,13 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         if _num_samples(y) == 0:
+             return np.array([])
+ 
+-        return _encode(y, uniques=self.classes_)
++        # Handle NaN values similarly to fit
++        y_processed = np.asarray(y)
++        nan_mask = np.isnan(y_processed)
++        if nan_mask.any():
++            y_processed = y_processed.astype(object)
++            y_processed[nan_mask] = 'NaN'
++        return _encode(y_processed, uniques=self.classes_)
+ 
+     def inverse_transform(self, y):
+         """Transform labels back to original encoding.

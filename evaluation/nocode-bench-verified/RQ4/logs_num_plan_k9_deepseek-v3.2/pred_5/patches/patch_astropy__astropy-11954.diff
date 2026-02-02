@@ -1,0 +1,80 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..9d91d23 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,10 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -368,6 +368,18 @@ def join(left, right, keys=None, join_type='inner',
+     join_funcs : dict, None
+         Dict of functions to use for matching the corresponding key column(s).
+         See `~astropy.table.join_skycoord` for an example and details.
++    keys_left : str, list of str, or list of column-like, optional
++        Key column(s) from the left table to use for matching. If provided,
++        must also specify ``keys_right``. Can be a column name, a list of column
++        names, or a list of column-like objects (e.g., a list of arrays). If
++        column-like objects are provided, they must have the same length as the
++        left table.
++    keys_right : str, list of str, or list of column-like, optional
++        Key column(s) from the right table to use for matching. If provided,
++        must also specify ``keys_left``. Can be a column name, a list of column
++        names, or a list of column-like objects (e.g., a list of arrays). If
++        column-like objects are provided, they must have the same length as the
++        right table.
+ 
+     Returns
+     -------
+@@ -381,8 +393,33 @@ def join(left, right, keys=None, join_type='inner',
+     if not isinstance(right, Table):
+         right = Table(right)
+ 
++    # If keys_left and keys_right are provided, use them.
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError("Cannot specify both 'keys' and 'keys_left'/'keys_right'")
++        if keys_left is None or keys_right is None:
++            raise ValueError("Must specify both 'keys_left' and 'keys_right'")
++        # Convert to list if not already
++        if isinstance(keys_left, str):
++            keys_left = [keys_left]
++        if isinstance(keys_right, str):
++            keys_right = [keys_right]
++        # Check that the lengths match
++        if len(keys_left) != len(keys_right):
++            raise ValueError("'keys_left' and 'keys_right' must have the same length")
++    else:
++        # Use the common keys if keys is None
++        if keys is None:
++            keys = list(set(left.colnames) & set(right.colnames))
++            if len(keys) == 0:
++                raise ValueError('No keys in common between left and right tables')
++        # Convert to list if not already
++        if isinstance(keys, str):
++            keys = [keys]
++        keys_left = keys_right = keys
++
+     col_name_map = OrderedDict()
+-    out = _join(left, right, keys, join_type,
++    out = _join(left, right, keys_left, keys_right, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+                 join_funcs)
+ 
+@@ -1043,7 +1080,7 @@ def _apply_join_funcs(left, right, keys, join_funcs):
+     return left, right, keys
+ 
+ 
+-def _join(left, right, keys=None, join_type='inner',
++def _join(left, right, keys_left=None, keys_right=None, join_type='inner',
+           uniq_col_name='{col_name}_{table_name}',
+           table_names=['1', '2'],
+           col_name_map=None, metadata_conflicts='warn',

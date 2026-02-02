@@ -1,0 +1,52 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..9c4d3f3 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -186,7 +186,6 @@ class Nominal(Scale):
+         mpl_scale = CatScale(data.name)
+         if axis is None:
+             axis = PseudoAxis(mpl_scale)
+-
+             # TODO Currently just used in non-Coordinate contexts, but should
+             # we use this to (A) set the padding we want for categorial plots
+             # and (B) allow the values parameter for a Coordinate to set xlim/ylim
+@@ -194,6 +193,10 @@ class Nominal(Scale):
+ 
+         new._matplotlib_scale = mpl_scale
+ 
++        # Style the axis to look like a seaborn categorical axis
++        if axis is not None and hasattr(axis, 'axes'):
++            style_categorical_axis(axis)
++
+         # TODO array cast necessary to handle float/int mixture, which we need
+         # to solve in a more systematic way probably
+         # (i.e. if we have [1, 2.5], do we want [1.0, 2.5]? Unclear)
+diff --git a/seaborn/_core/axes.py b/seaborn/_core/axes.py
+new file mode 100644
+index 0000000..bbfcf93
+--- /dev/null
++++ b/seaborn/_core/axes.py
+@@ -0,0 +1,23 @@
++"""
++Axis styling for seaborn.
++"""
++
++def style_categorical_axis(axis):
++    """
++    Style an axis to look like a seaborn categorical axis.
++
++    Parameters
++    ----------
++    axis : matplotlib.axis.Axis
++        The axis to style.
++    """
++    if hasattr(axis, 'axes'):
++        ax = axis.axes
++        # Set fixed margins
++        if axis.axis_name == 'x':
++            ax.set_xmargin(0.02)
++        elif axis.axis_name == 'y':
++            ax.set_ymargin(0.02)
++            ax.invert_yaxis()
++        # Remove grid
++        ax.grid(False)

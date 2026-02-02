@@ -1,0 +1,50 @@
+diff --git a/django/template/defaulttags.py b/django/template/defaulttags.py
+index 8c6c1d4..219fd5f 100644
+--- a/django/template/defaulttags.py
++++ b/django/template/defaulttags.py
+@@ -419,12 +419,18 @@ class LoadNode(Node):
+ 
+ 
+ class NowNode(Node):
+-    def __init__(self, format_string):
++    def __init__(self, format_string, asvar=None):
+         self.format_string = format_string
++        self.asvar = asvar
+ 
+     def render(self, context):
+         tzinfo = timezone.get_current_timezone() if settings.USE_TZ else None
+-        return date(datetime.now(tz=tzinfo), self.format_string)
++        output = date(datetime.now(tz=tzinfo), self.format_string)
++        if self.asvar:
++            context[self.asvar] = output
++            return ''
++        else:
++            return output
+ 
+ 
+ class SpacelessNode(Node):
+@@ -1198,12 +1204,21 @@ def now(parser, token):
+     Sample usage::
+ 
+         It is {% now "jS F Y H:i" %}
++
++    You can also use the syntax ``{% now "Y" as current_year %}`` to store the
++    output inside a variable.
+     """
+     bits = token.split_contents()
+-    if len(bits) != 2:
+-        raise TemplateSyntaxError("'now' statement takes one argument")
++    if len(bits) not in (2, 4):
++        raise TemplateSyntaxError("'now' statement takes one or three arguments")
+     format_string = bits[1][1:-1]
+-    return NowNode(format_string)
++    if len(bits) == 4:
++        if bits[2] != 'as':
++            raise TemplateSyntaxError("Second argument to 'now' tag must be 'as'")
++        asvar = bits[3]
++    else:
++        asvar = None
++    return NowNode(format_string, asvar)
+ 
+ 
+ @register.tag

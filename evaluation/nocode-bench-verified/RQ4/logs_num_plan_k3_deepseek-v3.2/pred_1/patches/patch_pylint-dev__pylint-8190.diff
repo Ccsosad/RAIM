@@ -1,0 +1,109 @@
+diff --git a/pylint/pyreverse/inspector.py b/pylint/pyreverse/inspector.py
+index 9996e5d..52fd88c 100644
+--- a/pylint/pyreverse/inspector.py
++++ b/pylint/pyreverse/inspector.py
+@@ -343,11 +343,29 @@ def project_from_files(
+     func_wrapper: _WrapperFuncT = _astroid_wrapper,
+     project_name: str = "no name",
+     black_list: tuple[str, ...] = constants.DEFAULT_IGNORE_LIST,
++    show_stdlib: bool = False,
+ ) -> Project:
+     """Return a Project from a list of files or modules."""
+     # build the project representation
+     astroid_manager = astroid.MANAGER
+     project = Project(project_name)
++    # If not showing stdlib, we need to filter out standard library modules.
++    # We'll create a set of standard library module names.
++    stdlib_names = set()
++    if not show_stdlib:
++        try:
++            # Python 3.10+
++            stdlib_names = set(sys.stdlib_module_names)
++        except AttributeError:
++            # Fallback for older Python versions
++            import distutils.sysconfig
++            import os
++            stdlib_path = distutils.sysconfig.get_python_lib(standard_lib=True)
++            # This is not perfect, but we can list the modules in the stdlib path.
++            # However, this is complex and may not be necessary for the basic use case.
++            # We'll leave it empty for now, meaning no filtering for older versions.
++            pass
++
+     for something in files:
+         if not os.path.exists(something):
+             fpath = astroid.modutils.file_from_modpath(something.split("."))
+@@ -358,6 +376,9 @@ def project_from_files(
+         ast = func_wrapper(astroid_manager.ast_from_file, fpath)
+         if ast is None:
+             continue
++        # Check if the module is in the standard library
++        if not show_stdlib and ast.name in stdlib_names:
++            continue
+         project.path = project.path or ast.file
+         project.add_module(ast)
+         base_name = ast.name
+@@ -370,5 +391,7 @@ def project_from_files(
+                 ast = func_wrapper(astroid_manager.ast_from_file, fpath)
+                 if ast is None or ast.name == base_name:
+                     continue
++                if not show_stdlib and ast.name in stdlib_names:
++                    continue
+                 project.add_module(ast)
+-    return project
++    return project
+diff --git a/pylint/pyreverse/main.py b/pylint/pyreverse/main.py
+index 946d88c..11059de 100644
+--- a/pylint/pyreverse/main.py
++++ b/pylint/pyreverse/main.py
+@@ -292,6 +292,7 @@ class Run(_ArgumentsManager, _ArgumentsProvider):
+                 args,
+                 project_name=self.config.project,
+                 black_list=self.config.ignore_list,
++                show_stdlib=self.config.show_stdlib,
+             )
+             linker = Linker(project, tag=True)
+             handler = DiadefsHandler(self.config)
+@@ -301,4 +302,4 @@ class Run(_ArgumentsManager, _ArgumentsProvider):
+ 
+ 
+ if __name__ == "__main__":
+-    Run(sys.argv[1:])
++    Run(sys.argv[1:])
+diff --git a/pylint/pyreverse/config.py b/pylint/pyreverse/config.py
+new file mode 100644
+index 0000000..d0f098e
+--- /dev/null
++++ b/pylint/pyreverse/config.py
+@@ -0,0 +1,32 @@
++"""Configuration for pyreverse."""
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from typing import Any
++
++
++@dataclass
++class PyreverseConfiguration:
++    """Configuration for pyreverse."""
++
++    output_format: str = "dot"
++    output_directory: str = "."
++    project: str = "no name"
++    ignore_list: tuple[str, ...] = ()
++    source_roots: tuple[str, ...] = ()
++    show_builtin: bool = False
++    show_stdlib: bool = False
++    # ... other fields as needed
++
++    @classmethod
++    def from_argparse(cls, namespace: Any) -> PyreverseConfiguration:
++        """Create configuration from argparse namespace."""
++        return cls(
++            output_format=namespace.output_format,
++            output_directory=namespace.output_directory,
++            project=namespace.project,
++            ignore_list=tuple(namespace.ignore_list),
++            source_roots=tuple(namespace.source_roots),
++            show_builtin=namespace.show_builtin,
++            show_stdlib=namespace.show_stdlib,
++        )

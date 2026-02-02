@@ -1,0 +1,21 @@
+diff --git a/sphinx/ext/autosummary/__init__.py b/sphinx/ext/autosummary/__init__.py
+index a7f2a9d..c1a96b5 100644
+--- a/sphinx/ext/autosummary/__init__.py
++++ b/sphinx/ext/autosummary/__init__.py
+@@ -707,13 +707,15 @@ def process_generate_options(app):
+         generate_autosummary_docs(genfiles, builder=app.builder,
+                                   warn=logger.warning, info=logger.info,
+                                   suffix=suffix, base_path=app.srcdir,
+-                                  app=app)
++                                  app=app,
++                                  imported_members=app.config.autosummary_imported_members)
+ 
+ 
+ def setup(app):
+     # type: (Sphinx) -> Dict[str, Any]
+     # I need autodoc
+     app.setup_extension('sphinx.ext.autodoc')
++    app.add_config_value('autosummary_imported_members', False, 'env')
+     app.add_node(autosummary_toc,
+                  html=(autosummary_toc_visit_html, autosummary_noop),
+                  latex=(autosummary_noop, autosummary_noop),

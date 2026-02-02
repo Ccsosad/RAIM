@@ -1,0 +1,18 @@
+diff --git a/sphinx/ext/autodoc/typehints.py b/sphinx/ext/autodoc/typehints.py
+index 5ae1ec7..feb073f 100644
+--- a/sphinx/ext/autodoc/typehints.py
++++ b/sphinx/ext/autodoc/typehints.py
+@@ -24,11 +24,8 @@ from sphinx.util import inspect, typing
+ 
+ def config_inited(app: Sphinx, config: Config) -> None:
+     if config.autodoc_typehints == 'description':
+-        # HACK: override this to make autodoc suppressing typehints in signatures
+-        config.autodoc_typehints = 'none'  # type: ignore
+-
+-        # preserve user settings
+-        app._autodoc_typehints_description = True  # type: ignore
++        # Now handled by core autodoc, do not override
++        app._autodoc_typehints_description = False  # type: ignore
+     else:
+         app._autodoc_typehints_description = False  # type: ignore
+ 

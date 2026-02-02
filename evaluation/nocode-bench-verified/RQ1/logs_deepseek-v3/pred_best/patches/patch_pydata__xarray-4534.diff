@@ -1,0 +1,46 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..d87ed8e 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -382,6 +382,41 @@ class DatetimeAccessor(Properties):
+         "is_leap_year", "Boolean indicator if the date belongs to a leap year.", bool
+     )
+ 
++    def isocalendar(self):
++        """Calculate the ISO year, week number, and weekday according to the ISO 8601 calendar.
++
++        Returns
++        -------
++        Dataset
++            With keys: year, week, day corresponding to the ISO calendar components.
++        """
++        from distutils.version import LooseVersion
++        import pandas as pd
++
++        if LooseVersion(pd.__version__) < LooseVersion("1.1.0"):
++            raise AttributeError(
++                "isocalendar() requires pandas version 1.1.0 or greater"
++            )
++
++        obj_type = type(self._obj)
++        result = self._obj._to_temp_dataset()._ds._to_temp_dataset()
++        result.data = self._obj.data.isocalendar()
++        return result.to_dataset(name=self._obj.name)
++
++    @property
++    def weekofyear(self):
++        import warnings
++        warnings.warn(
++            "weekofyear is deprecated. Use isocalendar().week instead",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return Properties._tslib_field_accessor(
++            "weekofyear", "The week ordinal of the year", np.int64
++        )(self)
++
++    week = weekofyear
++
+ 
+ class TimedeltaAccessor(Properties):
+     """Access Timedelta fields for DataArrays with Timedelta-like dtypes.

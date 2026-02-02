@@ -1,0 +1,72 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index eed9d35..35a17ec 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -6476,7 +6476,7 @@ default: :rc:`scatter.edgecolors`
+ 
+     @_preprocess_data()
+     @_docstring.dedent_interpd
+-    def contour(self, *args, **kwargs):
++    def contour(self, *args, clip_path=None, **kwargs):
+         """
+         Plot contour lines.
+ 
+@@ -6486,13 +6486,14 @@ default: :rc:`scatter.edgecolors`
+         %(contour_doc)s
+         """
+         kwargs['filled'] = False
++        kwargs['clip_path'] = clip_path
+         contours = mcontour.QuadContourSet(self, *args, **kwargs)
+         self._request_autoscale_view()
+         return contours
+ 
+     @_preprocess_data()
+     @_docstring.dedent_interpd
+-    def contourf(self, *args, **kwargs):
++    def contourf(self, *args, clip_path=None, **kwargs):
+         """
+         Plot filled contours.
+ 
+@@ -6502,6 +6503,7 @@ default: :rc:`scatter.edgecolors`
+         %(contour_doc)s
+         """
+         kwargs['filled'] = True
++        kwargs['clip_path'] = clip_path
+         contours = mcontour.QuadContourSet(self, *args, **kwargs)
+         self._request_autoscale_view()
+         return contours
+@@ -8423,4 +8425,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())
+diff --git a/lib/matplotlib/contour.py b/lib/matplotlib/contour.py
+index 4305dde..9b35c70 100644
+--- a/lib/matplotlib/contour.py
++++ b/lib/matplotlib/contour.py
+@@ -1486,7 +1486,7 @@ class QuadContourSet(ContourSet):
+     %(contour_set_attributes)s
+     """
+ 
+-    def _process_args(self, *args, corner_mask=None, algorithm=None, **kwargs):
++    def _process_args(self, *args, corner_mask=None, algorithm=None, clip_path=None, **kwargs):
+         """
+         Process args and kwargs.
+         """
+@@ -1500,6 +1500,7 @@ class QuadContourSet(ContourSet):
+             self._mins = args[0]._mins
+             self._maxs = args[0]._maxs
+             self._algorithm = args[0]._algorithm
++            self.clip_path = args[0].clip_path
+         else:
+             import contourpy
+ 
+@@ -1539,6 +1540,7 @@ class QuadContourSet(ContourSet):
+ 
+             self._mins = [ma.min(x), ma.min(y)]
+             self._maxs = [ma.max(x), ma.max(y)]
++            self.clip_path = clip_path
+ 
+         self._contour_generator = contour_generator
+ 

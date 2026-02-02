@@ -1,0 +1,72 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..6db0958 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -62,6 +62,67 @@ class _BaseGrid:
+         kwargs.setdefault("bbox_inches", "tight")
+         self.figure.savefig(*args, **kwargs)
+ 
++    def tight_layout(self, *args, **kwargs):
++        """
++        Call fig.tight_layout within rect and pad.
++
++        Parameters
++        ----------
++        *args, **kwargs
++            Passed to :meth:`matplotlib.figure.Figure.tight_layout`.
++
++        Returns
++        -------
++        self : object
++            Returns self for method chaining.
++
++        """
++        self.figure.tight_layout(*args, **kwargs)
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid. It should take the grid as its first
++            argument and return a grid (or any object).
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns the result of the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object.
++
++        This method is similar to :meth:`apply`, but is intended for functions
++        that do not return a grid (or return a different object).
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid. It should take the grid as its first
++            argument.
++        *args, **kwargs
++            Additional arguments are passed to the function.
++
++        Returns
++        -------
++        object
++            Returns the result of the function.
++
++        """
++        return func(self, *args, **kwargs)
++
+ 
+ class Grid(_BaseGrid):
+     """A grid that can have multiple subplots and an external legend."""

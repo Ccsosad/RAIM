@@ -1,0 +1,55 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..06e1774 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -1,3 +1,4 @@
++
+ """
+ In this module, we define the coordinate representation classes, which are
+ used to represent low-level cartesian, spherical, cylindrical, and other
+@@ -1656,18 +1657,23 @@ class UnitSphericalRepresentation(BaseRepresentation):
+         return rep
+ 
+     def __mul__(self, other):
+-        self._raise_if_has_differentials('multiplication')
+-        return self._dimensional_representation(lon=self.lon, lat=self.lat,
+-                                                distance=1. * other)
++        # Convert to cartesian, multiply, and convert back.
++        cartesian = self.represent_as(CartesianRepresentation)
++        new_cartesian = cartesian * other
++        # For multiplication, we return a SphericalRepresentation because there is a scale change.
++        return self._dimensional_representation.from_cartesian(new_cartesian)
+ 
+     def __truediv__(self, other):
+-        self._raise_if_has_differentials('division')
+-        return self._dimensional_representation(lon=self.lon, lat=self.lat,
+-                                                distance=1. / other)
++        cartesian = self.represent_as(CartesianRepresentation)
++        new_cartesian = cartesian / other
++        # For division, we return a SphericalRepresentation because there is a scale change.
++        return self._dimensional_representation.from_cartesian(new_cartesian)
+ 
+     def __neg__(self):
+-        self._raise_if_has_differentials('negation')
+-        return self.__class__(self.lon + 180. * u.deg, -self.lat, copy=False)
++        cartesian = self.represent_as(CartesianRepresentation)
++        new_cartesian = -cartesian
++        # For negation, there is no scale change, so we return a UnitSphericalRepresentation.
++        return self.__class__.from_cartesian(new_cartesian)
+ 
+     def norm(self):
+         """Vector norm.
+@@ -2022,9 +2028,10 @@ class SphericalRepresentation(BaseRepresentation):
+         return np.abs(self.distance)
+ 
+     def __neg__(self):
+-        self._raise_if_has_differentials('negation')
+-        return self.__class__(self.lon + 180. * u.deg, -self.lat, self.distance,
+-                              copy=False)
++        # Convert to cartesian, negate, and convert back.
++        cartesian = self.represent_as(CartesianRepresentation)
++        new_cartesian = -cartesian
++        return self.__class__.from_cartesian(new_cartesian)
+ 
+ 
+ class PhysicsSphericalRepresentation(BaseRepresentation):

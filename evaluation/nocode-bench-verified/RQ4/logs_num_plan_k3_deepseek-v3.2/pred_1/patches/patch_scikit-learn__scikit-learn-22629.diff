@@ -1,0 +1,37 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 38b5c3a..f0a7905 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -229,6 +229,32 @@ def _encode(values, *, uniques, check_unknown=True):
+             diff = _check_unknown(values, uniques)
+             if diff:
+                 raise ValueError(f"y contains previously unseen labels: {str(diff)}")
++        
++        # For float arrays, we need to handle NaN specially
++        if values.dtype.kind == 'f':
++            # Check if there are NaN values in the input
++            nan_mask = np.isnan(values)
++            if nan_mask.any():
++                # Check if NaN is in uniques
++                nan_in_uniques = np.isnan(uniques)
++                if nan_in_uniques.any():
++                    # Encode non-NaN values
++                    encoded = np.empty(values.shape, dtype=np.int64)
++                    not_nan_mask = ~nan_mask
++                    if not_nan_mask.any():
++                        # Sort the non-NaN part of uniques
++                        non_nan_uniques = uniques[~nan_in_uniques]
++                        # non_nan_uniques should already be sorted
++                        encoded[not_nan_mask] = np.searchsorted(
++                            non_nan_uniques, 
++                            values[not_nan_mask]
++                        )
++                    # Encode NaN values
++                    nan_index = np.where(nan_in_uniques)[0][0]
++                    encoded[nan_mask] = nan_index
++                    return encoded
++        
++        # Default case: use searchsorted
+         return np.searchsorted(uniques, values)
+ 
+ 

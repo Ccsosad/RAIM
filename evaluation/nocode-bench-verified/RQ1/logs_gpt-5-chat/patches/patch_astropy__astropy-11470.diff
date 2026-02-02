@@ -1,0 +1,58 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..72b8a5a 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -1049,23 +1049,38 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             be multiplied with, divided by).
+         """
+ 
+-        self._raise_if_has_differentials(op.__name__)
++        # If no differentials, use existing procedure
++        if not self.differentials:
++            results = []
++            for component, cls in self.attr_classes.items():
++                value = getattr(self, component)
++                if issubclass(cls, Angle):
++                    results.append(value)
++                else:
++                    results.append(op(value, *args))
++            try:
++                return self.__class__(*results)
++            except Exception:
++                return NotImplemented
+ 
+-        results = []
+-        for component, cls in self.attr_classes.items():
+-            value = getattr(self, component)
+-            if issubclass(cls, Angle):
+-                results.append(value)
+-            else:
+-                results.append(op(value, *args))
++        # New feature: apply operation to representations with differentials
++        # Route operation through Cartesian for consistency
++        difs_cls = {k: CartesianDifferential for k in self.differentials.keys()}
++        crep = self.represent_as(CartesianRepresentation,
++                                 differential_class=difs_cls)
+ 
+-        # try/except catches anything that cannot initialize the class, such
+-        # as operations that returned NotImplemented or a representation
+-        # instead of a quantity (as would happen for, e.g., rep * rep).
+-        try:
+-            return self.__class__(*results)
+-        except Exception:
+-            return NotImplemented
++        # apply scale operation on CartesianRepresentation, which supports it
++        scaled = crep._scale_operation(op, *args)
++
++        # return back to original representation with appropriate differential class
++        final_difs_cls = {k: diff.__class__ for k, diff in self.differentials.items()}
++        scaled_rep = scaled.represent_as(self.__class__, final_difs_cls)
++
++        # According to documentation, UnitSphericalRepresentation becomes SphericalRepresentation if scaled
++        if isinstance(self, UnitSphericalRepresentation) and not np.allclose(args[0], 1):
++            return scaled_rep.represent_as(SphericalRepresentation, final_difs_cls)
++
++        return scaled_rep
+ 
+     def _combine_operation(self, op, other, reverse=False):
+         """Combine two representation.

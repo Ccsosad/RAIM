@@ -1,0 +1,125 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..a3c6149 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1862,12 +1863,20 @@ class DataArray(AbstractArray, DataWithCoords):
+         numpy.transpose
+         Dataset.transpose
+         """
+-        if dims:
+-            if set(dims) ^ set(self.dims):
+-                raise ValueError(
+-                    "arguments to transpose (%s) must be "
+-                    "permuted array dimensions (%s)" % (dims, tuple(self.dims))
+-                )
++        from .transpose_utils import infix_dims
++
++        # If no dims are given, reverse the dimensions
++        if not dims:
++            dims = self.dims[::-1]
++        else:
++            # Expand ellipsis if present
++            dims = infix_dims(dims, self.dims)
++
++        if set(dims) ^ set(self.dims):
++            raise ValueError(
++                "arguments to transpose (%s) must be "
++                "permuted array dimensions (%s)" % (dims, tuple(self.dims))
++            )
+ 
+         variable = self.variable.transpose(*dims)
+         if transpose_coords:
+@@ -3122,4 +3131,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..55ac0bc 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5449,4 +5449,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/transpose_utils.py b/xarray/core/transpose_utils.py
+new file mode 100644
+index 0000000..5744f0d
+--- /dev/null
++++ b/xarray/core/transpose_utils.py
+@@ -0,0 +1,62 @@
++"""
++Utilities for handling transpose operations with ellipsis.
++"""
++
++from typing import Sequence, Hashable, Tuple
++import numpy as np
++
++
++def infix_dims(
++    dims: Sequence[Hashable], all_dims: Sequence[Hashable]
++) -> Tuple[Hashable, ...]:
++    """
++    Expand ellipsis (...) in a sequence of dimensions to the appropriate
++    dimensions from all_dims.
++
++    Parameters
++    ----------
++    dims : sequence of hashable
++        The input dimensions, which may contain an ellipsis (...).
++    all_dims : sequence of hashable
++        All dimensions of the array.
++
++    Returns
++    -------
++    tuple of hashable
++        The dimensions with ellipsis expanded.
++
++    Raises
++    ------
++    ValueError
++        If there are multiple ellipses, or if the number of dimensions
++        after expanding does not match the total number of dimensions.
++    """
++    if dims is None or ... not in dims:
++        return tuple(dims)
++
++    # Count ellipsis
++    ellipsis_count = sum(1 for d in dims if d is ...)
++    if ellipsis_count > 1:
++        raise ValueError("Cannot have more than one ellipsis in transpose.")
++
++    # Find the position of the ellipsis
++    ellipsis_pos = dims.index(...)
++
++    # Dimensions before and after the ellipsis
++    before = dims[:ellipsis_pos]
++    after = dims[ellipsis_pos + 1 :]
++
++    # Dimensions to be inserted in place of ellipsis
++    remaining = [d for d in all_dims if d not in before and d not in after]
++
++    # Build the new dimension order
++    new_dims = list(before) + remaining + list(after)
++
++    # Check that we have the right number of dimensions
++    if len(new_dims) != len(all_dims):
++        raise ValueError(
++            "Dimensions after expanding ellipsis do not match "
++            "the total number of dimensions."
++        )
++
++    return tuple(new_dims)

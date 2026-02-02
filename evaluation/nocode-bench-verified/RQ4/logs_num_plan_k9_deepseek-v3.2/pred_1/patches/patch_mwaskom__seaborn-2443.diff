@@ -1,0 +1,150 @@
+diff --git a/seaborn/categorical.py b/seaborn/categorical.py
+index 27d5801..9678504 100644
+--- a/seaborn/categorical.py
++++ b/seaborn/categorical.py
+@@ -1356,6 +1356,52 @@ class _CategoricalScatterPlotter(_CategoricalPlotter):
+                            s=60)
+ 
+ 
++class Beeswarm:
++    """Manage the state of a single swarm for draw-time repositioning."""
++    def __init__(self, plotter, ax, points, center, width, s, **kws):
++        self.plotter = plotter
++        self.ax = ax
++        self.points = points
++        self.center = center
++        self.width = width
++        self.s = s
++        self.kws = kws
++        # Store the original positions in data coordinates (without swarming)
++        self.orig_xyr = points.get_offsets().copy()
++
++    def recalculate(self):
++        """Recalculate the swarm positions and update the points."""
++        # This is essentially the same as swarm_points, but using stored state.
++        dpi = self.ax.figure.dpi
++        default_lw = mpl.rcParams["patch.linewidth"]
++        lw = self.kws.get("linewidth", self.kws.get("lw", default_lw))
++        d = (np.sqrt(self.s) + lw) * (dpi / 72)
++
++        # Transform the data coordinates to point coordinates.
++        orig_xy = self.ax.transData.transform(self.orig_xyr)
++
++        # Order the variables so that x is the categorical axis
++        if self.plotter.orient == "h":
++            orig_xy = orig_xy[:, [1, 0]]
++
++        # Do the beeswarm in point coordinates
++        new_xy = self.plotter.beeswarm(orig_xy, d)
++
++        # Transform the point coordinates back to data coordinates
++        if self.plotter.orient == "h":
++            new_xy = new_xy[:, [1, 0]]
++        new_x, new_y = self.ax.transData.inverted().transform(new_xy).T
++
++        # Add gutters
++        if self.plotter.orient == "v":
++            self.plotter.add_gutters(new_x, self.center, self.width)
++        else:
++            self.plotter.add_gutters(new_y, self.center, self.width)
++
++        # Reposition the points so they do not overlap
++        self.points.set_offsets(np.c_[new_x, new_y])
++
++
+ class _SwarmPlotter(_CategoricalScatterPlotter):
+ 
+     def __init__(self, x, y, hue, data, order, hue_order,
+@@ -1527,8 +1573,7 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+         """Plot the data."""
+         s = kws.pop("s")
+ 
+-        centers = []
+-        swarms = []
++        beeswarms = []  # to store Beeswarm instances
+ 
+         palette = np.asarray(self.colors)
+ 
+@@ -1556,10 +1601,9 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                 swarm_data = np.asarray(group_data[hue_mask])
+                 point_colors = np.asarray(self.point_colors[i][hue_mask])
+ 
+-                # Sort the points for the beeswarm algorithm
+-                sorter = np.argsort(swarm_data)
+-                swarm_data = swarm_data[sorter]
+-                point_colors = point_colors[sorter]
++                # Do NOT sort the points for the beeswarm algorithm
++                # Keep original order
++                # swarm_data and point_colors are already in original order
+ 
+                 # Plot the points in centered positions
+                 cat_pos = np.ones(swarm_data.size) * i
+@@ -1569,8 +1613,9 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                 else:
+                     points = ax.scatter(swarm_data, cat_pos, s=s, **kws)
+ 
+-                centers.append(i)
+-                swarms.append(points)
++                # Create a Beeswarm instance for this swarm
++                beeswarm = Beeswarm(self, ax, points, i, width, s, **kws)
++                beeswarms.append(beeswarm)
+ 
+             else:
+                 offsets = self.hue_offsets
+@@ -1581,10 +1626,8 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                     swarm_data = np.asarray(group_data[hue_mask])
+                     point_colors = np.asarray(self.point_colors[i][hue_mask])
+ 
+-                    # Sort the points for the beeswarm algorithm
+-                    sorter = np.argsort(swarm_data)
+-                    swarm_data = swarm_data[sorter]
+-                    point_colors = point_colors[sorter]
++                    # Do NOT sort the points for the beeswarm algorithm
++                    # Keep original order
+ 
+                     # Plot the points in centered positions
+                     center = i + offsets[j]
+@@ -1595,17 +1638,36 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                     else:
+                         points = ax.scatter(swarm_data, cat_pos, s=s, **kws)
+ 
+-                    centers.append(center)
+-                    swarms.append(points)
++                    # Create a Beeswarm instance for this swarm
++                    beeswarm = Beeswarm(self, ax, points, center, width, s, **kws)
++                    beeswarms.append(beeswarm)
+ 
+         # Autoscale the valus axis to set the data/axes transforms properly
+         ax.autoscale_view(scalex=self.orient == "h", scaley=self.orient == "v")
+ 
+-        # Update the position of each point on the categorical axis
+-        # Do this after plotting so that the numerical axis limits are correct
+-        for center, swarm in zip(centers, swarms):
+-            if swarm.get_offsets().size:
+-                self.swarm_points(ax, swarm, center, width, s, **kws)
++        # Store the beeswarms on the axes for the callback
++        if not hasattr(ax, '_seaborn_beeswarms'):
++            ax._seaborn_beeswarms = []
++        ax._seaborn_beeswarms.extend(beeswarms)
++
++        # Create a draw callback to recalculate swarms
++        if not hasattr(ax, '_seaborn_swarm_cid'):
++            def on_draw(event):
++                # Avoid infinite recursion
++                if hasattr(ax, '_seaborn_swarm_recalculating'):
++                    return
++                ax._seaborn_swarm_recalculating = True
++                try:
++                    for beeswarm in ax._seaborn_beeswarms:
++                        beeswarm.recalculate()
++                finally:
++                    ax._seaborn_swarm_recalculating = False
++            cid = ax.callbacks.connect('draw_event', on_draw)
++            ax._seaborn_swarm_cid = cid
++
++        # Also recalculate once now to set initial positions
++        for beeswarm in beeswarms:
++            beeswarm.recalculate()
+ 
+     def plot(self, ax, kws):
+         """Make the full plot."""

@@ -1,0 +1,94 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..7b0f099 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,10 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -384,7 +384,7 @@ def join(left, right, keys=None, join_type='inner',
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+-                join_funcs)
++                join_funcs, keys_left, keys_right)
+ 
+     # Merge the column and table meta data. Table subclasses might override
+     # these methods for custom merge behavior.
+@@ -1047,7 +1047,7 @@ def _join(left, right, keys=None, join_type='inner',
+           uniq_col_name='{col_name}_{table_name}',
+           table_names=['1', '2'],
+           col_name_map=None, metadata_conflicts='warn',
+-          join_funcs=None):
++          join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left and right Tables on specified keys.
+ 
+@@ -1112,23 +1112,45 @@ def _join(left, right, keys=None, join_type='inner',
+         right[cartesian_index_name] = np.uint8(0)
+         keys = (cartesian_index_name, )
+ 
+-    # If we have a single key, put it in a tuple
+-    if keys is None:
+-        keys = tuple(name for name in left.colnames if name in right.colnames)
+-        if len(keys) == 0:
+-            raise TableMergeError('No keys in common between left and right tables')
+-    elif isinstance(keys, str):
+-        keys = (keys,)
++    # Handle keys_left and keys_right
++    if keys_left is not None or keys_right is not None:
++        if keys_left is None or keys_right is None:
++            raise ValueError('keys_left and keys_right must both be provided if either is provided')
++        # Override keys with keys_left and keys_right
++        # Convert to tuples if they are strings
++        if isinstance(keys_left, str):
++            keys_left = (keys_left,)
++        if isinstance(keys_right, str):
++            keys_right = (keys_right,)
++        # Check that the lengths match
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same length')
++        # Use keys_left and keys_right as the keys for the join
++        # We will create a temporary combined key for the join process.
++        # For each pair (left_key, right_key), we will create a temporary column in both tables?
++        # This is complex. Instead, we will change the join logic to use two separate key lists.
++        # But for now, we will assume that the keys are column names and exist in the tables.
++        # We will check them separately.
++        keys = None  # We will not use the combined keys
++    else:
++        # If we have a single key, put it in a tuple
++        if keys is None:
++            keys = tuple(name for name in left.colnames if name in right.colnames)
++            if len(keys) == 0:
++                raise TableMergeError('No keys in common between left and right tables')
++        elif isinstance(keys, str):
++            keys = (keys,)
++        keys_left = keys_right = keys
+ 
+     # Check the key columns
+-    for arr, arr_label in ((left, 'Left'), (right, 'Right')):
+-        for name in keys:
+-            if name not in arr.colnames:
++    for name, arr, arr_label in ((keys_left, left, 'Left'), (keys_right, right, 'Right')):
++        for key in name:
++            if key not in arr.colnames:
+                 raise TableMergeError('{} table does not have key column {!r}'
+-                                      .format(arr_label, name))
+-            if hasattr(arr[name], 'mask') and np.any(arr[name].mask):
++                                      .format(arr_label, key))
++            if hasattr(arr[key], 'mask') and np.any(arr[key].mask):
+                 raise TableMergeError('{} key column {!r} has missing values'
+-                                      .format(arr_label, name))
++                                      .format(arr_label, key))
+ 
+     if join_funcs is not None:
+         if not all(key in keys for key in join_funcs):

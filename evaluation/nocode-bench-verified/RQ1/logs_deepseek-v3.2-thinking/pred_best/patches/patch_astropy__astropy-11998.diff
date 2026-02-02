@@ -1,0 +1,279 @@
+diff --git a/astropy/cosmology/connect.py b/astropy/cosmology/connect.py
+index de88de3..cffc180 100644
+--- a/astropy/cosmology/connect.py
++++ b/astropy/cosmology/connect.py
+@@ -105,4 +105,72 @@ class CosmologyWrite(io_registry.UnifiedReadWrite):
+         super().__init__(instance, cls, "write")
+ 
+     def __call__(self, *args, **kwargs):
+-        io_registry.write(self._instance, *args, **kwargs)
++        io_registry.write(self._instance, *args, **kwargs)
++
++
++class CosmologyToFormat(io_registry.UnifiedReadWrite):
++    """Transform this Cosmology object to another format.
++
++    This function provides the Cosmology interface to the astropy unified I/O
++    layer.  This allows easily converting a Cosmology to a supported format
++    using syntax such as::
++
++      >>> from astropy.cosmology import Planck18
++      >>> Planck18.to_format("mapping")
++
++    Get help on the available formats for ``Cosmology`` using the``help()``
++    method::
++
++      >>> Cosmology.to_format.help()  # Get help and list supported formats
++      >>> Cosmology.to_format.help('[format]')  # Get detailed help on format
++      >>> Cosmology.to_format.list_formats()  # Print list of available formats
++
++    Parameters
++    ----------
++    *args
++        Positional arguments passed through to the data writer.
++    format : str (optional, keyword-only)
++        Format specifier.
++    **kwargs
++        Keyword arguments passed through to the data writer.
++    """
++
++    def __init__(self, instance, cls):
++        super().__init__(instance, cls, "to")
++
++    def __call__(self, *args, **kwargs):
++        return io_registry.to(self._instance, *args, **kwargs)
++
++
++class CosmologyFromFormat(io_registry.UnifiedReadWrite):
++    """Transform from another format to a Cosmology object.
++
++    This function provides the Cosmology interface to the astropy unified I/O
++    layer.  This allows easily converting from a supported format to a Cosmology
++    using syntax such as::
++
++      >>> from astropy.cosmology import Cosmology
++      >>> Cosmology.from_format(mapping, format="mapping")
++
++    Get help on the available formats for ``Cosmology`` using the``help()``
++    method::
++
++      >>> Cosmology.from_format.help()  # Get help and list supported formats
++      >>> Cosmology.from_format.help('[format]')  # Get detailed help on format
++      >>> Cosmology.from_format.list_formats()  # Print list of available formats
++
++    Parameters
++    ----------
++    *args
++        Positional arguments passed through to the data reader.
++    format : str (optional, keyword-only)
++        Format specifier.
++    **kwargs
++        Keyword arguments passed through to the data reader.
++    """
++
++    def __init__(self, instance, cls):
++        super().__init__(instance, cls, "from")
++
++    def __call__(self, *args, **kwargs):
++        return io_registry.from_(self._cls, *args, **kwargs)
+diff --git a/astropy/cosmology/core.py b/astropy/cosmology/core.py
+index 775db70..0dc1ecb 100644
+--- a/astropy/cosmology/core.py
++++ b/astropy/cosmology/core.py
+@@ -85,6 +85,8 @@ class Cosmology(metaclass=ABCMeta):
+     # Unified I/O read and write methods
+     read = UnifiedReadWriteMethod(CosmologyRead)
+     write = UnifiedReadWriteMethod(CosmologyWrite)
++    to_format = UnifiedReadWriteMethod(CosmologyToFormat)
++    from_format = UnifiedReadWriteMethod(CosmologyFromFormat)
+ 
+     def __init_subclass__(cls):
+         super().__init_subclass__()
+diff --git a/astropy/cosmology/__init__.py b/astropy/cosmology/__init__.py
+new file mode 100644
+index 0000000..e68f053
+--- /dev/null
++++ b/astropy/cosmology/__init__.py
+@@ -0,0 +1,20 @@
++# Licensed under a 3-clause BSD style license - see LICENSE.rst
++
++"""
++This is the Astropy cosmology package.
++"""
++
++# Affiliated packages may add whatever they like to this file, but
++# should keep this content at the top.
++# ----------------------------------------------------------------------------
++from ._astropy_init import *
++# ----------------------------------------------------------------------------
++
++if not _ASTROPY_SETUP_:
++    # For egg_info test builds to pass, put package imports here.
++    from . import core
++    from .core import *
++    from . import flrw
++    from .flrw import *
++    # Import io subpackage to register formats
++    from . import io
+diff --git a/astropy/cosmology/io/__init__.py b/astropy/cosmology/io/__init__.py
+new file mode 100644
+index 0000000..ce0cbae
+--- /dev/null
++++ b/astropy/cosmology/io/__init__.py
+@@ -0,0 +1,6 @@
++"""Input/output subpackage for cosmology."""
++# Licensed under a 3-clause BSD style license - see LICENSE.rst
++
++from . import mapping
++
++__all__ = []
+diff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py
+new file mode 100644
+index 0000000..641810c
+--- /dev/null
++++ b/astropy/cosmology/io/mapping.py
+@@ -0,0 +1,144 @@
++"""Convert to/from a mapping (dictionary) representation."""
++import copy
++
++import numpy as np
++
++from astropy.cosmology.core import Cosmology, _COSMOLOGY_CLASSES
++from astropy.io import registry as io_registry
++from astropy.units import Quantity
++
++__all__ = []  # Nothing is publicly scoped
++
++
++def from_mapping(mapping, *, move_to_meta=False, cosmology=None):
++    """Load `~astropy.cosmology.Cosmology` from mapping.
++    
++    Parameters
++    ----------
++    mapping : Mapping
++        Mapping representation of a cosmology.
++    move_to_meta : bool (optional, keyword-only)
++        Whether to move keyword arguments that are not in the Cosmology class'
++        signature to the metadata. This will only be applied if the cosmology
++        class is specified.
++    cosmology : str, `~astropy.cosmology.Cosmology` class, or None (optional, keyword-only)
++        The cosmology class (or string name thereof) to use when constructing
++        the cosmology instance. If `None` (default) the class is identified from
++        the mapping.
++    
++    Returns
++    -------
++    `~astropy.cosmology.Cosmology` instance
++    
++    Raises
++    ------
++    TypeError
++        If the cosmology class is specified but not a subclass of Cosmology.
++    ValueError
++        If the mapping does not contain a 'cosmology' key.
++    """
++    # Get cosmology class
++    if cosmology is None:
++        cosmology = mapping.get("cosmology")
++        if cosmology is None:
++            raise ValueError("mapping must contain a 'cosmology' key")
++    
++    # Convert string to class if needed
++    if isinstance(cosmology, str):
++        if cosmology not in _COSMOLOGY_CLASSES:
++            raise ValueError(f"cosmology {cosmology!r} not in registered classes")
++        cosmology = _COSMOLOGY_CLASSES[cosmology]
++    
++    # Check it's a cosmology class
++    if not (isinstance(cosmology, type) and issubclass(cosmology, Cosmology)):
++        raise TypeError(f"cosmology must be a Cosmology subclass, got {cosmology!r}")
++    
++    # Make a copy to avoid modifying input
++    data = copy.deepcopy(mapping)
++    
++    # Remove cosmology key
++    data.pop("cosmology", None)
++    
++    # Handle metadata
++    meta = data.pop("meta", {})
++    
++    # Move unrecognized parameters to metadata if requested
++    if move_to_meta and cosmology is not None:
++        # Get allowed parameters from signature
++        sig = cosmology._init_signature
++        allowed = set(sig.parameters.keys())
++        
++        # Find extra parameters
++        extra = set(data.keys()) - allowed
++        
++        # Move extras to metadata
++        for key in extra:
++            meta[key] = data.pop(key)
++    
++    # Create and return cosmology instance
++    # Note: _init_signature handles default values
++    ba = cosmology._init_signature.bind_partial(**data)
++    ba.apply_defaults()
++    
++    # Re-add metadata
++    ba.arguments["meta"] = meta
++    
++    return cosmology(*ba.args, **ba.kwargs)
++
++
++def to_mapping(cosmology, *args):
++    """Return the cosmology as a mapping.
++    
++    Parameters
++    ----------
++    cosmology : `~astropy.cosmology.Cosmology`
++        The cosmology instance to convert.
++    *args : tuple
++        Not used. Needed for compatibility with Unified I/O.
++    
++    Returns
++    -------
++    dict
++        Mapping representation of the cosmology.
++    """
++    # Start with the initialization arguments
++    mapping = dict(cosmology._init_arguments)
++    
++    # Add the cosmology class
++    mapping["cosmology"] = cosmology.__class__
++    
++    return mapping
++
++
++def mapping_identify(origin, format, *args, **kwargs):
++    """Identify if object uses the mapping format.
++    
++    Parameters
++    ----------
++    origin : str
++        "read", "write", "to", or "from".
++    format : str or None
++        The format string.
++    *args, **kwargs
++        Additional arguments.
++    
++    Returns
++    -------
++    bool
++        True if the format is mapping.
++    """
++    if origin == "read" or origin == "write":
++        # Not a file format
++        return False
++    
++    # For to/from, check if format is mapping
++    if origin == "to" or origin == "from":
++        return format == "mapping"
++    
++    return False
++
++
++# Register with Unified I/O
++io_registry.register_reader("mapping", Cosmology, from_mapping)
++io_registry.register_writer("mapping", Cosmology, to_mapping)
++io_registry.register_identifier("mapping", Cosmology, mapping_identify)

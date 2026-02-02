@@ -1,0 +1,88 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..172a03f 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -1048,24 +1048,67 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             Any arguments required for the operator (typically, what is to
+             be multiplied with, divided by).
+         """
++        if not self.differentials:
++            # If there are no differentials, we can do the original operation.
++            results = []
++            for component, cls in self.attr_classes.items():
++                value = getattr(self, component)
++                if issubclass(cls, Angle):
++                    results.append(value)
++                else:
++                    results.append(op(value, *args))
+ 
+-        self._raise_if_has_differentials(op.__name__)
+-
+-        results = []
+-        for component, cls in self.attr_classes.items():
+-            value = getattr(self, component)
+-            if issubclass(cls, Angle):
+-                results.append(value)
++            # try/except catches anything that cannot initialize the class, such
++            # as operations that returned NotImplemented or a representation
++            # instead of a quantity (as would happen for, e.g., rep * rep).
++            try:
++                return self.__class__(*results)
++            except Exception:
++                return NotImplemented
++        else:
++            # We have differentials.
++            if self.__class__.__name__ == 'CartesianRepresentation':
++                # For cartesian, we scale the components and the differentials.
++                results = []
++                for component, cls in self.attr_classes.items():
++                    value = getattr(self, component)
++                    if issubclass(cls, Angle):
++                        results.append(value)
++                    else:
++                        results.append(op(value, *args))
++
++                # Also scale the differentials.
++                new_diffs = {}
++                for key, diff in self.differentials.items():
++                    new_diffs[key] = diff._scale_operation(op, *args)
++
++                # Create the new representation with the scaled differentials.
++                new_rep = self.__class__(*results, differentials=new_diffs, copy=False)
++                return new_rep
+             else:
+-                results.append(op(value, *args))
+-
+-        # try/except catches anything that cannot initialize the class, such
+-        # as operations that returned NotImplemented or a representation
+-        # instead of a quantity (as would happen for, e.g., rep * rep).
+-        try:
+-            return self.__class__(*results)
+-        except Exception:
+-            return NotImplemented
++                # For non-cartesian, we transform to cartesian, apply the operation,
++                # and transform back.
++                # First, convert to cartesian with cartesian differentials.
++                from . import CartesianRepresentation, CartesianDifferential
++                crep = self.represent_as(CartesianRepresentation,
++                                         differential_class={k: CartesianDifferential
++                                                             for k in self.differentials})
++                # Apply the scale operation to the cartesian representation.
++                # This will call CartesianRepresentation._scale_operation, which we have
++                # just handled above.
++                result = crep._scale_operation(op, *args)
++                if result is NotImplemented:
++                    return NotImplemented
++                # Now convert back to the original representation.
++                # But note: if the original representation is UnitSphericalRepresentation
++                # and there is a scale change (i.e., multiplication or division by a scalar),
++                # then we should return a SphericalRepresentation.
++                # This is handled by the represent_as method, because when we convert
++                # from cartesian to UnitSphericalRepresentation, it will fail if there is
++                # a non-unit distance. So we should let the conversion handle it.
++                # We convert back to the same class as self, but with the same differential types.
++                diff_classes = {k: diff.__class__ for k, diff in self.differentials.items()}
++                return result.represent_as(self.__class__, diff_classes)
+ 
+     def _combine_operation(self, op, other, reverse=False):
+         """Combine two representation.

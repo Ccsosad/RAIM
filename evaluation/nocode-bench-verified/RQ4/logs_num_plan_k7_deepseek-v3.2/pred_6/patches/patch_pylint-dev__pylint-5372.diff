@@ -1,0 +1,28 @@
+diff --git a/pylint/utils/message_formatter.py b/pylint/utils/message_formatter.py
+new file mode 100644
+index 0000000..9867b6f
+--- /dev/null
++++ b/pylint/utils/message_formatter.py
+@@ -0,0 +1,22 @@
++"""Utilities for formatting messages in Pylint."""
++
++MESSAGE_FIELDS = {
++    "path",
++    "module",
++    "obj",
++    "line",
++    "column",
++    "end_line",
++    "end_column",
++    "symbol",
++    "msg",
++    "msg_id",
++    "category",
++    "confidence",
++    "abspath",
++    "C",
++    "R",
++    "W",
++    "E",
++    "F",
++}

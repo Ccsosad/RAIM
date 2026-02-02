@@ -1,0 +1,83 @@
+diff --git a/xarray/core/common.py b/xarray/core/common.py
+index 6878d7a..d70cf85 100644
+--- a/xarray/core/common.py
++++ b/xarray/core/common.py
+@@ -334,6 +334,36 @@ def get_squeeze_dims(
+     return dim
+ 
+ 
++def infix_dims(dims: Tuple[Hashable, ...], given_dims: Tuple[Hashable, ...]) -> Tuple[Hashable, ...]:
++    """Expand an ellipsis (...) in given_dims to the remaining dimensions.
++
++    Parameters
++    ----------
++    dims : tuple
++        All dimensions of the object.
++    given_dims : tuple
++        Dimensions for transpose, possibly containing an ellipsis.
++
++    Returns
++    -------
++    tuple
++        Expanded dimensions.
++    """
++    if ... not in given_dims:
++        return given_dims
++    if given_dims.count(...) > 1:
++        raise ValueError("cannot use more than one ellipsis in transpose")
++    # Find the index of the ellipsis
++    ellipsis_index = given_dims.index(...)
++    # Dimensions before and after the ellipsis
++    before = given_dims[:ellipsis_index]
++    after = given_dims[ellipsis_index + 1:]
++    # Remaining dimensions are those not already in before or after
++    remaining = [d for d in dims if d not in before and d not in after]
++    # Insert the remaining dimensions in place of the ellipsis
++    return before + tuple(remaining) + after
++
++
+ class DataWithCoords(SupportsArithmetic, AttrAccessMixin):
+     """Shared base class for Dataset and DataArray."""
+ 
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..125fead 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1862,6 +1863,11 @@ class DataArray(AbstractArray, DataWithCoords):
+         numpy.transpose
+         Dataset.transpose
+         """
++        from .common import infix_dims
++        # Expand ellipsis if present
++        if dims and ... in dims:
++            dims = infix_dims(self.dims, dims)
++
+         if dims:
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+@@ -3122,4 +3128,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..55ac0bc 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5449,4 +5449,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

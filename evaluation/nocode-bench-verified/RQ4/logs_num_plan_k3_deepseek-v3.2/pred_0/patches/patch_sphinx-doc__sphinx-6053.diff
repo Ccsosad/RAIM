@@ -1,0 +1,16 @@
+diff --git a/sphinx/ext/autodoc/directive.py b/sphinx/ext/autodoc/directive.py
+index e7fd9fd..0728b6a 100644
+--- a/sphinx/ext/autodoc/directive.py
++++ b/sphinx/ext/autodoc/directive.py
+@@ -75,6 +75,11 @@ def process_documenter_options(documenter, config, options):
+             if name in config.autodoc_default_options and not negated:
+                 options[name] = config.autodoc_default_options[name]
+ 
++    # Convert True values to None for compatibility with option_spec
++    for key, value in list(options.items()):
++        if value is True:
++            options[key] = None
++
+     return Options(assemble_option_dict(options.items(), documenter.option_spec))
+ 
+ 

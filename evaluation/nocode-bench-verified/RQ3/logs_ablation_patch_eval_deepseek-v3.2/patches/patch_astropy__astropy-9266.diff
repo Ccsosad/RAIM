@@ -1,0 +1,74 @@
+diff --git a/astropy/visualization/wcsaxes/coordinates_map.py b/astropy/visualization/wcsaxes/coordinates_map.py
+index 54139f3..f105057 100644
+--- a/astropy/visualization/wcsaxes/coordinates_map.py
++++ b/astropy/visualization/wcsaxes/coordinates_map.py
+@@ -1,13 +1,50 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ from textwrap import indent
+ from collections import OrderedDict
+ 
+ from .coordinate_helpers import CoordinateHelper
+-from .frame import RectangularFrame
++from .frame import RectangularFrame, BaseFrame
+ from .coordinate_range import find_coordinate_range
+ 
+ 
++class RectangularFrame1D(BaseFrame):
++    """
++    A frame for a single axis, which is just a line.
++
++    Parameters
++    ----------
++    axes : :class:`~matplotlib.axes.Axes`
++        The axes to which the frame is attached.
++    transform : `~matplotlib.transforms.Transform`
++        The transform from data to world coordinates.
++    path : `~matplotlib.path.Path`, optional
++        The path for the frame. If not specified, it will be created.
++    """
++    def __init__(self, axes, transform, path=None):
++        super().__init__(axes, transform, path=path)
++        # For 1D, we only have one spine: the line along the axis.
++        # We'll create a simple path from (0,0) to (1,0) in data coordinates.
++        # But note: the frame should be in display coordinates.
++        # Actually, the base class will create a path if not provided.
++        # We'll override the _update_path method to create a line.
++        pass
++
++    def _update_path(self):
++        # Create a horizontal line in data coordinates from (0,0) to (1,0)
++        # and then transform it to display coordinates.
++        import matplotlib.path as mpath
++        from matplotlib.transforms import Affine2D
++        data_to_display = self.axes.transData
++        # In data coordinates, we want a line from (0,0) to (1,0)
++        path_data = [(0.0, 0.0), (1.0, 0.0)]
++        # Transform to display coordinates
++        display_points = data_to_display.transform(path_data)
++        self._path = mpath.Path(display_points, codes=[mpath.Path.MOVETO, mpath.Path.LINETO])
++        self._update_patch_path()
++
++
+ class CoordinatesMap:
+     """
+     A container for coordinate helpers that represents a coordinate system.
+@@ -49,6 +86,11 @@ class CoordinatesMap:
+         self._axes = axes
+         self._transform = transform
+ 
++        # If there is only one visible coordinate and the frame_class is the default,
++        # use RectangularFrame1D instead.
++        if frame_class == RectangularFrame and visible_count == 1:
++            frame_class = RectangularFrame1D
++
+         self.frame = frame_class(axes, self._transform, path=previous_frame_path)
+ 
+         # Set up coordinates
+@@ -168,4 +210,4 @@ class CoordinatesMap:
+     def __repr__(self):
+         s = f'<CoordinatesMap with {len(self._coords)} world coordinates:\n\n'
+         table = indent(str(self._as_table()), '  ')
+-        return s + table + '\n\n>'
++        return s + table + '\n\n>'

@@ -1,0 +1,102 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..fb8fe23 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1862,7 +1863,13 @@ class DataArray(AbstractArray, DataWithCoords):
+         numpy.transpose
+         Dataset.transpose
+         """
+-        if dims:
++        # If no dims are given, reverse the dimensions
++        if not dims:
++            dims = self.dims[::-1]
++        else:
++            # Expand ellipsis if present
++            dims = utils.infix_dims(self.dims, dims)
++
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+@@ -3122,4 +3129,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..55ac0bc 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5449,4 +5449,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/utils.py b/xarray/core/utils.py
+index 383949f..55646fb 100644
+--- a/xarray/core/utils.py
++++ b/xarray/core/utils.py
+@@ -569,6 +569,52 @@ def is_grib_path(path: str) -> bool:
+     return ext in [".grib", ".grb", ".grib2", ".grb2"]
+ 
+ 
++def infix_dims(dims: Tuple[Hashable, ...], given_dims: Tuple[Hashable, ...]) -> Tuple[Hashable, ...]:
++    """
++    Replace an ellipsis (...) in given_dims with the remaining dimensions from dims.
++
++    Parameters
++    ----------
++    dims : tuple
++        All dimensions of the array.
++    given_dims : tuple
++        Dimensions for transpose, possibly containing an ellipsis.
++
++    Returns
++    -------
++    tuple
++        The actual dimension order for transpose.
++
++    Examples
++    --------
++    >>> infix_dims(('x', 'y', 'z'), ('y', 'z', 'x'))
++    ('y', 'z', 'x')
++    >>> infix_dims(('x', 'y', 'z'), (..., 'x'))
++    ('y', 'z', 'x')
++    >>> infix_dims(('x', 'y', 'z'), ('x', ...))
++    ('x', 'y', 'z')
++    """
++    if ... not in given_dims:
++        return given_dims
++
++    if given_dims.count(...) > 1:
++        raise ValueError("cannot use more than one ellipsis in transpose")
++
++    # Find the position of the ellipsis
++    ellipsis_index = given_dims.index(...)
++
++    # Dimensions before the ellipsis
++    before = given_dims[:ellipsis_index]
++    # Dimensions after the ellipsis
++    after = given_dims[ellipsis_index + 1:]
++
++    # The remaining dimensions are those not already in before or after
++    remaining = [d for d in dims if d not in before and d not in after]
++
++    # Insert the remaining dimensions in place of the ellipsis
++    return before + tuple(remaining) + after
++
++
+ def is_uniform_spaced(arr, **kwargs) -> bool:
+     """Return True if values of an array are uniformly spaced and sorted.
+ 

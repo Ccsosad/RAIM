@@ -1,0 +1,19 @@
+diff --git a/sphinx/ext/autosummary/__init__.py b/sphinx/ext/autosummary/__init__.py
+index a7f2a9d..731548b 100644
+--- a/sphinx/ext/autosummary/__init__.py
++++ b/sphinx/ext/autosummary/__init__.py
+@@ -311,6 +311,14 @@ class Autosummary(SphinxDirective):
+                 logger.warning(__('failed to import object %s'), real_name)
+                 items.append((display_name, '', '', real_name))
+                 continue
++            
++            # Check if the object is imported and we should exclude it
++            if (hasattr(documenter, 'imported') and 
++                documenter.imported and 
++                not self.config.autosummary_imported_members):
++                # Skip this imported member
++                continue
++            
+             if documenter.options.members and not documenter.check_module():
+                 continue
+ 

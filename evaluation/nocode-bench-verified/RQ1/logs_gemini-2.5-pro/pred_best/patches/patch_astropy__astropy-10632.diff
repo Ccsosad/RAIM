@@ -1,0 +1,40 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..8b0f313 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -56,6 +56,11 @@ class Conf(_config.ConfigNamespace):
+     Configuration parameters for `astropy.utils.data`.
+     """
+ 
++    allow_internet = _config.ConfigItem(
++        True,
++        'If False, prevents any attempt to download any file from the internet. '
++        'This is intended for use in test suites that want to ensure that no '
++        'internet access is attempted.')
+     dataurl = _config.ConfigItem(
+         'http://data.astropy.org/',
+         'Primary URL for astropy remote data site.')
+@@ -69,8 +74,8 @@ class Conf(_config.ConfigNamespace):
+         'This only provides the default value when not set by https_headers.')
+     remote_timeout = _config.ConfigItem(
+         10.,
+-        'Time to wait for remote data queries (in seconds). Set this to zero '
+-        'to prevent any attempt to download anything.',
++        'Time to wait for remote data queries (in seconds). To disable '
++        'internet access, use the `allow_internet` configuration item.',
+         aliases=['astropy.coordinates.name_resolve.name_resolve_timeout'])
+     compute_hash_block_size = _config.ConfigItem(
+         2 ** 16,  # 64K
+@@ -1003,6 +1008,12 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+ 
+     if remote_url is None:
+         remote_url = source_url
++
++    if not conf.allow_internet:
++        raise urllib.error.URLError(
++            f"URL {remote_url} was supposed to be downloaded but internet access is "
++            f"disabled by `astropy.utils.data.conf.allow_internet`")
++
+     if http_headers is None:
+         http_headers = {}
+ 

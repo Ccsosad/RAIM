@@ -1,0 +1,89 @@
+diff --git a/lib/matplotlib/patches.py b/lib/matplotlib/patches.py
+index 8561725..6873da0 100644
+--- a/lib/matplotlib/patches.py
++++ b/lib/matplotlib/patches.py
+@@ -1654,6 +1654,38 @@ class Ellipse(Patch):
+         return self.get_patch_transform().transform(
+             [(-1, -1), (1, -1), (1, 1), (-1, 1)])
+ 
++    def get_vertices(self):
++        """
++        Return the vertices of the ellipse.
++
++        The vertices are the endpoints of the major axis.
++        """
++        import numpy as np
++        trans = self.get_patch_transform()
++        points = np.array([(1, 0), (-1, 0), (0, 1), (0, -1)])
++        transformed = trans.transform(points)
++        center = np.array(self.get_center())
++        distances = np.linalg.norm(transformed - center, axis=1)
++        # The two points with largest distance are vertices
++        idx_vertices = np.argsort(distances)[-2:]
++        return transformed[idx_vertices]
++
++    def get_co_vertices(self):
++        """
++        Return the co-vertices of the ellipse.
++
++        The co-vertices are the endpoints of the minor axis.
++        """
++        import numpy as np
++        trans = self.get_patch_transform()
++        points = np.array([(1, 0), (-1, 0), (0, 1), (0, -1)])
++        transformed = trans.transform(points)
++        center = np.array(self.get_center())
++        distances = np.linalg.norm(transformed - center, axis=1)
++        # The two points with smallest distance are co-vertices
++        idx_covertices = np.argsort(distances)[:2]
++        return transformed[idx_covertices]
++
+ 
+ class Annulus(Patch):
+     """
+diff --git a/galleries/examples/shapes_and_collections/ellipse_arrow.py b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+new file mode 100644
+index 0000000..15e623b
+--- /dev/null
++++ b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+@@ -0,0 +1,40 @@
++"""
++====================
++Ellipse with arrows at vertices and co-vertices
++====================
++
++This example shows how to use `Ellipse.get_vertices()` and `Ellipse.get_co_vertices()`
++to place arrows on an ellipse.
++"""
++
++import matplotlib.pyplot as plt
++from matplotlib.patches import Ellipse
++
++fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
++
++# First ellipse: counter-clockwise arrow at a vertex
++ellipse1 = Ellipse(xy=(0.5, 0.5), width=0.8, height=0.3, angle=30, edgecolor='b', facecolor='none')
++ax1.add_patch(ellipse1)
++vertices1 = ellipse1.get_vertices()
++# Draw an arrow from the first vertex to the second vertex to indicate direction
++ax1.annotate('', xy=vertices1[1], xytext=vertices1[0],
++            arrowprops=dict(arrowstyle="->", color='r', lw=2))
++ax1.set_xlim(0, 1)
++ax1.set_ylim(0, 1)
++ax1.set_aspect('equal')
++ax1.set_title('Counter-clockwise')
++
++# Second ellipse: clockwise arrow at a co-vertex
++ellipse2 = Ellipse(xy=(0.5, 0.5), width=0.8, height=0.3, angle=30, edgecolor='g', facecolor='none')
++ax2.add_patch(ellipse2)
++covertices2 = ellipse2.get_co_vertices()
++# Draw an arrow from the second co-vertex to the first co-vertex to indicate opposite direction
++ax2.annotate('', xy=covertices2[0], xytext=covertices2[1],
++            arrowprops=dict(arrowstyle="->", color='orange', lw=2))
++ax2.set_xlim(0, 1)
++ax2.set_ylim(0, 1)
++ax2.set_aspect('equal')
++ax2.set_title('Clockwise')
++
++plt.tight_layout()
++plt.show()

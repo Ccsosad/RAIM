@@ -1,0 +1,114 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1017cc4..237254f 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -474,6 +474,13 @@ class Documenter:
+                 # autodoc-process-docstring is fired and can add some
+                 # content if desired
+                 docstrings.append([])
++            # If autodoc_typehints is set to 'description', we need to add type hints
++            # to the docstring.
++            if self.env.config.autodoc_typehints == 'description':
++                typehints_lines = self.get_typehints_description()
++                if typehints_lines:
++                    # Prepend the type hints to the first docstring
++                    docstrings[0] = typehints_lines + docstrings[0]
+             for i, line in enumerate(self.process_doc(docstrings)):
+                 self.add_line(line, sourcename, i)
+ 
+@@ -482,6 +489,14 @@ class Documenter:
+             for line, src in zip(more_content.data, more_content.items):
+                 self.add_line(line, src[0], src[1])
+ 
++    def get_typehints_description(self) -> List[str]:
++        """Get the type hints as description lines.
++
++        This method should be overridden by documenters that support type hints.
++        The default implementation returns an empty list.
++        """
++        return []
++
+     def get_object_members(self, want_all: bool) -> Tuple[bool, List[Tuple[str, Any]]]:
+         """Return `(members_check_module, members)` where `members` is a
+         list of `(membername, member)` pairs of the members of *self.object*.
+@@ -1744,7 +1759,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
+     app.add_config_value('autodoc_default_options', {}, True)
+     app.add_config_value('autodoc_docstring_signature', True, True)
+     app.add_config_value('autodoc_mock_imports', [], True)
+-    app.add_config_value('autodoc_typehints', "signature", True, ENUM("signature", "none"))
++    app.add_config_value('autodoc_typehints', "signature", True, ENUM("signature", "description", "none"))
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
+     app.add_event('autodoc-before-process-signature')
+diff --git a/sphinx/ext/autodoc/typehints_strategy.py b/sphinx/ext/autodoc/typehints_strategy.py
+new file mode 100644
+index 0000000..dd92f11
+--- /dev/null
++++ b/sphinx/ext/autodoc/typehints_strategy.py
+@@ -0,0 +1,66 @@
++"""
++A module to format type hints for display in the description.
++"""
++
++from typing import Any, List, Tuple, Optional
++
++from sphinx.application import Sphinx
++from sphinx.ext.autodoc import Options
++
++
++def format_annotation(annotation: Any) -> str:
++    """Format a type annotation as a string."""
++    if annotation is None:
++        return ''
++    if isinstance(annotation, str):
++        return annotation
++    try:
++        return str(annotation)
++    except Exception:
++        return ''
++
++
++def format_typehints_description(signature: inspect.Signature, typehints: dict,
++                                 config: Any) -> List[str]:
++    """Format the type hints as description text.
++
++    :param signature: The inspected signature.
++    :param typehints: A dictionary of type hints (return and parameter annotations).
++    :param config: The Sphinx config object.
++    :return: A list of lines to be inserted into the docstring.
++    """
++    lines = []
++    for param_name, param in signature.parameters.items():
++        if param.annotation is not inspect.Parameter.empty:
++            annotation = format_annotation(param.annotation)
++            lines.append(':type %s: %s' % (param_name, annotation))
++    if 'return' in typehints and typehints['return'] is not None:
++        annotation = format_annotation(typehints['return'])
++        lines.append(':rtype: %s' % annotation)
++    return lines
++
++
++def get_typehints_description(obj: Any, config: Any) -> List[str]:
++    """Get the type hints description lines for an object.
++
++    This function inspects the object and returns a list of lines
++    that describe the type hints.
++
++    :param obj: The object to inspect.
++    :param config: The Sphinx config object.
++    :return: A list of lines.
++    """
++    import inspect
++    try:
++        signature = inspect.signature(obj)
++    except (TypeError, ValueError):
++        return []
++
++    typehints = {}
++    if signature.return_annotation is not inspect.Signature.empty:
++        typehints['return'] = signature.return_annotation
++    else:
++        typehints['return'] = None
++
++    lines = format_typehints_description(signature, typehints, config)
++    return lines

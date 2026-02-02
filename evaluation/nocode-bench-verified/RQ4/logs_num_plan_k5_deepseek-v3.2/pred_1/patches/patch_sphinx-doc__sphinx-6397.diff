@@ -1,0 +1,15 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..ad283c3 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -416,6 +416,10 @@ class Documenter:
+         if result:
+             args, retann = result
+ 
++        # If autodoc_typehints is set to 'none', hide the return annotation
++        if self.env.config.autodoc_typehints == 'none':
++            retann = None
++
+         if args is not None:
+             return args + (retann and (' -> %s' % retann) or '')
+         else:

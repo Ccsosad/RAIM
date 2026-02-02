@@ -1,0 +1,293 @@
+diff --git a/xarray/__init__.py b/xarray/__init__.py
+index b35ae4c..f13c48e 100644
+--- a/xarray/__init__.py
++++ b/xarray/__init__.py
+@@ -17,7 +17,7 @@ from .conventions import SerializationWarning, decode_cf
+ from .core.alignment import align, broadcast
+ from .core.combine import auto_combine, combine_by_coords, combine_nested
+ from .core.common import ALL_DIMS, full_like, ones_like, zeros_like
+-from .core.computation import apply_ufunc, dot, where
++from .core.computation import apply_ufunc, dot, polyval, where
+ from .core.concat import concat
+ from .core.dataarray import DataArray
+ from .core.dataset import Dataset
+diff --git a/xarray/core/computation.py b/xarray/core/computation.py
+index 15b4590..f1cd1ef 100644
+--- a/xarray/core/computation.py
++++ b/xarray/core/computation.py
+@@ -1215,6 +1215,158 @@ def dot(*arrays, dims=None, **kwargs):
+     return result.transpose(*[d for d in all_dims if d in result.dims])
+ 
+ 
++def polyfit(coord, data, dim, deg, full=False, cov=False, **kwargs):
++    """
++    Least squares polynomial fit.
++
++    This is a low-level function used by `DataArray.polyfit` and `Dataset.polyfit`.
++
++    Parameters
++    ----------
++    coord : DataArray or Variable
++        Coordinate to use for the polynomial fit.
++    data : DataArray or Variable
++        Data to fit.
++    dim : hashable
++        Dimension along which to fit.
++    deg : int
++        Degree of the polynomial.
++    full : bool, optional
++        If True, return the residuals, rank, singular values and rcond.
++    cov : bool, optional
++        If True, return the covariance matrix.
++    **kwargs : optional
++        Additional keyword arguments passed to numpy.polyfit.
++
++    Returns
++    -------
++    polyfit_coefficients : Dataset
++        A dataset containing the coefficients and optionally other statistics.
++    """
++    from .dataset import Dataset
++    from .variable import Variable
++
++    # Ensure we have the right dimension
++    if dim not in data.dims:
++        raise ValueError(f"Dimension {dim} not found in data.")
++
++    # Align coord and data
++    coord_aligned, data_aligned = align(coord, data, join='inner', copy=False)
++
++    # Get the coordinate values along the dimension
++    coord_values = coord_aligned.variable
++    data_values = data_aligned.variable
++
++    # Define the core dimensions for apply_ufunc
++    input_core_dims = [[dim], [dim]]
++    output_core_dims = [["degree"]]
++
++    # Define the function to apply
++    def _polyfit_func(x, y, deg, full, cov, **kwargs):
++        result = np.polyfit(x, y, deg, full=full, cov=cov, **kwargs)
++        if full or cov:
++            # numpy.polyfit returns a tuple when full or cov is True
++            coeff = result[0]
++            extra = result[1:]
++            return (coeff,) + extra
++        else:
++            return (result,)
++
++    # Apply the function
++    if full or cov:
++        # When full or cov is True, we need to handle multiple outputs
++        func = functools.partial(_polyfit_func, deg=deg, full=full, cov=cov, **kwargs)
++        results = apply_ufunc(
++            func,
++            coord_values,
++            data_values,
++            input_core_dims=input_core_dims,
++            output_core_dims=[["degree"], [], [], [], []][: (3 + full + cov)],
++            dask="allowed",
++            output_dtypes=[coord_values.dtype] * (3 + full + cov),
++        )
++        coeff = results[0]
++        extra = results[1:]
++    else:
++        func = functools.partial(_polyfit_func, deg=deg, full=full, cov=cov, **kwargs)
++        results = apply_ufunc(
++            func,
++            coord_values,
++            data_values,
++            input_core_dims=input_core_dims,
++            output_core_dims=[["degree"]],
++            dask="allowed",
++            output_dtypes=[coord_values.dtype],
++        )
++        coeff = results
++        extra = ()
++
++    # Build the dataset
++    coeff_var = Variable("degree", coeff)
++    ds = Dataset({"polyfit_coefficients": coeff_var})
++
++    if full:
++        residuals, rank, singular_values, rcond = extra[:4]
++        ds["residuals"] = Variable([], residuals)
++        ds["rank"] = Variable([], rank)
++        ds["singular_values"] = Variable("degree", singular_values)
++        ds["rcond"] = Variable([], rcond)
++
++    if cov:
++        cov_matrix = extra[-1]
++        ds["covariance_matrix"] = Variable(("degree", "degree_2"), cov_matrix)
++
++    return ds
++
++
++def polyval(coord, coeffs):
++    """
++    Evaluate a polynomial at specific coordinates.
++
++    Parameters
++    ----------
++    coord : DataArray or Variable
++        Coordinate at which to evaluate the polynomial.
++    coeffs : DataArray or Variable
++        Polynomial coefficients, as returned by `polyfit`.
++
++    Returns
++    -------
++    values : DataArray
++        Evaluated polynomial.
++    """
++    from .dataarray import DataArray
++    from .variable import Variable
++
++    # Align coord and coeffs
++    coord_aligned, coeffs_aligned = align(coord, coeffs, join='inner', copy=False)
++
++    # Get the variables
++    coord_var = coord_aligned.variable
++    coeffs_var = coeffs_aligned.variable
++
++    # Define the core dimensions
++    input_core_dims = [[], ["degree"]]
++    output_core_dims = [[]]
++
++    # Define the function
++    def _polyval_func(x, c):
++        return np.polyval(c, x)
++
++    # Apply the function
++    result = apply_ufunc(
++        _polyval_func,
++        coord_var,
++        coeffs_var,
++        input_core_dims=input_core_dims,
++        output_core_dims=output_core_dims,
++        dask="allowed",
++        output_dtypes=[coord_var.dtype],
++    )
++
++    return DataArray(result)
++
++
+ def where(cond, x, y):
+     """Return elements from `x` or `y` depending on `cond`.
+ 
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..7e5daca 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3202,6 +3202,47 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().integrate(dim, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        cov: bool = False,
++        **kwargs,
++    ) -> "Dataset":
++        """
++        Least squares polynomial fit.
++
++        Parameters
++        ----------
++        dim : hashable
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        full : bool, optional
++            If True, return the residuals, rank, singular values and rcond.
++        cov : bool, optional
++            If True, return the covariance matrix.
++        **kwargs : optional
++            Additional keyword arguments passed to numpy.polyfit.
++
++        Returns
++        -------
++        polyfit_coefficients : Dataset
++            A dataset containing the coefficients of the polynomial fit.
++            If `full` is True, additional variables are included: residuals,
++            rank, singular_values, and rcond.
++            If `cov` is True, the covariance matrix is also included.
++
++        See Also
++        --------
++        numpy.polyfit
++        xarray.polyval
++        """
++        from .computation import polyfit
++
++        return polyfit(self, dim=dim, deg=deg, full=full, cov=cov, **kwargs)
++
+     def unify_chunks(self) -> "DataArray":
+         """ Unify chunk size along all chunked dimensions of this DataArray.
+ 
+@@ -3449,4 +3490,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 16f0e97..3c8b40c 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5483,6 +5483,48 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             result = result._integrate_one(c, datetime_unit=datetime_unit)
+         return result
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        cov: bool = False,
++        **kwargs,
++    ) -> "Dataset":
++        """
++        Least squares polynomial fit for each variable in the dataset.
++
++        Parameters
++        ----------
++        dim : hashable
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        full : bool, optional
++            If True, return the residuals, rank, singular values and rcond.
++        cov : bool, optional
++            If True, return the covariance matrix.
++        **kwargs : optional
++            Additional keyword arguments passed to numpy.polyfit.
++
++        Returns
++        -------
++        polyfit_coefficients : Dataset
++            A dataset containing the coefficients of the polynomial fit for each
++            data variable.
++            If `full` is True, additional variables are included: residuals,
++            rank, singular_values, and rcond for each data variable.
++            If `cov` is True, the covariance matrix is also included for each.
++
++        See Also
++        --------
++        numpy.polyfit
++        xarray.polyval
++        """
++        from .computation import polyfit
++
++        return polyfit(self, dim=dim, deg=deg, full=full, cov=cov, **kwargs)
++
+     def _integrate_one(self, coord, datetime_unit=None):
+         from .variable import Variable
+ 
+@@ -5915,4 +5957,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self._replace_vars_and_dims(variables)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

@@ -1,0 +1,28 @@
+diff --git a/lib/matplotlib/spines.py b/lib/matplotlib/spines.py
+index 915b34c..0863fd6 100644
+--- a/lib/matplotlib/spines.py
++++ b/lib/matplotlib/spines.py
+@@ -504,12 +504,19 @@ class SpinesProxy:
+         x.__doc__ = broadcast_targets[0].__doc__
+         return x
+ 
++    def set(self, **kwargs):
++        """Set multiple properties on all spines."""
++        for spine in self._spine_dict.values():
++            spine.set(**kwargs)
++
+     def __dir__(self):
+-        names = []
++        names = set()
+         for spine in self._spine_dict.values():
+-            names.extend(name
+-                         for name in dir(spine) if name.startswith('set_'))
+-        return list(sorted(set(names)))
++            for name in dir(spine):
++                if name.startswith('set_'):
++                    names.add(name)
++        names.add('set')
++        return sorted(names)
+ 
+ 
+ class Spines(MutableMapping):

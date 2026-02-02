@@ -1,0 +1,70 @@
+diff --git a/astropy/__init__.py b/astropy/__init__.py
+index 9e1bf3a..837dd85 100644
+--- a/astropy/__init__.py
++++ b/astropy/__init__.py
+@@ -161,6 +161,9 @@ conf = Conf()
+ from .tests.runner import TestRunner
+ test = TestRunner.make_test_runner_in(__path__[0])
+ 
++# Expose the ScienceState instances for constants
++from .constants.config import physical_constants, astronomical_constants
++
+ 
+ # if we are *not* in setup mode, import the logger and possibly populate the
+ # configuration file with the defaults
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..d272bf7
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,50 @@
++"""
++Configuration for astropy.constants.
++"""
++
++from astropy.config import ScienceState
++
++__all__ = ['physical_constants', 'astronomical_constants']
++
++
++class _PhysicalConstantsState(ScienceState):
++    """
++    ScienceState for the physical constants version.
++    """
++    _value = 'codata2014'
++
++    @classmethod
++    def validate(cls, value):
++        # Map module names to the actual version
++        if value == 'astropyconst13':
++            value = 'codata2010'
++        elif value == 'astropyconst20':
++            value = 'codata2014'
++        # Add more mappings as needed
++        if value not in ('codata2010', 'codata2014'):
++            raise ValueError(f"Invalid physical constants version: {value}")
++        return value
++
++
++class _AstronomicalConstantsState(ScienceState):
++    """
++    ScienceState for the astronomical constants version.
++    """
++    _value = 'iau2015'
++
++    @classmethod
++    def validate(cls, value):
++        # Map module names to the actual version
++        if value == 'astropyconst13':
++            value = 'iau2012'
++        elif value == 'astropyconst20':
++            value = 'iau2015'
++        # Add more mappings as needed
++        if value not in ('iau2012', 'iau2015'):
++            raise ValueError(f"Invalid astronomical constants version: {value}")
++        return value
++
++
++# Create singleton instances
++physical_constants = _PhysicalConstantsState()
++astronomical_constants = _AstronomicalConstantsState()

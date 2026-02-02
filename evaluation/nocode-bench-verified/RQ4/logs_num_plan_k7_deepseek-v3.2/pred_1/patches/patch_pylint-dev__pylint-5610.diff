@@ -1,0 +1,57 @@
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..c4c2660
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,51 @@
++"""Checker for imports of private names."""
++from typing import TYPE_CHECKING
++
++from pylint.checkers import BaseChecker
++from pylint.interfaces import HIGH, IAstroidChecker
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++
++class PrivateImportChecker(BaseChecker):
++    """Check for imports of private names (starting with an underscore)."""
++
++    __implements__ = IAstroidChecker
++
++    name = "import-private-name"
++    msgs = {
++        "C9990": (
++            "Import of private name %s",
++            "import-private-name",
++            "Used when a private name (starting with an underscore) is imported.",
++        )
++    }
++
++    def visit_import(self, node):
++        """Called for import statements."""
++        for name, _ in node.names:
++            if name.startswith("_"):
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=name,
++                    confidence=HIGH,
++                )
++
++    def visit_importfrom(self, node):
++        """Called for import from statements."""
++        for name, alias in node.names:
++            imported_name = alias or name
++            if imported_name.startswith("_"):
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=imported_name,
++                    confidence=HIGH,
++                )
++
++
++def register(linter: "PyLinter") -> None:
++    """Required method to auto-register this checker."""
++    linter.register_checker(PrivateImportChecker(linter))

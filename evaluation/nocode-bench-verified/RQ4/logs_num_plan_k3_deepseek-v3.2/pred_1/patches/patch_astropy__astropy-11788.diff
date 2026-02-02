@@ -1,0 +1,25 @@
+diff --git a/astropy/units/__init__.py b/astropy/units/__init__.py
+index 0853e7b..4710502 100644
+--- a/astropy/units/__init__.py
++++ b/astropy/units/__init__.py
+@@ -43,4 +43,9 @@ del bases
+ # Enable the set of default units.  This notably does *not* include
+ # Imperial units.
+ 
+-set_enabled_units([si, cgs, astrophys, function_units, misc, photometric])
++set_enabled_units([si, cgs, astrophys, function_units, misc, photometric])
++
++# Add milli- prefix to Angstrom if not already present
++from .core import _add_prefixes
++if hasattr(astrophys, 'Angstrom'):
++    _add_prefixes(astrophys.Angstrom, prefixes=True)
+diff --git a/astropy/units/astrophys.py b/astropy/units/astrophys.py
+new file mode 100644
+index 0000000..6114e42
+--- /dev/null
++++ b/astropy/units/astrophys.py
+@@ -0,0 +1,4 @@
++Angstrom = def_unit(['Angstrom', 'AA', 'angstrom'],
++                    doc="Angstrom: 10**-10 m",
++                    format={'latex': r'\AA', 'unicode': 'Å'},
++                    prefixes=True)

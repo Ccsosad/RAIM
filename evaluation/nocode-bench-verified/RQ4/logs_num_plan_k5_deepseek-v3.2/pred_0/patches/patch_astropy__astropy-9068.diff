@@ -1,0 +1,64 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..0d90b96 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,59 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A table with the same column names and length as self, with boolean
++            values indicating element-wise equality.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table with different column names.
++        """
++        from . import Table, MaskedColumn, Column
++
++        if isinstance(other, Table):
++            # Check column names
++            if set(self.colnames) != set(other.colnames):
++                raise ValueError("cannot compare tables with different column names")
++            # Ensure same column order
++            other = other[self.colnames]
++            # Compare each column
++            result = Table()
++            for name in self.colnames:
++                col_self = self[name]
++                col_other = other[name]
++                # For masked columns, we need to consider the mask
++                if isinstance(col_self, MaskedColumn) or isinstance(col_other, MaskedColumn):
++                    # Use np.ma.equal to handle masks
++                    eq = np.ma.equal(col_self, col_other)
++                else:
++                    eq = col_self == col_other
++                result[name] = Column(eq, name=name, dtype=bool)
++        else:
++            # other is an array or scalar
++            # We compare each column to other (broadcasting)
++            result = Table()
++            for name in self.colnames:
++                col = self[name]
++                if isinstance(col, MaskedColumn):
++                    eq = np.ma.equal(col, other)
++                else:
++                    eq = col == other
++                result[name] = Column(eq, name=name, dtype=bool)
++        return result
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

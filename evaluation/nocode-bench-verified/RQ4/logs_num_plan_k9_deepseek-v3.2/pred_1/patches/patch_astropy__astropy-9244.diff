@@ -1,0 +1,69 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..7d75911 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -598,6 +598,36 @@ class IERS_B(IERS):
+         """Set PM source flag for entries in IERS table"""
+         return np.ones_like(i) * FROM_IERS_B
+ 
++from astropy.utils.state import ScienceState
++
++
++class EarthOrientationTableScienceState(ScienceState):
++    """
++    ScienceState to set the Earth orientation table.
++
++    The default value is `None`, which means that the table will be
++    automatically downloaded (if configured) when needed.
++
++    Examples
++    --------
++    >>> from astropy.utils import iers
++    >>> from astropy.utils.iers import IERS_B
++    >>> iers_b = IERS_B.open()
++    >>> iers.earth_orientation_table.set(iers_b)
++    <ScienceState earth_orientation_table: <IERS_B length=...>>
++    >>> iers.earth_orientation_table.set(None)  # Reset to default
++    <ScienceState earth_orientation_table: None>
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        if value is not None and not isinstance(value, IERS):
++            raise TypeError("Earth orientation table must be an IERS instance.")
++        return value
++
++earth_orientation_table = EarthOrientationTableScienceState()
++
+ 
+ class IERS_Auto(IERS_A):
+     """
+@@ -623,11 +653,21 @@ class IERS_Auto(IERS_A):
+         ``iers_table`` class attribute), and further calls to ``open`` will
+         return this stored table.
+ 
++        However, if the global Earth orientation table has been set via
++        `~astropy.utils.iers.earth_orientation_table.set`, that table will be
++        returned instead.
++
+         Returns
+         -------
+         `~astropy.table.QTable` instance with IERS (Earth rotation) data columns
+ 
+         """
++        # First, check if the user has set a global table.
++        global_table = earth_orientation_table.get()
++        if global_table is not None:
++            return global_table
++
++        # Otherwise, proceed with the normal auto-download logic.
+         if not conf.auto_download:
+             cls.iers_table = IERS_B.open()
+             return cls.iers_table
+@@ -801,4 +841,4 @@ class IERS_Auto(IERS_A):
+             table['dX_2000A_B'][:n_iers_b] = iers_b['dX_2000A']
+             table['dY_2000A_B'][:n_iers_b] = iers_b['dY_2000A']
+ 
+-        return table
++        return table

@@ -1,0 +1,35 @@
+diff --git a/astropy/wcs/wcs.py b/astropy/wcs/wcs.py
+index 657d20c..87d6cbf 100644
+--- a/astropy/wcs/wcs.py
++++ b/astropy/wcs/wcs.py
+@@ -3132,6 +3132,13 @@ reduce these to 2 dimensions using the naxis kwarg.
+ 
+         return coord.contained_by(self, **kwargs)
+ 
++    @property
++    def is_1d(self):
++        """
++        Returns True if the WCS is one-dimensional.
++        """
++        return self.naxis == 1
++
+ 
+ def __WCS_unpickle__(cls, dct, fits_data):
+     """
+diff --git a/astropy/wcs/wcsapi/sliced_low_level_wcs.py b/astropy/wcs/wcsapi/sliced_low_level_wcs.py
+index 647d772..5b068b7 100644
+--- a/astropy/wcs/wcsapi/sliced_low_level_wcs.py
++++ b/astropy/wcs/wcsapi/sliced_low_level_wcs.py
+@@ -229,4 +229,11 @@ class SlicedLowLevelWCS(BaseLowLevelWCS):
+         return wcs_info_str(self)
+ 
+     def __str__(self):
+-        return wcs_info_str(self)
++        return wcs_info_str(self)
++
++    @property
++    def is_1d(self):
++        """
++        Returns True if the sliced WCS is one-dimensional.
++        """
++        return self.pixel_n_dim == 1 and self.world_n_dim == 1

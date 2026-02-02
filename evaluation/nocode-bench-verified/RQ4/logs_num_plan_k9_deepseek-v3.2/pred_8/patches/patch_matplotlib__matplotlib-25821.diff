@@ -1,0 +1,122 @@
+diff --git a/lib/mpl_toolkits/mplot3d/axes3d.py b/lib/mpl_toolkits/mplot3d/axes3d.py
+index 7e611ff..12fbc25 100644
+--- a/lib/mpl_toolkits/mplot3d/axes3d.py
++++ b/lib/mpl_toolkits/mplot3d/axes3d.py
+@@ -37,12 +37,13 @@ from matplotlib.tri._triangulation import Triangulation
+ from . import art3d
+ from . import proj3d
+ from . import axis3d
++from .view_share_mixin import ViewShareMixin
+ 
+ 
+ @_docstring.interpd
+ @_api.define_aliases({
+     "xlim": ["xlim3d"], "ylim": ["ylim3d"], "zlim": ["zlim3d"]})
+-class Axes3D(Axes):
++class Axes3D(ViewShareMixin, Axes):
+     """
+     3D Axes object.
+ 
+@@ -64,9 +65,9 @@ class Axes3D(Axes):
+ 
+     def __init__(
+             self, fig, rect=None, *args,
+-            elev=30, azim=-60, roll=0, sharez=None, proj_type='persp',
+-            box_aspect=None, computed_zorder=True, focal_length=None,
+-            **kwargs):
++            elev=30, azim=-60, roll=0, sharez=None, shareview=None,
++            proj_type='persp', box_aspect=None, computed_zorder=True,
++            focal_length=None, **kwargs):
+         """
+         Parameters
+         ----------
+@@ -89,6 +90,8 @@ class Axes3D(Axes):
+             scene to rotate counter-clockwise.
+         sharez : Axes3D, optional
+             Other Axes to share z-limits with.
++        shareview : Axes3D, optional
++            Other Axes to share view angles with.
+         proj_type : {'persp', 'ortho'}
+             The projection type, default 'persp'.
+         box_aspect : 3-tuple of floats, default: None
+@@ -142,6 +145,10 @@ class Axes3D(Axes):
+             self._shared_axes["z"].join(self, sharez)
+             self._adjustable = 'datalim'
+ 
++        self._shareview = shareview
++        if shareview is not None:
++            self._shared_views.join(self, shareview)
++
+         if kwargs.pop('auto_add_to_figure', False):
+             raise AttributeError(
+                 'auto_add_to_figure is no longer supported for Axes3D. '
+@@ -827,6 +834,10 @@ class Axes3D(Axes):
+             dict(x=0, y=1, z=2), vertical_axis=vertical_axis
+         )
+ 
++        # Update shared views if not already updating
++        if hasattr(self, '_shared_views'):
++            self._update_shared_views(self.elev, self.azim, self.roll, self._vertical_axis)
++
+     def set_proj_type(self, proj_type, focal_length=None):
+         """
+         Set the projection type.
+@@ -1110,6 +1121,9 @@ class Axes3D(Axes):
+             self.elev = self.elev + delev
+             self.azim = self.azim + dazim
+             self.stale = True
++            # Update shared views
++            if hasattr(self, '_shared_views'):
++                self._update_shared_views(self.elev, self.azim, self.roll, self._vertical_axis)
+ 
+         elif self.button_pressed in self._pan_btn:
+             # Start the pan event with pixel coordinates
+diff --git a/lib/mpl_toolkits/mplot3d/view_share_mixin.py b/lib/mpl_toolkits/mplot3d/view_share_mixin.py
+new file mode 100644
+index 0000000..239912f
+--- /dev/null
++++ b/lib/mpl_toolkits/mplot3d/view_share_mixin.py
+@@ -0,0 +1,43 @@
++"""
++Mixin for sharing view angles between 3D axes.
++"""
++
++from matplotlib import _api, cbook
++
++class ViewShareMixin:
++    """
++    Mixin to enable sharing view angles between multiple 3D axes.
++    """
++    _shared_views = cbook.Grouper()
++
++    def shareview(self, other):
++        """
++        Share the view angles with *other*.
++
++        This is equivalent to passing ``shareview=other`` when constructing the
++        Axes, and cannot be used if the view is already being shared with
++        another Axes.
++        """
++        _api.check_isinstance(ViewShareMixin, other=other)
++        if hasattr(self, '_shareview') and self._shareview is not None and other is not self._shareview:
++            raise ValueError("view is already shared")
++        self._shared_views.join(self, other)
++        self._shareview = other
++        # Sync the view angles
++        self.view_init(other.elev, other.azim, other.roll, other._vertical_axis)
++
++    def _update_shared_views(self, elev, azim, roll, vertical_axis):
++        """
++        Update the view angles of all axes in the shared group.
++        """
++        if getattr(self, '_updating_view', False):
++            return
++        self._updating_view = True
++        try:
++            for ax in self._shared_views.get_siblings(self):
++                if ax is not self:
++                    ax._updating_view = True
++                    ax.view_init(elev, azim, roll, vertical_axis)
++                    ax._updating_view = False
++        finally:
++            self._updating_view = False

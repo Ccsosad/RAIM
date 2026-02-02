@@ -1,0 +1,16 @@
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 836039e..ad55cc8 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -372,6 +372,11 @@ class TimeBase(ShapedLikeNDArray):
+                 raise ScaleValueError("Scale {!r} is not in the allowed scales "
+                                       "{}".format(scale,
+                                                   sorted(self.SCALES)))
++            # Delay leap seconds update until a transform involving UTC is done
++            if scale.lower() == 'utc':
++                from astropy.utils.iers import update_leap_seconds, iers
++                if iers.conf.auto_download:
++                    update_leap_seconds()
+ 
+         # If either of the input val, val2 are masked arrays then
+         # find the masked elements and fill them.

@@ -1,0 +1,14 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 44120b5..5fbc83b 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -3236,6 +3236,9 @@ class Axes(_AxesBase):
+                                clip_on=False,
+                                label=label)
+             w.set(**wedgeprops)
++            hatch_val = get_next_hatch()
++            if hatch_val is not None:
++                w.set(hatch=hatch_val)
+             slices.append(w)
+             self.add_patch(w)
+ 

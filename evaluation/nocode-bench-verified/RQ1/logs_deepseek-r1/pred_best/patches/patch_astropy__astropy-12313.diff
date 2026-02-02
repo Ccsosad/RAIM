@@ -1,0 +1,91 @@
+diff --git a/astropy/cosmology/io/row.py b/astropy/cosmology/io/row.py
+new file mode 100644
+index 0000000..1083866
+--- /dev/null
++++ b/astropy/cosmology/io/row.py
+@@ -0,0 +1,85 @@
++from astropy.table import Row
++from astropy.cosmology.core import Cosmology
++from astropy.cosmology.connect import convert_registry
++from astropy.cosmology.io.mapping import from_mapping, to_mapping
++
++__all__ = []  # nothing is publicly scoped
++
++
++def from_row(row, *, move_to_meta=False, cosmology=None):
++    """Load `~astropy.cosmology.Cosmology` from an `~astropy.table.Row`.
++
++    Parameters
++    ----------
++    row : `~astropy.table.Row`
++        The row to parse.
++    move_to_meta : bool (optional, keyword-only)
++        Whether to move keyword arguments that are not in the Cosmology class'
++        signature to the Cosmology's metadata. This will only be applied if the
++        Cosmology does NOT have a keyword-only argument (e.g. ``**kwargs``).
++        Arguments moved to the metadata will be merged with existing metadata,
++        preferring specified metadata in the case of a merge conflict
++        (e.g. for ``Cosmology(meta={'key':10}, key=42)``, the ``Cosmology.meta``
++        will be ``{'key': 10}``).
++    cosmology : str, `~astropy.cosmology.Cosmology` class, or None (optional, keyword-only)
++        The cosmology class (or string name thereof) to use when constructing
++        the cosmology instance. The class also provides default parameter values,
++        filling in any non-mandatory arguments missing in 'row'.
++
++    Returns
++    -------
++    `~astropy.cosmology.Cosmology` subclass instance
++    """
++    # parse meta
++    name = row.meta.pop("name", None)
++    meta = row.meta
++    # turn row into mapping (dict of the arguments)
++    mapping = dict(row)
++    mapping["name"] = name
++    mapping.setdefault("cosmology", meta.pop("cosmology", None))
++    mapping["meta"] = meta
++    # build cosmology from map
++    return from_mapping(mapping, move_to_meta=move_to_meta, cosmology=cosmology)
++
++
++def to_row(cosmology, *args, cls=Row):
++    """Convert a `~astropy.cosmology.Cosmology` to an `~astropy.table.Row`.
++
++    Parameters
++    ----------
++    cosmology : `~astropy.cosmology.Cosmology` subclass instance
++    *args
++        Not used. Needed for compatibility with
++        `~astropy.io.registry.UnifiedReadWriteMethod`
++    cls : type (optional, keyword-only)
++        The `~astropy.table.Row` class or subclass. Default is `~astropy.table.Row`.
++
++    Returns
++    -------
++    `~astropy.table.Row`
++        With columns for the cosmology parameters and metadata in the row's meta.
++    """
++    # get mapping
++    m = to_mapping(cosmology, cls=dict)
++    # create Row
++    row = cls(m, meta={"name": m["name"], "cosmology": m["cosmology"].__qualname__})
++    row.remove_columns(["cosmology", "meta", "name"])  # remove redundant columns
++    return row
++
++
++def row_identify(origin, format, *args, **kwargs):
++    """Identify if object uses the Row format.
++
++    Returns
++    -------
++    bool
++    """
++    if origin == "read":
++        return isinstance(args[1], Row) and (format in (None, "astropy.row"))
++    return False
++
++
++# Register
++convert_registry.register_reader("astropy.row", Cosmology, from_row)
++convert_registry.register_writer("astropy.row", Cosmology, to_row)
++convert_registry.register_identifier("astropy.row", Cosmology, row_identify)

@@ -1,0 +1,48 @@
+diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py
+index eb43231..3a17e6e 100644
+--- a/django/urls/resolvers.py
++++ b/django/urls/resolvers.py
+@@ -41,10 +41,19 @@ class ResolverMatch:
+         namespaces=None,
+         route=None,
+         tried=None,
++        captured_kwargs=None,
++        extra_kwargs=None,
+     ):
+         self.func = func
+         self.args = args
+-        self.kwargs = kwargs
++        if captured_kwargs is not None and extra_kwargs is not None:
++            self.captured_kwargs = captured_kwargs
++            self.extra_kwargs = extra_kwargs
++            self.kwargs = {**self.captured_kwargs, **self.extra_kwargs}
++        else:
++            self.captured_kwargs = {}
++            self.extra_kwargs = {}
++            self.kwargs = kwargs
+         self.url_name = url_name
+         self.route = route
+         self.tried = tried
+@@ -654,9 +663,10 @@ class URLResolver:
+                 else:
+                     if sub_match:
+                         # Merge captured arguments in match with submatch
+-                        sub_match_dict = {**kwargs, **self.default_kwargs}
+-                        # Update the sub_match_dict with the kwargs from the sub_match.
+-                        sub_match_dict.update(sub_match.kwargs)
++                        # Merge captured arguments in match with submatch
++                        captured_kwargs = {**kwargs, **sub_match.captured_kwargs}
++                        extra_kwargs = {**self.default_kwargs, **sub_match.extra_kwargs}
++                        sub_match_dict = {**captured_kwargs, **extra_kwargs}
+                         # If there are *any* named groups, ignore all non-named groups.
+                         # Otherwise, pass all non-named arguments as positional
+                         # arguments.
+@@ -678,6 +688,8 @@ class URLResolver:
+                             [self.namespace] + sub_match.namespaces,
+                             self._join_route(current_route, sub_match.route),
+                             tried,
++                            captured_kwargs=captured_kwargs,
++                            extra_kwargs=extra_kwargs,
+                         )
+                     tried.append([pattern])
+             raise Resolver404({"tried": tried, "path": new_path})

@@ -1,0 +1,83 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..e3d2e8b 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -326,9 +326,20 @@ class DatetimeAccessor(Properties):
+     nanosecond = Properties._tslib_field_accessor(
+         "nanosecond", "The nanoseconds of the datetime", np.int64
+     )
+-    weekofyear = Properties._tslib_field_accessor(
+-        "weekofyear", "The week ordinal of the year", np.int64
+-    )
++    @property
++    def weekofyear(self):
++        import warnings
++        warnings.warn(
++            "weekofyear is deprecated. Use isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        obj_type = type(self._obj)
++        result = _get_date_field(self._obj.data, "weekofyear", np.int64)
++        return obj_type(
++            result, name="weekofyear", coords=self._obj.coords, dims=self._obj.dims
++        )
++
+     week = weekofyear
+     dayofweek = Properties._tslib_field_accessor(
+         "dayofweek", "The day of the week with Monday=0, Sunday=6", np.int64
+@@ -382,6 +393,54 @@ class DatetimeAccessor(Properties):
+         "is_leap_year", "Boolean indicator if the date belongs to a leap year.", bool
+     )
+ 
++    def isocalendar(self):
++        """
++        Returns a Dataset with the year, week, and weekday calculated according to the ISO 8601 calendar.
++
++        Returns
++        -------
++        Dataset
++            A Dataset with three data variables: year, week, and weekday.
++
++        Notes
++        -----
++        Requires pandas version 1.1.0 or greater.
++        """
++        from distutils.version import LooseVersion
++        import pandas as pd
++        import warnings
++
++        if LooseVersion(pd.__version__) < LooseVersion("1.1.0"):
++            raise AttributeError(
++                "isocalendar requires pandas version 1.1.0 or greater."
++            )
++
++        from ..dataset import Dataset
++
++        data = self._obj.data
++        # For now, we don't support dask arrays in isocalendar
++        if is_duck_dask_array(data):
++            raise NotImplementedError("isocalendar is not implemented for dask arrays.")
++
++        # Convert to pandas Series
++        series = pd.Series(data.ravel())
++        result = series.dt.isocalendar()
++        # Reshape back to original shape
++        year = result['year'].values.reshape(data.shape)
++        week = result['week'].values.reshape(data.shape)
++        day = result['day'].values.reshape(data.shape)
++
++        # Create a Dataset
++        ds = Dataset(
++            {
++                "year": (self._obj.dims, year),
++                "week": (self._obj.dims, week),
++                "day": (self._obj.dims, day),
++            },
++            coords=self._obj.coords,
++        )
++        return ds
++
+ 
+ class TimedeltaAccessor(Properties):
+     """Access Timedelta fields for DataArrays with Timedelta-like dtypes.

@@ -1,0 +1,84 @@
+diff --git a/sphinx/builders/htmlhelp.py b/sphinx/builders/htmlhelp.py
+index 4273245..75d624b 100644
+--- a/sphinx/builders/htmlhelp.py
++++ b/sphinx/builders/htmlhelp.py
+@@ -169,7 +169,9 @@ chm_locales = {
+ }
+ 
+ 
+-class HTMLHelpBuilder(StandaloneHTMLBuilder):
++from .suffix_mixin import SuffixMixin
++
++class HTMLHelpBuilder(StandaloneHTMLBuilder, SuffixMixin):
+     """
+     Builder that also outputs Windows HTML help project, contents and
+     index files.  Adapted from the original Doc/tools/prechm.py.
+@@ -196,9 +198,8 @@ class HTMLHelpBuilder(StandaloneHTMLBuilder):
+     def init(self):
+         # type: () -> None
+         StandaloneHTMLBuilder.init(self)
+-        # the output files for HTML help must be .html only
+-        self.out_suffix = '.html'
+-        self.link_suffix = '.html'
++        # set the configurable suffixes
++        self.set_suffix()
+         # determine the correct locale setting
+         locale = chm_locales.get(self.config.language)
+         if locale is not None:
+@@ -265,7 +266,7 @@ class HTMLHelpBuilder(StandaloneHTMLBuilder):
+                                                 self.config.master_doc + self.out_suffix))
+             for indexname, indexcls, content, collapse in self.domain_indices:
+                 f.write('<LI> ' + object_sitemap % (indexcls.localname,
+-                                                    '%s.html' % indexname))
++                                                    '%s%s' % (indexname, self.out_suffix)))
+             # the TOC
+             tocdoc = self.env.get_and_resolve_doctree(
+                 self.config.master_doc, self, prune_toctrees=False)
+@@ -341,9 +342,11 @@ def setup(app):
+     app.add_builder(HTMLHelpBuilder)
+ 
+     app.add_config_value('htmlhelp_basename', lambda self: make_filename(self.project), None)
++    app.add_config_value('htmlhelp_file_suffix', '.html', 'html')
++    app.add_config_value('htmlhelp_link_suffix', '.html', 'html')
+ 
+     return {
+         'version': 'builtin',
+         'parallel_read_safe': True,
+         'parallel_write_safe': True,
+-    }
++    }
+diff --git a/sphinx/builders/suffix_mixin.py b/sphinx/builders/suffix_mixin.py
+new file mode 100644
+index 0000000..f632a5c
+--- /dev/null
++++ b/sphinx/builders/suffix_mixin.py
+@@ -0,0 +1,29 @@
++"""
++SuffixMixin: a mixin class for builders that need configurable file and link suffixes.
++"""
++
++
++class SuffixMixin:
++    """
++    This mixin provides configurable file and link suffixes for builders.
++    It reads the configuration values:
++        * <builder_name>_file_suffix
++        * <builder_name>_link_suffix
++    If these are not set, it falls back to the builder's default suffixes.
++    """
++    # Default suffixes for the builder
++    out_suffix = '.html'
++    link_suffix = '.html'
++
++    def get_out_suffix(self):
++        """Return the file suffix for generated files."""
++        return getattr(self.config, f'{self.name}_file_suffix', self.out_suffix)
++
++    def get_link_suffix(self):
++        """Return the suffix for links."""
++        return getattr(self.config, f'{self.name}_link_suffix', self.link_suffix)
++
++    def set_suffix(self):
++        """Set the out_suffix and link_suffix from configuration."""
++        self.out_suffix = self.get_out_suffix()
++        self.link_suffix = self.get_link_suffix()

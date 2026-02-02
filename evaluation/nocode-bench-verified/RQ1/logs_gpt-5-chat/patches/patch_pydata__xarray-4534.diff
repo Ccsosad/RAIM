@@ -1,0 +1,49 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..ff6c5cc 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -382,6 +382,44 @@ class DatetimeAccessor(Properties):
+         "is_leap_year", "Boolean indicator if the date belongs to a leap year.", bool
+     )
+ 
++    def isocalendar(self):
++        """
++        Return a Dataset with ISO 8601 calendar fields: year, week, and weekday.
++
++        Each component is computed from pandas' isocalendar and returned
++        as a DataArray within a Dataset.
++
++        Returns
++        -------
++        xarray.Dataset
++            A dataset with variables ``year``, ``week``, and ``weekday``.
++
++        Raises
++        ------
++        ImportError
++            If pandas is older than 1.1.0 where ``isocalendar`` is unavailable.
++        """
++        from distutils.version import LooseVersion
++        import pandas as pd
++        from xarray import Dataset, DataArray
++
++        if LooseVersion(pd.__version__) < LooseVersion("1.1.0"):
++            raise ImportError(
++                "pandas version >= 1.1.0 required for isocalendar support"
++            )
++
++        series = pd.Series(self._obj.data.ravel())
++        iso_df = series.dt.isocalendar()
++        dataset_dict = {}
++        for field in ["year", "week", "weekday"]:
++            dataset_dict[field] = DataArray(
++                iso_df[field].values.reshape(self._obj.shape),
++                name=field,
++                coords=self._obj.coords,
++                dims=self._obj.dims,
++            )
++        return Dataset(dataset_dict)
++
+ 
+ class TimedeltaAccessor(Properties):
+     """Access Timedelta fields for DataArrays with Timedelta-like dtypes.

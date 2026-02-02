@@ -1,0 +1,36 @@
+diff --git a/pylint/pyreverse/diadefslib.py b/pylint/pyreverse/diadefslib.py
+index 7f83c91..e82b1a3 100644
+--- a/pylint/pyreverse/diadefslib.py
++++ b/pylint/pyreverse/diadefslib.py
+@@ -10,6 +10,8 @@ import argparse
+ from collections.abc import Generator
+ from typing import Any
+ 
++import os
++import sys
+ import astroid
+ from astroid import nodes
+ 
+@@ -67,10 +69,20 @@ class DiaDefGenerator:
+         return self.anc_level, self.association_level
+ 
+     def show_node(self, node: nodes.ClassDef) -> bool:
+-        """True if builtins and not show_builtins."""
++        """True if builtins and not show_builtins, or stdlib and not show_stdlib."""
+         if self.config.show_builtin:
+             return True
+-        return node.root().name != "builtins"  # type: ignore[no-any-return]
++        if node.root().name == "builtins":
++            return False
++        if not self.config.show_stdlib:
++            module = node.root()
++            if module.file:
++                # Normalize paths for comparison
++                stdlib_paths = [os.path.realpath(p) for p in [sys.prefix, sys.base_prefix]]
++                module_path = os.path.realpath(module.file)
++                if any(module_path.startswith(p) for p in stdlib_paths):
++                    return False
++        return True
+ 
+     def add_class(self, node: nodes.ClassDef) -> None:
+         """Visit one class and add it to diagram."""

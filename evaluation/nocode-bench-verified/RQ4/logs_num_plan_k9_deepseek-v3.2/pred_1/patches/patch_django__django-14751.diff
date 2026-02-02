@@ -1,0 +1,83 @@
+diff --git a/django/core/management/commands/makemigrations.py b/django/core/management/commands/makemigrations.py
+index 66985c1..907d2ad 100644
+--- a/django/core/management/commands/makemigrations.py
++++ b/django/core/management/commands/makemigrations.py
+@@ -57,9 +57,16 @@ class Command(BaseCommand):
+             '--check', action='store_true', dest='check_changes',
+             help='Exit with a non-zero status if model changes are missing migrations.',
+         )
++        parser.add_argument(
++            '--scriptable', action='store_true',
++            help='Diverts log output and input prompts to stderr, writing only paths of generated migration files to stdout.',
++        )
+ 
+     def log(self, msg):
+-        self.stdout.write(msg)
++        if getattr(self, 'scriptable', False):
++            self.stderr.write(msg)
++        else:
++            self.stdout.write(msg)
+ 
+     @no_translations
+     def handle(self, *app_labels, **options):
+@@ -73,6 +80,7 @@ class Command(BaseCommand):
+             raise CommandError('The migration name must be a valid Python identifier.')
+         self.include_header = options['include_header']
+         check_changes = options['check_changes']
++        self.scriptable = options['scriptable']
+ 
+         # Make sure the app they asked for exists
+         app_labels = set(app_labels)
+@@ -144,10 +152,11 @@ class Command(BaseCommand):
+             return self.handle_merge(loader, conflicts)
+ 
+         if self.interactive:
++            prompt_output = self.stderr if self.scriptable else self.stdout
+             questioner = InteractiveMigrationQuestioner(
+                 specified_apps=app_labels,
+                 dry_run=self.dry_run,
+-                prompt_output=self.stdout,
++                prompt_output=prompt_output,
+             )
+         else:
+             questioner = NonInteractiveMigrationQuestioner(
+@@ -223,7 +232,10 @@ class Command(BaseCommand):
+                         migration_string = writer.path
+                     if migration_string.startswith('..'):
+                         migration_string = writer.path
+-                    self.log('  %s\n' % self.style.MIGRATE_LABEL(migration_string))
++                    if self.scriptable:
++                        self.stdout.write('  %s\n' % self.style.MIGRATE_LABEL(migration_string))
++                    else:
++                        self.log('  %s\n' % self.style.MIGRATE_LABEL(migration_string))
+                     for operation in migration.operations:
+                         self.log('    - %s' % operation.describe())
+                 if not self.dry_run:
+@@ -254,7 +266,8 @@ class Command(BaseCommand):
+         if it's safe; otherwise, advises on how to fix it.
+         """
+         if self.interactive:
+-            questioner = InteractiveMigrationQuestioner(prompt_output=self.stdout)
++            prompt_output = self.stderr if self.scriptable else self.stdout
++            questioner = InteractiveMigrationQuestioner(prompt_output=prompt_output)
+         else:
+             questioner = MigrationQuestioner(defaults={'ask_merge': True})
+ 
+@@ -326,7 +339,10 @@ class Command(BaseCommand):
+                     with open(writer.path, "w", encoding='utf-8') as fh:
+                         fh.write(writer.as_string())
+                     if self.verbosity > 0:
+-                        self.log('\nCreated new merge migration %s' % writer.path)
++                        if self.scriptable:
++                            self.stdout.write('\nCreated new merge migration %s' % writer.path)
++                        else:
++                            self.log('\nCreated new merge migration %s' % writer.path)
+                 elif self.verbosity == 3:
+                     # Alternatively, makemigrations --merge --dry-run --verbosity 3
+                     # will log the merge migrations rather than saving the file
+@@ -334,4 +350,4 @@ class Command(BaseCommand):
+                     self.log(self.style.MIGRATE_HEADING(
+                         "Full merge migrations file '%s':" % writer.filename
+                     ))
+-                    self.log(writer.as_string())
++                    self.log(writer.as_string())

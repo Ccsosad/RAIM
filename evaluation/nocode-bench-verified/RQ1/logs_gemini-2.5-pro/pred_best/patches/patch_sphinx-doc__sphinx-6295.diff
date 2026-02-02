@@ -1,0 +1,109 @@
+diff --git a/sphinx/domains/python.py b/sphinx/domains/python.py
+index 612ff28..7add2d6 100644
+--- a/sphinx/domains/python.py
++++ b/sphinx/domains/python.py
+@@ -438,10 +438,22 @@ class PyModulelevel(PyObject):
+ class PyFunction(PyObject):
+     """Description of a function."""
+ 
++    option_spec = PyObject.option_spec.copy()
++    option_spec.update({
++        'async': directives.flag,
++    })
++
+     def needs_arglist(self):
+         # type: () -> bool
+         return True
+ 
++    def get_signature_prefix(self, sig):
++        # type: (str) -> str
++        if 'async' in self.options:
++            return 'async '
++        else:
++            return ''
++
+     def get_index_text(self, modname, name_cls):
+         # type: (str, Tuple[str, str]) -> str
+         name, cls = name_cls
+@@ -575,6 +587,7 @@ class PyMethod(PyObject):
+     option_spec.update({
+         'classmethod': directives.flag,
+         'staticmethod': directives.flag,
++        'async': directives.flag,
+     })
+ 
+     def needs_arglist(self):
+@@ -583,12 +596,14 @@ class PyMethod(PyObject):
+ 
+     def get_signature_prefix(self, sig):
+         # type: (str) -> str
++        prefix = ''
++        if 'async' in self.options:
++            prefix += 'async '
+         if 'staticmethod' in self.options:
+-            return 'static '
++            prefix += 'static '
+         elif 'classmethod' in self.options:
+-            return 'classmethod '
+-        else:
+-            return ''
++            prefix += 'classmethod '
++        return prefix
+ 
+     def get_index_text(self, modname, name_cls):
+         # type: (str, Tuple[str, str]) -> str
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index cd5ce78..935622f 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1030,6 +1030,13 @@ class FunctionDocumenter(DocstringSignatureMixin, ModuleLevelDocumenter):  # typ
+         args = args.replace('\\', '\\\\')
+         return args
+ 
++    def add_directive_header(self, sig):
++        # type: (str) -> None
++        super().add_directive_header(sig)
++        if inspect.iscoroutinefunction(self.object):
++            sourcename = self.get_sourcename()
++            self.add_line('   :async:', sourcename)
++
+     def document_members(self, all_members=False):
+         # type: (bool) -> None
+         pass
+@@ -1256,6 +1263,13 @@ class DataDocumenter(ModuleLevelDocumenter):
+             self.add_line('   :annotation: %s' % self.options.annotation,
+                           sourcename)
+ 
++    def add_directive_header(self, sig):
++        # type: (str) -> None
++        super().add_directive_header(sig)
++        if inspect.iscoroutinefunction(self.object):
++            sourcename = self.get_sourcename()
++            self.add_line('   :async:', sourcename)
++
+     def document_members(self, all_members=False):
+         # type: (bool) -> None
+         pass
+@@ -1317,12 +1331,22 @@ class MethodDocumenter(DocstringSignatureMixin, ClassLevelDocumenter):  # type:
+         super().add_directive_header(sig)
+ 
+         sourcename = self.get_sourcename()
++        if inspect.iscoroutinefunction(self.object):
++            self.add_line('   :async:', sourcename)
++
+         obj = self.parent.__dict__.get(self.object_name, self.object)
+         if inspect.isclassmethod(obj):
+             self.add_line('   :classmethod:', sourcename)
+         elif inspect.isstaticmethod(obj, cls=self.parent, name=self.object_name):
+             self.add_line('   :staticmethod:', sourcename)
+ 
++    def add_directive_header(self, sig):
++        # type: (str) -> None
++        super().add_directive_header(sig)
++        if inspect.iscoroutinefunction(self.object):
++            sourcename = self.get_sourcename()
++            self.add_line('   :async:', sourcename)
++
+     def document_members(self, all_members=False):
+         # type: (bool) -> None
+         pass

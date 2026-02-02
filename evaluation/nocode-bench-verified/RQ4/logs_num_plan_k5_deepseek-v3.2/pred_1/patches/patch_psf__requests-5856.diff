@@ -1,0 +1,50 @@
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..b88f9c0 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -882,12 +882,8 @@ class Response(object):
+         r"""Returns the json-encoded content of a response, if any.
+ 
+         :param \*\*kwargs: Optional arguments that ``json.loads`` takes.
+-        :raises simplejson.JSONDecodeError: If the response body does not
+-            contain valid json and simplejson is installed.
+-        :raises json.JSONDecodeError: If the response body does not contain
+-            valid json and simplejson is not installed on Python 3.
+-        :raises ValueError: If the response body does not contain valid
+-            json and simplejson is not installed on Python 2.        
++        :raises requests.exceptions.JSONDecodeError: If the response body does not
++            contain valid json.
+         """
+ 
+         if not self.encoding and self.content and len(self.content) > 3:
+@@ -907,7 +903,12 @@ class Response(object):
+                     # and the server didn't bother to tell us what codec *was*
+                     # used.
+                     pass
+-        return complexjson.loads(self.text, **kwargs)
++        try:
++            return complexjson.loads(self.text, **kwargs)
++        except (ValueError, TypeError) as e:
++            # Catch JSON decode errors and re-raise as requests.exceptions.JSONDecodeError
++            from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
++            raise RequestsJSONDecodeError(e, request=self)
+ 
+     @property
+     def links(self):
+@@ -963,4 +964,4 @@ class Response(object):
+ 
+         release_conn = getattr(self.raw, 'release_conn', None)
+         if release_conn is not None:
+-            release_conn()
++            release_conn()
+diff --git a/requests/exceptions.py b/requests/exceptions.py
+new file mode 100644
+index 0000000..fd2af6b
+--- /dev/null
++++ b/requests/exceptions.py
+@@ -0,0 +1,5 @@
++class InvalidJSONError(ValueError):
++    """A JSON error occurred."""
++
++class JSONDecodeError(InvalidJSONError):
++    """Failed to decode JSON because of invalid JSON."""

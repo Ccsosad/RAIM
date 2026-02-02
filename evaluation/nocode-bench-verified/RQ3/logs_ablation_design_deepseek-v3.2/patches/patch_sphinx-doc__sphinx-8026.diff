@@ -1,0 +1,59 @@
+diff --git a/sphinx/builders/html/__init__.py b/sphinx/builders/html/__init__.py
+index c052c27..e65aeb4 100644
+--- a/sphinx/builders/html/__init__.py
++++ b/sphinx/builders/html/__init__.py
+@@ -604,6 +604,8 @@ class StandaloneHTMLBuilder(Builder):
+ 
+     def write_doc_serialized(self, docname: str, doctree: nodes.document) -> None:
+         self.imgpath = relative_uri(self.get_target_uri(docname), self.imagedir)
++        # Set the current document name in the environment's temp_data for use in token expansion
++        self.env.temp_data['docname'] = docname
+         self.post_process_images(doctree)
+         title_node = self.env.longtitles.get(docname)
+         title = self.render_partial(title_node)['title'] if title_node else ''
+diff --git a/sphinx/environment/adapters/asset.py b/sphinx/environment/adapters/asset.py
+new file mode 100644
+index 0000000..802ae60
+--- /dev/null
++++ b/sphinx/environment/adapters/asset.py
+@@ -0,0 +1,6 @@
++    def get_image_filename_for_language(self, filename, language):
++        """Get the image filename for the specified language.
++        """
++        # Get the current document from the environment's temporary data
++        docname = self.env.temp_data.get('docname')
++        return get_image_filename_for_language(filename, self.env, docname)
+diff --git a/sphinx/util/images.py b/sphinx/util/images.py
+new file mode 100644
+index 0000000..941993b
+--- /dev/null
++++ b/sphinx/util/images.py
+@@ -0,0 +1,28 @@
++def get_image_filename_for_language(filename, env, docname=None):
++    """Get the image filename for the specified language.
++    """
++    format = env.config.figure_language_filename
++    if not format:
++        return filename
++
++    dirname = path.dirname(filename)
++    basename = path.basename(filename)
++    root, ext = path.splitext(basename)
++    if docname:
++        docdir = path.dirname(docname)
++        docpath = docdir + '/' if docdir else ''
++    else:
++        docpath = ''
++    d = {
++        'root': root,
++        'path': dirname + '/' if dirname else '',
++        'basename': basename,
++        'ext': ext,
++        'language': env.config.language,
++        'docpath': docpath,
++    }
++    try:
++        return format.format(**d)
++    except KeyError as exc:
++        logger.warning(__('Invalid figure_language_filename format: %s'), exc)
++        return filename

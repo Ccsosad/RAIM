@@ -1,0 +1,34 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..c087f59 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -137,9 +137,18 @@ def _solve_sparse_cg(
+     return coefs
+ 
+ 
+-def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
++def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3, X_offset=None, X_scale=None, sample_weight_sqrt=None):
+     n_samples, n_features = X.shape
+-    coefs = np.empty((y.shape[1], n_features), dtype=X.dtype)
++    if X_offset is not None and X_scale is not None and sample_weight_sqrt is not None:
++        # Use the centered operator with intercept column
++        X_op = _X_CenterStackOp(X, X_offset / X_scale, sample_weight_sqrt)
++        # The operator has n_features + 1 columns (including intercept)
++        n_coef = n_features + 1
++    else:
++        X_op = X
++        n_coef = n_features
++
++    coefs = np.empty((y.shape[1], n_coef), dtype=X.dtype)
+     n_iter = np.empty(y.shape[1], dtype=np.int32)
+ 
+     # According to the lsqr documentation, alpha = damp^2.
+@@ -148,7 +157,7 @@ def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
+     for i in range(y.shape[1]):
+         y_column = y[:, i]
+         info = sp_linalg.lsqr(
+-            X, y_column, damp=sqrt_alpha[i], atol=tol, btol=tol, iter_lim=max_iter
++            X_op, y_column, damp=sqrt_alpha[i], atol=tol, btol=tol, iter_lim=max_iter
+         )
+         coefs[i] = info[0]
+         n_iter[i] = info[2]

@@ -1,0 +1,30 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 677b319..3e79bc6 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -2465,8 +2465,18 @@ class Axes(_AxesBase):
+         else:  # horizontal
+             datavalues = width
+ 
++        # If label is a list, assign each label to the corresponding patch
++        # and set the container label to '_nolegend_'
++        if (isinstance(label, (list, tuple, np.ndarray)) and 
++                len(label) == len(patches)):
++            for patch, lbl in zip(patches, label):
++                patch.set_label(lbl)
++            container_label = '_nolegend_'
++        else:
++            container_label = label
++
+         bar_container = BarContainer(patches, errorbar, datavalues=datavalues,
+-                                     orientation=orientation, label=label)
++                                     orientation=orientation, label=container_label)
+         self.add_container(bar_container)
+ 
+         if tick_labels is not None:
+@@ -8162,4 +8172,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

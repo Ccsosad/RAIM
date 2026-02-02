@@ -1,0 +1,65 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index fb4476d..d05d467 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -913,6 +913,27 @@ class FacetGrid(Grid):
+                 ax.set_yticklabels(labels, **kwargs)
+         return self
+ 
++    def tick_params(self, **kwargs):
++        """
++        Customize the appearance of ticks, tick labels, and gridlines for all subplots.
++
++        This method calls `matplotlib.axes.Axes.tick_params` on each axis in the grid.
++        See the documentation for that method for more details.
++
++        Parameters
++        ----------
++        **kwargs : dict
++            Keyword arguments are passed to `Axes.tick_params`.
++
++        Returns
++        -------
++        self : object
++            Returns self for method chaining.
++        """
++        for ax in self.axes.flat:
++            ax.tick_params(**kwargs)
++        return self
++
+     def set_titles(self, template=None, row_template=None, col_template=None,
+                    **kwargs):
+         """Draw titles either above each facet or on the grid margins.
+@@ -1491,6 +1512,32 @@ class PairGrid(Grid):
+         self._add_axis_labels()
+         return self
+ 
++    def tick_params(self, **kwargs):
++        """
++        Customize the appearance of ticks, tick labels, and gridlines for all subplots.
++
++        This method calls `matplotlib.axes.Axes.tick_params` on each axis in the grid.
++        See the documentation for that method for more details.
++
++        Parameters
++        ----------
++        **kwargs : dict
++            Keyword arguments are passed to `Axes.tick_params`.
++
++        Returns
++        -------
++        self : object
++            Returns self for method chaining.
++        """
++        for ax in self.axes.flat:
++            if ax is not None:  # Some axes might be None in corner mode
++                ax.tick_params(**kwargs)
++        # Also apply to diagonal axes if they exist
++        if self.diag_axes is not None:
++            for ax in self.diag_axes.flat:
++                ax.tick_params(**kwargs)
++        return self
++
+     def _map_diag_iter_hue(self, func, **kwargs):
+         """Put marginal plot on each diagonal axes, iterating over hue."""
+         # Plot on each of the diagonal axes

@@ -1,0 +1,116 @@
+diff --git a/sklearn/datasets/_kddcup99.py b/sklearn/datasets/_kddcup99.py
+index 5405c9d..d646d94 100644
+--- a/sklearn/datasets/_kddcup99.py
++++ b/sklearn/datasets/_kddcup99.py
+@@ -42,13 +42,30 @@ ARCHIVE_10_PERCENT = RemoteFileMetadata(
+     checksum=('8045aca0d84e70e622d1148d7df78249'
+               '6f6333bf6eb979a1b0837c42a9fd9561'))
+ 
++FEATURE_NAMES_FULL = ["duration", "protocol_type", "service", "flag",
++                      "src_bytes", "dst_bytes", "land", "wrong_fragment",
++                      "urgent", "hot", "num_failed_logins", "logged_in",
++                      "num_compromised", "root_shell", "su_attempted",
++                      "num_root", "num_file_creations", "num_shells",
++                      "num_access_files", "num_outbound_cmds", "is_host_login",
++                      "is_guest_login", "count", "srv_count", "serror_rate",
++                      "srv_serror_rate", "rerror_rate", "srv_rerror_rate",
++                      "same_srv_rate", "diff_srv_rate", "srv_diff_host_rate",
++                      "dst_host_count", "dst_host_srv_count",
++                      "dst_host_same_srv_rate", "dst_host_diff_srv_rate",
++                      "dst_host_same_src_port_rate", "dst_host_srv_diff_host_rate",
++                      "dst_host_serror_rate", "dst_host_srv_serror_rate",
++                      "dst_host_rerror_rate", "dst_host_srv_rerror_rate"]
++TARGET_NAMES = ["target"]
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+ @_deprecate_positional_args
+ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+                    random_state=None,
+-                   percent10=True, download_if_missing=True, return_X_y=False):
++                   percent10=True, download_if_missing=True, return_X_y=False,
++                   as_frame=False):
+     """Load the kddcup99 dataset (classification).
+ 
+     Download it if necessary.
+@@ -97,6 +114,15 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+ 
+         .. versionadded:: 0.20
+ 
++    as_frame : bool, default=False
++        If True, the data is a pandas DataFrame including columns with
++        appropriate dtypes (numeric). The target is a pandas DataFrame or
++        Series depending on the number of target columns. If `return_X_y` is
++        True, then (`data`, `target`) will be pandas DataFrames or Series as
++        described below.
++
++        .. versionadded:: 0.24
++
+     Returns
+     -------
+     data : :class:`~sklearn.utils.Bunch`
+@@ -106,6 +132,8 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+             The data matrix to learn.
+         target : ndarray of shape (494021,)
+             The regression target for each sample.
++        frame : pandas DataFrame
++            Only present when `as_frame=True`. Contains `data` and `target`.
+         DESCR : str
+             The full description of the dataset.
+ 
+@@ -164,6 +192,34 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+         if subset == 'SF':
+             data = np.c_[data[:, 0], data[:, 2], data[:, 4], data[:, 5]]
+ 
++    # Define feature names for the current data
++    if subset is None or subset == 'SA':
++        feature_names = FEATURE_NAMES_FULL
++    elif subset == 'SF':
++        # After processing, data has 4 columns: indices 0,2,4,5 from the filtered set
++        # The filtered set has 40 features (after removing logged_in)
++        # But we need to map to the original names.
++        # Actually, the processing for SF:
++        # 1. Select rows where logged_in=1 (feature 11)
++        # 2. Remove column 11 -> now 40 features
++        # 3. Take columns 0,2,4,5 from the remaining 40.
++        # So we need to get the names of these columns.
++        # We have FEATURE_NAMES_FULL for the original 41.
++        # After removing column 11, the indices shift for columns >11.
++        # Let's create a list of names without the 11th feature.
++        names_without_logged_in = FEATURE_NAMES_FULL[:11] + FEATURE_NAMES_FULL[12:]
++        # Then take indices 0,2,4,5 from this list.
++        feature_names = [names_without_logged_in[i] for i in [0,2,4,5]]
++    elif subset == 'http' or subset == 'smtp':
++        # Similarly, for http and smtp, we take columns 0,4,5 from the filtered set.
++        names_without_logged_in = FEATURE_NAMES_FULL[:11] + FEATURE_NAMES_FULL[12:]
++        feature_names = [names_without_logged_in[i] for i in [0,4,5]]
++    else:
++        # This should not happen because subset is validated elsewhere.
++        feature_names = FEATURE_NAMES_FULL
++
++    target_names = TARGET_NAMES
++
+     if shuffle:
+         data, target = shuffle_method(data, target, random_state=random_state)
+ 
+@@ -171,10 +227,18 @@ def fetch_kddcup99(*, subset=None, data_home=None, shuffle=False,
+     with open(join(module_path, 'descr', 'kddcup99.rst')) as rst_file:
+         fdescr = rst_file.read()
+ 
++    frame = None
++    if as_frame:
++        frame, data, target = _convert_data_dataframe(caller_name="fetch_kddcup99",
++                                                      data=data,
++                                                      target=target,
++                                                      feature_names=feature_names,
++                                                      target_names=target_names)
++
+     if return_X_y:
+         return data, target
+ 
+-    return Bunch(data=data, target=target, DESCR=fdescr)
++    return Bunch(data=data, target=target, frame=frame, DESCR=fdescr)
+ 
+ 
+ def _fetch_brute_kddcup99(data_home=None,

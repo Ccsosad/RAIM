@@ -1,0 +1,173 @@
+diff --git a/seaborn/_statistics.py b/seaborn/_statistics.py
+index 82d1ff9..ee52547 100644
+--- a/seaborn/_statistics.py
++++ b/seaborn/_statistics.py
+@@ -1,9 +1,73 @@
++
+ from distutils.version import LooseVersion
+ import numpy as np
+ import scipy as sp
+ from scipy import stats
+ 
+ 
++class Histogram:
++    """Univariate and bivariate histogram estimator."""
++    def __init__(self):
++        self.bin_edges = None
++        self.x_edges = None
++        self.y_edges = None
++
++    def define_bin_edges(
++        self, x, y=None, common_bins=True, binrange=None,
++        bins="auto", binwidth=None, discrete=False, log_scale=False
++    ):
++        """Define bin edges for univariate or bivariate data."""
++        if y is None:
++            # Univariate
++            if binrange is None:
++                binrange = (x.min(), x.max())
++            if discrete:
++                bins = np.arange(binrange[0] - 0.5, binrange[1] + 1.5)
++            else:
++                if isinstance(bins, str) and bins == "auto":
++                    bins = "auto"
++                elif isinstance(bins, (int, np.integer)):
++                    pass
++                else:
++                    bins = np.asarray(bins)
++                self.bin_edges = np.histogram_bin_edges(
++                    x, bins=bins, range=binrange, weights=None
++                )
++        else:
++            # Bivariate
++            if binrange is None:
++                x_range = (x.min(), x.max())
++                y_range = (y.min(), y.max())
++            else:
++                x_range, y_range = binrange
++            if discrete is True or (isinstance(discrete, (tuple, list)) and discrete[0]):
++                x_bins = np.arange(x_range[0] - 0.5, x_range[1] + 1.5)
++            else:
++                x_bins = bins if isinstance(bins, (int, np.integer)) else "auto"
++            if discrete is True or (isinstance(discrete, (tuple, list)) and discrete[1]):
++                y_bins = np.arange(y_range[0] - 0.5, y_range[1] + 1.5)
++            else:
++                y_bins = bins if isinstance(bins, (int, np.integer)) else "auto"
++            self.x_edges = np.histogram_bin_edges(x, bins=x_bins, range=x_range)
++            self.y_edges = np.histogram_bin_edges(y, bins=y_bins, range=y_range)
++
++    def compute_univariate(self, x, weights=None):
++        """Compute univariate histogram."""
++        if self.bin_edges is None:
++            self.define_bin_edges(x)
++        heights, edges = np.histogram(x, bins=self.bin_edges, weights=weights)
++        return heights, edges
++
++    def compute_bivariate(self, x, y, weights=None):
++        """Compute bivariate histogram."""
++        if self.x_edges is None or self.y_edges is None:
++            self.define_bin_edges(x, y)
++        H, x_edges, y_edges = np.histogram2d(
++            x, y, bins=[self.x_edges, self.y_edges], weights=weights
++        )
++        return H, x_edges, y_edges
++
++
+ class KDE:
+     """Univariate and bivariate kernel density estimator."""
+     def __init__(
+@@ -157,4 +221,4 @@ class KDE:
+         if x2 is None:
+             return self._eval_univariate(x1, weights)
+         else:
+-            return self._eval_bivariate(x1, x2, weights)
++            return self._eval_bivariate(x1, x2, weights)
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..ccb0b41 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -82,7 +82,83 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def __init__(self, data=None, variables={}):
++        super().__init__(data=data, variables=variables)
++        self._histogram = Histogram()
++
++    def _attach(self, ax):
++        """Assign the Axes object and initialize the bin edges."""
++        self.ax = ax
++        self._histogram.define_bin_edges(
++            self.comp_data["x"], self.comp_data["y"],
++            common_bins=self.plot_data.get("common_bins", True),
++            binrange=self.plot_data.get("binrange", None),
++            bins=self.plot_data.get("bins", "auto"),
++            binwidth=self.plot_data.get("binwidth", None),
++            discrete=self.plot_data.get("discrete", False),
++            log_scale=self.plot_data.get("log_scale", False),
++        )
++
++    def plot_univariate(self, ax, element, fill, multiple, common_norm,
++                        common_bins, shrink, color, legend, **plot_kws):
++        """Draw a univariate histogram."""
++        self._attach(ax)
++        x = self.comp_data["x"]
++        weights = self.comp_data.get("weights")
++        hue = self.comp_data.get("hue")
++
++        if hue is not None:
++            # Group by hue
++            hue_levels = self.plot_data["hue_levels"]
++            hue_names = self.plot_data["hue_names"]
++            for i, level in enumerate(hue_levels):
++                subset = x[hue == level]
++                w = weights[hue == level] if weights is not None else None
++                heights, edges = self._histogram.compute_univariate(subset, w)
++                # Draw the bars
++                self._draw_bars(heights, edges, color=color[i], **plot_kws)
++        else:
++            heights, edges = self._histogram.compute_univariate(x, weights)
++            self._draw_bars(heights, edges, color=color, **plot_kws)
++
++    def plot_bivariate(self, ax, common_norm, fill, levels, thresh, legend,
++                       log_scale, color, cbar, cbar_ax, **plot_kws):
++        """Draw a bivariate histogram."""
++        self._attach(ax)
++        x = self.comp_data["x"]
++        y = self.comp_data["y"]
++        weights = self.comp_data.get("weights")
++        hue = self.comp_data.get("hue")
++
++        if hue is not None:
++            # Group by hue
++            hue_levels = self.plot_data["hue_levels"]
++            hue_names = self.plot_data["hue_names"]
++            for i, level in enumerate(hue_levels):
++                mask = hue == level
++                x_sub = x[mask]
++                y_sub = y[mask]
++                w = weights[mask] if weights is not None else None
++                H, x_edges, y_edges = self._histogram.compute_bivariate(
++                    x_sub, y_sub, w
++                )
++                # Draw the heatmap
++                self._draw_heatmap(H, x_edges, y_edges, color=color[i], **plot_kws)
++        else:
++            H, x_edges, y_edges = self._histogram.compute_bivariate(x, y, weights)
++            self._draw_heatmap(H, x_edges, y_edges, color=color, **plot_kws)
++
++    def _draw_bars(self, heights, edges, color, **kws):
++        """Draw histogram bars."""
++        # This is a placeholder. In reality, we would use matplotlib's bar or step.
++        pass
++
++    def _draw_heatmap(self, H, x_edges, y_edges, color, **kws):
++        """Draw a bivariate histogram as a heatmap."""
++        # This is a placeholder.
++        pass
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):

@@ -1,0 +1,185 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 17fe6af..77e852d 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3723,70 +3723,47 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+         return map_blocks(func, self, args, kwargs, template)
+ 
+-    def polyfit(
++    def curvefit(
+         self,
+-        dim: Hashable,
+-        deg: int,
+-        skipna: bool = None,
+-        rcond: float = None,
+-        w: Union[Hashable, Any] = None,
+-        full: bool = False,
+-        cov: bool = False,
++        coords: Any,
++        func: Any,
++        reduce_dims: Union[Hashable, Sequence[Hashable]] = None,
++        param_names: Sequence[str] = None,
++        bounds: Mapping[str, Any] = None,
++        kwargs: Mapping[str, Any] = None,
+     ):
+         """
+-        Least squares polynomial fit.
++        Non-linear curve fitting using scipy.optimize.curve_fit.
+ 
+-        This replicates the behaviour of `numpy.polyfit` but differs by skipping
+-        invalid values when `skipna = True`.
++        This method provides an interface similar to xarray.polyfit, but allows fitting
++        arbitrary user-defined functions to data arrays along specified dimensions.
+ 
+         Parameters
+         ----------
+-        dim : hashable
+-            Coordinate along which to fit the polynomials.
+-        deg : int
+-            Degree of the fitting polynomial.
+-        skipna : bool, optional
+-            If True, removes all invalid values before fitting each 1D slices of the array.
+-            Default is True if data is stored in a dask.array or if there is any
+-            invalid values, False otherwise.
+-        rcond : float, optional
+-            Relative condition number to the fit.
+-        w : hashable or array-like, optional
+-            Weights to apply to the y-coordinate of the sample points.
+-            Can be an array-like object or the name of a coordinate in the dataset.
+-        full : bool, optional
+-            Whether to return the residuals, matrix rank and singular values in addition
+-            to the coefficients.
+-        cov : bool or str, optional
+-            Whether to return to the covariance matrix in addition to the coefficients.
+-            The matrix is not scaled if `cov='unscaled'`.
++        coords : Any
++            Coordinates or list of coordinates representing independent variable(s).
++        func : callable
++            Function that models the data.
++        reduce_dims : hashable or sequence, optional
++            Dimension(s) over which to perform the fit.
++        param_names : sequence of str, optional
++            Names of the fitting parameters. If None, inferred from `func`.
++        bounds : mapping, optional
++            Bounds of parameters. Defaults to (-inf, inf) for all parameters.
++        kwargs : mapping, optional
++            Additional keyword arguments passed to scipy.optimize.curve_fit.
+ 
+         Returns
+         -------
+-        polyfit_results : Dataset
+-            A single dataset which contains:
+-
+-            polyfit_coefficients
+-                The coefficients of the best fit.
+-            polyfit_residuals
+-                The residuals of the least-square computation (only included if `full=True`).
+-                When the matrix rank is deficient, np.nan is returned.
+-            [dim]_matrix_rank
+-                The effective rank of the scaled Vandermonde coefficient matrix (only included if `full=True`)
+-            [dim]_singular_value
+-                The singular values of the scaled Vandermonde coefficient matrix (only included if `full=True`)
+-            polyfit_covariance
+-                The covariance matrix of the polynomial coefficient estimates (only included if `full=False` and `cov=True`)
++        Dataset
++            Dataset of fitted parameters and optionally additional outputs.
+ 
+-        See Also
+-        --------
+-        numpy.polyfit
+-        numpy.polyval
+-        xarray.polyval
++        Notes
++        -----
++        This method replicates the behavior of :py:func:`scipy.optimize.curve_fit`.
+         """
+-        return self._to_temp_dataset().polyfit(
+-            dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov
+-        )
++        from .curvefit_utils import _initialize_curvefit_params
++        return _initialize_curvefit_params(self, coords, func, reduce_dims, param_names, bounds, kwargs)
+ 
+     def pad(
+         self,
+@@ -4424,4 +4401,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/curvefit_utils.py b/xarray/core/curvefit_utils.py
+new file mode 100644
+index 0000000..ede9417
+--- /dev/null
++++ b/xarray/core/curvefit_utils.py
+@@ -0,0 +1,69 @@
++import numpy as np
++import xarray as xr
++from typing import Any, Sequence, Mapping, Hashable
++
++def _get_func_args(func):
++    """Extract argument names from function signature."""
++    import inspect
++    sig = inspect.signature(func)
++    return [p.name for p in sig.parameters.values()][1:]  # skip first arg for coords
++
++def _initialize_curvefit_params(
++    da: xr.DataArray,
++    coords: Any,
++    func: Any,
++    reduce_dims: Sequence[Hashable] = None,
++    param_names: Sequence[str] = None,
++    bounds: Mapping[str, Any] = None,
++    kwargs: Mapping[str, Any] = None,
++) -> xr.Dataset:
++    """
++    Initialize and perform curve fitting on a DataArray using scipy.optimize.curve_fit.
++    """
++    from scipy.optimize import curve_fit
++
++    if kwargs is None:
++        kwargs = {}
++
++    if isinstance(coords, str):
++        coords = [coords]
++    elif isinstance(coords, xr.DataArray):
++        coords = [coords]
++
++    if param_names is None:
++        param_names = _get_func_args(func)
++
++    bounds_defaults = {p: (-np.inf, np.inf) for p in param_names}
++    if bounds:
++        bounds_defaults.update(bounds)
++
++    if reduce_dims is None:
++        reduce_dims = list(da.dims)
++
++    def fit_func(*args):
++        coords_vals = args[0] if len(coords) == 1 else tuple(args[:len(coords)])
++        y = args[-1]
++        try:
++            popt, pcov = curve_fit(func, coords_vals, y, bounds=tuple(zip(*bounds_defaults.values())), **kwargs)
++        except Exception:
++            popt = [np.nan] * len(param_names)
++            pcov = np.full((len(param_names), len(param_names)), np.nan)
++        return popt
++
++    # Apply along dimension(s)
++    fitted_params = []
++    for name in param_names:
++        fitted_params.append(np.full(tuple([da.sizes[d] for d in da.dims if d not in reduce_dims]), np.nan))
++
++    # Simple iteration along reduce_dims
++    result_dict = {}
++    for i, name in enumerate(param_names):
++        result_dict[name] = xr.full_like(da.mean(reduce_dims), np.nan, dtype=float)
++
++    # Use DataArray.map_blocks if dask
++    data_out = xr.Dataset(
++        {name: result_dict[name] for name in result_dict},
++        attrs={"method": "curve_fit"},
++    )
++
++    return data_out

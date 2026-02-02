@@ -1,0 +1,48 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..37480fd 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -147,6 +147,18 @@ def use(style):
+                 _apply_style(rcParamsDefault, warn=False)
+         elif style in library:
+             _apply_style(library[style])
++        elif '.' in style:  # Handle package.style format
++            from importlib.resources import files
++            package, style_name = style.rsplit('.', 1)
++            try:
++                resource = files(package) / f"{style_name}.mplstyle"
++                with resource.open('r', encoding='utf-8') as f:
++                    rc = rc_params_from_file(f, use_default_template=False)
++                    _apply_style(rc)
++            except Exception as err:
++                raise IOError(
++                    f"Style {style_name!r} not found in package {package!r} or "
++                    "could not be loaded") from err
+         else:
+             try:
+                 rc = rc_params_from_file(style, use_default_template=False)
+diff --git a/lib/matplotlib/style/registry.py b/lib/matplotlib/style/registry.py
+new file mode 100644
+index 0000000..91cbb54
+--- /dev/null
++++ b/lib/matplotlib/style/registry.py
+@@ -0,0 +1,19 @@
++"""
++Registry for style files distributed in packages.
++"""
++from importlib.resources import files
++import warnings
++
++def discover_package_styles():
++    """
++    Discover available styles from installed packages.
++    
++    Returns
++    -------
++    dict
++        Mapping of style names to their package paths.
++    """
++    # Implementation note: This could be enhanced to actively scan for
++    # packages with .mplstyle files, but currently relies on explicit
++    # package.style usage pattern.
++    return {}

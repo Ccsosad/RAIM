@@ -1,0 +1,40 @@
+diff --git a/astropy/units/format/fits.py b/astropy/units/format/fits.py
+index 2aaafe3..cb5f8d2 100644
+--- a/astropy/units/format/fits.py
++++ b/astropy/units/format/fits.py
+@@ -68,7 +68,8 @@ class Fits(generic.Generic):
+             'deg', 'arcmin', 'arcsec', 'mas', 'min', 'h', 'd', 'Ry',
+             'solMass', 'u', 'solLum', 'solRad', 'AU', 'lyr', 'count',
+             'ct', 'photon', 'ph', 'pixel', 'pix', 'D', 'Sun', 'chan',
+-            'bin', 'voxel', 'adu', 'beam', 'erg', 'Angstrom', 'angstrom'
++            'bin', 'voxel', 'adu', 'beam', 'erg', 'Angstrom', 'angstrom',
++            'mAngstrom', 'mangstrom'
+         ]
+         deprecated_units = []
+ 
+@@ -153,4 +154,4 @@ class Fits(generic.Generic):
+         if hasattr(result, 'function_unit'):
+             raise ValueError("Function units are not yet supported for "
+                              "FITS units.")
+-        return result
++        return result
+diff --git a/astropy/units/format/vounit.py b/astropy/units/format/vounit.py
+index 3e5be52..4430c93 100644
+--- a/astropy/units/format/vounit.py
++++ b/astropy/units/format/vounit.py
+@@ -46,7 +46,8 @@ class VOUnit(generic.Generic):
+             'bit', 'byte', 'B'
+         ]
+         simple_units = [
+-            'Angstrom', 'angstrom', 'AU', 'au', 'Ba', 'dB', 'mas'
++            'Angstrom', 'angstrom', 'AU', 'au', 'Ba', 'dB', 'mas',
++            'mAngstrom', 'mangstrom'
+         ]
+         si_prefixes = [
+             'y', 'z', 'a', 'f', 'p', 'n', 'u', 'm', 'c', 'd',
+@@ -240,4 +241,4 @@ class VOUnit(generic.Generic):
+             unit = copy.copy(unit)
+             unit._scale = 1.0
+             return f'{cls.to_string(unit)} (with data multiplied by {scale})'
+-        return s
++        return s

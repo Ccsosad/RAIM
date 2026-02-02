@@ -1,0 +1,64 @@
+diff --git a/sphinx/config.py b/sphinx/config.py
+new file mode 100644
+index 0000000..063674e
+--- /dev/null
++++ b/sphinx/config.py
+@@ -0,0 +1,18 @@
++    def _expand_relative_paths(self, value: Any, docname: str = None) -> Any:
++        """Expand relative paths in configuration values."""
++        if isinstance(value, str):
++            # Expand {path}, {basename}, etc. for image paths
++            if '{' in value:
++                # This is a simplified version - actual implementation
++                # would use a proper template engine
++                dirname = os.path.dirname(docname) if docname else ''
++                if dirname:
++                    dirname += '/'
++                value = value.replace('{docpath}', dirname)
++            return value
++        elif isinstance(value, (list, tuple)):
++            return type(value)(self._expand_relative_paths(v, docname) for v in value)
++        elif isinstance(value, dict):
++            return {k: self._expand_relative_paths(v, docname) for k, v in value.items()}
++        else:
++            return value
+diff --git a/sphinx/util/i18n.py b/sphinx/util/i18n.py
+new file mode 100644
+index 0000000..6e1db9d
+--- /dev/null
++++ b/sphinx/util/i18n.py
+@@ -0,0 +1,15 @@
++    def format(self, filename: str) -> str:
++        """Format filename with template variables."""
++        context = {
++            'path': self.path,
++            'basename': self.basename,
++            'stem': self.stem,
++            'ext': self.ext,
++        }
++        if self.docname:
++            context['docname'] = self.docname
++            # Add docpath token
++            docpath = posixpath.dirname(self.docname)
++            if docpath:
++                docpath += '/'
++            context['docpath'] = docpath
+diff --git a/sphinx/util/template.py b/sphinx/util/template.py
+new file mode 100644
+index 0000000..8cecde8
+--- /dev/null
++++ b/sphinx/util/template.py
+@@ -0,0 +1,13 @@
++    def __init__(self, context: Dict = {}) -> None:
++        self.context = context
++        self.filters['e'] = html.escape
++        self.filters['escape'] = html.escape
++        self.filters['repr'] = repr
++        
++        # Add docpath to context if not present
++        if 'docpath' not in self.context and 'docname' in self.context:
++            docname = self.context['docname']
++            docpath = posixpath.dirname(docname)
++            if docpath:
++                docpath += '/'
++            self.context['docpath'] = docpath

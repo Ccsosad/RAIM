@@ -1,0 +1,68 @@
+diff --git a/lib/matplotlib/cbook/__init__.py b/lib/matplotlib/cbook/__init__.py
+index 5c3e852..2a9cee6 100644
+--- a/lib/matplotlib/cbook/__init__.py
++++ b/lib/matplotlib/cbook/__init__.py
+@@ -175,6 +175,9 @@ class CallbackRegistry:
+         self._func_cid_map = {}
+         # A hidden variable that marks cids that need to be pickled.
+         self._pickled_cids = set()
++        # Stack for blocking signals. Each element is either None (block all)
++        # or a string (block only that signal).
++        self._block_stack = []
+ 
+     def __getstate__(self):
+         return {
+@@ -234,6 +237,41 @@ class CallbackRegistry:
+             del self.callbacks[signal]
+             del self._func_cid_map[signal]
+ 
++    def blocked(self, signal=None):
++        """
++        Context manager to temporarily block callback signals.
++
++        Parameters
++        ----------
++        signal : str, optional
++            If provided, only block this specific signal. Otherwise, block all
++            signals.
++
++        Returns
++        -------
++        contextmanager
++            A context manager that blocks the specified signal(s) for its
++            duration.
++
++        Examples
++        --------
++        >>> with registry.blocked():
++        ...     # All signals are blocked
++        ...     pass
++        >>> with registry.blocked(signal="key_press_event"):
++        ...     # Only "key_press_event" is blocked
++        ...     pass
++        """
++        class _Block:
++            def __init__(self, registry, signal):
++                self.registry = registry
++                self.signal = signal
++            def __enter__(self):
++                self.registry._block_stack.append(self.signal)
++            def __exit__(self, *args):
++                self.registry._block_stack.pop()
++        return _Block(self, signal)
++
+     def disconnect(self, cid):
+         """
+         Disconnect the callback registered with callback id *cid*.
+@@ -267,6 +305,11 @@ class CallbackRegistry:
+         All of the functions registered to receive callbacks on *s* will be
+         called with ``*args`` and ``**kwargs``.
+         """
++        # Check if we are currently blocking this signal.
++        if self._block_stack:
++            block = self._block_stack[-1]
++            if block is None or block == s:
++                return
+         for cid, ref in list(self.callbacks.get(s, {}).items()):
+             func = ref()
+             if func is not None:

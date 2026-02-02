@@ -1,0 +1,45 @@
+diff --git a/pylint/pyreverse/diadefslib.py b/pylint/pyreverse/diadefslib.py
+index 7f83c91..69fc7dc 100644
+--- a/pylint/pyreverse/diadefslib.py
++++ b/pylint/pyreverse/diadefslib.py
+@@ -217,6 +217,16 @@ class DiadefsHandler:
+         :returns: The list of diagram definitions
+         :rtype: list(:class:`pylint.pyreverse.diagrams.ClassDiagram`)
+         """
++        # Filter out standard library modules if show_stdlib is False
++        if not getattr(self.config, 'show_stdlib', False):
++            import sys
++            stdlib_paths = {p for p in sys.path if p and 'site-packages' not in p and 'dist-packages' not in p}
++            to_remove = []
++            for module in project.modules:
++                if any(module.file.startswith(p) for p in stdlib_paths if p):
++                    to_remove.append(module)
++            for module in to_remove:
++                project.remove_module(module)
+ 
+         #  read and interpret diagram definitions (Diadefs)
+         diagrams = []
+@@ -227,4 +237,4 @@ class DiadefsHandler:
+             diagrams = DefaultDiadefGenerator(linker, self).visit(project)
+         for diagram in diagrams:
+             diagram.extract_relationships()
+-        return diagrams
++        return diagrams
+diff --git a/pylint/pyreverse/inspector.py b/pylint/pyreverse/inspector.py
+index 9996e5d..6e90f26 100644
+--- a/pylint/pyreverse/inspector.py
++++ b/pylint/pyreverse/inspector.py
+@@ -343,6 +343,7 @@ def project_from_files(
+     func_wrapper: _WrapperFuncT = _astroid_wrapper,
+     project_name: str = "no name",
+     black_list: tuple[str, ...] = constants.DEFAULT_IGNORE_LIST,
++    show_stdlib: bool = False,
+ ) -> Project:
+     """Return a Project from a list of files or modules."""
+     # build the project representation
+@@ -371,4 +372,4 @@ def project_from_files(
+                 if ast is None or ast.name == base_name:
+                     continue
+                 project.add_module(ast)
+-    return project
++    return project

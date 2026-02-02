@@ -1,0 +1,128 @@
+diff --git a/astropy/cosmology/core.py b/astropy/cosmology/core.py
+index 775db70..17d4666 100644
+--- a/astropy/cosmology/core.py
++++ b/astropy/cosmology/core.py
+@@ -85,6 +85,9 @@ class Cosmology(metaclass=ABCMeta):
+     # Unified I/O read and write methods
+     read = UnifiedReadWriteMethod(CosmologyRead)
+     write = UnifiedReadWriteMethod(CosmologyWrite)
++    # Unified I/O to_format and from_format methods
++    to_format = UnifiedReadWriteMethod(CosmologyToFormat)
++    from_format = UnifiedReadWriteMethod(CosmologyFromFormat)
+ 
+     def __init_subclass__(cls):
+         super().__init_subclass__()
+diff --git a/astropy/cosmology/io/__init__.py b/astropy/cosmology/io/__init__.py
+new file mode 100644
+index 0000000..14bd153
+--- /dev/null
++++ b/astropy/cosmology/io/__init__.py
+@@ -0,0 +1,7 @@
++"""
++I/O subpackage for Cosmology.
++"""
++
++from . import mapping
++
++__all__ = ['mapping']
+diff --git a/astropy/cosmology/io/mapping.py b/astropy/cosmology/io/mapping.py
+new file mode 100644
+index 0000000..cde8ffb
+--- /dev/null
++++ b/astropy/cosmology/io/mapping.py
+@@ -0,0 +1,95 @@
++"""
++Convert a Cosmology to/from a mapping (e.g., dictionary).
++"""
++
++import copy
++
++from astropy.cosmology.connect import convert_registry
++from astropy.cosmology.core import Cosmology
++
++__all__ = []  # nothing is publicly scoped
++
++
++def from_mapping(mapping, *, move_to_meta=False, cosmology=None):
++    """Load a Cosmology from a mapping.
++
++    Parameters
++    ----------
++    mapping : dict
++        A mapping containing the cosmology information.
++    move_to_meta : bool (optional, keyword-only)
++        Whether to move keyword arguments that are not in the cosmology's
++        signature to the cosmology's metadata. Default is `False`.
++    cosmology : str, `~astropy.cosmology.Cosmology` class, or None (optional, keyword-only)
++        The cosmology class to use. If `None`, the class is taken from the
++        mapping. If a string, it must be the name of a cosmology class.
++
++    Returns
++    -------
++    `~astropy.cosmology.Cosmology` instance
++        The cosmology instance.
++
++    Raises
++    ------
++    TypeError
++        If the mapping does not contain a 'cosmology' key.
++    """
++    # Get the cosmology class
++    if cosmology is None:
++        cosmology = mapping.get("cosmology")
++        if cosmology is None:
++            raise TypeError("Mapping must contain a 'cosmology' key.")
++    # If cosmology is a string, get the class from the registry
++    if isinstance(cosmology, str):
++        from astropy.cosmology.core import _COSMOLOGY_CLASSES
++        cosmology = _COSMOLOGY_CLASSES.get(cosmology)
++        if cosmology is None:
++            raise ValueError(f"Unknown cosmology class: {cosmology}")
++
++    # Separate the metadata
++    meta = mapping.get("meta", {})
++    # Get the cosmology parameters
++    params = {k: v for k, v in mapping.items()
++              if k not in ("cosmology", "meta")}
++
++    # If move_to_meta is True, move any parameters that are not in the
++    # cosmology's signature to the metadata.
++    if move_to_meta:
++        sig = cosmology._init_signature
++        for key in list(params.keys()):
++            if key not in sig.parameters:
++                meta[key] = params.pop(key)
++
++    # Create the cosmology instance
++    return cosmology(**params, meta=meta, name=mapping.get("name"))
++
++
++def to_mapping(cosmology, *args):
++    """Convert a Cosmology to a mapping.
++
++    Parameters
++    ----------
++    cosmology : `~astropy.cosmology.Cosmology` instance
++        The cosmology instance to convert.
++    *args
++        Not used. Present for compatibility with the Unified I/O registry.
++
++    Returns
++    -------
++    dict
++        A mapping with the cosmology's information.
++    """
++    # Start with the initialization arguments
++    mapping = copy.deepcopy(cosmology._init_arguments)
++    # Add the cosmology class
++    mapping["cosmology"] = cosmology.__class__
++    # Add the name separately (it might be in _init_arguments already)
++    mapping["name"] = cosmology.name
++    # Add the metadata
++    mapping["meta"] = cosmology.meta
++    return mapping
++
++
++# Register the converter
++convert_registry.register_reader("mapping", Cosmology, from_mapping)
++convert_registry.register_writer("mapping", Cosmology, to_mapping)

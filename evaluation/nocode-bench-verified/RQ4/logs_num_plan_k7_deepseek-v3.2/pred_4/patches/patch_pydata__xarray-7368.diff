@@ -1,0 +1,279 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..6ac0525 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -31,9 +31,12 @@ _THIS_ARRAY = ReprObject("<this-array>")
+ 
+ 
+ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+-    _data: DataWithCoords
++    _data: DataWithCoords | None
+     __slots__ = ("_data",)
+ 
++    def __init__(self, data: DataWithCoords | None = None):
++        self._data = data
++
+     def __getitem__(self, key: Hashable) -> T_DataArray:
+         raise NotImplementedError()
+ 
+@@ -54,10 +57,14 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+ 
+     @property
+     def indexes(self) -> Indexes[pd.Index]:
++        if self._data is None:
++            raise AttributeError("indexes not available for standalone Coordinates")
+         return self._data.indexes
+ 
+     @property
+     def xindexes(self) -> Indexes[Index]:
++        if self._data is None:
++            raise AttributeError("xindexes not available for standalone Coordinates")
+         return self._data.xindexes
+ 
+     @property
+@@ -70,6 +77,116 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     def _maybe_drop_multiindex_coords(self, coords):
+         raise NotImplementedError()
+ 
++    @classmethod
++    def from_pandas_multiindex(
++        cls,
++        midx: pd.MultiIndex,
++        dim: Hashable,
++        index_type: type[Index] | None = None,
++    ) -> "Coordinates":
++        """Create Coordinates from a pandas MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            The MultiIndex to convert to coordinates.
++        dim : hashable
++            The dimension name for the MultiIndex.
++        index_type : type of Index, optional
++            The type of index to create. If None, defaults to PandasMultiIndex.
++
++        Returns
++        -------
++        Coordinates
++            A new Coordinates object containing the MultiIndex coordinates.
++        """
++        from xarray.core.indexes import PandasMultiIndex
++
++        if index_type is None:
++            index_type = PandasMultiIndex
++        
++        idx = index_type(midx, dim)
++        index_vars = idx.create_variables()
++        
++        # Create a minimal dataset-like structure
++        class StandaloneCoordinates(Coordinates):
++            def __init__(self, variables, indexes):
++                self._variables = variables
++                self._indexes = indexes
++                super().__init__(None)
++            
++            @property
++            def _names(self):
++                return set(self._variables)
++            
++            @property
++            def dims(self):
++                dims = {}
++                for name, var in self._variables.items():
++                    for d in var.dims:
++                        dims[d] = var.sizes[d]
++                return dims
++            
++            @property
++            def dtypes(self):
++                from xarray.core.utils import Frozen
++                return Frozen({name: var.dtype for name, var in self._variables.items()})
++            
++            @property
++            def variables(self):
++                return self._variables
++            
++            def __getitem__(self, key):
++                from xarray.core.dataarray import DataArray
++                return DataArray(self._variables[key])
++            
++            def _update_coords(self, coords, indexes):
++                self._variables = coords
++                self._indexes = indexes
++            
++            def _maybe_drop_multiindex_coords(self, coords):
++                pass
++            
++            def to_dataset(self):
++                from xarray.core.dataset import Dataset
++                return Dataset._construct_direct(
++                    variables=self._variables,
++                    coord_names=set(self._variables),
++                    indexes=self._indexes,
++                )
++            
++            def copy(self, deep: bool = True):
++                import copy
++                if deep:
++                    new_vars = {k: v.copy(deep=True) for k, v in self._variables.items()}
++                    new_indexes = {k: v.copy(deep=True) for k, v in self._indexes.items()}
++                else:
++                    new_vars = self._variables.copy()
++                    new_indexes = self._indexes.copy()
++                return StandaloneCoordinates(new_vars, new_indexes)
++            
++            def equals(self, other):
++                if not isinstance(other, Coordinates):
++                    return False
++                if set(self._variables) != set(other.variables):
++                    return False
++                return all(
++                    self._variables[k].equals(other.variables[k])
++                    for k in self._variables
++                )
++            
++            def identical(self, other):
++                if not isinstance(other, Coordinates):
++                    return False
++                if set(self._variables) != set(other.variables):
++                    return False
++                return all(
++                    self._variables[k].identical(other.variables[k])
++                    for k in self._variables
++                )
++        
++        return StandaloneCoordinates(index_vars, {dim: idx})
++
+     def __iter__(self) -> Iterator[Hashable]:
+         # needs to be in the same order as the dataset variables
+         for k in self.variables:
+@@ -236,6 +353,53 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+             variables=coords, coord_names=coord_names, indexes=indexes
+         )
+ 
++    def copy(self, deep: bool = True) -> "Coordinates":
++        """Return a copy of the coordinates.
++
++        Parameters
++        ----------
++        deep : bool, default: True
++            If True, make a deep copy of the coordinates and indexes.
++            If False, make a shallow copy.
++
++        Returns
++        -------
++        Coordinates
++            New coordinates object.
++        """
++        raise NotImplementedError()
++
++    def equals(self, other: object) -> bool:
++        """Two Coordinates objects are equal if they have matching variables
++        and all variables are equal.
++
++        Parameters
++        ----------
++        other : object
++            The other object to compare against.
++
++        Returns
++        -------
++        bool
++            True if the two Coordinates are equal, False otherwise.
++        """
++        raise NotImplementedError()
++
++    def identical(self, other: object) -> bool:
++        """Like equals, but also checks all attributes.
++
++        Parameters
++        ----------
++        other : object
++            The other object to compare against.
++
++        Returns
++        -------
++        bool
++            True if the two Coordinates are identical, False otherwise.
++        """
++        raise NotImplementedError()
++
+ 
+ class DatasetCoordinates(Coordinates):
+     """Dictionary like container for Dataset coordinates.
+@@ -245,6 +409,74 @@ class DatasetCoordinates(Coordinates):
+     objects.
+     """
+ 
++    def copy(self, deep: bool = True) -> "DatasetCoordinates":
++        """Return a copy of the coordinates.
++
++        Parameters
++        ----------
++        deep : bool, default: True
++            If True, make a deep copy of the coordinates and indexes.
++            If False, make a shallow copy.
++
++        Returns
++        -------
++        DatasetCoordinates
++            New coordinates object.
++        """
++        from xarray.core.dataset import Dataset
++        
++        ds = self._data.copy(deep=deep)
++        return ds.coords
++
++    def equals(self, other: object) -> bool:
++        """Two Coordinates objects are equal if they have matching variables
++        and all variables are equal.
++
++        Parameters
++        ----------
++        other : object
++            The other object to compare against.
++
++        Returns
++        -------
++        bool
++            True if the two Coordinates are equal, False otherwise.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        
++        if set(self._names) != set(other._names):
++            return False
++        
++        return all(
++            self._data._variables[k].equals(other._data._variables[k])
++            for k in self._names
++        )
++
++    def identical(self, other: object) -> bool:
++        """Like equals, but also checks all attributes.
++
++        Parameters
++        ----------
++        other : object
++            The other object to compare against.
++
++        Returns
++        -------
++        bool
++            True if the two Coordinates are identical, False otherwise.
++        """
++        if not isinstance(other, Coordinates):
++            return False
++        
++        if set(self._names) != set(other._names):
++            return False
++        
++        return all(
++            self._data._variables[k].identical(other._data._variables[k])
++            for k in self._names
++        )
++
+     _data: Dataset
+ 
+     __slots__ = ("_data",)

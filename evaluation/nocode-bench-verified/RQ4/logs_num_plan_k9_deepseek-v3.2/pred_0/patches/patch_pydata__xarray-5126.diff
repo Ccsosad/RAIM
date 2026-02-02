@@ -1,0 +1,82 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..3bb6fd2 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -1,3 +1,4 @@
++
+ """String formatting routines for __repr__.
+ """
+ import contextlib
+@@ -371,15 +372,25 @@ def _calculate_col_width(col_items):
+     return col_width
+ 
+ 
+-def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
++def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None, expand="default"):
+     if col_width is None:
+         col_width = _calculate_col_width(mapping)
+-    if max_rows is None:
+-        max_rows = OPTIONS["display_max_rows"]
++    if expand == "default":
++        if max_rows is None:
++            max_rows = OPTIONS["display_max_rows"]
++    elif expand is True:
++        max_rows = len(mapping)
++    elif expand is False:
++        max_rows = 0
++    else:
++        raise ValueError("expand must be True, False, or 'default'")
+     summary = [f"{title}:"]
+     if mapping:
+         len_mapping = len(mapping)
+-        if len_mapping > max_rows:
++        if max_rows == 0:
++            # collapsed view: only show the title and the count
++            summary = [f"{summary[0]} ({len_mapping})"]
++        elif len_mapping > max_rows:
+             summary = [f"{summary[0]} ({max_rows}/{len_mapping})"]
+             first_rows = max_rows // 2 + max_rows % 2
+             items = list(mapping.items())
+@@ -395,21 +406,35 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+     return "\n".join(summary)
+ 
+ 
+-data_vars_repr = functools.partial(
+-    _mapping_repr, title="Data variables", summarizer=summarize_datavar
+-)
++def data_vars_repr(mapping, col_width=None):
++    return _mapping_repr(
++        mapping,
++        title="Data variables",
++        summarizer=summarize_datavar,
++        col_width=col_width,
++        expand=OPTIONS["display_expand_data_vars"],
++    )
+ 
+ 
+-attrs_repr = functools.partial(
+-    _mapping_repr, title="Attributes", summarizer=summarize_attr
+-)
++def attrs_repr(mapping, col_width=None):
++    return _mapping_repr(
++        mapping,
++        title="Attributes",
++        summarizer=summarize_attr,
++        col_width=col_width,
++        expand=OPTIONS["display_expand_attrs"],
++    )
+ 
+ 
+ def coords_repr(coords, col_width=None):
+     if col_width is None:
+         col_width = _calculate_col_width(_get_col_items(coords))
+     return _mapping_repr(
+-        coords, title="Coordinates", summarizer=summarize_coord, col_width=col_width
++        coords,
++        title="Coordinates",
++        summarizer=summarize_coord,
++        col_width=col_width,
++        expand=OPTIONS["display_expand_coords"],
+     )
+ 
+ 

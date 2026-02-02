@@ -1,0 +1,98 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 24b047c..85d6bbf 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -1,3 +1,4 @@
++
+ import numpy as np
+ 
+ 
+@@ -27,26 +28,78 @@ def _unique(values, *, return_inverse=False):
+     if values.dtype == object:
+         return _unique_python(values, return_inverse=return_inverse)
+     # numerical
+-    return np.unique(values, return_inverse=return_inverse)
++    # Check for nan
++    if np.issubdtype(values.dtype, np.floating) and np.any(np.isnan(values)):
++        # We have nan in the array
++        # Separate nan and non-nan
++        nan_mask = np.isnan(values)
++        non_nan_values = values[~nan_mask]
++        # Get unique non-nan values
++        uniques_non_nan = np.unique(non_nan_values)
++        # Combine
++        uniques = np.append(uniques_non_nan, np.nan)
++        if return_inverse:
++            # Create inverse indices
++            # For non-nan values, use the indices from np.unique with return_inverse
++            non_nan_inverse = np.searchsorted(uniques_non_nan, non_nan_values)
++            inverse = np.empty(len(values), dtype=int)
++            inverse[~nan_mask] = non_nan_inverse
++            inverse[nan_mask] = len(uniques) - 1  # last position is nan
++            return uniques, inverse
++        return uniques
++    else:
++        return np.unique(values, return_inverse=return_inverse)
+ 
+ 
+ def _unique_python(values, *, return_inverse):
+     # Only used in `_uniques`, see docstring there for details
++    # Separate missing values (nan and None) from the rest
++    missing_mask = np.zeros(len(values), dtype=bool)
++    non_missing_values = []
++    for i, v in enumerate(values):
++        if v is None or (isinstance(v, float) and np.isnan(v)):
++            missing_mask[i] = True
++        else:
++            non_missing_values.append(v)
++    
++    # Get unique non-missing values and sort them
+     try:
+-        uniques = sorted(set(values))
+-        uniques = np.array(uniques, dtype=values.dtype)
++        uniques_non_missing = sorted(set(non_missing_values))
+     except TypeError:
+         types = sorted(t.__qualname__
+-                       for t in set(type(v) for v in values))
++                       for t in set(type(v) for v in non_missing_values))
+         raise TypeError("Encoders require their input to be uniformly "
+                         f"strings or numbers. Got {types}")
+-
++    
++    # Create a list of unique missing values in the order we want: None, then nan
++    unique_missing = []
++    has_none = False
++    has_nan = False
++    for v in values:
++        if v is None and not has_none:
++            unique_missing.append(None)
++            has_none = True
++        elif isinstance(v, float) and np.isnan(v) and not has_nan:
++            unique_missing.append(np.nan)
++            has_nan = True
++    
++    # Combine: non-missing first, then missing
++    uniques = uniques_non_missing + unique_missing
++    
+     if return_inverse:
+-        table = {val: i for i, val in enumerate(uniques)}
+-        inverse = np.array([table[v] for v in values])
+-        return uniques, inverse
+-
+-    return uniques
++        # Create a mapping for non-missing values
++        table = {val: i for i, val in enumerate(uniques_non_missing)}
++        # For missing values, we need to map them to their positions in uniques
++        for i, val in enumerate(unique_missing):
++            table[val] = len(uniques_non_missing) + i
++        
++        # Build the inverse array
++        inverse = np.empty(len(values), dtype=int)
++        for i, v in enumerate(values):
++            inverse[i] = table[v]
++        return np.array(uniques, dtype=values.dtype), inverse
++
++    return np.array(uniques, dtype=values.dtype)
+ 
+ 
+ def _encode(values, *, uniques, check_unknown=True):

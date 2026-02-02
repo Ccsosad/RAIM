@@ -1,0 +1,121 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..5dd7589 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1840,9 +1840,10 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+         Parameters
+         ----------
+-        *dims : hashable, optional
++        *dims : hashable or ..., optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) may be used to
++            represent all dimensions that are not explicitly listed.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -3122,4 +3123,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..50685b6 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3690,9 +3690,10 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+ 
+         Parameters
+         ----------
+-        *dims : Hashable, optional
++        *dims : Hashable or ..., optional
+             By default, reverse the dimensions on each array. Otherwise,
+-            reorder the dimensions to this order.
++            reorder the dimensions to this order. An ellipsis (`...`) may be
++            used to represent all dimensions that are not explicitly listed.
+ 
+         Returns
+         -------
+@@ -5449,4 +5450,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 873be99..2af03cd 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -256,6 +256,47 @@ def _as_array_or_item(data):
+     return data
+ 
+ 
++def infix_dims(dims, all_dims):
++    """
++    Expand an ellipsis (...) in a tuple of dimensions to the full list of dimensions.
++
++    Parameters
++    ----------
++    dims : tuple
++        The input dimensions, possibly containing an ellipsis.
++    all_dims : tuple
++        The full list of dimensions.
++
++    Returns
++    -------
++    tuple
++        The expanded dimensions.
++
++    Examples
++    --------
++    >>> infix_dims(('x', ...), ('x', 'y', 'z'))
++    ('x', 'y', 'z')
++    >>> infix_dims((..., 'x'), ('y', 'z', 'x'))
++    ('y', 'z', 'x')
++    >>> infix_dims(('x', 'y'), ('x', 'y', 'z'))
++    ('x', 'y')
++    """
++    if ... not in dims:
++        return dims
++    if dims.count(...) > 1:
++        raise ValueError("Only one ellipsis may be used.")
++    # Find the index of the ellipsis
++    ellipsis_index = dims.index(...)
++    # Dimensions before the ellipsis
++    before = dims[:ellipsis_index]
++    # Dimensions after the ellipsis
++    after = dims[ellipsis_index + 1:]
++    # Dimensions that are not in before or after
++    other = [d for d in all_dims if d not in before and d not in after]
++    # Combine
++    return before + tuple(other) + after
++
++
+ class Variable(
+     common.AbstractArray, arithmetic.SupportsArithmetic, utils.NdimSizeLenMixin
+ ):
+@@ -1207,9 +1248,10 @@ class Variable(
+ 
+         Parameters
+         ----------
+-        *dims : str, optional
++        *dims : str or ..., optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) may be used to
++            represent all dimensions that are not explicitly listed.
+ 
+         Returns
+         -------
+@@ -1228,6 +1270,9 @@ class Variable(
+         """
+         if len(dims) == 0:
+             dims = self.dims[::-1]
++        else:
++            # Expand ellipsis
++            dims = infix_dims(dims, self.dims)
+         axes = self.get_axis_num(dims)
+         if len(dims) < 2:  # no need to transpose if only one dimension
+             return self.copy(deep=False)

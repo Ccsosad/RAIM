@@ -1,0 +1,250 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index 469c69b..f862a58 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -412,6 +412,10 @@ class DatetimeAccessor(Properties):
+         "date", "Date corresponding to datetimes", object
+     )
+ 
++    calendar = Properties._tslib_field_accessor(
++        "calendar", "Calendar of the datetimes", object
++    )
++
+     is_month_start = Properties._tslib_field_accessor(
+         "is_month_start",
+         "Indicates whether the date is the first day of the month.",
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index e6fae2b..ce3870d 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3153,6 +3153,50 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+ 
+         return title
+ 
++    def convert_calendar(self, calendar, use_cftime=None, align_on=None, missing=None):
++        """
++        Convert the DataArray to another calendar.
++
++        Parameters
++        ----------
++        calendar : str
++            Target calendar name.
++        use_cftime : bool, optional
++            Whether to use cftime for the output. If None, use cftime only when necessary.
++        align_on : str, optional
++            How to align the dates when converting. Options are 'year', 'month', 'day', etc.
++        missing : any, optional
++            Value to use for missing dates.
++
++        Returns
++        -------
++        converted : DataArray
++            DataArray with converted calendar.
++        """
++        from .coding.calendar_ops import convert_calendar
++        return convert_calendar(self, calendar, use_cftime=use_cftime, align_on=align_on, missing=missing)
++
++    def interp_calendar(self, target, use_cftime=None, method='linear'):
++        """
++        Interpolate the DataArray from one calendar to another.
++
++        Parameters
++        ----------
++        target : DataArray
++            Target dates in the new calendar.
++        use_cftime : bool, optional
++            Whether to use cftime for the output.
++        method : str, optional
++            Interpolation method.
++
++        Returns
++        -------
++        interpolated : DataArray
++            DataArray interpolated to the target calendar.
++        """
++        from .coding.calendar_ops import interp_calendar
++        return interp_calendar(self, target, use_cftime=use_cftime, method=method)
++
+     def diff(self, dim: Hashable, n: int = 1, label: Hashable = "upper") -> "DataArray":
+         """Calculate the n-th order discrete difference along given axis.
+ 
+@@ -4658,4 +4702,4 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 0054d15..0491e53 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5806,6 +5806,50 @@ class Dataset(DataWithCoords, DatasetArithmetic, Mapping):
+             if v in self.variables:
+                 self.variables[v].attrs = other.variables[v].attrs
+ 
++    def convert_calendar(self, calendar, use_cftime=None, align_on=None, missing=None):
++        """
++        Convert the Dataset to another calendar.
++
++        Parameters
++        ----------
++        calendar : str
++            Target calendar name.
++        use_cftime : bool, optional
++            Whether to use cftime for the output. If None, use cftime only when necessary.
++        align_on : str, optional
++            How to align the dates when converting. Options are 'year', 'month', 'day', etc.
++        missing : any, optional
++            Value to use for missing dates.
++
++        Returns
++        -------
++        converted : Dataset
++            Dataset with converted calendar.
++        """
++        from .coding.calendar_ops import convert_calendar
++        return convert_calendar(self, calendar, use_cftime=use_cftime, align_on=align_on, missing=missing)
++
++    def interp_calendar(self, target, use_cftime=None, method='linear'):
++        """
++        Interpolate the Dataset from one calendar to another.
++
++        Parameters
++        ----------
++        target : Dataset or DataArray
++            Target dates in the new calendar.
++        use_cftime : bool, optional
++            Whether to use cftime for the output.
++        method : str, optional
++            Interpolation method.
++
++        Returns
++        -------
++        interpolated : Dataset
++            Dataset interpolated to the target calendar.
++        """
++        from .coding.calendar_ops import interp_calendar
++        return interp_calendar(self, target, use_cftime=use_cftime, method=method)
++
+     def diff(self, dim, n=1, label="upper"):
+         """Calculate the n-th order discrete difference along given axis.
+ 
+@@ -7730,4 +7774,4 @@ class Dataset(DataWithCoords, DatasetArithmetic, Mapping):
+         )
+         result.attrs = self.attrs.copy()
+ 
+-        return result
++        return result
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..0e723ce
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1,107 @@
++"""
++Calendar-aware operations for xarray.
++"""
++import numpy as np
++import pandas as pd
++from .times import _should_cftime_be_used, _parse_array_of_cftime_strings
++from .common import _contains_datetime_like_objects
++from .variable import Variable, as_variable
++from .dataarray import DataArray
++from .dataset import Dataset
++from .duck_array_ops import datetime_to_numeric
++from . import utils
++
++def convert_calendar(obj, calendar, use_cftime=None, align_on=None, missing=None):
++    """
++    Convert a DataArray or Dataset to another calendar.
++
++    Parameters
++    ----------
++    obj : DataArray or Dataset
++        Input data with a datetime-like coordinate.
++    calendar : str
++        Target calendar name.
++    use_cftime : bool, optional
++        Whether to use cftime for the output. If None, use cftime only when necessary.
++    align_on : str, optional
++        How to align the dates when converting. Options are 'year', 'month', 'day', etc.
++    missing : any, optional
++        Value to use for missing dates.
++
++    Returns
++    -------
++    converted : same type as obj
++        Object with converted calendar.
++    """
++    # This is a stub. The actual implementation would be more complex.
++    raise NotImplementedError("convert_calendar is not yet implemented")
++
++def interp_calendar(obj, target, use_cftime=None, method='linear'):
++    """
++    Interpolate data from one calendar to another.
++
++    Parameters
++    ----------
++    obj : DataArray or Dataset
++        Input data with a datetime-like coordinate.
++    target : DataArray or Dataset
++        Target dates in the new calendar.
++    use_cftime : bool, optional
++        Whether to use cftime for the output.
++    method : str, optional
++        Interpolation method.
++
++    Returns
++    -------
++    interpolated : same type as obj
++        Object interpolated to the target calendar.
++    """
++    raise NotImplementedError("interp_calendar is not yet implemented")
++
++def date_range(start, end, periods=None, freq=None, calendar=None, use_cftime=None):
++    """
++    Generate a range of dates with a given calendar.
++
++    Parameters
++    ----------
++    start : str or datetime-like
++        Start date.
++    end : str or datetime-like
++        End date.
++    periods : int, optional
++        Number of periods.
++    freq : str, optional
++        Frequency string.
++    calendar : str, optional
++        Calendar name.
++    use_cftime : bool, optional
++        Whether to use cftime.
++
++    Returns
++    -------
++    dates : DataArray
++        Dates in the specified calendar.
++    """
++    # This is a stub.
++    raise NotImplementedError("date_range is not yet implemented")
++
++def date_range_like(source, calendar=None, use_cftime=None):
++    """
++    Generate a date range with the same length and frequency as a source array.
++
++    Parameters
++    ----------
++    source : DataArray or array-like
++        Source dates.
++    calendar : str, optional
++        Target calendar.
++    use_cftime : bool, optional
++        Whether to use cftime.
++
++    Returns
++    -------
++    dates : DataArray
++        Dates in the specified calendar.
++    """
++    # This is a stub.
++    raise NotImplementedError("date_range_like is not yet implemented")

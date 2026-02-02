@@ -1,0 +1,13 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..fc18c06 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -725,7 +725,7 @@ class Documenter:
+             self.directive.filename_set.add(self.analyzer.srcname)
+ 
+         # check __module__ of object (for members not given explicitly)
+-        if check_module:
++        if check_module or not all_members:
+             if not self.check_module():
+                 return
+ 

@@ -1,0 +1,111 @@
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+index 9e23fee..98f0381 100644
+--- a/astropy/cosmology/parameter.py
++++ b/astropy/cosmology/parameter.py
+@@ -1,3 +1,4 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ import astropy.units as u
+@@ -46,7 +47,7 @@ class Parameter:
+ 
+     _registry_validators = {}
+ 
+-    def __init__(self, fvalidate="default", doc=None, *,
++    def __init__(self, *, fvalidate="default", doc=None,
+                  unit=None, equivalencies=[], fmt=".3g", derived=False):
+         # parse registered fvalidate
+         if callable(fvalidate):
+@@ -148,6 +149,39 @@ class Parameter:
+                           derived=self.derived)
+         return desc
+ 
++    def clone(self, *, fvalidate=None, doc=None, unit=None,
++              equivalencies=None, fmt=None, derived=None):
++        """Return a copy of this Parameter with changed constructor arguments.
++
++        Parameters
++        ----------
++        fvalidate : callable[[object, object, Any], Any] or str, optional
++            If provided, replace the current validator function.
++        doc : str or None, optional
++            If provided, replace the current documentation.
++        unit : unit-like or None, optional
++            If provided, replace the current unit.
++        equivalencies : `~astropy.units.Equivalency` or sequence thereof, optional
++            If provided, replace the current equivalencies.
++        fmt : str, optional
++            If provided, replace the current format specification.
++        derived : bool, optional
++            If provided, replace the current derived flag.
++
++        Returns
++        -------
++        `~astropy.cosmology.Parameter`
++            A new Parameter instance with the given arguments replaced.
++        """
++        return type(self)(
++            fvalidate=self._fvalidate if fvalidate is None else fvalidate,
++            doc=self.__doc__ if doc is None else doc,
++            unit=self._unit if unit is None else unit,
++            equivalencies=self._equivalencies if equivalencies is None else equivalencies,
++            fmt=self._fmt if fmt is None else fmt,
++            derived=self._derived if derived is None else derived,
++        )
++
+     def validate(self, cosmology, value):
+         """Run the validator on this Parameter.
+ 
+@@ -210,8 +244,51 @@ class Parameter:
+ 
+     # -------------------------------------------
+ 
++    def __eq__(self, other):
++        """Return True if other is a Parameter with same constructor arguments.
++
++        This method compares the internal state of the Parameter, not the
++        identity. It is used for testing and cloning.
++        """
++        if not isinstance(other, Parameter):
++            return NotImplemented
++        return (self._fvalidate == other._fvalidate and
++                self.__doc__ == other.__doc__ and
++                self._unit == other._unit and
++                self._equivalencies == other._equivalencies and
++                self._fmt == other._fmt and
++                self._derived == other._derived)
++
+     def __repr__(self):
+-        return f"<Parameter {self._attr_name!r} at {hex(id(self))}>"
++        """Return a string representation that can be used to recreate the Parameter.
++
++        This representation is eval-able if the fvalidate is a string key in the
++        registry and all other arguments are eval-able.
++        """
++        # Build the constructor arguments
++        args = []
++        if self._fvalidate != "default":
++            if isinstance(self._fvalidate, str):
++                args.append(f"fvalidate={self._fvalidate!r}")
++            else:
++                # Cannot represent a function in an eval-able way.
++                return f"<Parameter {self._attr_name!r} at {hex(id(self))}>"
++        if self.__doc__ is not None:
++            args.append(f"doc={self.__doc__!r}")
++        if self._unit is not None:
++            args.append(f"unit={self._unit!r}")
++        if self._equivalencies:
++            args.append(f"equivalencies={self._equivalencies!r}")
++        if self._fmt != ".3g":
++            args.append(f"fmt={self._fmt!r}")
++        if self._derived:
++            args.append(f"derived={self._derived!r}")
++        # If no arguments, we still need to include the keyword-only star.
++        # But the constructor requires keyword-only arguments. So we can return
++        # just "Parameter()" if all are default.
++        if not args:
++            return "Parameter()"
++        return f"Parameter({', '.join(args)})"
+ 
+ 
+ # ===================================================================

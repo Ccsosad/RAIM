@@ -1,0 +1,75 @@
+diff --git a/sklearn/random_projection.py b/sklearn/random_projection.py
+index d06dfcd..8bb314f 100644
+--- a/sklearn/random_projection.py
++++ b/sklearn/random_projection.py
+@@ -442,6 +442,33 @@ class BaseRandomProjection(
+             "preserves_dtype": [np.float64, np.float32],
+         }
+ 
++    def inverse_transform(self, X):
++        """Project data back to its original space.
++
++        Parameters
++        ----------
++        X : {array-like, sparse matrix} of shape (n_samples, n_components)
++            The projected data.
++
++        Returns
++        -------
++        X_original : ndarray of shape (n_samples, n_features)
++            The data in the original space. It will always be a dense array.
++        """
++        X = check_array(X, accept_sparse=True)
++        if not hasattr(self, "components_"):
++            raise ValueError("The model has not been fitted yet.")
++
++        # Compute inverse components if not already computed
++        if not hasattr(self, "inverse_components_") or self.inverse_components_ is None:
++            # Compute the pseudo-inverse of the components matrix
++            self.inverse_components_ = np.linalg.pinv(self.components_)
++
++        # The inverse transform is X * inverse_components_.T
++        # inverse_components_ has shape (n_features, n_components)
++        X_original = X @ self.inverse_components_.T
++        return X_original
++
+ 
+ class GaussianRandomProjection(BaseRandomProjection):
+     """Reduce dimensionality through Gaussian random projection.
+@@ -516,12 +543,20 @@ class GaussianRandomProjection(BaseRandomProjection):
+     (25, 2759)
+     """
+ 
+-    def __init__(self, n_components="auto", *, eps=0.1, random_state=None):
++    def __init__(
++        self,
++        n_components="auto",
++        *,
++        eps=0.1,
++        random_state=None,
++        compute_inverse_components=False,
++    ):
+         super().__init__(
+             n_components=n_components,
+             eps=eps,
+             dense_output=True,
+             random_state=random_state,
++            compute_inverse_components=compute_inverse_components,
+         )
+ 
+     def _make_random_matrix(self, n_components, n_features):
+@@ -677,12 +712,14 @@ class SparseRandomProjection(BaseRandomProjection):
+         eps=0.1,
+         dense_output=False,
+         random_state=None,
++        compute_inverse_components=False,
+     ):
+         super().__init__(
+             n_components=n_components,
+             eps=eps,
+             dense_output=dense_output,
+             random_state=random_state,
++            compute_inverse_components=compute_inverse_components,
+         )
+ 
+         self.density = density

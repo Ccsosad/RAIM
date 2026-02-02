@@ -1,0 +1,24 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index b0a0822..4033a16 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -330,6 +330,19 @@ class ContinuousBase(Scale):
+ 
+         forward, inverse = new._get_transform()
+ 
++        # If label base is None and scale is log, set label base to transform's base
++        if new._label_params.get('base') is None and new.trans is not None and isinstance(new.trans, str):
++            arg = new.trans
++            if arg.startswith("log") and not arg.startswith("logit"):
++                if arg == "log":
++                    base = 10
++                else:
++                    try:
++                        base = float(arg[3:])
++                    except ValueError:
++                        base = 10
++                new._label_params['base'] = base
++
+         mpl_scale = new._get_scale(str(data.name), forward, inverse)
+ 
+         if axis is None:

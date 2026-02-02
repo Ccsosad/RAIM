@@ -1,0 +1,65 @@
+diff --git a/lib/matplotlib/cbook/__init__.py b/lib/matplotlib/cbook/__init__.py
+index 5c3e852..f88fc50 100644
+--- a/lib/matplotlib/cbook/__init__.py
++++ b/lib/matplotlib/cbook/__init__.py
+@@ -175,6 +175,8 @@ class CallbackRegistry:
+         self._func_cid_map = {}
+         # A hidden variable that marks cids that need to be pickled.
+         self._pickled_cids = set()
++        self._blocked_all = 0
++        self._blocked_specific = collections.defaultdict(int)
+ 
+     def __getstate__(self):
+         return {
+@@ -190,6 +192,10 @@ class CallbackRegistry:
+ 
+     def __setstate__(self, state):
+         vars(self).update(state)
++        if not hasattr(self, "_blocked_all"):
++            self._blocked_all = 0
++        if not hasattr(self, "_blocked_specific"):
++            self._blocked_specific = collections.defaultdict(int)
+         self.callbacks = {
+             s: {cid: _weak_or_strong_ref(func, self._remove_proxy)
+                 for cid, func in d.items()}
+@@ -260,6 +266,31 @@ class CallbackRegistry:
+             del self.callbacks[signal]
+             del self._func_cid_map[signal]
+ 
++    @contextlib.contextmanager
++    def blocked(self, signal=None):
++        """
++        A context manager to temporarily block signals from being processed.
++
++        The optional keyword *signal* can be used to block a specific signal
++        from being processed and let all other signals pass.
++
++        Parameters
++        ----------
++        signal : str, optional
++            The signal to block. If None, all signals are blocked.
++        """
++        if signal is None:
++            self._blocked_all += 1
++        else:
++            self._blocked_specific[signal] += 1
++        try:
++            yield
++        finally:
++            if signal is None:
++                self._blocked_all -= 1
++            else:
++                self._blocked_specific[signal] -= 1
++
+     def process(self, s, *args, **kwargs):
+         """
+         Process signal *s*.
+@@ -267,6 +298,8 @@ class CallbackRegistry:
+         All of the functions registered to receive callbacks on *s* will be
+         called with ``*args`` and ``**kwargs``.
+         """
++        if self._blocked_all > 0 or self._blocked_specific.get(s, 0) > 0:
++            return
+         for cid, ref in list(self.callbacks.get(s, {}).items()):
+             func = ref()
+             if func is not None:

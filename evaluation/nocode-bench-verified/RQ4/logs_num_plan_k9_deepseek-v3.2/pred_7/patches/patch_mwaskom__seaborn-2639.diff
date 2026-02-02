@@ -1,0 +1,16 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..f4e6a4b 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -223,6 +223,11 @@ class Grid:
+         except AttributeError:
+             return None
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` object underlying the grid."""
++        return self.fig
++
+ 
+ _facet_docs = dict(
+ 

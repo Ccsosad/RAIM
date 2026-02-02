@@ -1,0 +1,51 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 2fd732e..35c0aab 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -5077,4 +5077,4 @@ class DataArray(
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index f468716..e8b755d 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5944,7 +5944,7 @@ class Dataset(DataWithCoords, DatasetReductions, DatasetArithmetic, Mapping):
+ 
+         return df
+ 
+-    def to_dict(self, data=True):
++    def to_dict(self, data=True, encoding=False):
+         """
+         Convert this dataset to a dictionary following xarray naming
+         conventions.
+@@ -5958,6 +5958,9 @@ class Dataset(DataWithCoords, DatasetReductions, DatasetArithmetic, Mapping):
+         data : bool, optional
+             Whether to include the actual data in the dictionary. When set to
+             False, returns just the schema.
++        encoding : bool, optional
++            Whether to include encoding attributes in the dictionary. When set to
++            True, encoding attributes are included for the variables and coordinates.
+ 
+         See Also
+         --------
+@@ -5970,9 +5973,9 @@ class Dataset(DataWithCoords, DatasetReductions, DatasetArithmetic, Mapping):
+             "data_vars": {},
+         }
+         for k in self.coords:
+-            d["coords"].update({k: self[k].variable.to_dict(data=data)})
++            d["coords"].update({k: self[k].variable.to_dict(data=data, encoding=encoding)})
+         for k in self.data_vars:
+-            d["data_vars"].update({k: self[k].variable.to_dict(data=data)})
++            d["data_vars"].update({k: self[k].variable.to_dict(data=data, encoding=encoding)})
+         return d
+ 
+     @classmethod
+@@ -8335,4 +8338,4 @@ class Dataset(DataWithCoords, DatasetReductions, DatasetArithmetic, Mapping):
+         DataArray
+             The source interpolated on the decimal years of target,
+         """
+-        return interp_calendar(self, target, dim=dim)
++        return interp_calendar(self, target, dim=dim)

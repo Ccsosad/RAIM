@@ -1,0 +1,35 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..303372c 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -198,6 +198,10 @@ def _standardize_physical_type_names(physical_type_input):
+     return standardized_physical_types
+ 
+ 
++# Mapping from underscored attribute names to physical type names (with spaces)
++_attrname_physical_mapping = {}
++
++
+ class PhysicalType:
+     """
+     Represents the physical type(s) that are dimensionally compatible
+@@ -476,6 +480,19 @@ def def_physical_type(unit, name):
+ 
+     for ptype_name in physical_type_names:
+         _name_physical_mapping[ptype_name] = physical_type
++        # Create an underscored version for attribute access
++        attr_name = ptype_name.replace(" ", "_")
++        _attrname_physical_mapping[attr_name] = ptype_name
++        # Set the attribute on this module
++        if not hasattr(sys.modules[__name__], attr_name):
++            setattr(sys.modules[__name__], attr_name, physical_type)
++        # Create an underscored version for attribute access
++        attr_name = ptype_name.replace(" ", "_")
++        _attrname_physical_mapping[attr_name] = ptype_name
++        # Set the attribute on this module
++        import sys
++        if not hasattr(sys.modules[__name__], attr_name):
++            setattr(sys.modules[__name__], attr_name, physical_type)
+ 
+ 
+ def get_physical_type(obj):

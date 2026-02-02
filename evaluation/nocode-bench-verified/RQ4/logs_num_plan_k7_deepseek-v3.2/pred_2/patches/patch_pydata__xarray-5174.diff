@@ -1,0 +1,38 @@
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index daf5951..163b986 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1380,13 +1380,26 @@ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+                 return value
+ 
+     def __setitem__(self, key, value):
+-        raise TypeError(
+-            "this variable's data is stored in a dask array, "
+-            "which does not support item assignment. To "
+-            "assign to this variable, you must first load it "
+-            "into memory explicitly using the .load() "
+-            "method or accessing its .values attribute."
+-        )
++        try:
++            import dask
++        except ImportError:
++            dask = None
++        if dask is not None and dask.__version__ >= "2022.03.0":
++            # Convert the key to a tuple
++            if isinstance(key, (BasicIndexer, VectorizedIndexer, OuterIndexer)):
++                key_tuple = key.tuple
++            else:
++                raise TypeError(f"Unsupported indexer type: {type(key)}")
++            # Delegate to the dask array
++            self.array[key_tuple] = value
++        else:
++            raise TypeError(
++                "this variable's data is stored in a dask array, "
++                "which does not support item assignment. To "
++                "assign to this variable, you must first load it "
++                "into memory explicitly using the .load() "
++                "method or accessing its .values attribute."
++            )
+ 
+     def transpose(self, order):
+         return self.array.transpose(order)

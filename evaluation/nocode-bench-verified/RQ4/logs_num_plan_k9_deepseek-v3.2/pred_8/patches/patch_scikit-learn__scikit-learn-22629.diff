@@ -1,0 +1,34 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..3c240ce 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -136,7 +136,28 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         if _num_samples(y) == 0:
+             return np.array([])
+ 
+-        return _encode(y, uniques=self.classes_)
++        # Check for unknowns, which will raise an error if there are new labels (including NaN)
++        diff = _check_unknown(y, self.classes_)
++        if diff:
++            raise ValueError("y contains previously unseen labels: %s" % str(diff))
++
++        # If there are no unknowns, we can encode safely.
++        # We need to handle NaN specifically because np.searchsorted does not work with NaN.
++        # We will use a vectorized method for non-NaN and handle NaN separately.
++        from sklearn.utils.validation import is_scalar_nan
++
++        # Create an array for the encoded values
++        y_encoded = np.zeros(len(y), dtype=int)
++        # For each class in self.classes_, we will find the corresponding indices in y.
++        for i, class_val in enumerate(self.classes_):
++            if is_scalar_nan(class_val):
++                # Find the positions in y that are NaN
++                nan_mask = np.array([is_scalar_nan(val) for val in y])
++                y_encoded[nan_mask] = i
++            else:
++                # Find the positions where y equals class_val
++                y_encoded[y == class_val] = i
++        return y_encoded
+ 
+     def inverse_transform(self, y):
+         """Transform labels back to original encoding.

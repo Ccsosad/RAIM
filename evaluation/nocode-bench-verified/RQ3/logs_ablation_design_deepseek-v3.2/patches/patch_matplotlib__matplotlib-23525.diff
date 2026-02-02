@@ -1,0 +1,46 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 677b319..ae52d3d 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -2381,6 +2381,17 @@ class Axes(_AxesBase):
+             tick_label_axis = self.yaxis
+             tick_label_position = y
+ 
++        n_bars = len(x)
++        label = kwargs.pop('label', '')
++        if isinstance(label, str):
++            # Single label for all bars
++            labels = [label] * n_bars
++        else:
++            # Assume it's iterable
++            labels = list(label)
++            if len(labels) != n_bars:
++                raise ValueError(f"The number of labels ({len(labels)}) must match the number of bars ({n_bars})")
++
+         linewidth = itertools.cycle(np.atleast_1d(linewidth))
+         hatch = itertools.cycle(np.atleast_1d(hatch))
+         color = itertools.chain(itertools.cycle(mcolors.to_rgba_array(color)),
+@@ -2420,14 +2431,14 @@ class Axes(_AxesBase):
+ 
+         patches = []
+         args = zip(left, bottom, width, height, color, edgecolor, linewidth,
+-                   hatch)
+-        for l, b, w, h, c, e, lw, htch in args:
++                   hatch, labels)
++        for l, b, w, h, c, e, lw, htch, lbl in args:
+             r = mpatches.Rectangle(
+                 xy=(l, b), width=w, height=h,
+                 facecolor=c,
+                 edgecolor=e,
+                 linewidth=lw,
+-                label='_nolegend_',
++                label=lbl,
+                 hatch=htch,
+                 )
+             r._internal_update(kwargs)
+@@ -8162,4 +8173,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

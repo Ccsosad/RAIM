@@ -1,0 +1,165 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..123e6ab 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -23,22 +23,24 @@ def _modpath_from_file(filename: str, is_namespace: bool, path: list[str]) -> li
+     )
+ 
+ 
+-def get_python_path(filepath: str) -> str:
+-    """TODO This get the python path with the (bad) assumption that there is always
+-    an __init__.py.
++def get_python_path(filepath: str, source_roots: list[str] | None = None) -> str:
++    """Get the python path for a file.
+ 
+-    This is not true since python 3.3 and is causing problem.
++    This function uses the source roots to correctly handle implicit namespace
++    packages (PEP 420) which do not contain __init__.py files.
++
++    Args:
++        filepath: The path to the file.
++        source_roots: A list of source roots (absolute paths). If None, only
++                      the traditional method is used.
++
++    Returns:
++        The absolute path to the directory that should be considered as the
++        package root for the module.
+     """
+-    dirname = os.path.realpath(os.path.expanduser(filepath))
+-    if not os.path.isdir(dirname):
+-        dirname = os.path.dirname(dirname)
+-    while True:
+-        if not os.path.exists(os.path.join(dirname, "__init__.py")):
+-            return dirname
+-        old_dirname = dirname
+-        dirname = os.path.dirname(dirname)
+-        if old_dirname == dirname:
+-            return os.getcwd()
++    from pylint.lint.source_roots import discover_package_path
++
++    return discover_package_path(filepath, source_roots)
+ 
+ 
+ def _is_in_ignore_list_re(element: str, ignore_list_re: list[Pattern[str]]) -> bool:
+@@ -67,9 +69,19 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: list[str] | None = None,
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
++
++    Args:
++        files_or_modules: The list of files, modules, or packages to expand.
++        ignore_list: List of files to ignore.
++        ignore_list_re: List of regex patterns for files to ignore.
++        ignore_list_paths_re: List of regex patterns for paths to ignore.
++        source_roots: A list of source roots (absolute paths) for handling
++                      implicit namespace packages (PEP 420). If None, only
++                      the traditional method is used.
+     """
+     result: dict[str, ModuleDescriptionDict] = {}
+     errors: list[ErrorDescriptionDict] = []
+@@ -81,7 +93,7 @@ def expand_modules(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+         ):
+             continue
+-        module_path = get_python_path(something)
++        module_path = get_python_path(something, source_roots)
+         additional_search_path = [".", module_path] + path
+         if os.path.exists(something):
+             # this is a file or a directory
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 21f6e51..e28c244 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -891,6 +891,7 @@ class PyLinter(
+             self.config.ignore,
+             self.config.ignore_patterns,
+             self._ignore_paths,
++            self.config.source_roots,
+         )
+         for error in errors:
+             message = modname = error["mod"]
+diff --git a/pylint/lint/source_roots.py b/pylint/lint/source_roots.py
+new file mode 100644
+index 0000000..ed15cce
+--- /dev/null
++++ b/pylint/lint/source_roots.py
+@@ -0,0 +1,75 @@
++"""Utilities for handling source roots for implicit namespace packages (PEP 420)."""
++
++import os
++import sys
++from typing import Iterable, List, Optional
++
++
++def get_source_roots(source_roots: Iterable[str]) -> List[str]:
++    """Return a list of source roots as absolute paths.
++
++    The source roots are used to determine the package namespace for modules
++    located under them. This is particularly important for implicit namespace
++    packages (PEP 420) which do not contain __init__.py files.
++
++    Args:
++        source_roots: An iterable of paths (absolute or relative to cwd).
++
++    Returns:
++        A list of absolute paths.
++    """
++    cwd = os.getcwd()
++    roots = []
++    for root in source_roots:
++        if not os.path.isabs(root):
++            root = os.path.join(cwd, root)
++        roots.append(os.path.normpath(root))
++    return roots
++
++
++def discover_package_path(
++    filepath: str, source_roots: Optional[List[str]] = None
++) -> str:
++    """Discover the package path for a given file.
++
++    This function is intended to replace the old get_python_path which assumed
++    the presence of __init__.py. For regular packages, it behaves similarly.
++    For namespace packages (PEP 420), it uses the source roots to determine
++    the correct package path.
++
++    Args:
++        filepath: The path to a file or directory.
++        source_roots: A list of source roots (absolute paths). If None, only
++                      the traditional method is used.
++
++    Returns:
++        The absolute path to the directory that should be considered as the
++        package root for the module.
++    """
++    if source_roots is None:
++        source_roots = []
++
++    # First, try to find the package root by looking for __init__.py
++    dirname = os.path.realpath(os.path.expanduser(filepath))
++    if not os.path.isdir(dirname):
++        dirname = os.path.dirname(dirname)
++    while True:
++        if not os.path.exists(os.path.join(dirname, "__init__.py")):
++            break
++        old_dirname = dirname
++        dirname = os.path.dirname(dirname)
++        if old_dirname == dirname:
++            dirname = os.getcwd()
++            break
++
++    # If we are in a source root, we might be in a namespace package.
++    # In that case, we should return the deepest source root that contains
++    # the file.
++    if source_roots:
++        # Sort by length (deepest first) to get the most specific root.
++        sorted_roots = sorted(source_roots, key=len, reverse=True)
++        for root in sorted_roots:
++            if os.path.commonpath([root, dirname]) == root:
++                return root
++
++    return dirname

@@ -1,0 +1,127 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..4fa44e0 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -395,21 +395,50 @@ def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
+     return "\n".join(summary)
+ 
+ 
+-data_vars_repr = functools.partial(
+-    _mapping_repr, title="Data variables", summarizer=summarize_datavar
+-)
++def data_vars_repr(mapping, col_width=None, max_rows=None):
++    if max_rows is None:
++        expand_opt = OPTIONS.get("display_expand_data_vars", "default")
++        if expand_opt is True:
++            max_rows = len(mapping) if mapping else 0
++        elif expand_opt is False:
++            max_rows = 0
++        else:  # default
++            max_rows = OPTIONS["display_max_rows"]
++    return _mapping_repr(
++        mapping, title="Data variables", summarizer=summarize_datavar,
++        col_width=col_width, max_rows=max_rows
++    )
+ 
+ 
+-attrs_repr = functools.partial(
+-    _mapping_repr, title="Attributes", summarizer=summarize_attr
+-)
++def attrs_repr(mapping, col_width=None, max_rows=None):
++    if max_rows is None:
++        expand_opt = OPTIONS.get("display_expand_attrs", "default")
++        if expand_opt is True:
++            max_rows = len(mapping) if mapping else 0
++        elif expand_opt is False:
++            max_rows = 0
++        else:  # default
++            max_rows = OPTIONS["display_max_rows"]
++    return _mapping_repr(
++        mapping, title="Attributes", summarizer=summarize_attr,
++        col_width=col_width, max_rows=max_rows
++    )
+ 
+ 
+-def coords_repr(coords, col_width=None):
++def coords_repr(coords, col_width=None, max_rows=None):
+     if col_width is None:
+         col_width = _calculate_col_width(_get_col_items(coords))
++    if max_rows is None:
++        expand_opt = OPTIONS.get("display_expand_coords", "default")
++        if expand_opt is True:
++            max_rows = len(coords) if coords else 0
++        elif expand_opt is False:
++            max_rows = 0
++        else:  # default
++            max_rows = OPTIONS["display_max_rows"]
+     return _mapping_repr(
+-        coords, title="Coordinates", summarizer=summarize_coord, col_width=col_width
++        coords, title="Coordinates", summarizer=summarize_coord,
++        col_width=col_width, max_rows=max_rows
+     )
+ 
+ 
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..7f7f8d9 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -78,6 +78,14 @@ def _get_keep_attrs(default):
+         )
+ 
+ 
++def _validate_expand_option(choice):
++    if choice not in (True, False, "default"):
++        raise ValueError(
++            f"display_expand_* option must be one of True, False, or 'default', got {choice!r}."
++        )
++    return True
++
++
+ class set_options:
+     """Set options for xarray in a controlled context.
+ 
+@@ -108,6 +116,15 @@ class set_options:
+       Default: ``'default'``.
+     - ``display_style``: display style to use in jupyter for xarray objects.
+       Default: ``'text'``. Other options are ``'html'``.
++    - ``display_expand_attrs``: control expansion of attributes section. Can be
++      ``True`` to always expand, ``False`` to always collapse, or ``'default'``
++      to expand unless over the pre-defined limit. Default: ``'default'``.
++    - ``display_expand_coords``: control expansion of coordinates section.
++      Same values as above. Default: ``'default'``.
++    - ``display_expand_data``: control expansion of data section in DataArray.
++      Same values as above. Default: ``'default'``.
++    - ``display_expand_data_vars``: control expansion of data variables section.
++      Same values as above. Default: ``'default'``.
+ 
+ 
+     You can use ``set_options`` either as a context manager:
+@@ -133,10 +150,18 @@ class set_options:
+         self.old = {}
+         for k, v in kwargs.items():
+             if k not in OPTIONS:
+-                raise ValueError(
+-                    "argument name %r is not in the set of valid options %r"
+-                    % (k, set(OPTIONS))
+-                )
++                # If it's one of the new display_expand options, we allow it and add it to OPTIONS
++                if k in ["display_expand_attrs", "display_expand_coords", "display_expand_data", "display_expand_data_vars"]:
++                    # Validate the value
++                    if v not in (True, False, "default"):
++                        raise ValueError(
++                            f"option {k!r} must be one of True, False, or 'default', got {v!r}."
++                        )
++                else:
++                    raise ValueError(
++                        "argument name %r is not in the set of valid options %r"
++                        % (k, set(OPTIONS))
++                    )
+             if k in _VALIDATORS and not _VALIDATORS[k](v):
+                 if k == ARITHMETIC_JOIN:
+                     expected = f"Expected one of {_JOIN_OPTIONS!r}"
+@@ -160,4 +185,4 @@ class set_options:
+         return
+ 
+     def __exit__(self, type, value, traceback):
+-        self._apply_update(self.old)
++        self._apply_update(self.old)

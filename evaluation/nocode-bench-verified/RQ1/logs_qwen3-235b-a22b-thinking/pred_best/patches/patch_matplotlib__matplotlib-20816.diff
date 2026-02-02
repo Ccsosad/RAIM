@@ -1,0 +1,11 @@
+diff --git a/lib/matplotlib/cbook.py b/lib/matplotlib/cbook.py
+new file mode 100644
+index 0000000..4d2bbe9
+--- /dev/null
++++ b/lib/matplotlib/cbook.py
+@@ -0,0 +1,5 @@
++        self.exception_handler = exception_handler
++        self.callbacks = defaultdict(list)
++        self.cid = 0
++        self._block_all_count = 0
++        self._blocked_signals = defaultdict(int)

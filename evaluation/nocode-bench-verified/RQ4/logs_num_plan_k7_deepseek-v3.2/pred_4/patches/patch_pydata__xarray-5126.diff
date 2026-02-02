@@ -1,0 +1,77 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..2244d09 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -371,37 +371,49 @@ def _calculate_col_width(col_items):
+     return col_width
+ 
+ 
+-def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
++def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None, expand=None):
+     if col_width is None:
+         col_width = _calculate_col_width(mapping)
+     if max_rows is None:
+         max_rows = OPTIONS["display_max_rows"]
++    if expand is None:
++        expand = "default"
+     summary = [f"{title}:"]
+     if mapping:
+         len_mapping = len(mapping)
+-        if len_mapping > max_rows:
+-            summary = [f"{summary[0]} ({max_rows}/{len_mapping})"]
+-            first_rows = max_rows // 2 + max_rows % 2
+-            items = list(mapping.items())
+-            summary += [summarizer(k, v, col_width) for k, v in items[:first_rows]]
+-            if max_rows > 1:
+-                last_rows = max_rows // 2
+-                summary += [pretty_print("    ...", col_width) + " ..."]
+-                summary += [summarizer(k, v, col_width) for k, v in items[-last_rows:]]
+-        else:
++        if expand is True:
++            # Always expand: show all items
+             summary += [summarizer(k, v, col_width) for k, v in mapping.items()]
++        elif expand is False:
++            # Always collapse: show only the title and a placeholder
++            summary += [EMPTY_REPR]
++        else:  # expand == "default"
++            # Default behavior: expand unless over max_rows
++            if len_mapping > max_rows:
++                summary = [f"{summary[0]} ({max_rows}/{len_mapping})"]
++                first_rows = max_rows // 2 + max_rows % 2
++                items = list(mapping.items())
++                summary += [summarizer(k, v, col_width) for k, v in items[:first_rows]]
++                if max_rows > 1:
++                    last_rows = max_rows // 2
++                    summary += [pretty_print("    ...", col_width) + " ..."]
++                    summary += [summarizer(k, v, col_width) for k, v in items[-last_rows:]]
++            else:
++                summary += [summarizer(k, v, col_width) for k, v in mapping.items()]
+     else:
+         summary += [EMPTY_REPR]
+     return "\n".join(summary)
+ 
+ 
+ data_vars_repr = functools.partial(
+-    _mapping_repr, title="Data variables", summarizer=summarize_datavar
++    _mapping_repr, title="Data variables", summarizer=summarize_datavar,
++    expand=OPTIONS.get("display_expand_data_vars", "default")
+ )
+ 
+ 
+ attrs_repr = functools.partial(
+-    _mapping_repr, title="Attributes", summarizer=summarize_attr
++    _mapping_repr, title="Attributes", summarizer=summarize_attr,
++    expand=OPTIONS.get("display_expand_attrs", "default")
+ )
+ 
+ 
+@@ -409,7 +421,8 @@ def coords_repr(coords, col_width=None):
+     if col_width is None:
+         col_width = _calculate_col_width(_get_col_items(coords))
+     return _mapping_repr(
+-        coords, title="Coordinates", summarizer=summarize_coord, col_width=col_width
++        coords, title="Coordinates", summarizer=summarize_coord, col_width=col_width,
++        expand=OPTIONS.get("display_expand_coords", "default")
+     )
+ 
+ 

@@ -1,0 +1,45 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1ae55eb..63f5d05 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1433,6 +1433,20 @@ def get_documenters(app):
+     return app.registry.documenters
+ 
+ 
++#: The list of autodoc default options that can be configured via
++#: autodoc_default_options.
++AUTODOC_DEFAULT_OPTIONS = [
++    'members',
++    'member-order',
++    'undoc-members',
++    'private-members',
++    'special-members',
++    'inherited-members',
++    'show-inheritance',
++    'ignore-module-all',
++    'exclude-members',
++]
++
+ def autodoc_attrgetter(app, obj, name, *defargs):
+     # type: (Sphinx, Any, unicode, Any) -> Any
+     """Alternative getattr() for types"""
+@@ -1443,6 +1457,19 @@ def autodoc_attrgetter(app, obj, name, *defargs):
+     return safe_getattr(obj, name, *defargs)
+ 
+ 
++# Define the list of autodoc default options
++AUTODOC_DEFAULT_OPTIONS = [
++    'members',
++    'member-order',
++    'undoc-members',
++    'private-members',
++    'special-members',
++    'inherited-members',
++    'show-inheritance',
++    'ignore-module-all',
++    'exclude-members',
++]
++
+ def merge_autodoc_default_flags(app, config):
+     # type: (Sphinx, Config) -> None
+     """This merges the autodoc_default_flags to autodoc_default_options."""

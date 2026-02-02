@@ -1,0 +1,82 @@
+diff --git a/xarray/core/formatting.py b/xarray/core/formatting.py
+index 48cd89e..29f9862 100644
+--- a/xarray/core/formatting.py
++++ b/xarray/core/formatting.py
+@@ -371,11 +371,17 @@ def _calculate_col_width(col_items):
+     return col_width
+ 
+ 
+-def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None):
++def _mapping_repr(mapping, title, summarizer, col_width=None, max_rows=None, expand='default'):
+     if col_width is None:
+         col_width = _calculate_col_width(mapping)
+     if max_rows is None:
+-        max_rows = OPTIONS["display_max_rows"]
++        if expand == 'default':
++            max_rows = OPTIONS["display_max_rows"]
++        elif expand is True:
++            # A very large number to effectively show all
++            max_rows = 10**6
++        else:  # expand is False
++            max_rows = 0
+     summary = [f"{title}:"]
+     if mapping:
+         len_mapping = len(mapping)
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..c4c1916 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -108,6 +108,16 @@ class set_options:
+       Default: ``'default'``.
+     - ``display_style``: display style to use in jupyter for xarray objects.
+       Default: ``'text'``. Other options are ``'html'``.
++    - ``display_expand_attrs``: whether to expand the attributes section in the
++      display. Can be ``True`` to always expand, ``False`` to always collapse,
++      or ``'default'`` to expand unless over the pre-defined limit (controlled
++      by ``display_max_rows``). Default: ``'default'``.
++    - ``display_expand_coords``: similar to ``display_expand_attrs``, but for
++      coordinates.
++    - ``display_expand_data``: similar to ``display_expand_attrs``, but for the
++      data section of a DataArray.
++    - ``display_expand_data_vars``: similar to ``display_expand_attrs``, but for
++      data variables in a Dataset.
+ 
+ 
+     You can use ``set_options`` either as a context manager:
+@@ -131,13 +141,29 @@ class set_options:
+ 
+     def __init__(self, **kwargs):
+         self.old = {}
++        # Define the new display options and their default values
++        new_display_options = {
++            'display_expand_attrs': 'default',
++            'display_expand_coords': 'default',
++            'display_expand_data': 'default',
++            'display_expand_data_vars': 'default',
++        }
++        for opt, default in new_display_options.items():
++            if opt not in OPTIONS:
++                OPTIONS[opt] = default
+         for k, v in kwargs.items():
+             if k not in OPTIONS:
+                 raise ValueError(
+                     "argument name %r is not in the set of valid options %r"
+                     % (k, set(OPTIONS))
+                 )
+-            if k in _VALIDATORS and not _VALIDATORS[k](v):
++            # Validate the new display options
++            if k in new_display_options:
++                if v not in (True, False, 'default'):
++                    raise ValueError(
++                        f"option {k!r} must be True, False, or 'default', got {v!r}"
++                    )
++            elif k in _VALIDATORS and not _VALIDATORS[k](v):
+                 if k == ARITHMETIC_JOIN:
+                     expected = f"Expected one of {_JOIN_OPTIONS!r}"
+                 elif k == DISPLAY_STYLE:
+@@ -160,4 +186,4 @@ class set_options:
+         return
+ 
+     def __exit__(self, type, value, traceback):
+-        self._apply_update(self.old)
++        self._apply_update(self.old)

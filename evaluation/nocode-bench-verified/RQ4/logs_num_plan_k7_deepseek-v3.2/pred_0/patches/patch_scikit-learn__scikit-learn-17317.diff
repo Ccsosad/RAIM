@@ -1,0 +1,91 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 24b047c..755a8fa 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -32,18 +32,47 @@ def _unique(values, *, return_inverse=False):
+ 
+ def _unique_python(values, *, return_inverse):
+     # Only used in `_uniques`, see docstring there for details
+-    try:
+-        uniques = sorted(set(values))
+-        uniques = np.array(uniques, dtype=values.dtype)
+-    except TypeError:
+-        types = sorted(t.__qualname__
+-                       for t in set(type(v) for v in values))
+-        raise TypeError("Encoders require their input to be uniformly "
+-                        f"strings or numbers. Got {types}")
++    # Separate missing and non-missing values
++    non_missing = []
++    missing = []
++    seen_non_missing = set()
++    seen_missing = []
++
++    for val in values:
++        if val is None:
++            if None not in seen_missing:
++                seen_missing.append(None)
++                missing.append(val)
++        elif isinstance(val, float) and math.isnan(val):
++            # Check if we have already seen a NaN
++            if not any(isinstance(v, float) and math.isnan(v) for v in seen_missing):
++                seen_missing.append(val)
++                missing.append(val)
++        else:
++            if val not in seen_non_missing:
++                seen_non_missing.add(val)
++                non_missing.append(val)
++
++    # Sort the non-missing values
++    non_missing.sort()
++    uniques_list = non_missing + missing
++    uniques = np.array(uniques_list, dtype=values.dtype)
+ 
+     if return_inverse:
+-        table = {val: i for i, val in enumerate(uniques)}
+-        inverse = np.array([table[v] for v in values])
++        # Build a mapping from value to index, with special handling for NaN
++        table = {}
++        for i, val in enumerate(uniques_list):
++            if isinstance(val, float) and math.isnan(val):
++                table['__nan__'] = i
++            else:
++                table[val] = i
++
++        inverse = np.zeros(len(values), dtype=int)
++        for i, v in enumerate(values):
++            if isinstance(v, float) and math.isnan(v):
++                inverse[i] = table['__nan__']
++            else:
++                inverse[i] = table[v]
+         return uniques, inverse
+ 
+     return uniques
+@@ -119,13 +148,22 @@ def _check_unknown(values, known_values, return_mask=False):
+ 
+     """
+     if values.dtype == object:
+-        uniques_set = set(known_values)
+-        diff = list(set(values) - uniques_set)
+-        if return_mask:
+-            if diff:
+-                valid_mask = np.array([val in uniques_set for val in values])
++        # We cannot use a set for membership with NaN, so we use a list and a custom function.
++        uniques_list = list(known_values)
++        def is_in(val):
++            if isinstance(val, float) and math.isnan(val):
++                return any(isinstance(u, float) and math.isnan(u) for u in uniques_list)
+             else:
+-                valid_mask = np.ones(len(values), dtype=bool)
++                return val in uniques_list
++
++        diff = []
++        for val in values:
++            if not is_in(val):
++                diff.append(val)
++        diff = list(set(diff))
++
++        if return_mask:
++            valid_mask = np.array([is_in(val) for val in values], dtype=bool)
+             return diff, valid_mask
+         else:
+             return diff

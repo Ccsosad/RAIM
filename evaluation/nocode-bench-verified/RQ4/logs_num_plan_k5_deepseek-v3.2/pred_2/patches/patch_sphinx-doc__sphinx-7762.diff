@@ -1,0 +1,25 @@
+diff --git a/sphinx/util/requests.py b/sphinx/util/requests.py
+index 930b64d..f3edd17 100644
+--- a/sphinx/util/requests.py
++++ b/sphinx/util/requests.py
+@@ -104,6 +104,8 @@ def get(url: str, **kwargs: Any) -> requests.Response:
+     if config:
+         kwargs.setdefault('verify', _get_tls_cacert(url, config))
+         headers.setdefault('User-Agent', _get_user_agent(config))
++        # Add headers from linkcheck_request_headers
++        headers.update(_get_request_headers(url, config))
+     else:
+         headers.setdefault('User-Agent', useragent_header[0][1])
+ 
+@@ -120,8 +122,10 @@ def head(url: str, **kwargs: Any) -> requests.Response:
+     if config:
+         kwargs.setdefault('verify', _get_tls_cacert(url, config))
+         headers.setdefault('User-Agent', _get_user_agent(config))
++        # Add headers from linkcheck_request_headers
++        headers.update(_get_request_headers(url, config))
+     else:
+         headers.setdefault('User-Agent', useragent_header[0][1])
+ 
+     with ignore_insecure_warning(**kwargs):
+-        return requests.get(url, **kwargs)
++        return requests.head(url, **kwargs)

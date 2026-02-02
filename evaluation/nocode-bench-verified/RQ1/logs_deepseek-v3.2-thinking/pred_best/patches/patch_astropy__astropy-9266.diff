@@ -1,0 +1,92 @@
+diff --git a/astropy/visualization/wcsaxes/wcsapi.py b/astropy/visualization/wcsaxes/wcsapi.py
+index 18817a1..88aaf5a 100644
+--- a/astropy/visualization/wcsaxes/wcsapi.py
++++ b/astropy/visualization/wcsaxes/wcsapi.py
+@@ -33,10 +33,15 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+             raise ValueError("'slices' should have as many elements as WCS "
+                              "has pixel dimensions (should be {})"
+                              .format(wcs.pixel_n_dim))
+-    elif wcs.pixel_n_dim < 2:
+-        raise ValueError("WCS should have at least 2 pixel dimensions")
+-    elif slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
+-        raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    elif wcs.pixel_n_dim == 2:
++        if slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
++            # Check if we're slicing to 1D
++            if not (len(slices) == 2 and 
++                    ((isinstance(slices[0], (int, slice)) and slices[1] in ('x', 'y')) or
++                     (isinstance(slices[1], (int, slice)) and slices[0] in ('x', 'y')))):
++                raise ValueError("For 2D WCS, slices must be ('x', 'y'), ('y', 'x'), "
++                                 "or slice to 1D with one 'x' or 'y' and one integer")
++    # Allow 1D WCS - no error for pixel_n_dim < 2
+ 
+     is_fits_wcs = isinstance(wcs, WCS)
+ 
+@@ -124,10 +129,15 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+     invert_xy = False
+     if slices is not None:
+         wcs_slice = list(slices)
+-        wcs_slice[wcs_slice.index("x")] = slice(None)
+-        wcs_slice[wcs_slice.index("y")] = slice(None)
++        # Handle 1D case: only one of 'x' or 'y' might be present
++        if 'x' in wcs_slice:
++            wcs_slice[wcs_slice.index("x")] = slice(None)
++        if 'y' in wcs_slice:
++            wcs_slice[wcs_slice.index("y")] = slice(None)
+         wcs = SlicedLowLevelWCS(wcs, wcs_slice[::-1])
+-        invert_xy = slices.index('x') > slices.index('y')
++        # Only set invert_xy if both x and y are present
++        if 'x' in slices and 'y' in slices:
++            invert_xy = slices.index('x') > slices.index('y')
+         world_keep = wcs._world_keep
+     else:
+         world_keep = list(range(wcs.world_n_dim))
+@@ -137,11 +147,32 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+ 
+     transform = WCSPixel2WorldTransform(wcs, invert_xy=invert_xy)
+ 
+-    m = wcs.axis_correlation_matrix.copy()
+-    if invert_xy:
+-        m = m[:, ::-1]
+-
+-    if frame_class is RectangularFrame:
++    # Get axis correlation matrix - handle 1D case
++    if hasattr(wcs, 'axis_correlation_matrix'):
++        m = wcs.axis_correlation_matrix.copy()
++        if invert_xy and m.shape[1] >= 2:
++            m = m[:, ::-1]
++    else:
++        # For 1D case, create a simple correlation matrix
++        # shape: (world_n_dim, pixel_n_dim)
++        pixel_n_dim = getattr(wcs, 'pixel_n_dim', 1)
++        world_n_dim = getattr(wcs, 'world_n_dim', 1)
++        m = np.ones((world_n_dim, pixel_n_dim), dtype=bool)
++
++    if frame_class.__name__ == 'RectangularFrame1D':
++        # For 1D rectangular frame, we need to handle axis positions differently
++        # In 1D plots, we typically put the axis on the bottom (or left/right)
++        # but let's use the existing spine_names from the frame class
++        for i in range(len(coord_meta['type'])):
++            if i in world_keep:
++                index = world_keep[i]
++                # For 1D, put everything on the 'l' spine by default
++                # The actual position will be determined by the frame class
++                coord_meta['default_axislabel_position'][index] = frame_class.spine_names
++                coord_meta['default_ticklabel_position'][index] = frame_class.spine_names
++                coord_meta['default_ticks_position'][index] = frame_class.spine_names
++                
++    elif frame_class is RectangularFrame:
+ 
+         for i, spine_name in enumerate('bltr'):
+             pos = np.nonzero(m[:, i % 2])[0]
+diff --git a/astropy/visualization/wcsaxes/frames.py b/astropy/visualization/wcsaxes/frames.py
+new file mode 100644
+index 0000000..9dd5927
+--- /dev/null
++++ b/astropy/visualization/wcsaxes/frames.py
+@@ -0,0 +1,5 @@
++class RectangularFrame1D:
++    """
++    A frame for 1D plots, with spines on the left and right.
++    """
++    spine_names = ('l', 'r')

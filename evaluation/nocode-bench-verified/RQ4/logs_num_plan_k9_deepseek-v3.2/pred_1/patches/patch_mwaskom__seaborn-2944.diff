@@ -1,0 +1,28 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index fb4476d..381dc3d 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -38,6 +38,23 @@ class _BaseGrid:
+                 ax.set(**kwargs)
+         return self
+ 
++    def tick_params(self, **kwargs):
++        """Customize the appearance of ticks, tick labels, and gridlines.
++
++        This method calls :meth:`matplotlib.axes.Axes.tick_params` on each
++        subplot Axes in the grid. All keyword arguments are passed through.
++
++        Returns
++        -------
++        self : object
++            Returns self for easy method chaining.
++
++        """
++        for ax in self.axes.flat:
++            if ax is not None:  # Handle removed axes
++                ax.tick_params(**kwargs)
++        return self
++
+     @property
+     def fig(self):
+         """DEPRECATED: prefer the `figure` property."""

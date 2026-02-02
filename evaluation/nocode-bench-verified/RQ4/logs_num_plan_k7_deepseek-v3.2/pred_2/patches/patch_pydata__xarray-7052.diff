@@ -1,0 +1,224 @@
+diff --git a/xarray/plot/accessor.py b/xarray/plot/accessor.py
+new file mode 100644
+index 0000000..50b441d
+--- /dev/null
++++ b/xarray/plot/accessor.py
+@@ -0,0 +1,218 @@
++"""
++Typed plot accessors for xarray objects.
++
++This module provides typed accessors for the plot functionality,
++enabling better static type checking and IDE support.
++"""
++
++from typing import TYPE_CHECKING, Any, Hashable, Literal, overload
++
++if TYPE_CHECKING:
++    from ..core.dataarray import DataArray
++    from ..core.dataset import Dataset
++    from .facetgrid import FacetGrid
++    from .plot import _PlotMethods
++
++
++class DataArrayPlotAccessor:
++    """Typed accessor for DataArray plot methods."""
++
++    def __init__(self, dataarray: "DataArray") -> None:
++        self._da = dataarray
++
++    def __call__(self, **kwargs: Any) -> Any:
++        """Call the default plot function."""
++        from .plot import plot
++
++        return plot(self._da, **kwargs)
++
++    @overload
++    def line(
++        self,
++        *,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        hue: Hashable | None = None,
++        figsize: tuple[float, float] | None = None,
++        size: float | None = None,
++        aspect: float | None = None,
++        ax: Any | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        col_wrap: int | None = None,
++        xincrease: bool | None = True,
++        yincrease: bool | None = True,
++        xscale: Literal["linear", "symlog", "log", "logit"] | None = None,
++        yscale: Literal["linear", "symlog", "log", "logit"] | None = None,
++        xticks: Any | None = None,
++        yticks: Any | None = None,
++        xlim: tuple[float, float] | None = None,
++        ylim: tuple[float, float] | None = None,
++        add_legend: bool | None = True,
++        **kwargs: Any,
++    ) -> Any:
++        ...
++
++    def line(self, *args: Any, **kwargs: Any) -> Any:
++        """Line plot."""
++        from .plot import line
++
++        return line(self._da, *args, **kwargs)
++
++    @overload
++    def scatter(
++        self,
++        *,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        z: Hashable | None = None,
++        hue: Hashable | None = None,
++        hue_style: Literal["continuous", "discrete"] | None = None,
++        markersize: Hashable | None = None,
++        linewidth: Hashable | None = None,
++        figsize: tuple[float, float] | None = None,
++        size: float | None = None,
++        aspect: float | None = None,
++        ax: Any | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        col_wrap: int | None = None,
++        xincrease: bool | None = True,
++        yincrease: bool | None = True,
++        add_legend: bool | None = None,
++        add_colorbar: bool | None = None,
++        add_labels: bool | list[bool] = True,
++        subplot_kws: dict[str, Any] | None = None,
++        xscale: Literal["linear", "symlog", "log", "logit"] | None = None,
++        yscale: Literal["linear", "symlog", "log", "logit"] | None = None,
++        xticks: Any | None = None,
++        yticks: Any | None = None,
++        xlim: tuple[float, float] | None = None,
++        ylim: tuple[float, float] | None = None,
++        cmap: Any | None = None,
++        vmin: float | None = None,
++        vmax: float | None = None,
++        norm: Any | None = None,
++        extend: Literal["neither", "both", "min", "max"] | None = None,
++        levels: int | list[float] | None = None,
++        **kwargs: Any,
++    ) -> Any:
++        ...
++
++    def scatter(self, *args: Any, **kwargs: Any) -> Any:
++        """Scatter plot."""
++        from .plot import scatter
++
++        return scatter(self._da, *args, **kwargs)
++
++    def hist(self, **kwargs: Any) -> Any:
++        """Histogram plot."""
++        from .plot import hist
++
++        return hist(self._da, **kwargs)
++
++    def step(self, **kwargs: Any) -> Any:
++        """Step plot."""
++        from .plot import step
++
++        return step(self._da, **kwargs)
++
++    def imshow(self, **kwargs: Any) -> Any:
++        """Image plot."""
++        from .plot import imshow
++
++        return imshow(self._da, **kwargs)
++
++    def pcolormesh(self, **kwargs: Any) -> Any:
++        """Pseudocolor plot."""
++        from .plot import pcolormesh
++
++        return pcolormesh(self._da, **kwargs)
++
++    def contour(self, **kwargs: Any) -> Any:
++        """Contour plot."""
++        from .plot import contour
++
++        return contour(self._da, **kwargs)
++
++    def contourf(self, **kwargs: Any) -> Any:
++        """Filled contour plot."""
++        from .plot import contourf
++
++        return contourf(self._da, **kwargs)
++
++    def surface(self, **kwargs: Any) -> Any:
++        """Surface plot."""
++        from .plot import surface
++
++        return surface(self._da, **kwargs)
++
++
++class DatasetPlotAccessor:
++    """Typed accessor for Dataset plot methods."""
++
++    def __init__(self, dataset: "Dataset") -> None:
++        self._ds = dataset
++
++    def __call__(self, **kwargs: Any) -> Any:
++        """Call the default plot function."""
++        from .dataset_plot import plot
++
++        return plot(self._ds, **kwargs)
++
++    @overload
++    def scatter(
++        self,
++        *,
++        x: Hashable,
++        y: Hashable,
++        z: Hashable | None = None,
++        hue: Hashable | None = None,
++        hue_style: Literal["continuous", "discrete"] | None = None,
++        markersize: Hashable | None = None,
++        figsize: tuple[float, float] | None = None,
++        size: float | None = None,
++        aspect: float | None = None,
++        ax: Any | None = None,
++        row: Hashable | None = None,
++        col: Hashable | None = None,
++        col_wrap: int | None = None,
++        xincrease: bool | None = True,
++        yincrease: bool | None = True,
++        add_legend: bool | None = None,
++        add_colorbar: bool | None = None,
++        add_labels: bool | list[bool] = True,
++        subplot_kws: dict[str, Any] | None = None,
++        xscale: Literal["linear", "symlog", "log", "logit"] | None = None,
++        yscale: Literal["linear", "symlog", "log", "logit"] | None = None,
++        xticks: Any | None = None,
++        yticks: Any | None = None,
++        xlim: tuple[float, float] | None = None,
++        ylim: tuple[float, float] | None = None,
++        cmap: Any | None = None,
++        vmin: float | None = None,
++        vmax: float | None = None,
++        norm: Any | None = None,
++        extend: Literal["neither", "both", "min", "max"] | None = None,
++        levels: int | list[float] | None = None,
++        **kwargs: Any,
++    ) -> Any:
++        ...
++
++    def scatter(self, *args: Any, **kwargs: Any) -> Any:
++        """Scatter plot."""
++        from .dataset_plot import scatter
++
++        return scatter(self._ds, *args, **kwargs)
++
++    def quiver(self, **kwargs: Any) -> Any:
++        """Quiver plot."""
++        from .dataset_plot import quiver
++
++        return quiver(self._ds, **kwargs)
++
++    def streamplot(self, **kwargs: Any) -> Any:
++        """Streamplot."""
++        from .dataset_plot import streamplot
++
++        return streamplot(self._ds, **kwargs)

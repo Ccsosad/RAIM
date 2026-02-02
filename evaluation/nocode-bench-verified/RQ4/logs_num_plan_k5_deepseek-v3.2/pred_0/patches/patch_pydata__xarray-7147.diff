@@ -1,0 +1,82 @@
+diff --git a/xarray/coding/times.py b/xarray/coding/times.py
+index 3885b1c..caaba3d 100644
+--- a/xarray/coding/times.py
++++ b/xarray/coding/times.py
+@@ -692,6 +692,17 @@ class CFDatetimeCoder(VariableCoder):
+                 calendar=calendar,
+                 use_cftime=self.use_cftime,
+             )
++            # Wrap the transform to catch errors and add the variable name
++            if name is not None:
++                def safe_transform(num_dates):
++                    try:
++                        return transform(num_dates)
++                    except Exception as e:
++                        raise ValueError(
++                            f"Failed to decode variable {name!r} as datetime. "
++                            f"Error: {e}"
++                        ) from e
++                transform = safe_transform
+             data = lazy_elemwise_func(data, transform, dtype)
+ 
+         return Variable(dims, data, attrs, encoding)
+@@ -714,7 +725,18 @@ class CFTimedeltaCoder(VariableCoder):
+         if isinstance(units, str) and units in TIME_UNITS:
+             units = pop_to(attrs, encoding, "units")
+             transform = partial(decode_cf_timedelta, units=units)
++            # Wrap the transform to catch errors and add the variable name
++            if name is not None:
++                def safe_transform(timedeltas):
++                    try:
++                        return transform(timedeltas)
++                    except Exception as e:
++                        raise ValueError(
++                            f"Failed to decode variable {name!r} as timedelta. "
++                            f"Error: {e}"
++                        ) from e
++                transform = safe_transform
+             dtype = np.dtype("timedelta64[ns]")
+             data = lazy_elemwise_func(data, transform, dtype=dtype)
+ 
+-        return Variable(dims, data, attrs, encoding)
++        return Variable(dims, data, attrs, encoding)
+diff --git a/xarray/coding/variables.py b/xarray/coding/variables.py
+index 9592ba1..b49cbb0 100644
+--- a/xarray/coding/variables.py
++++ b/xarray/coding/variables.py
+@@ -210,6 +210,17 @@ class CFMaskCoder(VariableCoder):
+                     decoded_fill_value=decoded_fill_value,
+                     dtype=dtype,
+                 )
++                # Wrap the transform to catch errors and add the variable name
++                if name is not None:
++                    def safe_transform(data):
++                        try:
++                            return transform(data)
++                        except Exception as e:
++                            raise ValueError(
++                                f"Failed to decode variable {name!r} with mask. "
++                                f"Error: {e}"
++                            ) from e
++                    transform = safe_transform
+                 data = lazy_elemwise_func(data, transform, dtype)
+ 
+         return Variable(dims, data, attrs, encoding)
+@@ -280,6 +291,17 @@ class CFScaleOffsetCoder(VariableCoder):
+                 add_offset=add_offset,
+                 dtype=dtype,
+             )
++            # Wrap the transform to catch errors and add the variable name
++            if name is not None:
++                def safe_transform(data):
++                    try:
++                        return transform(data)
++                    except Exception as e:
++                        raise ValueError(
++                            f"Failed to decode variable {name!r} with scale/offset. "
++                            f"Error: {e}"
++                        ) from e
++                transform = safe_transform
+             data = lazy_elemwise_func(data, transform, dtype)
+ 
+         return Variable(dims, data, attrs, encoding)

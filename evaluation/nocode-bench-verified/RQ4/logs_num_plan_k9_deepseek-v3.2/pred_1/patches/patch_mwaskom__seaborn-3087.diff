@@ -1,0 +1,36 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index b0a0822..6d2d089 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -428,6 +428,7 @@ class Continuous(ContinuousBase):
+     # outside: Literal["keep", "drop", "clip"] = "keep"
+ 
+     _priority: ClassVar[int] = 1
++    _UNSET = object()
+ 
+     def tick(
+         self,
+@@ -494,7 +495,7 @@ class Continuous(ContinuousBase):
+         self,
+         formatter: Formatter | None = None, *,
+         like: str | Callable | None = None,
+-        base: int | None = None,
++        base: int | None = _UNSET,
+         unit: str | None = None,
+     ) -> Continuous:
+         """
+@@ -615,8 +616,12 @@ class Continuous(ContinuousBase):
+         log_base, symlog_thresh = self._parse_for_log_params(self.trans)
+         if base is None:
+             if symlog_thresh:
+-                log_base = 10
+-            base = log_base
++                base = 10
++            else:
++                # If base is None and there is no log transform, we still want to use a log formatter?
++                # According to the new feature, base=None should override the default formatter with a log transform.
++                # So we set base to 10 to use a log formatter.
++                base = log_base if log_base is not None else 10
+ 
+         if formatter is not None:
+             return formatter

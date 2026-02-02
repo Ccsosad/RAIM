@@ -1,0 +1,68 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..47b6adb 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,63 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array-like, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        equal : Table
++            A boolean table with the same shape as this table, where each
++            element indicates whether the corresponding element in this table
++            is equal to `other`.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table with different column names.
++        """
++        from .table import Table
++
++        if isinstance(other, Table):
++            # Check column names
++            if set(self.colnames) != set(other.colnames):
++                raise ValueError('cannot compare tables with different column names')
++            # Ensure same column order
++            other = other[self.colnames]
++            # Compare each column
++            equal_cols = []
++            for name in self.colnames:
++                equal_cols.append(self[name] == other[name])
++            # Build the result table
++            result = Table(equal_cols, names=self.colnames, copy=False)
++            return result
++        elif np.isscalar(other):
++            # Compare each column to the scalar
++            equal_cols = []
++            for col in self.columns.values():
++                equal_cols.append(col == other)
++            result = Table(equal_cols, names=self.colnames, copy=False)
++            return result
++        else:
++            # Assume array-like with same length as number of columns
++            try:
++                other = np.asarray(other)
++            except Exception:
++                raise TypeError('`other` must be a Table, scalar, or array-like')
++            if other.shape != (len(self.colnames),):
++                raise ValueError('`other` array must have length equal to number of columns')
++            equal_cols = []
++            for val, col in zip(other, self.columns.values()):
++                equal_cols.append(col == val)
++            result = Table(equal_cols, names=self.colnames, copy=False)
++            return result
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

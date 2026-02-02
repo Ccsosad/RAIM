@@ -1,0 +1,132 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..1868f60 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -41,17 +41,16 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         """
+         if not (hasattr(X, 'iloc') and getattr(X, 'ndim', 0) == 2):
+             # if not a dataframe, do normal check_array validation
+-            X_temp = check_array(X, dtype=None)
++            X_temp = check_array(X, dtype=None, force_all_finite=False)
+             if (not hasattr(X, 'dtype')
+                     and np.issubdtype(X_temp.dtype, np.str_)):
+-                X = check_array(X, dtype=object)
++                X = check_array(X, dtype=object, force_all_finite=False)
+             else:
+                 X = X_temp
+-            needs_validation = False
+         else:
+             # pandas dataframe, do validation later column by column, in order
+             # to keep the dtype information to be used in the encoder.
+-            needs_validation = True
++            pass
+ 
+         n_samples, n_features = X.shape
+         X_columns = []
+@@ -59,7 +58,7 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+         for i in range(n_features):
+             Xi = self._get_feature(X, feature_idx=i)
+             Xi = check_array(Xi, ensure_2d=False, dtype=None,
+-                             force_all_finite=needs_validation)
++                             force_all_finite=False)
+             X_columns.append(Xi)
+ 
+         return X_columns, n_samples, n_features
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 24b047c..6c6e377 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -1,3 +1,4 @@
++
+ import numpy as np
+ 
+ 
+@@ -30,19 +31,46 @@ def _unique(values, *, return_inverse=False):
+     return np.unique(values, return_inverse=return_inverse)
+ 
+ 
++def _is_missing(val):
++    """Check if a value is considered missing (None or np.nan)."""
++    if val is None:
++        return True
++    if isinstance(val, float) and np.isnan(val):
++        return True
++    return False
++
+ def _unique_python(values, *, return_inverse):
+     # Only used in `_uniques`, see docstring there for details
++    # Separate missing and non-missing values
++    missing = []
++    non_missing = []
++    for v in values:
++        if _is_missing(v):
++            missing.append(v)
++        else:
++            non_missing.append(v)
++    
++    # Remove duplicates in non_missing by using a set, then sort
+     try:
+-        uniques = sorted(set(values))
+-        uniques = np.array(uniques, dtype=values.dtype)
++        uniques_non_missing = sorted(set(non_missing))
+     except TypeError:
+         types = sorted(t.__qualname__
+-                       for t in set(type(v) for v in values))
++                       for t in set(type(v) for v in non_missing))
+         raise TypeError("Encoders require their input to be uniformly "
+                         f"strings or numbers. Got {types}")
++    
++    # Remove duplicates in missing while preserving order
++    seen_missing = []
++    for v in missing:
++        if v not in seen_missing:
++            seen_missing.append(v)
++    
++    # Combine: non-missing first, then missing
++    uniques_list = uniques_non_missing + seen_missing
++    uniques = np.array(uniques_list, dtype=values.dtype)
+ 
+     if return_inverse:
+-        table = {val: i for i, val in enumerate(uniques)}
++        table = {val: i for i, val in enumerate(uniques_list)}
+         inverse = np.array([table[v] for v in values])
+         return uniques, inverse
+ 
+@@ -119,13 +147,31 @@ def _check_unknown(values, known_values, return_mask=False):
+ 
+     """
+     if values.dtype == object:
+-        uniques_set = set(known_values)
+-        diff = list(set(values) - uniques_set)
+-        if return_mask:
+-            if diff:
+-                valid_mask = np.array([val in uniques_set for val in values])
++        # For object dtype, we need to handle missing values specially
++        # because np.nan != np.nan.
++        # We split known_values into missing and non-missing.
++        known_missing = [v for v in known_values if _is_missing(v)]
++        known_non_missing = [v for v in known_values if not _is_missing(v)]
++        uniques_set = set(known_non_missing)
++        
++        diff = []
++        for v in set(values):
++            if _is_missing(v):
++                if v not in known_missing:
++                    diff.append(v)
+             else:
+-                valid_mask = np.ones(len(values), dtype=bool)
++                if v not in uniques_set:
++                    diff.append(v)
++        
++        if return_mask:
++            valid_mask = np.ones(len(values), dtype=bool)
++            for i, val in enumerate(values):
++                if _is_missing(val):
++                    if val not in known_missing:
++                        valid_mask[i] = False
++                else:
++                    if val not in uniques_set:
++                        valid_mask[i] = False
+             return diff, valid_mask
+         else:
+             return diff

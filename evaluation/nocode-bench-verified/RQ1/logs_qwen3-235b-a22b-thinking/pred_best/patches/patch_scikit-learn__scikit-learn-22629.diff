@@ -1,0 +1,27 @@
+diff --git a/sklearn/utils/_encode.py b/sklearn/utils/_encode.py
+index 38b5c3a..b37c34f 100644
+--- a/sklearn/utils/_encode.py
++++ b/sklearn/utils/_encode.py
+@@ -223,6 +223,22 @@ def _encode(values, *, uniques, check_unknown=True):
+         try:
+             return _map_to_integer(values, uniques)
+         except KeyError as e:
++            # Handle NaN specially since NaN != NaN breaks dictionary lookup
++            value = e.args[0]
++            if (isinstance(value, float) and np.isnan(value)) and any(
++                u is np.nan or (isinstance(u, float) and np.isnan(u)) for u in uniques
++            ):
++                # If NaN is in uniques but not found due to comparison issues, retry with sentinel
++                sentinel = object()
++                uniques_replaced = np.array([
++                    sentinel if (u is np.nan or (isinstance(u, float) and np.isnan(u))) else u 
++                    for u in uniques
++                ], dtype=object)
++                values_replaced = np.array([
++                    sentinel if (v is np.nan or (isinstance(v, float) and np.isnan(v))) else v 
++                    for v in values
++                ], dtype=object)
++                return _map_to_integer(values_replaced, uniques_replaced)
+             raise ValueError(f"y contains previously unseen labels: {str(e)}")
+     else:
+         if check_unknown:

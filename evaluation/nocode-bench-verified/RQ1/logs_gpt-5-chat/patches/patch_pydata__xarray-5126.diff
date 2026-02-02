@@ -1,0 +1,65 @@
+diff --git a/xarray/core/formatting_html.py b/xarray/core/formatting_html.py
+index 87f3bcf..f719f3f 100644
+--- a/xarray/core/formatting_html.py
++++ b/xarray/core/formatting_html.py
+@@ -166,7 +166,22 @@ def collapsible_section(
+ 
+ def _mapping_section(mapping, name, details_func, max_items_collapse, enabled=True):
+     n_items = len(mapping)
+-    collapsed = n_items >= max_items_collapse
++
++    from . import display_options
++
++    expand_opt = {
++        "Attributes": display_options._get_option("display_expand_attrs"),
++        "Coordinates": display_options._get_option("display_expand_coords"),
++        "Data variables": display_options._get_option("display_expand_data_vars"),
++        "Data": display_options._get_option("display_expand_data"),
++    }.get(name, "default")
++
++    if expand_opt is True:
++        collapsed = False
++    elif expand_opt is False:
++        collapsed = True
++    else:  # "default"
++        collapsed = n_items >= max_items_collapse
+ 
+     return collapsible_section(
+         name,
+diff --git a/xarray/core/display_options.py b/xarray/core/display_options.py
+new file mode 100644
+index 0000000..d48b57b
+--- /dev/null
++++ b/xarray/core/display_options.py
+@@ -0,0 +1,31 @@
++# xarray/core/display_options.py
++
++_display_options = {
++    "display_expand_attrs": "default",
++    "display_expand_coords": "default",
++    "display_expand_data": "default",
++    "display_expand_data_vars": "default",
++}
++
++
++def set_display_options(**kwargs):
++    """
++    Update HTML display expansion options.
++
++    Parameters
++    ----------
++    display_expand_attrs : bool or "default"
++    display_expand_coords : bool or "default"
++    display_expand_data : bool or "default"
++    display_expand_data_vars : bool or "default"
++    """
++    for k, v in kwargs.items():
++        if k not in _display_options:
++            raise ValueError(f"Invalid display option: {k}")
++        if v not in (True, False, "default"):
++            raise ValueError(f"Invalid value for {k}: {v}")
++        _display_options[k] = v
++
++
++def _get_option(key):
++    return _display_options.get(key, "default")

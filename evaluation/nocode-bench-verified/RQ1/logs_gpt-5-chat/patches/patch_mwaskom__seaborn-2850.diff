@@ -1,0 +1,18 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 21c0562..cc363dd 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -1623,8 +1623,12 @@ class PairGrid(Grid):
+             ax.set_xlabel(label)
+         for ax, label in zip(self.axes[:, 0], self.y_vars):
+             ax.set_ylabel(label)
++        # In corner mode, the top-left subplot QLabel can optionally be hidden.
++        # Previously we always removed it, but we need to restore it when diag_kind is None.
+         if self._corner:
+-            self.axes[0, 0].set_ylabel("")
++            # Only hide the top-left ylabel when there will be diagonal plots
++            if getattr(self, "diag_axes", None) is not None:
++                self.axes[0, 0].set_ylabel("")
+ 
+     def _find_numeric_cols(self, data):
+         """Find which variables in a DataFrame are numeric."""

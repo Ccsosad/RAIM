@@ -1,0 +1,70 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..88f07b9 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -59,6 +59,56 @@ import matplotlib._layoutgrid as mlayoutgrid
+ _log = logging.getLogger(__name__)
+ 
+ 
++def make_margin_legends(layoutgrids, fig, renderer, h_pad, w_pad):
++    """
++    Make a margin for legends that are outside the axes.
++    """
++    # Iterate over all axes in the figure and its subfigures
++    for ax in fig.get_axes():
++        legend = ax.get_legend()
++        if legend is not None:
++            loc = legend.get_loc()
++            if isinstance(loc, str) and loc.startswith('outside'):
++                # Parse the location string
++                parts = loc.split()
++                if len(parts) >= 3:
++                    # Determine the side
++                    second_word = parts[1]
++                    if second_word in ['upper', 'lower']:
++                        # This is a vertical legend (top or bottom)
++                        side = 'top' if second_word == 'upper' else 'bottom'
++                    elif second_word in ['left', 'right']:
++                        # This is a horizontal legend (left or right)
++                        side = 'left' if second_word == 'left' else 'right'
++                    else:
++                        # Fallback to top
++                        side = 'top'
++                    # Get the legend's bounding box in display coordinates
++                    bbox = legend.get_window_extent(renderer)
++                    # Convert to figure-relative coordinates
++                    bbox_fig = fig.transFigure.inverted().transform_bbox(bbox)
++                    # The size in figure coordinates
++                    if side in ['top', 'bottom']:
++                        size = bbox_fig.height
++                        margin = size + h_pad
++                    else:
++                        size = bbox_fig.width
++                        margin = size + w_pad
++                    # Add the margin to the figure's layoutgrid
++                    if hasattr(layoutgrids[fig], 'add_margin'):
++                        layoutgrids[fig].add_margin(side, margin)
++                    else:
++                        # Fallback: set the margin directly
++                        if side == 'top':
++                            layoutgrids[fig].margins['top'] = margin
++                        elif side == 'bottom':
++                            layoutgrids[fig].margins['bottom'] = margin
++                        elif side == 'left':
++                            layoutgrids[fig].margins['left'] = margin
++                        elif side == 'right':
++                            layoutgrids[fig].margins['right'] = margin
++
++
+ ######################################################
+ def do_constrained_layout(fig, h_pad, w_pad,
+                           hspace=None, wspace=None, rect=(0, 0, 1, 1),
+@@ -120,6 +170,8 @@ def do_constrained_layout(fig, h_pad, w_pad,
+                             w_pad=w_pad, hspace=hspace, wspace=wspace)
+         make_margin_suptitles(layoutgrids, fig, renderer, h_pad=h_pad,
+                               w_pad=w_pad)
++        make_margin_legends(layoutgrids, fig, renderer, h_pad=h_pad,
++                            w_pad=w_pad)
+ 
+         # if a layout is such that a columns (or rows) margin has no
+         # constraints, we need to make all such instances in the grid

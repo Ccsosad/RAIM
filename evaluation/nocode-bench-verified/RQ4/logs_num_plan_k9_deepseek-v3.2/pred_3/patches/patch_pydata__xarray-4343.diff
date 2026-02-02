@@ -1,0 +1,37 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..2adec6e 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -102,11 +102,31 @@ def parse_iso8601(datetime_string):
+     raise ValueError("no ISO-8601 match for string: %s" % datetime_string)
+ 
+ 
++def parse_iso8601_like(datetime_string):
++    """Parse datetime strings in ISO 8601 format or cftime default format.
++    
++    Supports both ISO 8601 patterns (basic and extended) and the default
++    cftime string format (YYYY-MM-DD hh:mm:ss).
++    """
++    # First try the standard ISO 8601 patterns
++    try:
++        return parse_iso8601(datetime_string)
++    except ValueError:
++        # Try the cftime default format: YYYY-MM-DD hh:mm:ss
++        # This pattern is similar to ISO 8601 extended format but with space instead of 'T'
++        cftime_pattern = r'^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2}) (?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})$'
++        match = re.match(cftime_pattern, datetime_string)
++        if match:
++            return match.groupdict()
++        else:
++            raise ValueError("no ISO-8601 or cftime format match for string: %s" % datetime_string)
++
++
+ def _parse_iso8601_with_reso(date_type, timestr):
+     import cftime
+ 
+     default = date_type(1, 1, 1)
+-    result = parse_iso8601(timestr)
++    result = parse_iso8601_like(timestr)
+     replace = {}
+ 
+     for attr in ["year", "month", "day", "hour", "minute", "second"]:

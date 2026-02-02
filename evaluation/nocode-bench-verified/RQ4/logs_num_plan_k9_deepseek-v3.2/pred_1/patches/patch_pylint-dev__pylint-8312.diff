@@ -1,0 +1,38 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 4def383..fcdbcfb 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -94,7 +94,26 @@ def expand_modules(
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
+ 
+-    for something in files_or_modules:
++    # Expand glob patterns in the input list
++    from glob import glob
++    expanded_items = []
++    seen = set()
++    for item in files_or_modules:
++        # Check if the item contains any glob metacharacters
++        if any(char in item for char in '*?[]'):
++            # It's a glob pattern, expand it
++            matches = glob(item, recursive=True)
++            for match in matches:
++                norm_match = os.path.normpath(match)
++                if norm_match not in seen:
++                    seen.add(norm_match)
++                    expanded_items.append(norm_match)
++        else:
++            if item not in seen:
++                seen.add(item)
++                expanded_items.append(item)
++
++    for something in expanded_items:
+         basename = os.path.basename(something)
+         if _is_ignored_file(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+@@ -179,4 +198,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors

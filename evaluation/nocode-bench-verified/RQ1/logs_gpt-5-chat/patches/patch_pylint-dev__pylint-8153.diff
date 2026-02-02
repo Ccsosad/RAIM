@@ -1,0 +1,58 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..d928f5d 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -67,6 +67,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -74,6 +75,9 @@ def expand_modules(
+     result: dict[str, ModuleDescriptionDict] = {}
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
++    if source_roots:
++        from pylint.lint import source_root_resolver
++        path = source_root_resolver.augmented_sys_path(path, source_roots)
+ 
+     for something in files_or_modules:
+         basename = os.path.basename(something)
+@@ -160,4 +164,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 21f6e51..d4cc9d5 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -891,6 +891,7 @@ class PyLinter(
+             self.config.ignore,
+             self.config.ignore_patterns,
+             self._ignore_paths,
++            getattr(self.config, "source_roots", ()),
+         )
+         for error in errors:
+             message = modname = error["mod"]
+diff --git a/pylint/lint/source_root_resolver.py b/pylint/lint/source_root_resolver.py
+new file mode 100644
+index 0000000..aa88ab3
+--- /dev/null
++++ b/pylint/lint/source_root_resolver.py
+@@ -0,0 +1,12 @@
++import os
++from typing import Sequence
++
++def augmented_sys_path(sys_path: Sequence[str], source_roots: Sequence[str]) -> list[str]:
++    """Return an augmented sys.path including given source roots."""
++    augmented = list(sys_path)
++    for root in source_roots:
++        if not os.path.isabs(root):
++            root = os.path.abspath(root)
++        if root not in augmented:
++            augmented.insert(0, root)
++    return augmented

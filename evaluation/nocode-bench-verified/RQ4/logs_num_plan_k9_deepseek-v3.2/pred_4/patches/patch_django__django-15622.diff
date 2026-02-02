@@ -1,0 +1,62 @@
+diff --git a/django/forms/forms.py b/django/forms/forms.py
+index 3ebacee..3bb4ef0 100644
+--- a/django/forms/forms.py
++++ b/django/forms/forms.py
+@@ -66,12 +66,23 @@ class BaseForm(RenderableFormMixin):
+     prefix = None
+     use_required_attribute = True
+ 
+-    template_name = "django/forms/default.html"
++    template_name = None
+     template_name_p = "django/forms/p.html"
+     template_name_table = "django/forms/table.html"
+     template_name_ul = "django/forms/ul.html"
+     template_name_label = "django/forms/label.html"
+ 
++    @property
++    def template_name(self):
++        """
++        Return the template name for the form. If not set, return the renderer's
++        form_template_name.
++        """
++        template_name = self.__class__.template_name
++        if template_name is None:
++            return self.renderer.form_template_name
++        return template_name
++
+     def __init__(
+         self,
+         data=None,
+diff --git a/django/forms/formsets.py b/django/forms/formsets.py
+index bf826c8..ef0d359 100644
+--- a/django/forms/formsets.py
++++ b/django/forms/formsets.py
+@@ -1,3 +1,4 @@
++
+ from django.core.exceptions import ValidationError
+ from django.forms import Form
+ from django.forms.fields import BooleanField, IntegerField
+@@ -62,11 +63,22 @@ class BaseFormSet(RenderableFormMixin):
+             "%(field_names)s. You may need to file a bug report if the issue persists."
+         ),
+     }
+-    template_name = "django/forms/formsets/default.html"
++    template_name = None
+     template_name_p = "django/forms/formsets/p.html"
+     template_name_table = "django/forms/formsets/table.html"
+     template_name_ul = "django/forms/formsets/ul.html"
+ 
++    @property
++    def template_name(self):
++        """
++        Return the template name for the formset. If not set, return the renderer's
++        formset_template_name.
++        """
++        template_name = self.__class__.template_name
++        if template_name is None:
++            return self.renderer.formset_template_name
++        return template_name
++
+     def __init__(
+         self,
+         data=None,

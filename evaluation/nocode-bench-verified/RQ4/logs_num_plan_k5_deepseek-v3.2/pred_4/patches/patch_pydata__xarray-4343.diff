@@ -1,0 +1,18 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..959d4d5 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -99,6 +99,13 @@ def parse_iso8601(datetime_string):
+         match = re.match(pattern, datetime_string)
+         if match:
+             return match.groupdict()
++    # If no match, try replacing a space with 'T' (for cftime default format)
++    if " " in datetime_string:
++        modified = datetime_string.replace(" ", "T", 1)
++        for pattern in _PATTERNS:
++            match = re.match(pattern, modified)
++            if match:
++                return match.groupdict()
+     raise ValueError("no ISO-8601 match for string: %s" % datetime_string)
+ 
+ 

@@ -1,0 +1,49 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..55d6568 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -517,10 +517,13 @@ def _ridge_regression(
+     return_intercept=False,
+     X_scale=None,
+     X_offset=None,
++    y_offset=None,
+     check_input=True,
+ ):
+ 
+     has_sw = sample_weight is not None
++    intercept = None
++    intercept = None
+ 
+     if solver == "auto":
+         if positive:
+@@ -552,10 +555,10 @@ def _ridge_regression(
+             "Please use another solver."
+         )
+ 
+-    if return_intercept and solver != "sag":
++    if return_intercept and solver not in ["sag", "lsqr"]:
+         raise ValueError(
+-            "In Ridge, only 'sag' solver can directly fit the "
+-            "intercept. Please change solver to 'sag' or set "
++            "In Ridge, only 'sag' and 'lsqr' solvers can fit the "
++            "intercept. Please change solver to 'sag' or 'lsqr' or set "
+             "return_intercept=False."
+         )
+ 
+@@ -630,6 +633,16 @@ def _ridge_regression(
+ 
+     elif solver == "lsqr":
+         coef, n_iter = _solve_lsqr(X, y, alpha, max_iter, tol)
++        if return_intercept and X_offset is not None:
++            # Compute the intercept
++            if y_offset is None:
++                # For backward compatibility, compute y_offset as mean of y
++                y_offset = np.mean(y, axis=0)
++            intercept = y_offset - np.dot(X_offset, coef.T)
++            if intercept.shape[0] == 1:
++                intercept = intercept[0]
++        else:
++            intercept = None
+ 
+     elif solver == "cholesky":
+         if n_features > n_samples:

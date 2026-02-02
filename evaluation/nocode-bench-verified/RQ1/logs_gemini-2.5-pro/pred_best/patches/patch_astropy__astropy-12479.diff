@@ -1,0 +1,100 @@
+diff --git a/astropy/cosmology/parameter.py b/astropy/cosmology/parameter.py
+index 9e23fee..5438f47 100644
+--- a/astropy/cosmology/parameter.py
++++ b/astropy/cosmology/parameter.py
+@@ -1,3 +1,4 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ import astropy.units as u
+@@ -46,8 +47,9 @@ class Parameter:
+ 
+     _registry_validators = {}
+ 
+-    def __init__(self, fvalidate="default", doc=None, *,
++    def __init__(self, *, fvalidate="default", doc=None,
+                  unit=None, equivalencies=[], fmt=".3g", derived=False):
++        self._fvalidate_orig = fvalidate
+         # parse registered fvalidate
+         if callable(fvalidate):
+             pass
+@@ -65,7 +67,7 @@ class Parameter:
+ 
+         # units stuff
+         self._unit = u.Unit(unit) if unit is not None else None
+-        self._equivalencies = equivalencies
++        self._equivalencies = list(equivalencies)
+ 
+         # misc
+         self._fmt = str(fmt)
+@@ -142,11 +144,7 @@ class Parameter:
+         `~astropy.cosmology.Parameter`
+             Copy of this Parameter but with custom ``fvalidate``.
+         """
+-        desc = type(self)(fvalidate=fvalidate,
+-                          doc=self.__doc__, fmt=self.format_spec,
+-                          unit=self.unit, equivalencies=self.equivalencies,
+-                          derived=self.derived)
+-        return desc
++        return self.clone(fvalidate=fvalidate)
+ 
+     def validate(self, cosmology, value):
+         """Run the validator on this Parameter.
+@@ -210,8 +208,56 @@ class Parameter:
+ 
+     # -------------------------------------------
+ 
++    def __eq__(self, other):
++        if not isinstance(other, Parameter):
++            return NotImplemented
++
++        return (self._fvalidate_orig == other._fvalidate_orig and
++                self.__doc__ == other.__doc__ and
++                self.unit == other.unit and
++                self.equivalencies == other.equivalencies and
++                self.format_spec == other.format_spec and
++                self.derived == other.derived)
++
+     def __repr__(self):
+-        return f"<Parameter {self._attr_name!r} at {hex(id(self))}>"
++        """Return a round-trippable representation of the ``Parameter``."""
++        # `_fvalidate_orig` is used here so `eval(repr(param))` works.
++        # The name is not included, since it is set by the owner class.
++        return (f"{self.__class__.__name__}("
++                f"fvalidate={self._fvalidate_orig!r}, "
++                f"doc={self.__doc__!r}, "
++                f"unit={self.unit!r}, "
++                f"equivalencies={self.equivalencies!r}, "
++                f"fmt={self.format_spec!r}, "
++                f"derived={self.derived!r})")
++
++    def clone(self, **kwargs):
++        """
++        Return a copy of the Parameter with updated constructor arguments.
++
++        For example, ``Ode0`` in ``FlatFLRWMixin`` is a clone of ``Ode0`` in
++        ``FLRW``, but with ``derived=True``.
++
++        Parameters
++        ----------
++        **kwargs
++            Arguments to the ``Parameter`` constructor.
++            These will override the current ``Parameter``'s values.
++
++        Returns
++        -------
++        `~astropy.cosmology.Parameter`
++        """
++        current_args = {
++            "fvalidate": self._fvalidate_orig,
++            "doc": self.__doc__,
++            "unit": self.unit,
++            "equivalencies": self.equivalencies,
++            "fmt": self.format_spec,
++            "derived": self.derived}
++        current_args.update(kwargs)
++
++        return self.__class__(**current_args)
+ 
+ 
+ # ===================================================================

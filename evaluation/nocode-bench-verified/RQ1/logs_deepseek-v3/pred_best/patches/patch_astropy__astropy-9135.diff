@@ -1,0 +1,72 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..98c2a0d 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -1178,6 +1178,67 @@ class Model(metaclass=_ModelMeta):
+ 
+     # *** Public methods ***
+ 
++    @staticmethod
++    def fix_inputs(model, fixed_inputs):
++        """
++        Create a new model by fixing one or more inputs of the given model.
++        
++        Parameters
++        ----------
++        model : `~astropy.modeling.Model`
++            The model for which to fix inputs
++        fixed_inputs : dict
++            Dictionary mapping input names to fixed values. Keys can be either
++            input names or positional indices.
++            
++        Returns
++        -------
++        `~astropy.modeling.Model`
++            A new model with the specified inputs fixed
++        """
++        from astropy.modeling.mappings import Identity
++        from astropy.modeling.core import CompoundModel
++        
++        if not isinstance(fixed_inputs, dict):
++            raise TypeError("fixed_inputs must be a dictionary")
++            
++        # Convert numeric indices to input names
++        resolved_fixed = {}
++        for k, v in fixed_inputs.items():
++            if isinstance(k, int):
++                if k < 0 or k >= len(model.inputs):
++                    raise ValueError(f"Input index {k} out of range")
++                resolved_fixed[model.inputs[k]] = v
++            else:
++                if k not in model.inputs:
++                    raise ValueError(f"Unknown input name '{k}'")
++                resolved_fixed[k] = v
++                
++        # Create identity mappings for non-fixed inputs
++        mappings = []
++        new_inputs = []
++        for i, inp in enumerate(model.inputs):
++            if inp in resolved_fixed:
++                continue
++            mappings.append(Identity(i))
++            new_inputs.append(inp)
++            
++        # Create compound model that fixes specified inputs
++        fixed_model = CompoundModel('fix_inputs', model, *mappings)
++        
++        # Store fixed values in model meta
++        fixed_model.meta['fixed_inputs'] = resolved_fixed
++        
++        # Update bounding box if original model had one
++        if model.bounding_box is not None:
++            bb = list(model.bounding_box)
++            for inp in resolved_fixed:
++                idx = model.inputs.index(inp)
++                bb.pop(idx)
++            fixed_model.bounding_box = tuple(bb) if bb else None
++            
++        return fixed_model
++
+     def without_units_for_data(self, **kwargs):
+         """
+         Return an instance of the model for which the parameter values have

@@ -1,0 +1,38 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..42c6b89 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -713,6 +713,18 @@ class Legend(Artist):
+         self.stale = True
+         self._legend_box.set_offset(self._findoffset)
+ 
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++
++        Parameters
++        ----------
++        loc : str, int, tuple, or None
++            The location of the legend. Can be a string, integer, or a tuple of
++            coordinates.
++        """
++        self._set_loc(loc)
++
+     def set_ncols(self, ncols):
+         """Set the number of columns."""
+         self._ncols = ncols
+@@ -1232,6 +1244,14 @@ class Legend(Artist):
+             self._draggable = None
+         return self._draggable
+ 
++    def set(self, **kwargs):
++        """
++        Set properties of the legend.
++        """
++        if 'loc' in kwargs:
++            self.set_loc(kwargs.pop('loc'))
++        return super().set(**kwargs)
++
+     def get_draggable(self):
+         """Return ``True`` if the legend is draggable, ``False`` otherwise."""
+         return self._draggable is not None

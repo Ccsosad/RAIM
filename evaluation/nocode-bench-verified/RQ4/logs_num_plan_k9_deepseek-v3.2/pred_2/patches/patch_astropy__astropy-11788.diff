@@ -1,0 +1,7 @@
+diff --git a/astropy/units/astrophys.py b/astropy/units/astrophys.py
+new file mode 100644
+index 0000000..c0d9397
+--- /dev/null
++++ b/astropy/units/astrophys.py
+@@ -0,0 +1 @@
++Angstrom = def_unit(['Angstrom', 'AA'], 1e-10 * meter, doc="Angstrom: 10**-10 m", format={'latex': r'\AA', 'unicode': 'Å'}, prefixes=True)

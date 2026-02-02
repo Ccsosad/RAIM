@@ -1,0 +1,88 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..1500757 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,11 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None,
++         keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -368,6 +369,13 @@ def join(left, right, keys=None, join_type='inner',
+     join_funcs : dict, None
+         Dict of functions to use for matching the corresponding key column(s).
+         See `~astropy.table.join_skycoord` for an example and details.
++    keys_left : str, list of str, or column-like, optional
++        Key column(s) for the left table. If provided, must be used together
++        with ``keys_right``. Can be a column name, a list of column names, or
++        a column-like object (e.g., a list or array). If a column-like object
++        is provided, it will be added as a temporary column to the left table.
++    keys_right : str, list of str, or column-like, optional
++        Key column(s) for the right table. Similar to ``keys_left``.
+ 
+     Returns
+     -------
+@@ -381,11 +389,55 @@ def join(left, right, keys=None, join_type='inner',
+     if not isinstance(right, Table):
+         right = Table(right)
+ 
++    # Handle keys_left and keys_right
++    if keys_left is not None or keys_right is not None:
++        if keys_left is None or keys_right is None:
++            raise ValueError('keys_left and keys_right must both be provided if either is provided')
++        # Convert keys_left and keys_right to lists if they are not already
++        if isinstance(keys_left, str):
++            keys_left = [keys_left]
++        if isinstance(keys_right, str):
++            keys_right = [keys_right]
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same length')
++        # Create light copies of the tables
++        left = left.copy(copy_data=False)
++        right = right.copy(copy_data=False)
++        temp_key_names = []
++        for i, (key_left, key_right) in enumerate(zip(keys_left, keys_right)):
++            temp_name = f'__join_key_{i}__'
++            temp_key_names.append(temp_name)
++            # Check if key_left is a column name in left or a column-like object
++            if isinstance(key_left, str) and key_left in left.colnames:
++                left[temp_name] = left[key_left]
++            else:
++                # Assume it is column-like
++                left[temp_name] = key_left
++            # Similarly for right
++            if isinstance(key_right, str) and key_right in right.colnames:
++                right[temp_name] = right[key_right]
++            else:
++                right[temp_name] = key_right
++        # Now set keys to the temporary key names
++        keys = temp_key_names
++    elif keys is None:
++        # Use common columns as before
++        keys = tuple(name for name in left.colnames if name in right.colnames)
++        if len(keys) == 0:
++            raise TableMergeError('No keys in common between left and right tables')
++    elif isinstance(keys, str):
++        keys = (keys,)
++
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+                 join_funcs)
+ 
++    # Remove temporary key columns if they exist
++    for col in out.colnames:
++        if col.startswith('__join_key_'):
++            out.remove_column(col)
++
+     # Merge the column and table meta data. Table subclasses might override
+     # these methods for custom merge behavior.
+     _merge_table_meta(out, [left, right], metadata_conflicts=metadata_conflicts)

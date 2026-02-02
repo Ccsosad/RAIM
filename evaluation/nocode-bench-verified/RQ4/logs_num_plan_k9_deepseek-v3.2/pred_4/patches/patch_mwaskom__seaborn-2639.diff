@@ -1,0 +1,56 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..79701ca 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -996,6 +996,11 @@ class FacetGrid(Grid):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+         return self._fig
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._fig
++
+     @property
+     def axes(self):
+         """An array of the :class:`matplotlib.axes.Axes` objects in the grid."""
+@@ -1234,6 +1239,7 @@ class PairGrid(Grid):
+                 axes[i, j] = None
+ 
+         self.fig = fig
++        self.figure = fig
+         self.axes = axes
+         self.data = data
+ 
+@@ -1617,6 +1623,11 @@ class PairGrid(Grid):
+                 numeric_cols.append(col)
+         return numeric_cols
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+ 
+ class JointGrid(object):
+     """Grid for drawing a bivariate plot with marginal univariate plots.
+@@ -1651,6 +1662,7 @@ class JointGrid(object):
+         ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint)
+ 
+         self.fig = f
++        self.figure = f
+         self.ax_joint = ax_joint
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y
+@@ -1922,6 +1934,11 @@ class JointGrid(object):
+         kwargs.setdefault("bbox_inches", "tight")
+         self.fig.savefig(*args, **kwargs)
+ 
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self.fig
++
+ 
+ JointGrid.__init__.__doc__ = """\
+ Set up the grid of subplots and store data internally for easy plotting.

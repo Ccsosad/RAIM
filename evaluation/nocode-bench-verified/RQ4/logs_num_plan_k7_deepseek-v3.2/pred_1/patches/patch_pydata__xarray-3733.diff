@@ -1,0 +1,296 @@
+diff --git a/xarray/__init__.py b/xarray/__init__.py
+index b35ae4c..d6e754c 100644
+--- a/xarray/__init__.py
++++ b/xarray/__init__.py
+@@ -17,7 +17,8 @@ from .conventions import SerializationWarning, decode_cf
+ from .core.alignment import align, broadcast
+ from .core.combine import auto_combine, combine_by_coords, combine_nested
+ from .core.common import ALL_DIMS, full_like, ones_like, zeros_like
+-from .core.computation import apply_ufunc, dot, where
++from .core.computation import apply_ufunc, dot, where, polyval
++from .core.polyfit import polyval
+ from .core.concat import concat
+ from .core.dataarray import DataArray
+ from .core.dataset import Dataset
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..5515856 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3202,6 +3202,75 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().integrate(dim, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        skipna: bool = None,
++        rcond: float = None,
++        w: Any = None,
++        full: bool = False,
++        cov: Union[bool, str] = False,
++    ) -> Dataset:
++        """
++        Least squares polynomial fit.
++
++        Parameters
++        ----------
++        dim : str
++            The dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        skipna : bool, optional
++            If True, skip missing values (marked as NaN) in the fit.
++        rcond : float, optional
++            Relative condition number of the fit.
++        w : array_like, optional
++            Weights to apply to the y-coordinates.
++        full : bool, optional
++            If True, return additional information.
++        cov : bool or str, optional
++            If True, return the covariance matrix. If 'unscaled', return the unscaled
++            covariance matrix.
++
++        Returns
++        -------
++        Dataset
++            A dataset containing the coefficients and optionally other statistics.
++
++        See Also
++        --------
++        xarray.polyval
++        numpy.polyfit
++
++        Examples
++        --------
++        >>> x = xr.DataArray(np.arange(10), dims=['x'], name='x')
++        >>> a = xr.DataArray(3 + 4 * x, dims=['x'], coords={'x': x})
++        >>> out = a.polyfit(dim='x', deg=1, full=True)
++        >>> out
++        <xarray.Dataset>
++        Dimensions:                 ()
++        Coordinates:
++            polyfit_coefficients    (polyfit_coefficients) float64 3.0 4.0
++        Data variables:
++            polyfit_residuals       float64 0.0
++            polyfit_rank            int64 2
++            polyfit_singular_values (polyfit_coefficients) float64 14.59 1.374
++        """
++        from .polyfit import polyfit
++
++        return polyfit(
++            self,
++            dim=dim,
++            deg=deg,
++            skipna=skipna,
++            rcond=rcond,
++            w=w,
++            full=full,
++            cov=cov,
++        )
++
+     def unify_chunks(self) -> "DataArray":
+         """ Unify chunk size along all chunked dimensions of this DataArray.
+ 
+@@ -3449,4 +3518,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/polyfit.py b/xarray/core/polyfit.py
+new file mode 100644
+index 0000000..9696eb3
+--- /dev/null
++++ b/xarray/core/polyfit.py
+@@ -0,0 +1,190 @@
++"""
++Polynomial fitting for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from . import duck_array_ops
++from .common import _contains_datetime_like_objects
++from .computation import apply_ufunc
++from .dataset import Dataset
++from .dataarray import DataArray
++from .utils import is_scalar
++
++__all__ = ["polyfit", "polyval"]
++
++
++def _least_squares(lhs, rhs, rcond=None):
++    """
++    Return the coefficients of a polynomial of degree `deg` that fits the data `y` to `x`.
++
++    This is a helper function that mimics numpy's polyfit but works with dask arrays.
++    """
++    # Solve the linear least squares problem: lhs * coeffs = rhs
++    # lhs is Vandermonde matrix of shape (n, deg+1)
++    # rhs is y values of shape (n,) or (n, m) for multiple dimensions
++    # We want to solve for coeffs of shape (deg+1,) or (deg+1, m)
++    # Use numpy.linalg.lstsq or dask.array.linalg.lstsq
++    from .duck_array_ops import lstsq
++
++    coeffs, residuals, rank, s = lstsq(lhs, rhs, rcond=rcond)
++    return coeffs, residuals, rank, s
++
++
++def polyfit(
++    obj, dim, deg, skipna=None, rcond=None, w=None, full=False, cov=False
++):
++    """
++    Least squares polynomial fit.
++
++    Parameters
++    ----------
++    obj : DataArray or Dataset
++        The data to fit.
++    dim : str
++        The dimension along which to fit the polynomial.
++    deg : int
++        Degree of the fitting polynomial.
++    skipna : bool, optional
++        If True, skip missing values (marked as NaN) in the fit.
++    rcond : float, optional
++        Relative condition number of the fit.
++    w : array_like, optional
++        Weights to apply to the y-coordinates.
++    full : bool, optional
++        If True, return additional information.
++    cov : bool or str, optional
++        If True, return the covariance matrix. If 'unscaled', return the unscaled
++        covariance matrix.
++
++    Returns
++    -------
++    Dataset
++        A dataset containing the coefficients and optionally other statistics.
++    """
++    if skipna is not None:
++        raise NotImplementedError("skipna is not yet implemented for polyfit")
++    if w is not None:
++        raise NotImplementedError("weights are not yet implemented for polyfit")
++    if cov:
++        raise NotImplementedError("covariance is not yet implemented for polyfit")
++
++    # Get the coordinate along the dimension
++    coord = obj[dim]
++    if _contains_datetime_like_objects(coord):
++        # Convert datetime to numeric (seconds since epoch)
++        coord = coord.astype("datetime64[s]").astype(float)
++
++    # Build the Vandermonde matrix
++    lhs = np.vander(coord.values, deg + 1, increasing=True)
++
++    # For DataArray, we have a single variable
++    if isinstance(obj, DataArray):
++        rhs = obj.values
++        # If there are extra dimensions, we need to flatten them
++        original_shape = rhs.shape
++        if rhs.ndim > 1:
++            # Flatten all other dimensions
++            other_dims = [d for d in obj.dims if d != dim]
++            # We will fit along the dimension `dim` and treat other dimensions as separate
++            # This is equivalent to applying polyfit to each slice
++            # Reshape to (size_along_dim, -1)
++            rhs = rhs.reshape(original_shape[obj.dims.index(dim)], -1)
++
++        # Solve the least squares problem
++        coeffs, residuals, rank, s = _least_squares(lhs, rhs, rcond=rcond)
++
++        # Reshape coefficients back if necessary
++        if rhs.ndim == 2:
++            # coeffs shape is (deg+1, n_other)
++            # We want to create a DataArray with dimensions (deg+1, ...)
++            coeff_dims = ("polyfit_coefficients",) + tuple(other_dims)
++            coeff_shape = (deg + 1,) + tuple(obj.sizes[d] for d in other_dims)
++            coeffs = coeffs.reshape(coeff_shape)
++        else:
++            coeff_dims = ("polyfit_coefficients",)
++
++        # Create a dataset for the result
++        ds = Dataset()
++        ds["polyfit_coefficients"] = (coeff_dims, coeffs)
++
++        if full:
++            ds["polyfit_residuals"] = residuals
++            ds["polyfit_rank"] = rank
++            ds["polyfit_singular_values"] = s
++        return ds
++    elif isinstance(obj, Dataset):
++        # For Dataset, we fit each variable separately and combine
++        result_vars = {}
++        for name, var in obj.data_vars.items():
++            if dim in var.dims:
++                # Fit for this variable
++                var_da = var
++                var_result = polyfit(var_da, dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov)
++                # Rename the coefficient variable to avoid collisions
++                for k in var_result.data_vars:
++                    new_name = f"{name}_{k}"
++                    result_vars[new_name] = var_result[k]
++            else:
++                # If the variable does not have the dimension, skip it?
++                pass
++        return Dataset(result_vars)
++    else:
++        raise TypeError("polyfit only works with DataArray or Dataset")
++
++
++def polyval(coord, coeffs):
++    """
++    Evaluate a polynomial at specific values.
++
++    Parameters
++    ----------
++    coord : DataArray or array_like
++        The coordinate at which to evaluate the polynomial.
++    coeffs : DataArray or Dataset
++        The coefficients of the polynomial. If a Dataset, it should have a variable
++        named 'polyfit_coefficients'.
++
++    Returns
++    -------
++    DataArray or Dataset
++        The evaluated polynomial.
++    """
++    if isinstance(coeffs, Dataset):
++        # If coeffs is a Dataset, we expect it to have a 'polyfit_coefficients' variable
++        if "polyfit_coefficients" not in coeffs:
++            raise ValueError("coeffs Dataset must have a variable named 'polyfit_coefficients'")
++        coeffs = coeffs["polyfit_coefficients"]
++
++    # Get the coefficients as a numpy array
++    coeff_vals = coeffs.values
++    # Get the coordinate values
++    if isinstance(coord, DataArray):
++        coord_vals = coord.values
++    else:
++        coord_vals = np.asarray(coord)
++
++    # The coefficients are in increasing order (from polyfit)
++    # We want to evaluate: p(x) = c0 + c1*x + c2*x^2 + ... + cn*x^n
++    # Use numpy.polyval? But note: numpy.polyval expects coefficients in decreasing order.
++    # So we reverse the coefficients.
++    coeff_vals_rev = coeff_vals[::-1]
++    # Expand dimensions for broadcasting
++    if coeff_vals.ndim > 1:
++        # We have multiple coefficients for multiple dimensions
++        # We want to evaluate for each set of coefficients
++        # The shape of coeff_vals is (deg+1, ...)
++        # We want to broadcast over the extra dimensions
++        # Use apply_ufunc to handle dask arrays and broadcasting
++        return apply_ufunc(
++            np.polyval,
++            coeff_vals_rev,
++            coord_vals,
++            input_core_dims=[["polyfit_coefficients"], []],
++            output_core_dims=[[]],
++            vectorize=True,
++            dask="parallelized",
++            output_dtypes=[coeff_vals.dtype],
++        )
++    else:
++        # Simple 1D coefficients
++        return np.polyval(coeff_vals_rev, coord_vals)

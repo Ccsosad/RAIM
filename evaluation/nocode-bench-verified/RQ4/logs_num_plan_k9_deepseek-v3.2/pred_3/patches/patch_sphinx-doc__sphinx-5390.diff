@@ -1,0 +1,39 @@
+diff --git a/sphinx/builders/htmlhelp.py b/sphinx/builders/htmlhelp.py
+index 4273245..7b04d90 100644
+--- a/sphinx/builders/htmlhelp.py
++++ b/sphinx/builders/htmlhelp.py
+@@ -197,8 +197,14 @@ class HTMLHelpBuilder(StandaloneHTMLBuilder):
+         # type: () -> None
+         StandaloneHTMLBuilder.init(self)
+         # the output files for HTML help must be .html only
+-        self.out_suffix = '.html'
+-        self.link_suffix = '.html'
++        if self.config.htmlhelp_file_suffix is not None:
++            self.out_suffix = self.config.htmlhelp_file_suffix
++        else:
++            self.out_suffix = '.html'
++        if self.config.htmlhelp_link_suffix is not None:
++            self.link_suffix = self.config.htmlhelp_link_suffix
++        else:
++            self.link_suffix = self.out_suffix
+         # determine the correct locale setting
+         locale = chm_locales.get(self.config.language)
+         if locale is not None:
+@@ -265,7 +271,7 @@ class HTMLHelpBuilder(StandaloneHTMLBuilder):
+                                                 self.config.master_doc + self.out_suffix))
+             for indexname, indexcls, content, collapse in self.domain_indices:
+                 f.write('<LI> ' + object_sitemap % (indexcls.localname,
+-                                                    '%s.html' % indexname))
++                                                    self.get_target_uri(indexname)))
+             # the TOC
+             tocdoc = self.env.get_and_resolve_doctree(
+                 self.config.master_doc, self, prune_toctrees=False)
+@@ -341,6 +347,8 @@ def setup(app):
+     app.add_builder(HTMLHelpBuilder)
+ 
+     app.add_config_value('htmlhelp_basename', lambda self: make_filename(self.project), None)
++    app.add_config_value('htmlhelp_file_suffix', None, 'html')
++    app.add_config_value('htmlhelp_link_suffix', None, 'html')
+ 
+     return {
+         'version': 'builtin',

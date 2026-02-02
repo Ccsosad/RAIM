@@ -1,0 +1,122 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f8247e8..a668404 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1927,6 +1927,47 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().drop(labels, dim, errors=errors)
+         return self._from_temp_dataset(ds)
+ 
++    def drop_vars(
++        self, names: Union[Hashable, Iterable[Hashable]], *, errors: str = "raise"
++    ) -> "DataArray":
++        """Drop variables (including coordinates) from this DataArray.
++
++        Parameters
++        ----------
++        names : hashable or iterable of hashables
++            Name(s) of variables or coordinates to drop.
++        errors : {'raise', 'ignore'}, default: 'raise'
++            If 'raise', a ValueError is raised if any elements of `names` are not
++            found. If 'ignore', only elements that are present are dropped.
++
++        Returns
++        -------
++        DataArray
++        """
++        ds = self._to_temp_dataset().drop_vars(names, errors=errors)
++        return self._from_temp_dataset(ds)
++
++    def drop_sel(
++        self,
++        labels: Mapping[Hashable, Any] = None,
++        **labels_kwargs: Any,
++    ) -> "DataArray":
++        """Drop index labels from this DataArray along specified dimensions.
++
++        Parameters
++        ----------
++        labels : Mapping of {dim: label or sequence of labels}
++            Labels to drop along dimension(s).
++        **labels_kwargs : optional
++            Alternative form of passing labels as keyword arguments.
++
++        Returns
++        -------
++        DataArray
++        """
++        ds = self._to_temp_dataset().drop_sel(labels, **labels_kwargs)
++        return self._from_temp_dataset(ds)
++
+     def dropna(
+         self, dim: Hashable, how: str = "any", thresh: int = None
+     ) -> "DataArray":
+@@ -3118,4 +3159,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c07f9e0..7f479cd 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3638,6 +3638,53 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             variables, coord_names=coord_names, indexes=indexes
+         )
+ 
++    def drop_vars(
++        self, names: Union[Hashable, Iterable[Hashable]], *, errors: str = "raise"
++    ) -> "Dataset":
++        """Drop variables from this dataset.
++
++        Parameters
++        ----------
++        names : hashable or iterable of hashables
++            Name(s) of variables or coordinates to drop.
++        errors : {'raise', 'ignore'}, default: 'raise'
++            If 'raise', a ValueError is raised if any elements of `names` are not
++            in this dataset. If 'ignore', only elements that are present are dropped.
++
++        Returns
++        -------
++        dropped : Dataset
++        """
++        if isinstance(names, str) or not isinstance(names, Iterable):
++            names = {names}
++        else:
++            names = set(names)
++        return self._drop_vars(names, errors=errors)
++
++    def drop_sel(
++        self,
++        labels: Mapping[Hashable, Any] = None,
++        **labels_kwargs: Any,
++    ) -> "Dataset":
++        """Drop index labels from this dataset along specified dimensions.
++
++        Parameters
++        ----------
++        labels : Mapping of {dim: label or sequence of labels}
++            Labels to drop along dimension(s).
++        **labels_kwargs : optional
++            Alternative form of passing labels as keyword arguments.
++
++        Returns
++        -------
++        dropped : Dataset
++        """
++        labels = either_dict_or_kwargs(labels, labels_kwargs, "drop_sel")
++        ds = self
++        for dim, lab in labels.items():
++            ds = ds._drop_labels(lab, dim)
++        return ds
++
+     def drop_dims(
+         self, drop_dims: Union[Hashable, Iterable[Hashable]], *, errors: str = "raise"
+     ) -> "Dataset":
+@@ -5478,4 +5525,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

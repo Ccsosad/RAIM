@@ -1,0 +1,71 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..e709daf 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -418,7 +418,7 @@ class FacetGrid(Grid):
+ 
+         # Attributes that are part of the public API but accessed through
+         # a  property so that Sphinx adds them to the auto class doc
+-        self._fig = fig
++        self._figure = fig
+         self._axes = axes
+         self._axes_dict = axes_dict
+         self._legend = None
+@@ -994,7 +994,12 @@ class FacetGrid(Grid):
+     @property
+     def fig(self):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+-        return self._fig
++        return self._figure
++
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
+ 
+     @property
+     def axes(self):
+@@ -1233,7 +1238,7 @@ class PairGrid(Grid):
+                 axes[i, j].remove()
+                 axes[i, j] = None
+ 
+-        self.fig = fig
++        self._figure = fig
+         self.axes = axes
+         self.data = data
+ 
+@@ -1609,6 +1614,16 @@ class PairGrid(Grid):
+         if self._corner:
+             self.axes[0, 0].set_ylabel("")
+ 
++    @property
++    def fig(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
++    @property
++    def figure(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        return self._figure
++
+     def _find_numeric_cols(self, data):
+         """Find which variables in a DataFrame are numeric."""
+         numeric_cols = []
+@@ -1650,7 +1665,7 @@ class JointGrid(object):
+         ax_marg_x = f.add_subplot(gs[0, :-1], sharex=ax_joint)
+         ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint)
+ 
+-        self.fig = f
++        self._figure = f
+         self.ax_joint = ax_joint
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y
+@@ -1920,7 +1935,7 @@ class JointGrid(object):
+ 
+         """
+         kwargs.setdefault("bbox_inches", "tight")
+-        self.fig.savefig(*args, **kwargs)
++        self._figure.savefig(*args, **kwargs)
+ 
+ 
+ JointGrid.__init__.__doc__ = """\

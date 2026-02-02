@@ -1,0 +1,61 @@
+diff --git a/xarray/core/formatting_html.py b/xarray/core/formatting_html.py
+index 87f3bcf..95d0907 100644
+--- a/xarray/core/formatting_html.py
++++ b/xarray/core/formatting_html.py
+@@ -164,9 +164,18 @@ def collapsible_section(
+     )
+ 
+ 
+-def _mapping_section(mapping, name, details_func, max_items_collapse, enabled=True):
++def _mapping_section(mapping, name, details_func, max_items_collapse, enabled=True, expand_option=None):
+     n_items = len(mapping)
+-    collapsed = n_items >= max_items_collapse
++    if expand_option is not None:
++        option_value = OPTIONS.get(expand_option, 'default')
++        if option_value == True:
++            collapsed = False
++        elif option_value == False:
++            collapsed = True
++        else:  # 'default'
++            collapsed = n_items >= max_items_collapse
++    else:
++        collapsed = n_items >= max_items_collapse
+ 
+     return collapsible_section(
+         name,
+diff --git a/xarray/core/options.py b/xarray/core/options.py
+index 379b413..f4afc2c 100644
+--- a/xarray/core/options.py
++++ b/xarray/core/options.py
+@@ -108,6 +108,10 @@ class set_options:
+       Default: ``'default'``.
+     - ``display_style``: display style to use in jupyter for xarray objects.
+       Default: ``'text'``. Other options are ``'html'``.
++    - ``display_expand_attrs``: control expand/collapse of attributes section in HTML display. One of ``True`` (always expand), ``False`` (always collapse), or ``'default'`` (expand unless over limit). Default: ``'default'``.
++    - ``display_expand_coords``: similar to display_expand_attrs but for coordinates section. Default: ``'default'``.
++    - ``display_expand_data``: control expand/collapse of data section in HTML display. Default: ``'default'``.
++    - ``display_expand_data_vars``: similar to display_expand_attrs but for data variables section. Default: ``'default'``.
+ 
+ 
+     You can use ``set_options`` either as a context manager:
+@@ -137,7 +141,13 @@ class set_options:
+                     "argument name %r is not in the set of valid options %r"
+                     % (k, set(OPTIONS))
+                 )
+-            if k in _VALIDATORS and not _VALIDATORS[k](v):
++            # Add custom validators for new display_expand options
++            if k.startswith('display_expand_'):
++                if v not in [True, False, 'default']:
++                    raise ValueError(
++                        f"option {k!r} must be one of True, False, or 'default'"
++                    )
++            elif k in _VALIDATORS and not _VALIDATORS[k](v):
+                 if k == ARITHMETIC_JOIN:
+                     expected = f"Expected one of {_JOIN_OPTIONS!r}"
+                 elif k == DISPLAY_STYLE:
+@@ -160,4 +170,4 @@ class set_options:
+         return
+ 
+     def __exit__(self, type, value, traceback):
+-        self._apply_update(self.old)
++        self._apply_update(self.old)

@@ -1,0 +1,46 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..2b79b72 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1010,15 +1010,18 @@ class FunctionDocumenter(DocstringSignatureMixin, ModuleLevelDocumenter):  # typ
+         if inspect.isbuiltin(self.object) or inspect.ismethoddescriptor(self.object):
+             # cannot introspect arguments of a C function or method
+             return None
++
++        show_annotation = self.env.config.autodoc_typehints != 'none'
++
+         try:
+             if (not inspect.isfunction(self.object) and
+                     not inspect.ismethod(self.object) and
+                     not inspect.isbuiltin(self.object) and
+                     not inspect.isclass(self.object) and
+                     hasattr(self.object, '__call__')):
+-                args = Signature(self.object.__call__).format_args(**kwargs)
++                args = Signature(self.object.__call__).format_args(show_annotation=show_annotation, **kwargs)
+             else:
+-                args = Signature(self.object).format_args(**kwargs)
++                args = Signature(self.object).format_args(show_annotation=show_annotation, **kwargs)
+         except TypeError:
+             if (inspect.is_builtin_class_method(self.object, '__new__') and
+                inspect.is_builtin_class_method(self.object, '__init__')):
+@@ -1029,10 +1032,10 @@ class FunctionDocumenter(DocstringSignatureMixin, ModuleLevelDocumenter):  # typ
+             # signature without the first argument.
+             try:
+                 sig = Signature(self.object.__new__, bound_method=True, has_retval=False)
+-                args = sig.format_args(**kwargs)
++                args = sig.format_args(show_annotation=show_annotation, **kwargs)
+             except TypeError:
+                 sig = Signature(self.object.__init__, bound_method=True, has_retval=False)
+-                args = sig.format_args(**kwargs)
++                args = sig.format_args(show_annotation=show_annotation, **kwargs)
+ 
+         # escape backslashes for reST
+         args = args.replace('\\', '\\\\')
+@@ -1614,6 +1617,7 @@ def setup(app):
+     app.add_config_value('autodoc_mock_imports', [], True)
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
++    app.add_config_value('autodoc_typehints', 'signature', True)
+     app.add_event('autodoc-process-docstring')
+     app.add_event('autodoc-process-signature')
+     app.add_event('autodoc-skip-member')

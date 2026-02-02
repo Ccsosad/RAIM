@@ -1,0 +1,274 @@
+diff --git a/xarray/__init__.py b/xarray/__init__.py
+index b35ae4c..0764f06 100644
+--- a/xarray/__init__.py
++++ b/xarray/__init__.py
+@@ -18,6 +18,7 @@ from .core.alignment import align, broadcast
+ from .core.combine import auto_combine, combine_by_coords, combine_nested
+ from .core.common import ALL_DIMS, full_like, ones_like, zeros_like
+ from .core.computation import apply_ufunc, dot, where
++from .core.accessor_poly import polyval
+ from .core.concat import concat
+ from .core.dataarray import DataArray
+ from .core.dataset import Dataset
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..1bb47d6 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3202,6 +3202,40 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().integrate(dim, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        **kwargs,
++    ) -> "Dataset":
++        """
++        Least squares polynomial fit.
++
++        Parameters
++        ----------
++        dim : str
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        full : bool, optional
++            Whether to return additional information (residuals, rank, singular values).
++        **kwargs : dict
++            Additional keyword arguments passed to numpy.polyfit.
++
++        Returns
++        -------
++        fit : Dataset
++            A dataset containing the coefficients and optionally other information.
++
++        See Also
++        --------
++        xarray.polyval
++        numpy.polyfit
++        """
++        from .accessor_poly import polyfit
++        return polyfit(self, dim, deg, full=full, **kwargs)
++
+     def unify_chunks(self) -> "DataArray":
+         """ Unify chunk size along all chunked dimensions of this DataArray.
+ 
+@@ -3449,4 +3483,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 16f0e97..bd94c36 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5483,6 +5483,48 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             result = result._integrate_one(c, datetime_unit=datetime_unit)
+         return result
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        **kwargs,
++    ) -> "Dataset":
++        """
++        Least squares polynomial fit for each variable in the dataset.
++
++        Parameters
++        ----------
++        dim : str
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        full : bool, optional
++            Whether to return additional information (residuals, rank, singular values).
++        **kwargs : dict
++            Additional keyword arguments passed to numpy.polyfit.
++
++        Returns
++        -------
++        fit : Dataset
++            A dataset containing the coefficients for each variable and optionally other information.
++
++        See Also
++        --------
++        xarray.polyval
++        numpy.polyfit
++        """
++        from .accessor_poly import polyfit
++        # Apply polyfit to each data variable
++        result_vars = {}
++        for name, var in self.data_vars.items():
++            if dim in var.dims:
++                result_vars[name] = polyfit(var, dim, deg, full=full, **kwargs)
++        # Combine the results? Actually, polyfit returns a Dataset for each variable.
++        # We need to merge them.
++        from .merge import merge
++        return merge(result_vars.values())
++
+     def _integrate_one(self, coord, datetime_unit=None):
+         from .variable import Variable
+ 
+@@ -5915,4 +5957,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self._replace_vars_and_dims(variables)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/accessor_poly.py b/xarray/core/accessor_poly.py
+new file mode 100644
+index 0000000..7a40f9f
+--- /dev/null
++++ b/xarray/core/accessor_poly.py
+@@ -0,0 +1,146 @@
++"""
++Polynomial fitting for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from . import duck_array_ops
++from .common import _contains_datetime_like_objects
++from .computation import apply_ufunc
++from .utils import is_duck_dask_array
++from .variable import Variable, IndexVariable
++
++def _polyfit(x, y, deg, rcond=None, full=False, w=None, cov=False):
++    """
++    Least squares polynomial fit.
++    This is a wrapper around numpy.polyfit that works with dask arrays.
++    """
++    # TODO: support for datetime-like coordinates
++    if _contains_datetime_like_objects(x):
++        raise TypeError("Cannot fit polynomials to datetime-like coordinates.")
++
++    # Convert to numpy arrays if they are dask arrays
++    if is_duck_dask_array(x) or is_duck_dask_array(y):
++        import dask.array as da
++        # Use dask.array.polyfit if available? Actually, dask doesn't have polyfit.
++        # So we will use apply_ufunc.
++        pass
++
++    # Use numpy.polyfit for now. In the future, we might want to use dask.array.linalg.lstsq.
++    result = np.polyfit(x, y, deg, rcond=rcond, full=full, w=w, cov=cov)
++    return result
++
++def polyfit(data_array, dim, deg, full=False, **kwargs):
++    """
++    Least squares polynomial fit for DataArray.
++    """
++    from .dataarray import DataArray
++    from .dataset import Dataset
++
++    # Get the coordinate along the dimension
++    coord = data_array[dim]
++    if coord.ndim != 1:
++        raise ValueError("Coordinate must be 1-dimensional.")
++
++    # Convert to numpy array if it is datetime-like
++    if _contains_datetime_like_objects(coord):
++        # Convert to numeric (days since epoch) for fitting
++        coord = coord._to_numeric(datetime_unit='D')
++        x = coord.data
++    else:
++        x = coord.data
++
++    # The data to fit
++    y = data_array.data
++
++    # Handle dask arrays by using apply_ufunc
++    if is_duck_dask_array(x) or is_duck_dask_array(y):
++        # We need to use apply_ufunc to parallelize over other dimensions.
++        # We'll fit along the given dimension.
++        # We'll create a function that does polyfit for a 1-D slice.
++        def _polyfit_1d(x, y, deg, **kwargs):
++            return np.polyfit(x, y, deg, **kwargs)
++
++        # Apply along the dimension
++        coeffs = apply_ufunc(
++            _polyfit_1d,
++            coord,
++            data_array,
++            input_core_dims=[[dim], [dim]],
++            output_core_dims=[['degree']],
++            vectorize=True,
++            dask='parallelized',
++            output_dtypes=[float],
++            kwargs={'deg': deg, **kwargs}
++        )
++        # The result is a DataArray with dimension 'degree'
++        # We need to create a Dataset with the coefficients and possibly other outputs.
++        if full:
++            raise NotImplementedError("full=True is not supported for dask arrays yet.")
++        if kwargs.get('cov', False):
++            raise NotImplementedError("cov=True is not supported for dask arrays yet.")
++        # Create a Dataset with the coefficients
++        coeff_var = Variable(('degree',), coeffs.data)
++        ds = Dataset({'polyfit_coefficients': coeff_var})
++        ds.coords['degree'] = np.arange(deg + 1)
++        return ds
++    else:
++        # For in-memory arrays, use numpy.polyfit directly.
++        # We need to fit along the given dimension, so we loop over other dimensions.
++        # Actually, we can use numpy.polyfit on the flattened array? No, we need to fit each slice.
++        # We'll use apply_ufunc for consistency.
++        def _polyfit_1d(x, y, deg, **kwargs):
++            return np.polyfit(x, y, deg, **kwargs)
++
++        coeffs = apply_ufunc(
++            _polyfit_1d,
++            coord,
++            data_array,
++            input_core_dims=[[dim], [dim]],
++            output_core_dims=[['degree']],
++            vectorize=True,
++            dask='allowed',
++            output_dtypes=[float],
++            kwargs={'deg': deg, **kwargs}
++        )
++        # Create a Dataset
++        coeff_var = Variable(('degree',), coeffs.data)
++        ds = Dataset({'polyfit_coefficients': coeff_var})
++        ds.coords['degree'] = np.arange(deg + 1)
++        return ds
++
++def polyval(coord, coeffs):
++    """
++    Evaluate a polynomial at specific values.
++    """
++    from .dataarray import DataArray
++    from .dataset import Dataset
++
++    # If coeffs is a Dataset with variable 'polyfit_coefficients'
++    if isinstance(coeffs, Dataset):
++        coeffs = coeffs['polyfit_coefficients']
++    elif isinstance(coeffs, DataArray):
++        pass
++    else:
++        raise TypeError("coeffs must be a DataArray or Dataset with a variable 'polyfit_coefficients'.")
++
++    # The coefficients are along the 'degree' dimension.
++    # We need to evaluate the polynomial at the given coordinate.
++    # Use numpy.polyval
++    def _polyval_1d(x, c):
++        return np.polyval(c, x)
++
++    # Apply along the degree dimension? Actually, the degree dimension is in coeffs.
++    # We want to evaluate for each x in coord, using the coefficients.
++    # The coefficients are (..., degree) and coord is (...,) or (..., dim).
++    # We'll use apply_ufunc.
++    result = apply_ufunc(
++        _polyval_1d,
++        coord,
++        coeffs,
++        input_core_dims=[[], ['degree']],
++        output_core_dims=[[]],
++        vectorize=True,
++        dask='allowed',
++        output_dtypes=[float]
++    )
++    return result

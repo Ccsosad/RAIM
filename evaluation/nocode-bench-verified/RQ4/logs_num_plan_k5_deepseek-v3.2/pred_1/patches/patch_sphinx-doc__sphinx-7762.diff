@@ -1,0 +1,83 @@
+diff --git a/sphinx/util/requests.py b/sphinx/util/requests.py
+index 930b64d..b3e2d17 100644
+--- a/sphinx/util/requests.py
++++ b/sphinx/util/requests.py
+@@ -84,6 +84,55 @@ def _get_tls_cacert(url: str, config: Config) -> Union[str, bool]:
+         return certs.get(hostname, True)
+ 
+ 
++def _get_request_headers(url: str, config: Config) -> dict:
++    """Get additional request headers for a URL from the config."""
++    if not hasattr(config, 'linkcheck_request_headers'):
++        return {}
++
++    rules = config.linkcheck_request_headers
++    if not isinstance(rules, dict):
++        return {}
++
++    # First, collect all matching baseurls
++    matched_headers = {}
++    for baseurl, rule_headers in rules.items():
++        if baseurl == "*":
++            continue
++        if url.startswith(baseurl):
++            matched_headers.update(rule_headers)
++
++    # Then, if there is a wildcard and no other rules matched, use it
++    if not matched_headers and "*" in rules:
++        matched_headers.update(rules["*"])
++
++    return matched_headers
++
++
++def _get_request_headers(url: str, config: Config) -> Dict[str, str]:
++    """Get additional request headers for a URL from the config."""
++    if not hasattr(config, 'linkcheck_request_headers'):
++        return {}
++
++    headers = {}
++    rules = config.linkcheck_request_headers
++    if not isinstance(rules, dict):
++        return {}
++
++    # First, collect all matching baseurls
++    matched_headers = {}
++    for baseurl, rule_headers in rules.items():
++        if baseurl == "*":
++            continue
++        if url.startswith(baseurl):
++            matched_headers.update(rule_headers)
++
++    # Then, if there is a wildcard and no other rules matched, use it
++    if not matched_headers and "*" in rules:
++        matched_headers.update(rules["*"])
++
++    return matched_headers
++
++
+ def _get_user_agent(config: Config) -> str:
+     if config.user_agent:
+         return config.user_agent
+@@ -104,6 +153,9 @@ def get(url: str, **kwargs: Any) -> requests.Response:
+     if config:
+         kwargs.setdefault('verify', _get_tls_cacert(url, config))
+         headers.setdefault('User-Agent', _get_user_agent(config))
++        # Add headers from linkcheck_request_headers
++        for key, value in _get_request_headers(url, config).items():
++            headers.setdefault(key, value)
+     else:
+         headers.setdefault('User-Agent', useragent_header[0][1])
+ 
+@@ -120,8 +172,11 @@ def head(url: str, **kwargs: Any) -> requests.Response:
+     if config:
+         kwargs.setdefault('verify', _get_tls_cacert(url, config))
+         headers.setdefault('User-Agent', _get_user_agent(config))
++        # Add headers from linkcheck_request_headers
++        for key, value in _get_request_headers(url, config).items():
++            headers.setdefault(key, value)
+     else:
+         headers.setdefault('User-Agent', useragent_header[0][1])
+ 
+     with ignore_insecure_warning(**kwargs):
+-        return requests.get(url, **kwargs)
++        return requests.get(url, **kwargs)

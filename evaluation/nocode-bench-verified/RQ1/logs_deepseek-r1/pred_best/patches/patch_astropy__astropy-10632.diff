@@ -1,0 +1,125 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..a891bef 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -995,12 +995,11 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+                                http_headers=None, ftp_tls=None):
+     from astropy.utils.console import ProgressBarOrSpinner
+ 
+-    if timeout == 0:
++    if not conf.allow_internet:
+         raise urllib.error.URLError(
+-            f"URL {remote_url} was supposed to be downloaded but timeout was set to 0; "
++            f"URL {remote_url} was supposed to be downloaded but allow_internet is set to False; "
+             f"if this is unexpected check the astropy config file for the option "
+-            f"remote_timeout")
+-
++            f"allow_internet")
+     if remote_url is None:
+         remote_url = source_url
+     if http_headers is None:
+@@ -1197,50 +1196,63 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+                 if os.path.exists(filename):
+                     return os.path.abspath(filename)
+ 
+-    errors = {}
+-    for source_url in sources:
+-        try:
+-            f_name = _download_file_from_source(
+-                    source_url,
+-                    timeout=timeout,
+-                    show_progress=show_progress,
+-                    cache=cache,
+-                    remote_url=remote_url,
+-                    pkgname=pkgname,
+-                    http_headers=http_headers)
+-            # Success!
+-            break
+-
+-        except urllib.error.URLError as e:
+-            # errno 8 is from SSL "EOF occurred in violation of protocol"
+-            if (hasattr(e, 'reason')
+-                    and hasattr(e.reason, 'errno')
+-                    and e.reason.errno == 8):
+-                e.reason.strerror = (e.reason.strerror +
+-                                     '. requested URL: '
+-                                     + remote_url)
+-                e.reason.args = (e.reason.errno, e.reason.strerror)
+-            errors[source_url] = e
+-        except socket.timeout as e:
+-            # this isn't supposed to happen, but occasionally a socket.timeout
+-            # gets through.  It's supposed to be caught in urllib and raised
+-            # in this way, but for some reason in mysterious circumstances it
+-            # doesn't (or didn't in python2?). So we'll just re-raise it here
+-            # instead.
+-            errors[source_url] = e
+-    else:   # No success
+-        if not sources:
++    if not conf.allow_internet and sources:
++        # We are not allowed to use the internet, so we cannot download from any source.
++        # But note: we might have the file in the cache? We already checked the cache above.
++        # So if we are here, the file is not in the cache and we are not allowed to download.
++        # We should raise an error.
++        if cache:
++            # We tried the cache and it wasn't there, so we are going to raise an error.
+             raise KeyError(
+-                f"No sources listed and file {remote_url} not in cache! "
+-                f"Please include primary URL in sources if you want it to be "
+-                f"included as a valid source.")
+-        elif len(sources) == 1:
+-            raise errors[sources[0]]
++                f"File {remote_url} not found in cache and internet access is not allowed (allow_internet=False).")
+         else:
++            # We didn't check the cache because cache is False, so we are not allowed to download and we don't have the cache to fall back on.
+             raise urllib.error.URLError(
+-                f"Unable to open any source! Exceptions were {errors}") \
+-                from errors[sources[0]]
+-
++                f"Internet access is not allowed (allow_internet=False) and cache is not being used, so cannot download {remote_url}.")
++    else:
++        errors = {}
++        for source_url in sources:
++            try:
++                f_name = _download_file_from_source(
++                        source_url,
++                        timeout=timeout,
++                        show_progress=show_progress,
++                        cache=cache,
++                        remote_url=remote_url,
++                        pkgname=pkgname,
++                        http_headers=http_headers)
++                # Success!
++                break
++
++            except urllib.error.URLError as e:
++                # errno 8 is from SSL "EOF occurred in violation of protocol"
++                if (hasattr(e, 'reason')
++                        and hasattr(e.reason, 'errno')
++                        and e.reason.errno == 8):
++                    e.reason.strerror = (e.reason.strerror +
++                                         '. requested URL: '
++                                         + remote_url)
++                    e.reason.args = (e.reason.errno, e.reason.strerror)
++                errors[source_url] = e
++            except socket.timeout as e:
++                # this isn't supposed to happen, but occasionally a socket.timeout
++                # gets through.  It's supposed to be caught in urllib and raised
++                # in this way, but for some reason in mysterious circumstances it
++                # doesn't (or didn't in python2?). So we'll just re-raise it here
++                # instead.
++                errors[source_url] = e
++        else:   # No success
++            if not sources:
++                raise KeyError(
++                    f"No sources listed and file {remote_url} not in cache! "
++                    f"Please include primary URL in sources if you want it to be "
++                    f"included as a valid source.")
++            elif len(sources) == 1:
++                raise errors[sources[0]]
++            else:
++                raise urllib.error.URLError(
++                    f"Unable to open any source! Exceptions were {errors}") \
++                    from errors[sources[0]]
+     if cache:
+         try:
+             return import_file_to_cache(url_key, f_name,

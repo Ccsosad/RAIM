@@ -1,0 +1,23 @@
+diff --git a/astropy/units/format/generic.py b/astropy/units/format/generic.py
+index 25c69c1..09cddda 100644
+--- a/astropy/units/format/generic.py
++++ b/astropy/units/format/generic.py
+@@ -460,6 +460,12 @@ class Generic(Base):
+         if s in registry:
+             return registry[s]
+ 
++        # Support milli- prefix for Angstrom (e.g., mAngstrom, mangstrom)
++        if s.lower() in ('mangstrom', 'mangstroem'):
++            angstrom = registry.get('Angstrom')
++            if angstrom is not None:
++                return 1e-3 * angstrom
++
+         if detailed_exception:
+             raise ValueError(
+                 f'{s} is not a valid unit. {did_you_mean(s, registry)}')
+@@ -583,4 +589,4 @@ class Unscaled(Generic):
+ 
+     This is used in some error messages where the scale is irrelevant.
+     """
+-    _show_scale = False
++    _show_scale = False

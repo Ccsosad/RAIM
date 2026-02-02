@@ -1,0 +1,252 @@
+diff --git a/astropy/table/column.py b/astropy/table/column.py
+index bbde7e8..067a2fd 100644
+--- a/astropy/table/column.py
++++ b/astropy/table/column.py
+@@ -170,7 +170,7 @@ class ColumnInfo(BaseColumnInfo):
+ 
+         """
+         attrs = self.merge_cols_attributes(cols, metadata_conflicts, name,
+-                                           ('meta', 'unit', 'format', 'description'))
++                                           ('meta', 'unit', 'format', 'description', 'shape'))
+ 
+         return self._parent_cls(length=length, **attrs)
+ 
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index 5d84827..caaa133 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -231,6 +231,70 @@ def setdiff(table1, table2, keys=None):
+     return t12_diff
+ 
+ 
++def cstack(tables, join_type='outer', metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along a new axis)
++
++    A ``join_type`` of 'exact' means that the tables must all have exactly
++    the same column names (though the order can vary).  If ``join_type``
++    is 'inner' then the intersection of common columns will be the output.
++    A value of 'outer' (default) means the output will have the union of
++    all columns, with table values being masked where no common values are
++    available.
++
++    Parameters
++    ----------
++    tables : Table or list of Table objects
++        Table(s) to stack along a new depth axis with the current table
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    metadata_conflicts : str
++        How to proceed with metadata conflicts. This should be one of:
++            * ``'silent'``: silently pick the last conflicting meta-data value
++            * ``'warn'``: pick the last conflicting meta-data value, but emit a warning (default)
++            * ``'error'``: raise an exception.
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++
++    Examples
++    --------
++    To stack two tables depth-wise do::
++
++      >>> from astropy.table import cstack, Table
++      >>> t1 = Table({'a': [1, 2], 'b': [3, 4]}, names=('a', 'b'))
++      >>> t2 = Table({'a': [5, 6], 'b': [7, 8]}, names=('a', 'b'))
++      >>> print(t1)
++       a   b
++      --- ---
++        1   3
++        2   4
++      >>> print(t2)
++       a   b
++      --- ---
++        5   7
++        6   8
++      >>> print(cstack([t1, t2]))
++       a [2]   b [2]
++      ---------------
++       1 .. 5 3 .. 7
++       2 .. 6 4 .. 8
++    """
++    tables = _get_list_of_tables(tables)  # validates input
++    if len(tables) == 1:
++        return tables[0]  # no point in stacking a single table
++    col_name_map = OrderedDict()
++
++    out = _cstack(tables, join_type, col_name_map, metadata_conflicts)
++
++    # Merge table metadata
++    _merge_table_meta(out, tables, metadata_conflicts=metadata_conflicts)
++
++    return out
++
++
+ def vstack(tables, join_type='outer', metadata_conflicts='warn'):
+     """
+     Stack tables vertically (along rows)
+@@ -879,6 +943,163 @@ def _vstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='wa
+     return out
+ 
+ 
++def _cstack(arrays, join_type='outer', col_name_map=None, metadata_conflicts='warn'):
++    """
++    Stack tables depth-wise (along a new axis)
++
++    A ``join_type`` of 'exact' means that the arrays must all
++    have exactly the same column names (though the order can vary).  If
++    ``join_type`` is 'inner' then the intersection of common columns will
++    be the output.  A value of 'outer' means the output will have the union of
++    all columns, with array values being masked where no common values are
++    available.
++
++    Parameters
++    ----------
++    arrays : list of Tables
++        Tables to stack depth-wise
++    join_type : str
++        Join type ('inner' | 'exact' | 'outer'), default is 'outer'
++    col_name_map : empty dict or None
++        If passed as a dict then it will be updated in-place with the
++        mapping of output to input column names.
++    metadata_conflicts : str
++        How to proceed with metadata conflicts. This should be one of:
++            * ``'silent'``: silently pick the last conflicting meta-data value
++            * ``'warn'``: pick the last conflicting meta-data value, but emit a warning (default)
++            * ``'error'``: raise an exception.
++
++    Returns
++    -------
++    stacked_table : `~astropy.table.Table` object
++        New table containing the stacked data from the input tables.
++    """
++    # Store user-provided col_name_map until the end
++    _col_name_map = col_name_map
++
++    # Input validation
++    if join_type not in ('inner', 'exact', 'outer'):
++        raise ValueError("`join_type` arg must be one of 'inner', 'exact' or 'outer'")
++
++    # Trivial case of one input array
++    if len(arrays) == 1:
++        return arrays[0]
++
++    # Check that all tables have the same number of rows
++    n_rows = arrays[0].shape[0]
++    for arr in arrays[1:]:
++        if arr.shape[0] != n_rows:
++            raise ValueError("All input tables must have the same number of rows for cstack.")
++
++    # Start by assuming an outer match where all names go to output
++    names = set(itertools.chain(*[arr.colnames for arr in arrays]))
++    col_name_map = get_col_name_map(arrays, names)
++
++    # If require_match is True then the output must have exactly the same
++    # number of columns as each input array
++    if join_type == 'exact':
++        for names in col_name_map.values():
++            if any(x is None for x in names):
++                raise TableMergeError('Inconsistent columns in input arrays '
++                                      "(use 'inner' or 'outer' join_type to "
++                                      "allow non-matching columns)")
++        join_type = 'outer'
++
++    # For an inner join, keep only columns where all input arrays have that column
++    if join_type == 'inner':
++        col_name_map = OrderedDict((name, in_names) for name, in_names in col_name_map.items()
++                                   if all(x is not None for x in in_names))
++        if len(col_name_map) == 0:
++            raise TableMergeError('Input arrays have no columns in common')
++
++    n_tables = len(arrays)
++    out = _get_out_class(arrays)()
++
++    for out_name, in_names in col_name_map.items():
++        # List of input arrays that contribute to this output column
++        cols = [arr[name] for arr, name in zip(arrays, in_names) if name is not None]
++
++        col_cls = _get_out_class(cols)
++        if not hasattr(col_cls.info, 'new_like'):
++            raise NotImplementedError('cstack unavailable for mixin column type(s): {}'
++                                      .format(col_cls.__name__))
++
++        # For depth-wise stacking, we want the column to have shape (n_rows, n_tables)
++        # So we set the shape attribute to (n_tables,) and length = n_rows.
++        # The new_like method will create a column with shape (length,) + shape.
++        # We need to merge the shape attribute from the input columns.
++        # But the input columns are 1D, so we override with the new shape.
++        # We create a temporary list of columns with the desired shape? 
++        # Instead, we can directly set the shape in the attrs.
++
++        # We'll create a new list of columns with the same data but reshaped to (n_rows, 1)?
++        # Actually, we don't need to reshape the input columns. We just need to tell new_like
++        # that the output shape should be (n_tables,). So we create a dummy column with that shape.
++        # But the merge_cols_attributes method expects the columns to have a shape attribute.
++        # So we should set the shape attribute on each column? That would be modifying the input.
++        # Alternatively, we can pass the shape directly to new_like by monkey-patching?
++        # Since new_like uses merge_cols_attributes, we can make sure that the shape attribute
++        # is set in each column's info. But the column's info doesn't have a shape attribute.
++        # Actually, the column itself has a shape attribute. So we can get the shape from the column.
++        # The merge_cols_attributes will merge the shape if we include it in the list.
++        # So we need to include 'shape' in the list of attributes to merge.
++        # We already updated ColumnInfo.new_like to include 'shape'.
++        # So we can rely on that.
++
++        # However, the input columns are 1D, so their shape is (n_rows,). We want to change it to (n_tables,).
++        # So we need to override the merged shape. We can do that by setting the shape after creating the column.
++        # But it's easier to create the column with the correct shape by passing shape=(n_tables,) in attrs.
++        # So we should call new_like with an additional argument? Actually, new_like doesn't accept shape.
++        # We can set the shape in the attrs dictionary before calling new_like.
++        # But new_like creates the attrs dictionary itself. We can't change it.
++        # Therefore, we need to create the column without new_like? That would be duplicating code.
++
++        # Alternatively, we can create a new column with the correct shape using the column constructor.
++        # But we want to preserve the column type and other attributes.
++        # So we can use new_like to create a column with length=n_rows and then reshape it to (n_rows, n_tables)?
++        # But that would not be efficient and might break for some column types.
++
++        # Let's think differently: we can create a new column with the correct shape by using the first column
++        # as a template and then expanding it.
++        # Actually, we can create an empty column with the correct shape by using the column class directly.
++        # We can get the merged attributes and then create the column with shape=(n_rows, n_tables).
++        # But the column constructor might not accept a 2D shape? It does: the 'shape' argument can be 2D.
++        # So we can do:
++
++        # Get merged attributes
++        attrs = col_cls.info.merge_cols_attributes(cols, metadata_conflicts, out_name,
++                                                   ('meta', 'unit', 'format', 'description', 'shape'))
++        # Override the shape to be (n_tables,)
++        attrs['shape'] = (n_tables,)
++        # Create the column
++        col = col_cls(length=n_rows, **attrs)
++
++        # Now fill the column
++        for i, (name, arr) in enumerate(zip(in_names, arrays)):
++            if name is not None:
++                col[:, i] = arr[name]
++            else:
++                # If the column is missing in this table, we need to mask the entire slice.
++                # Check if the column supports masking
++                if isinstance(col, Column) and not isinstance(col, MaskedColumn):
++                    col = out.MaskedColumn(col, copy=False)
++                try:
++                    col[:, i] = col.info.mask_val
++                except Exception:
++                    raise NotImplementedError(
++                        "cstack requires masking column '{}' but column"
++                        " type {} does not support masking"
++                        .format(out_name, col.__class__.__name__))
++
++        out[out_name] = col
++
++    # If col_name_map supplied as a dict input, then update.
++    if isinstance(_col_name_map, Mapping):
++        _col_name_map.update(col_name_map)
++
++    return out
++
++
+ def _hstack(arrays, join_type='outer', uniq_col_name='{col_name}_{table_name}',
+            table_names=None, col_name_map=None):
+     """

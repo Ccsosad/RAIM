@@ -1,0 +1,24 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..a088dd6 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -819,7 +819,8 @@ class ModuleDocumenter(Documenter):
+                     hasattr(self.object, '__all__')):
+                 # for implicit module members, check __module__ to avoid
+                 # documenting imported objects
+-                return True, safe_getmembers(self.object)
++                check_module = not self.options.imported_members
++                return check_module, safe_getmembers(self.object)
+             else:
+                 memberlist = self.object.__all__
+                 # Sometimes __all__ is broken...
+@@ -832,7 +833,8 @@ class ModuleDocumenter(Documenter):
+                         type='autodoc'
+                     )
+                     # fall back to all members
+-                    return True, safe_getmembers(self.object)
++                    check_module = not self.options.imported_members
++                    return check_module, safe_getmembers(self.object)
+         else:
+             memberlist = self.options.members or []
+         ret = []

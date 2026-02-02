@@ -1,0 +1,23 @@
+diff --git a/lib/matplotlib/container.py b/lib/matplotlib/container.py
+index 2b87f8f..25f6f25 100644
+--- a/lib/matplotlib/container.py
++++ b/lib/matplotlib/container.py
+@@ -68,6 +68,18 @@ class BarContainer(Container):
+ 
+     def __init__(self, patches, errorbar=None, *, datavalues=None,
+                  orientation=None, **kwargs):
++        # If label is a list, it is assumed to be a list of labels for the
++        # individual bars.
++        label = kwargs.get('label')
++        if not cbook.is_scalar_or_string(label):
++            if len(label) != len(patches):
++                raise ValueError(
++                    f"The number of labels ({len(label)}) must be equal to "
++                    f"the number of bars ({len(patches)}).")
++            for patch, l in zip(patches, label):
++                patch.set_label(l)
++            kwargs.pop('label', None)
++
+         self.patches = patches
+         self.errorbar = errorbar
+         self.datavalues = datavalues

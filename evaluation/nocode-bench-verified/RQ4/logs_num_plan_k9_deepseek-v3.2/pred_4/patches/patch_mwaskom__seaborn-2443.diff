@@ -1,0 +1,136 @@
+diff --git a/seaborn/categorical.py b/seaborn/categorical.py
+index 27d5801..df60839 100644
+--- a/seaborn/categorical.py
++++ b/seaborn/categorical.py
+@@ -1434,8 +1434,20 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+         raise Exception('No non-overlapping candidates found. '
+                         'This should not happen.')
+ 
+-    def beeswarm(self, orig_xy, d):
++    def beeswarm(self, orig_xy, d, sorter=None):
+         """Adjust x position of points to avoid overlaps."""
++        # If a sorter is provided, sort the points, run the algorithm, then unsort.
++        if sorter is not None:
++            sorted_xy = orig_xy[sorter]
++            sorted_swarm = self._beeswarm_sorted(sorted_xy, d)
++            # Now unsort
++            unsorted_indices = np.argsort(sorter)
++            return sorted_swarm[unsorted_indices]
++        else:
++            return self._beeswarm_sorted(orig_xy, d)
++
++    def _beeswarm_sorted(self, orig_xy, d):
++        """Adjust x position of points to avoid overlaps, assuming points are sorted by y."""
+         # In this method, ``x`` is always the categorical axis
+         # Center of the swarm, in point coordinates
+         midline = orig_xy[0, 0]
+@@ -1506,8 +1518,10 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+         if self.orient == "h":
+             orig_xy = orig_xy[:, [1, 0]]
+ 
+-        # Do the beeswarm in point coordinates
+-        new_xy = self.beeswarm(orig_xy, d)
++        # Create a Beeswarm instance
++        beeswarm = Beeswarm(self, ax, orig_xy, center, width, s, d, self.orient)
++        beeswarm.compute()
++        new_xy = beeswarm.swarm_xy
+ 
+         # Transform the point coordinates back to data coordinates
+         if self.orient == "h":
+@@ -1523,6 +1537,13 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+         # Reposition the points so they do not overlap
+         points.set_offsets(np.c_[new_x, new_y])
+ 
++        # Store the beeswarm object for dynamic updating
++        points._Beeswarm = beeswarm
++
++        # Connect a draw callback if not already connected
++        if not hasattr(ax, '_swarm_callback_id'):
++            ax._swarm_callback_id = ax.figure.canvas.mpl_connect('draw_event', self.update_swarms)
++
+     def draw_swarmplot(self, ax, kws):
+         """Plot the data."""
+         s = kws.pop("s")
+@@ -1556,10 +1577,8 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                 swarm_data = np.asarray(group_data[hue_mask])
+                 point_colors = np.asarray(self.point_colors[i][hue_mask])
+ 
+-                # Sort the points for the beeswarm algorithm
+-                sorter = np.argsort(swarm_data)
+-                swarm_data = swarm_data[sorter]
+-                point_colors = point_colors[sorter]
++                # Do not sort the points; the beeswarm will handle sorting internally
++                # to maintain the original order in the artist's data.
+ 
+                 # Plot the points in centered positions
+                 cat_pos = np.ones(swarm_data.size) * i
+@@ -1581,10 +1600,8 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+                     swarm_data = np.asarray(group_data[hue_mask])
+                     point_colors = np.asarray(self.point_colors[i][hue_mask])
+ 
+-                    # Sort the points for the beeswarm algorithm
+-                    sorter = np.argsort(swarm_data)
+-                    swarm_data = swarm_data[sorter]
+-                    point_colors = point_colors[sorter]
++                    # Do not sort the points; the beeswarm will handle sorting internally
++                    # to maintain the original order in the artist's data.
+ 
+                     # Plot the points in centered positions
+                     center = i + offsets[j]
+@@ -1607,6 +1624,25 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+             if swarm.get_offsets().size:
+                 self.swarm_points(ax, swarm, center, width, s, **kws)
+ 
++    def update_swarms(self, event):
++        ax = event.artist if event.artist is not None else event.canvas
++        for artist in ax.collections:
++            if hasattr(artist, '_Beeswarm'):
++                beeswarm = artist._Beeswarm
++                # Recompute the swarm
++                beeswarm.compute()
++                new_xy = beeswarm.swarm_xy
++                # Transform back to data coordinates
++                if beeswarm.orient == "h":
++                    new_xy = new_xy[:, [1, 0]]
++                new_x, new_y = beeswarm.ax.transData.inverted().transform(new_xy).T
++                # Add gutters
++                if beeswarm.orient == "v":
++                    self.add_gutters(new_x, beeswarm.center, beeswarm.width)
++                else:
++                    self.add_gutters(new_y, beeswarm.center, beeswarm.width)
++                artist.set_offsets(np.c_[new_x, new_y])
++
+     def plot(self, ax, kws):
+         """Make the full plot."""
+         self.draw_swarmplot(ax, kws)
+@@ -1616,6 +1652,30 @@ class _SwarmPlotter(_CategoricalScatterPlotter):
+             ax.invert_yaxis()
+ 
+ 
++class Beeswarm:
++    """Manage the state of a beeswarm for dynamic updating."""
++    def __init__(self, plotter, ax, orig_xy, center, width, s, d, orient):
++        self.plotter = plotter
++        self.ax = ax
++        self.orig_xy = orig_xy
++        self.center = center
++        self.width = width
++        self.s = s
++        self.d = d
++        self.orient = orient
++        self.swarm_xy = None
++
++    def compute(self):
++        # Sort by the value axis (y in point coordinates for vertical orientation)
++        # Determine the value axis: if orient is 'v', value is y; if 'h', value is x.
++        if self.plotter.orient == "v":
++            value_axis = 1
++        else:
++            value_axis = 0
++        sorter = np.argsort(self.orig_xy[:, value_axis])
++        self.swarm_xy = self.plotter.beeswarm(self.orig_xy, self.d, sorter)
++
++
+ class _CategoricalStatPlotter(_CategoricalPlotter):
+ 
+     require_numeric = True

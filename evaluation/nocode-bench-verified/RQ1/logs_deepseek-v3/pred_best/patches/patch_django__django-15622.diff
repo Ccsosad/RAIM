@@ -1,0 +1,48 @@
+diff --git a/django/forms/forms.py b/django/forms/forms.py
+index 3ebacee..8a069ca 100644
+--- a/django/forms/forms.py
++++ b/django/forms/forms.py
+@@ -66,12 +66,22 @@ class BaseForm(RenderableFormMixin):
+     prefix = None
+     use_required_attribute = True
+ 
+-    template_name = "django/forms/default.html"
++    _template_name = None
+     template_name_p = "django/forms/p.html"
+     template_name_table = "django/forms/table.html"
+     template_name_ul = "django/forms/ul.html"
+     template_name_label = "django/forms/label.html"
+ 
++    @property
++    def template_name(self):
++        if self._template_name is not None:
++            return self._template_name
++        return self.renderer.form_template_name
++
++    @template_name.setter
++    def template_name(self, value):
++        self._template_name = value
++
+     def __init__(
+         self,
+         data=None,
+@@ -536,4 +546,4 @@ class Form(BaseForm, metaclass=DeclarativeFieldsMetaclass):
+     # self.fields is specified. This class (Form) is the one that does the
+     # fancy metaclass stuff purely for the semantic sugar -- it allows one
+     # to define a form using declarative syntax.
+-    # BaseForm itself has no way of designating self.fields.
++    # BaseForm itself has no way of designating self.fields.
+diff --git a/django/forms/renderers.py b/django/forms/renderers.py
+index f0a7fac..d697b1a 100644
+--- a/django/forms/renderers.py
++++ b/django/forms/renderers.py
+@@ -15,6 +15,9 @@ def get_default_renderer():
+ 
+ 
+ class BaseRenderer:
++    form_template_name = "django/forms/default.html"
++    formset_template_name = "django/forms/formsets/default.html"
++
+     def get_template(self, template_name):
+         raise NotImplementedError("subclasses must implement get_template()")
+ 

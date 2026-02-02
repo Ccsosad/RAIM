@@ -1,0 +1,57 @@
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index daf5951..b7e9cfe 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1380,13 +1380,45 @@ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+                 return value
+ 
+     def __setitem__(self, key, value):
+-        raise TypeError(
+-            "this variable's data is stored in a dask array, "
+-            "which does not support item assignment. To "
+-            "assign to this variable, you must first load it "
+-            "into memory explicitly using the .load() "
+-            "method or accessing its .values attribute."
+-        )
++        # Check if the dask array supports item assignment.
++        if hasattr(self.array, '__setitem__'):
++            # For VectorizedIndexer, use the vindex property.
++            if isinstance(key, VectorizedIndexer):
++                self.array.vindex[key.tuple] = value
++                return
++
++            # Now key is either BasicIndexer or OuterIndexer.
++            # Do the key rewrite if possible.
++            rewritten_indexer = False
++            new_indexer = []
++            for idim, k in enumerate(key.tuple):
++                if isinstance(k, Iterable) and duck_array_ops.array_equiv(
++                    k, np.arange(self.array.shape[idim])
++                ):
++                    new_indexer.append(slice(None))
++                    rewritten_indexer = True
++                else:
++                    new_indexer.append(k)
++            if rewritten_indexer:
++                key = type(key)(tuple(new_indexer))
++
++            # Now convert to tuple.
++            if isinstance(key, BasicIndexer):
++                key_tuple = key.tuple
++            else:
++                # OuterIndexer
++                assert isinstance(key, OuterIndexer)
++                key_tuple = key.tuple
++
++            self.array[key_tuple] = value
++        else:
++            raise TypeError(
++                "this variable's data is stored in a dask array, "
++                "which does not support item assignment. To "
++                "assign to this variable, you must first load it "
++                "into memory explicitly using the .load() "
++                "method or accessing its .values attribute."
++            )
+ 
+     def transpose(self, order):
+         return self.array.transpose(order)

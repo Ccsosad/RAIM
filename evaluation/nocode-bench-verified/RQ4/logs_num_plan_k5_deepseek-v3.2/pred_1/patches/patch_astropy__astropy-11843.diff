@@ -1,0 +1,43 @@
+diff --git a/astropy/io/fits/connect.py b/astropy/io/fits/connect.py
+index 8c70ca8..167fc73 100644
+--- a/astropy/io/fits/connect.py
++++ b/astropy/io/fits/connect.py
+@@ -112,7 +112,7 @@ def _decode_mixins(tbl):
+ 
+ 
+ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+-                    character_as_bytes=True):
++                    character_as_bytes=True, unit_parse_strict="warn"):
+     """
+     Read a Table object from an FITS file
+ 
+@@ -152,6 +152,10 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+         ``U``) internally, you should set this to `False`, but note that this
+         will use more memory. If set to `False`, string columns will not be
+         memory-mapped even if ``memmap`` is `True`.
++    unit_parse_strict : str, optional
++        How to handle invalid unit strings in the FITS header. Must be one of:
++        "raise", "warn", or "silent". Default is "warn", which means warnings
++        are raised for columns with invalid units.
+     """
+ 
+     if isinstance(input, HDUList):
+@@ -212,7 +216,8 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+ 
+         try:
+             return read_table_fits(hdulist, hdu=hdu,
+-                                   astropy_native=astropy_native)
++                                   astropy_native=astropy_native,
++                                   unit_parse_strict=unit_parse_strict)
+         finally:
+             hdulist.close()
+ 
+@@ -249,7 +254,7 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+ 
+         # Copy over units
+         if col.unit is not None:
+-            column.unit = u.Unit(col.unit, format='fits', parse_strict='silent')
++            column.unit = u.Unit(col.unit, format='fits', parse_strict=unit_parse_strict)
+ 
+         # Copy over display format
+         if col.disp is not None:

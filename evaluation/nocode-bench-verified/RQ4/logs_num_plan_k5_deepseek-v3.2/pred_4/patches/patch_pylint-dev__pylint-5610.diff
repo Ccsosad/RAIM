@@ -1,0 +1,67 @@
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..8d1d0b9
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,61 @@
++"""Checker for private imports (prefixed with underscore)."""
++from typing import TYPE_CHECKING
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++import astroid
++from pylint import checkers, interfaces
++from pylint.checkers import utils
++
++
++class PrivateImportChecker(checkers.BaseChecker):
++    """Check for imports of private packages and objects (prefixed with '_')."""
++
++    __implements__ = interfaces.IAstroidChecker
++
++    name = "private_import"
++    msgs = {
++        "W5501": (
++            "Import of private %s %r",
++            "private-import",
++            "Used when a private object (prefixed with underscore) is imported.",
++        ),
++    }
++
++    def visit_import(self, node: astroid.Import) -> None:
++        """Check for private packages in import statements."""
++        for name, _ in node.names:
++            parts = name.split(".")
++            if parts[0].startswith("_"):
++                self.add_message(
++                    "private-import",
++                    node=node,
++                    args=("package", name),
++                    confidence=interfaces.HIGH,
++                )
++
++    def visit_importfrom(self, node: astroid.ImportFrom) -> None:
++        """Check for private objects in from ... import ... statements."""
++        # If the module being imported from is private?
++        if node.modname and node.modname.split(".")[0].startswith("_"):
++            self.add_message(
++                "private-import",
++                node=node,
++                args=("module", node.modname),
++                confidence=interfaces.HIGH,
++            )
++        # Check the imported objects
++        for name, _ in node.names:
++            if name.startswith("_"):
++                self.add_message(
++                    "private-import",
++                    node=node,
++                    args=("object", name),
++                    confidence=interfaces.HIGH,
++                )
++
++
++def register(linter: "PyLinter") -> None:
++    """Required method to auto-register this checker."""
++    linter.register_checker(PrivateImportChecker(linter))

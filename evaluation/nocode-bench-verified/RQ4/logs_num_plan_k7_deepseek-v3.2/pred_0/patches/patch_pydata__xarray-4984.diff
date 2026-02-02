@@ -1,0 +1,58 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 5ee3f81..5f94435 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4360,4 +4360,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index e6fceb8..991d3ee 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -2244,6 +2244,37 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         result = self.isel(indexers=pos_indexers, drop=drop)
+         return result._overwrite_indexes(new_indexes)
+ 
++    def query(self, expr, engine=None):
++        """Return a new Dataset with data filtered by the query expression.
++
++        The query string is evaluated in the namespace of the data variables
++        in the Dataset. The expression should return a boolean DataArray.
++        The returned Dataset is then indexed by the truth values of the
++        expression.
++
++        Parameters
++        ----------
++        expr : str
++            Query expression string.
++        engine : {"python", "numexpr", None}, default: None
++            Engine to use for evaluation. If None, defaults to the global
++            option `xarray.set_options(engine=...)`.
++
++        Returns
++        -------
++        queried : Dataset
++            Dataset with the same coordinates and attributes but with data
++            filtered by the query expression.
++
++        See Also
++        --------
++        DataArray.query
++        """
++        from xarray.core.computation import eval as xr_eval
++
++        mask = xr_eval(expr, self, engine=engine)
++        return self.where(mask, drop=True)
++
+     def head(
+         self,
+         indexers: Union[Mapping[Hashable, int], int] = None,
+@@ -7002,4 +7033,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             )
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

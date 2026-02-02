@@ -1,0 +1,19 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index e770a09..dff66c2 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -858,10 +858,14 @@ class earth_orientation_table(ScienceState):
+ 
+     @classmethod
+     def validate(cls, value):
++        from .conf import iers_conf
+         if value is None:
+             value = IERS_Auto.open()
+         if not isinstance(value, IERS):
+             raise ValueError("earth_orientation_table requires an IERS Table.")
++        # Update leap seconds if auto_download is enabled
++        if iers_conf.auto_download:
++            LeapSeconds.update_erfa_leapseconds()
+         return value
+ 
+ 

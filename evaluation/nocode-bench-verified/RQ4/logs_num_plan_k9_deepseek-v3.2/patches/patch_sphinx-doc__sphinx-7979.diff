@@ -1,0 +1,18 @@
+diff --git a/sphinx/util/nodes.py b/sphinx/util/nodes.py
+index da00971..c1293d5 100644
+--- a/sphinx/util/nodes.py
++++ b/sphinx/util/nodes.py
+@@ -260,9 +260,11 @@ def extract_messages(doctree: Element) -> Iterable[Tuple[Element, str]]:
+             if not msg:
+                 msg = node.astext()
+         elif isinstance(node, IMAGE_TYPE_NODES):
+-            msg = '.. image:: %s' % node['uri']
++            # Extract the alt text as a separate message (translated by default)
+             if node.get('alt'):
+-                msg += '\n   :alt: %s' % node['alt']
++                yield node, node['alt']
++            # Extract the URI (when 'image' is in gettext_additional_targets)
++            msg = '.. image:: %s' % node['uri']
+         elif isinstance(node, META_TYPE_NODES):
+             msg = node.rawcontent
+         elif isinstance(node, nodes.pending) and is_pending_meta(node):

@@ -1,0 +1,45 @@
+diff --git a/lib/matplotlib/axis.py b/lib/matplotlib/axis.py
+index fbaa79e..1377274 100644
+--- a/lib/matplotlib/axis.py
++++ b/lib/matplotlib/axis.py
+@@ -778,6 +778,20 @@ class Axis(martist.Artist):
+         self.isDefault_minloc = True
+         self.isDefault_majfmt = True
+         self.isDefault_minfmt = True
++        
++        # Set ndivs for AutoMinorLocator from rcParams if it's the default minor locator
++        if self.isDefault_minloc and self.minor.locator is not None:
++            # Check if the locator is an AutoMinorLocator by class name
++            locator_class_name = self.minor.locator.__class__.__name__
++            if locator_class_name == 'AutoMinorLocator':
++                axis_name = self._get_axis_name()
++                if axis_name == 'x':
++                    ndivs = mpl.rcParams['xtick.minor.ndivs']
++                else:  # 'y'
++                    ndivs = mpl.rcParams['ytick.minor.ndivs']
++                # Set the ndivs attribute if it exists
++                if hasattr(self.minor.locator, 'ndivs'):
++                    self.minor.locator.ndivs = ndivs
+ 
+     # This method is directly wrapped by Axes.set_{x,y}scale.
+     def _set_axes_scale(self, value, **kwargs):
+@@ -1869,6 +1883,19 @@ class Axis(martist.Artist):
+         if self.minor.formatter:
+             self.minor.formatter._set_locator(locator)
+         locator.set_axis(self)
++        
++        # Set ndivs from rcParams if it's an AutoMinorLocator
++        locator_class_name = locator.__class__.__name__
++        if locator_class_name == 'AutoMinorLocator':
++            axis_name = self._get_axis_name()
++            if axis_name == 'x':
++                ndivs = mpl.rcParams['xtick.minor.ndivs']
++            else:  # 'y'
++                ndivs = mpl.rcParams['ytick.minor.ndivs']
++            # Set the ndivs attribute if it exists
++            if hasattr(locator, 'ndivs'):
++                locator.ndivs = ndivs
++        
+         self.stale = True
+ 
+     def set_pickradius(self, pickradius):

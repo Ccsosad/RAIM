@@ -1,0 +1,19 @@
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..9e99add 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -348,7 +348,7 @@ class FacetGrid:
+ 
+     def map_plot1d(
+         self, func: Callable, x: Hashable, y: Hashable, **kwargs: Any
+-    ) -> Self:
++    ) -> "FacetGrid":
+         """
+         Apply a plotting function to a 1d facet's subset of the data.
+ 
+@@ -1001,4 +1001,4 @@ def _easy_facetgrid(
+     if kind == "dataset":
+         return g.map_dataset(plotfunc, x, y, **kwargs)
+ 
+-    raise ValueError(f"kind must be one of `line`, `dataarray`, `dataset`, got {kind}")
++    raise ValueError(f"kind must be one of `line`, `dataarray`, `dataset`, `plot1d`, got {kind}")

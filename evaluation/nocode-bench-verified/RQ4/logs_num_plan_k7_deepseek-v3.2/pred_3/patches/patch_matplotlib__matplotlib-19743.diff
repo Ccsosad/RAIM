@@ -1,0 +1,73 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..49b973d 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -120,6 +120,8 @@ def do_constrained_layout(fig, h_pad, w_pad,
+                             w_pad=w_pad, hspace=hspace, wspace=wspace)
+         make_margin_suptitles(layoutgrids, fig, renderer, h_pad=h_pad,
+                               w_pad=w_pad)
++        make_margin_legends(layoutgrids, fig, renderer, h_pad=h_pad,
++                            w_pad=w_pad)
+ 
+         # if a layout is such that a columns (or rows) margin has no
+         # constraints, we need to make all such instances in the grid
+@@ -458,6 +460,59 @@ def make_margin_suptitles(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
+             layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
+ 
+ 
++def make_margin_legends(layoutgrids, fig, renderer, *, w_pad=0, h_pad=0):
++    """
++    Make room for legends that are outside the figure.
++    """
++    # recursively process subfigures
++    for sfig in fig.subfigs:
++        make_margin_legends(layoutgrids, sfig, renderer, w_pad=w_pad, h_pad=h_pad)
++
++    # check for legends in the figure (both from axes and figure-level)
++    legends = []
++    for ax in fig.axes:
++        leg = ax.get_legend()
++        if leg is not None and leg.get_in_layout():
++            legends.append(leg)
++    # add figure-level legends
++    if hasattr(fig, 'legends'):
++        for leg in fig.legends:
++            if leg.get_in_layout():
++                legends.append(leg)
++
++    for leg in legends:
++        # check if the legend is outside
++        loc = leg._loc
++        if isinstance(loc, str) and loc.startswith('outside'):
++            # transform the legend's bbox to figure coordinates
++            inv_trans_fig = fig.transFigure.inverted().transform_bbox
++            bbox = inv_trans_fig(leg.get_tightbbox(renderer))
++            # Now, we need to add to the appropriate margin.
++            # The loc string is like "outside upper right"
++            # We want to add to the top if it's "upper", etc.
++            # But note: the legend might be placed in a specific corner.
++            # We'll parse the loc string.
++            parts = loc.split()
++            if len(parts) >= 2:
++                # The second word indicates the side.
++                side = parts[1]
++                if side == 'upper':
++                    layoutgrids[fig].edit_margin_min('top', bbox.height + 2 * h_pad)
++                elif side == 'lower':
++                    layoutgrids[fig].edit_margin_min('bottom', bbox.height + 2 * h_pad)
++                elif side == 'left':
++                    layoutgrids[fig].edit_margin_min('left', bbox.width + 2 * w_pad)
++                elif side == 'right':
++                    layoutgrids[fig].edit_margin_min('right', bbox.width + 2 * w_pad)
++            # For more complex locs, we might need to handle both directions.
++            # But the requirement only mentions two forms.
++            # We'll also handle the reverse order: "outside right upper"
++            if len(parts) == 3:
++                # If there is a third part, it might be the other side.
++                # But we only care about the primary side.
++                pass
++
++
+ def match_submerged_margins(layoutgrids, fig):
+     """
+     Make the margins that are submerged inside an Axes the same size.

@@ -1,0 +1,37 @@
+diff --git a/lib/matplotlib/cbook.py b/lib/matplotlib/cbook.py
+new file mode 100644
+index 0000000..48ec021
+--- /dev/null
++++ b/lib/matplotlib/cbook.py
+@@ -0,0 +1,31 @@
++from contextlib import contextmanager
++from collections import defaultdict
++
++class CallbackRegistry:
++    def __init__(self):
++        self.callbacks = {}
++        self._blocked = 0
++        self._blocked_signals = defaultdict(int)
++
++    @contextmanager
++    def blocked(self, signal=None):
++        """Block signals from being processed.
++        
++        Parameters
++        ----------
++        signal : str, optional
++            The specific signal to block. If not provided, all signals are blocked.
++        """
++        if signal is None:
++            self._blocked += 1
++        else:
++            self._blocked_signals[signal] += 1
++        try:
++            yield
++        finally:
++            if signal is None:
++                self._blocked -= 1
++            else:
++                self._blocked_signals[signal] -= 1
++                if self._blocked_signals[signal] == 0:
++                    del self._blocked_signals[signal]

@@ -1,0 +1,133 @@
+diff --git a/xarray/coding/times.py b/xarray/coding/times.py
+index 3885b1c..e2fa20d 100644
+--- a/xarray/coding/times.py
++++ b/xarray/coding/times.py
+@@ -685,14 +685,22 @@ class CFDatetimeCoder(VariableCoder):
+         if isinstance(units, str) and "since" in units:
+             units = pop_to(attrs, encoding, "units")
+             calendar = pop_to(attrs, encoding, "calendar")
+-            dtype = _decode_cf_datetime_dtype(data, units, calendar, self.use_cftime)
+-            transform = partial(
+-                decode_cf_datetime,
+-                units=units,
+-                calendar=calendar,
+-                use_cftime=self.use_cftime,
+-            )
+-            data = lazy_elemwise_func(data, transform, dtype)
++            try:
++                dtype = _decode_cf_datetime_dtype(data, units, calendar, self.use_cftime)
++                transform = partial(
++                    decode_cf_datetime,
++                    units=units,
++                    calendar=calendar,
++                    use_cftime=self.use_cftime,
++                )
++                data = lazy_elemwise_func(data, transform, dtype)
++            except Exception as e:
++                # Add variable name context to the error message if available
++                if name is not None:
++                    msg = f"Failed to decode time variable {name!r}. {e}"
++                    raise type(e)(msg) from e
++                else:
++                    raise
+ 
+         return Variable(dims, data, attrs, encoding)
+ 
+diff --git a/xarray/conventions.py b/xarray/conventions.py
+index df059cc..7990f68 100644
+--- a/xarray/conventions.py
++++ b/xarray/conventions.py
+@@ -339,53 +339,58 @@ def decode_cf_variable(
+     out : Variable
+         A variable holding the decoded equivalent of var.
+     """
+-    var = as_variable(var)
++    try:
++        var = as_variable(var)
+ 
+-    # Ensure datetime-like Variables are passed through unmodified (GH 6453)
+-    if _contains_datetime_like_objects(var):
+-        return var
++        # Ensure datetime-like Variables are passed through unmodified (GH 6453)
++        if _contains_datetime_like_objects(var):
++            return var
+ 
+-    original_dtype = var.dtype
++        original_dtype = var.dtype
+ 
+-    if decode_timedelta is None:
+-        decode_timedelta = decode_times
++        if decode_timedelta is None:
++            decode_timedelta = decode_times
+ 
+-    if concat_characters:
+-        if stack_char_dim:
+-            var = strings.CharacterArrayCoder().decode(var, name=name)
+-        var = strings.EncodedStringCoder().decode(var)
++        if concat_characters:
++            if stack_char_dim:
++                var = strings.CharacterArrayCoder().decode(var, name=name)
++            var = strings.EncodedStringCoder().decode(var)
+ 
+-    if mask_and_scale:
+-        for coder in [
+-            variables.UnsignedIntegerCoder(),
+-            variables.CFMaskCoder(),
+-            variables.CFScaleOffsetCoder(),
+-        ]:
+-            var = coder.decode(var, name=name)
++        if mask_and_scale:
++            for coder in [
++                variables.UnsignedIntegerCoder(),
++                variables.CFMaskCoder(),
++                variables.CFScaleOffsetCoder(),
++            ]:
++                var = coder.decode(var, name=name)
+ 
+-    if decode_timedelta:
+-        var = times.CFTimedeltaCoder().decode(var, name=name)
+-    if decode_times:
+-        var = times.CFDatetimeCoder(use_cftime=use_cftime).decode(var, name=name)
++        if decode_timedelta:
++            var = times.CFTimedeltaCoder().decode(var, name=name)
++        if decode_times:
++            var = times.CFDatetimeCoder(use_cftime=use_cftime).decode(var, name=name)
+ 
+-    dimensions, data, attributes, encoding = variables.unpack_for_decoding(var)
+-    # TODO(shoyer): convert everything below to use coders
++        dimensions, data, attributes, encoding = variables.unpack_for_decoding(var)
++        # TODO(shoyer): convert everything below to use coders
+ 
+-    if decode_endianness and not data.dtype.isnative:
+-        # do this last, so it's only done if we didn't already unmask/scale
+-        data = NativeEndiannessArray(data)
+-        original_dtype = data.dtype
++        if decode_endianness and not data.dtype.isnative:
++            # do this last, so it's only done if we didn't already unmask/scale
++            data = NativeEndiannessArray(data)
++            original_dtype = data.dtype
+ 
+-    encoding.setdefault("dtype", original_dtype)
++        encoding.setdefault("dtype", original_dtype)
+ 
+-    if "dtype" in attributes and attributes["dtype"] == "bool":
+-        del attributes["dtype"]
+-        data = BoolTypeArray(data)
++        if "dtype" in attributes and attributes["dtype"] == "bool":
++            del attributes["dtype"]
++            data = BoolTypeArray(data)
+ 
+-    if not is_duck_dask_array(data):
+-        data = indexing.LazilyIndexedArray(data)
++        if not is_duck_dask_array(data):
++            data = indexing.LazilyIndexedArray(data)
+ 
+-    return Variable(dimensions, data, attributes, encoding=encoding)
++        return Variable(dimensions, data, attributes, encoding=encoding)
++    except Exception as e:
++        # Add variable name context to the error message
++        msg = f"Failed to decode variable {name!r}. {e}"
++        raise type(e)(msg) from e
+ 
+ 
+ def _update_bounds_attributes(variables):

@@ -1,0 +1,24 @@
+diff --git a/sphinx/ext/autosummary/__init__.py b/sphinx/ext/autosummary/__init__.py
+index a7f2a9d..021afee 100644
+--- a/sphinx/ext/autosummary/__init__.py
++++ b/sphinx/ext/autosummary/__init__.py
+@@ -234,8 +234,11 @@ class Autosummary(SphinxDirective):
+ 
+     def run(self):
+         # type: () -> List[nodes.Node]
++        options = Options()
++        if self.config.autosummary_imported_members:
++            options.imported_members = True
+         self.bridge = DocumenterBridge(self.env, self.state.document.reporter,
+-                                       Options(), self.lineno)
++                                       options, self.lineno)
+ 
+         names = [x.strip().split()[0] for x in self.content
+                  if x.strip() and re.search(r'^[~a-zA-Z_]', x.strip()[0])]
+@@ -733,5 +736,6 @@ def setup(app):
+     app.add_config_value('autosummary_generate', [], True, [bool])
+     app.add_config_value('autosummary_mock_imports',
+                          lambda config: config.autodoc_mock_imports, 'env')
++    app.add_config_value('autosummary_imported_members', False, 'env')
+ 
+     return {'version': sphinx.__display_version__, 'parallel_read_safe': True}

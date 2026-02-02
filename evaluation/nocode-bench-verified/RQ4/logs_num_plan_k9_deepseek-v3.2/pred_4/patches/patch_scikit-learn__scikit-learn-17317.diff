@@ -1,0 +1,61 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..3cfde8a 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -88,7 +88,9 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+             else:
+                 cats = np.array(self.categories[i], dtype=Xi.dtype)
+                 if Xi.dtype != object:
+-                    if not np.all(np.sort(cats) == cats):
++                    # Check for NaN in the categories
++                    has_nan = np.any(np.isnan(cats))
++                    if not has_nan and not np.all(np.sort(cats) == cats):
+                         raise ValueError("Unsorted categories are not "
+                                          "supported for numerical categories")
+                 if handle_unknown == 'error':
+@@ -115,11 +117,13 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+ 
+         for i in range(n_features):
+             Xi = X_list[i]
+-            diff, valid_mask = _check_unknown(Xi, self.categories_[i],
+-                                              return_mask=True)
+-
+-            if not np.all(valid_mask):
++            # Use _encode to get the encoded values and check for unknown
++            encoded = _encode(Xi, uniques=self.categories_[i],
++                              check_unknown=False)
++            unknown_mask = encoded == -1
++            if np.any(unknown_mask):
+                 if handle_unknown == 'error':
++                    diff = np.unique(Xi[unknown_mask])
+                     msg = ("Found unknown categories {0} in column {1}"
+                            " during transform".format(diff, i))
+                     raise ValueError(msg)
+@@ -127,7 +131,7 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+                     # Set the problematic rows to an acceptable value and
+                     # continue `The rows are marked `X_mask` and will be
+                     # removed later.
+-                    X_mask[:, i] = valid_mask
++                    X_mask[:, i] = ~unknown_mask
+                     # cast Xi into the largest string type necessary
+                     # to handle different lengths of numpy strings
+                     if (self.categories_[i].dtype.kind in ('U', 'S')
+@@ -135,12 +139,12 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+                         Xi = Xi.astype(self.categories_[i].dtype)
+                     else:
+                         Xi = Xi.copy()
+-
+-                    Xi[~valid_mask] = self.categories_[i][0]
+-            # We use check_unknown=False, since _check_unknown was
+-            # already called above.
+-            X_int[:, i] = _encode(Xi, uniques=self.categories_[i],
+-                                  check_unknown=False)
++                    # Replace unknown values with the first category
++                    Xi[unknown_mask] = self.categories_[i][0]
++                    # Re-encode with the replaced values
++                    encoded = _encode(Xi, uniques=self.categories_[i],
++                                      check_unknown=False)
++            X_int[:, i] = encoded
+ 
+         return X_int, X_mask
+ 

@@ -1,0 +1,27 @@
+diff --git a/sphinx/environment/__init__.py b/sphinx/environment/__init__.py
+index 9ed8cac..aeacd7e 100644
+--- a/sphinx/environment/__init__.py
++++ b/sphinx/environment/__init__.py
+@@ -344,6 +344,16 @@ class BuildEnvironment:
+             pathname = path.join(base, pathname)  # type: ignore
+         return pathname
+ 
++    def docpath(self, docname: str) -> str:
++        """Return the directory path component for the document, with a trailing
++        slash if non-empty.
++        """
++        dirname = path.dirname(self.doc2path(docname, base=None))
++        if dirname:
++            return dirname + '/'
++        else:
++            return ''
++
+     def relfn2path(self, filename: str, docname: str = None) -> Tuple[str, str]:
+         """Return paths to a file referenced from a document, relative to
+         documentation root and absolute.
+@@ -656,4 +666,4 @@ class BuildEnvironment:
+                       RemovedInSphinx40Warning, stacklevel=2)
+         from sphinx.domains.index import IndexDomain
+         domain = cast(IndexDomain, self.get_domain('index'))
+-        domain.data['entries'] = entries
++        domain.data['entries'] = entries

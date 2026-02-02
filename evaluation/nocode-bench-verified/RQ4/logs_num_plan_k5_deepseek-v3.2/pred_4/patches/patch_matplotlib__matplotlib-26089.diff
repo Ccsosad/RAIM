@@ -1,0 +1,67 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..d777fbd 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -713,6 +713,62 @@ class Legend(Artist):
+         self.stale = True
+         self._legend_box.set_offset(self._findoffset)
+ 
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++
++        Parameters
++        ----------
++        loc : str or int or tuple of two ints/floats
++            The location of the legend. The valid location codes are::
++
++                'best'            0
++                'upper right'     1
++                'upper left'      2
++                'lower left'      3
++                'lower right'     4
++                'right'           5
++                'center left'     6
++                'center right'    7
++                'lower center'    8
++                'upper center'    9
++                'center'          10
++
++            Alternatively, the location can be a coordinate tuple
++            (x, y) in axes coordinates (0,0 is bottom left, 1,1 is top right).
++
++        See Also
++        --------
++        get_loc : Get the current location.
++        """
++        self._set_loc(loc)
++
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++
++        Parameters
++        ----------
++        loc : str or int or tuple of two ints/floats
++            The location of the legend. The valid location codes are::
++
++                'best'            0
++                'upper right'     1
++                'upper left'      2
++                'lower left'      3
++                'lower right'     4
++                'right'           5
++                'center left'     6
++                'center right'    7
++                'lower center'    8
++                'upper center'    9
++                'center'          10
++
++            Alternatively, the location can be a coordinate tuple
++            (x, y) in axes coordinates (0,0 is bottom left, 1,1 is top right).
++        """
++        self._set_loc(loc)
++
+     def set_ncols(self, ncols):
+         """Set the number of columns."""
+         self._ncols = ncols

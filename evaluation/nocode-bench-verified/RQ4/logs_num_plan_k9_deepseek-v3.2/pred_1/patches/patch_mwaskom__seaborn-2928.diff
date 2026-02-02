@@ -1,0 +1,266 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..43919c8 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -1006,6 +1006,127 @@ class FacetGrid(Grid):
+         if y is not None:
+             self.map(plt.axhline, y=y, **line_kws)
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the grid object.
++
++        This method is intended for method chaining. The function should take
++        the grid object as its first argument and modify it in place.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object.
++        *args, **kwargs
++            Additional arguments and keyword arguments passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns the grid object for easy method chaining.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the function's result.
++
++        This method is intended for method chaining. The function should take
++        the grid object as its first argument and return a value.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object.
++        *args, **kwargs
++            Additional arguments and keyword arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def tight_layout(self, *args, **kwargs):
++        """
++        Call fig.tight_layout and return self.
++
++        This method is intended for method chaining.
++
++        Returns
++        -------
++        self : object
++            Returns the grid object for easy method chaining.
++
++        """
++        self._figure.tight_layout(*args, **kwargs)
++        return self
++        return self
++
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the grid object.
++
++        This method is intended for method chaining. The function should take
++        the grid object as its first argument and modify it in place.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object.
++        *args, **kwargs
++            Additional arguments and keyword arguments passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns the grid object for easy method chaining.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the function's result.
++
++        This method is intended for method chaining. The function should take
++        the grid object as its first argument and return a value.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object.
++        *args, **kwargs
++            Additional arguments and keyword arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def tight_layout(self, *args, **kwargs):
++        """
++        Call fig.tight_layout and return self.
++
++        This method is intended for method chaining.
++
++        Returns
++        -------
++        self : object
++            Returns the grid object for easy method chaining.
++
++        """
++        self._figure.tight_layout(*args, **kwargs)
++        return self
++
+     # ------ Properties that are part of the public API and documented by Sphinx
+ 
+     @property
+@@ -1618,6 +1739,66 @@ class PairGrid(Grid):
+                 numeric_cols.append(col)
+         return numeric_cols
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the grid object.
++
++        This method is intended for method chaining. The function should take
++        the grid object as its first argument and modify it in place.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object.
++        *args, **kwargs
++            Additional arguments and keyword arguments passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns the grid object for easy method chaining.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the function's result.
++
++        This method is intended for method chaining. The function should take
++        the grid object as its first argument and return a value.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object.
++        *args, **kwargs
++            Additional arguments and keyword arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def tight_layout(self, *args, **kwargs):
++        """
++        Call fig.tight_layout and return self.
++
++        This method is intended for method chaining.
++
++        Returns
++        -------
++        self : object
++            Returns the grid object for easy method chaining.
++
++        """
++        self._figure.tight_layout(*args, **kwargs)
++        return self
++
+ 
+ class JointGrid(_BaseGrid):
+     """Grid for drawing a bivariate plot with marginal univariate plots.
+@@ -1906,6 +2087,66 @@ class JointGrid(_BaseGrid):
+         self.ax_joint.set_ylabel(ylabel, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the grid object.
++
++        This method is intended for method chaining. The function should take
++        the grid object as its first argument and modify it in place.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object.
++        *args, **kwargs
++            Additional arguments and keyword arguments passed to the function.
++
++        Returns
++        -------
++        self : object
++            Returns the grid object for easy method chaining.
++
++        """
++        func(self, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the grid object and return the function's result.
++
++        This method is intended for method chaining. The function should take
++        the grid object as its first argument and return a value.
++
++        Parameters
++        ----------
++        func : callable
++            Function to apply to the grid object.
++        *args, **kwargs
++            Additional arguments and keyword arguments passed to the function.
++
++        Returns
++        -------
++        result : object
++            The result of the function.
++
++        """
++        return func(self, *args, **kwargs)
++
++    def tight_layout(self, *args, **kwargs):
++        """
++        Call fig.tight_layout and return self.
++
++        This method is intended for method chaining.
++
++        Returns
++        -------
++        self : object
++            Returns the grid object for easy method chaining.
++
++        """
++        self._figure.tight_layout(*args, **kwargs)
++        return self
++
+ 
+ JointGrid.__init__.__doc__ = """\
+ Set up the grid of subplots and store data internally for easy plotting.

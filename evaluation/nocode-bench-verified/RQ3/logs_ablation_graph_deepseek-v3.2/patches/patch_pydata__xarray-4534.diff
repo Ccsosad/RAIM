@@ -1,0 +1,105 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index e79a30f..fce4008 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -271,6 +271,62 @@ class DatetimeAccessor(Properties):
+ 
+     """
+ 
++    def isocalendar(self):
++        """
++        Returns a Dataset with three components: year, week and weekday
++        according to the ISO 8601 calendar.
++
++        Returns
++        -------
++        Dataset with fields: year, week, weekday
++
++        Examples
++        --------
++        >>> import pandas as pd
++        >>> dates = pd.date_range(start="2000-01-01", periods=10, freq="D")
++        >>> ts = xr.DataArray(dates, dims=("time"))
++        >>> ts.dt.isocalendar()
++        <xarray.Dataset>
++        Dimensions:  (time: 10)
++        Coordinates:
++          * time     (time) datetime64[ns] 2000-01-01 2000-01-02 ... 2000-01-10
++        Data variables:
++            year     (time) int64 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000
++            week     (time) int64 52 52 52 1 1 1 1 1 1 1
++            weekday  (time) int64 6 7 1 2 3 4 5 6 7 1
++
++        Notes
++        -----
++        Requires pandas version 1.1.0 or greater.
++        """
++        import pandas as pd
++        from distutils.version import LooseVersion
++
++        if LooseVersion(pd.__version__) < LooseVersion("1.1.0"):
++            raise AttributeError(
++                "isocalendar requires pandas version 1.1.0 or greater"
++            )
++
++        obj_type = type(self._obj)
++        data = self._obj.data
++        # pandas isocalendar returns a DataFrame with columns: year, week, day
++        iso_df = pd.Index(data).isocalendar()
++        # Convert to xarray Dataset
++        from xarray import Dataset
++
++        coords = self._obj.coords
++        dims = self._obj.dims
++        # Create a Dataset from the DataFrame
++        ds = Dataset(
++            {
++                "year": (dims, iso_df["year"].values),
++                "week": (dims, iso_df["week"].values),
++                "weekday": (dims, iso_df["day"].values),
++            },
++            coords=coords,
++        )
++        return ds
++
+     def strftime(self, date_format):
+         """
+         Return an array of formatted strings specified by date_format, which
+@@ -326,10 +382,35 @@ class DatetimeAccessor(Properties):
+     nanosecond = Properties._tslib_field_accessor(
+         "nanosecond", "The nanoseconds of the datetime", np.int64
+     )
+-    weekofyear = Properties._tslib_field_accessor(
++    _weekofyear_descriptor = Properties._tslib_field_accessor(
+         "weekofyear", "The week ordinal of the year", np.int64
+     )
+-    week = weekofyear
++
++    @property
++    def weekofyear(self):
++        """
++        Deprecated: Use `isocalendar().week` instead.
++        """
++        import warnings
++        warnings.warn(
++            "weekofyear is deprecated. Use isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return self._weekofyear_descriptor.__get__(self, type(self))
++
++    @property
++    def week(self):
++        """
++        Deprecated: Use `isocalendar().week` instead.
++        """
++        import warnings
++        warnings.warn(
++            "week is deprecated. Use isocalendar().week instead.",
++            FutureWarning,
++            stacklevel=2,
++        )
++        return self._weekofyear_descriptor.__get__(self, type(self))
+     dayofweek = Properties._tslib_field_accessor(
+         "dayofweek", "The day of the week with Monday=0, Sunday=6", np.int64
+     )

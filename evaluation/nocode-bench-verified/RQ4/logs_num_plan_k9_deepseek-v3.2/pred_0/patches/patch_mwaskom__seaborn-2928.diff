@@ -1,0 +1,171 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index 1b953c7..1cd367c 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -84,6 +84,7 @@ class Grid(_BaseGrid):
+         if self._tight_layout_pad is not None:
+             kwargs.setdefault("pad", self._tight_layout_pad)
+         self._figure.tight_layout(*args, **kwargs)
++        return self
+ 
+     def add_legend(self, legend_data=None, title=None, label_order=None,
+                    adjust_subtitles=False, **kwargs):
+@@ -1006,6 +1007,52 @@ class FacetGrid(Grid):
+         if y is not None:
+             self.map(plt.axhline, y=y, **line_kws)
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to each subplot in the grid.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes an :class:`matplotlib.axes.Axes` as its first argument.
++            It must return the axes object.
++        args : tuple
++            Additional positional arguments to pass to `func`.
++        kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        :class:`FacetGrid` instance
++            Returns ``self`` for easy method chaining.
++
++        """
++        for ax in self.axes.flat:
++            func(ax, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the :class:`FacetGrid` instance.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes a :class:`FacetGrid` as its first argument.
++            It must return the grid object or another object.
++        args : tuple
++            Additional positional arguments to pass to `func`.
++        kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        object
++            The result of calling `func(self, *args, **kwargs)`.
++
++        """
++        return func(self, *args, **kwargs)
++
+     # ------ Properties that are part of the public API and documented by Sphinx
+ 
+     @property
+@@ -1610,6 +1657,52 @@ class PairGrid(Grid):
+         for ax, label in zip(self.axes[:, 0], self.y_vars):
+             ax.set_ylabel(label)
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to each subplot in the grid.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes an :class:`matplotlib.axes.Axes` as its first argument.
++            It must return the axes object.
++        args : tuple
++            Additional positional arguments to pass to `func`.
++        kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        :class:`PairGrid` instance
++            Returns ``self`` for easy method chaining.
++
++        """
++        for ax in self.axes.flat:
++            func(ax, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the :class:`PairGrid` instance.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes a :class:`PairGrid` as its first argument.
++            It must return the grid object or another object.
++        args : tuple
++            Additional positional arguments to pass to `func`.
++        kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        object
++            The result of calling `func(self, *args, **kwargs)`.
++
++        """
++        return func(self, *args, **kwargs)
++
+     def _find_numeric_cols(self, data):
+         """Find which variables in a DataFrame are numeric."""
+         numeric_cols = []
+@@ -1906,6 +1999,52 @@ class JointGrid(_BaseGrid):
+         self.ax_joint.set_ylabel(ylabel, **kwargs)
+         return self
+ 
++    def apply(self, func, *args, **kwargs):
++        """
++        Apply a function to each subplot in the grid.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes an :class:`matplotlib.axes.Axes` as its first argument.
++            It must return the axes object.
++        args : tuple
++            Additional positional arguments to pass to `func`.
++        kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        :class:`JointGrid` instance
++            Returns ``self`` for easy method chaining.
++
++        """
++        for ax in [self.ax_joint, self.ax_marg_x, self.ax_marg_y]:
++            func(ax, *args, **kwargs)
++        return self
++
++    def pipe(self, func, *args, **kwargs):
++        """
++        Apply a function to the :class:`JointGrid` instance.
++
++        Parameters
++        ----------
++        func : callable
++            A function that takes a :class:`JointGrid` as its first argument.
++            It must return the grid object or another object.
++        args : tuple
++            Additional positional arguments to pass to `func`.
++        kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Returns
++        -------
++        object
++            The result of calling `func(self, *args, **kwargs)`.
++
++        """
++        return func(self, *args, **kwargs)
++
+ 
+ JointGrid.__init__.__doc__ = """\
+ Set up the grid of subplots and store data internally for easy plotting.

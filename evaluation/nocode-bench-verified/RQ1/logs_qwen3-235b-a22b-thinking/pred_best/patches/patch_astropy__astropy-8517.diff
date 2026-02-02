@@ -1,0 +1,119 @@
+diff --git a/astropy/constants/__init__.py b/astropy/constants/__init__.py
+index b9b3036..34339e9 100644
+--- a/astropy/constants/__init__.py
++++ b/astropy/constants/__init__.py
+@@ -42,6 +42,29 @@ _lines = [
+ _utils._set_c(codata2014, iau2015, find_current_module(),
+               not_in_module_only=True, doclines=_lines, set_class=True)
+ 
++# Determine which versions to use
++physical_version = physical_constants.get()
++astronomical_version = astronomical_constants.get()
++
++# Import the appropriate modules
++if physical_version == 'codata2010':
++    from .astropyconst13 import codata2010 as codata
++elif physical_version == 'codata2014':
++    from . import codata2014 as codata
++else:
++    raise ValueError(f"Unknown physical constants version: {physical_version}")
++
++if astronomical_version == 'iau2012':
++    from .astropyconst13 import iau2012 as iaudata
++elif astronomical_version == 'iau2015':
++    from . import iau2015 as iaudata
++else:
++    raise ValueError(f"Unknown astronomical constants version: {astronomical_version}")
++
++# Set the constants
++_utils._set_c(codata, iaudata, sys.modules[__name__],
++              not_in_module_only=True, doclines=_lines, set_class=True)
++
+ _lines.append(_lines[1])
+ 
+ if __doc__ is not None:
+@@ -99,4 +122,4 @@ def set_enabled_constants(modname):
+ del find_current_module
+ del contextmanager
+ del _utils
+-del _lines
++del _lines
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..4ae6b19
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,73 @@
++import sys
++
++from astropy.utils.state import ScienceState
++
++# Mapping from module names to constant versions
++MODULE_VERSION_MAP = {
++    'astropyconst13': ('codata2010', 'iau2012'),
++    'astropyconst18': ('codata2014', 'iau2015'),
++}
++
++class _PhysicalConstants(ScienceState):
++    """
++    Science state class for managing the version of physical constants.
++    """
++    _value = 'codata2014'  # Default version
++
++    @classmethod
++    def validate(cls, value):
++        # Map module names to constant versions
++        if value in MODULE_VERSION_MAP:
++            value = MODULE_VERSION_MAP[value][0]
++        
++        # Validate the version string
++        valid_versions = ['codata2010', 'codata2014']
++        if value not in valid_versions:
++            raise ValueError(f"Unknown physical constants version: {value}")
++        return value
++
++    @classmethod
++    def get(cls):
++        return cls._value
++
++    @classmethod
++    def set(cls, value):
++        # Check if astropy.units or astropy.constants has already been imported
++        if 'astropy.units' in sys.modules or 'astropy.constants' in sys.modules:
++            raise RuntimeError("astropy.units or astropy.constants is already imported")
++        return super().set(value)
++
++
++class _AstronomicalConstants(ScienceState):
++    """
++    Science state class for managing the version of astronomical constants.
++    """
++    _value = 'iau2015'  # Default version
++
++    @classmethod
++    def validate(cls, value):
++        # Map module names to constant versions
++        if value in MODULE_VERSION_MAP:
++            value = MODULE_VERSION_MAP[value][1]
++        
++        # Validate the version string
++        valid_versions = ['iau2012', 'iau2015']
++        if value not in valid_versions:
++            raise ValueError(f"Unknown astronomical constants version: {value}")
++        return value
++
++    @classmethod
++    def get(cls):
++        return cls._value
++
++    @classmethod
++    def set(cls, value):
++        # Check if astropy.units or astropy.constants has already been imported
++        if 'astropy.units' in sys.modules or 'astropy.constants' in sys.modules:
++            raise RuntimeError("astropy.units or astropy.constants is already imported")
++        return super().set(value)
++
++
++# Create instances of the ScienceState classes
++physical_constants = _PhysicalConstants()
++astronomical_constants = _AstronomicalConstants()

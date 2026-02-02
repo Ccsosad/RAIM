@@ -1,0 +1,20 @@
+diff --git a/sphinx/builders/gettext.py b/sphinx/builders/gettext.py
+index ac0abe0..ab64a46 100644
+--- a/sphinx/builders/gettext.py
++++ b/sphinx/builders/gettext.py
+@@ -156,6 +156,15 @@ class I18nBuilder(Builder):
+         for node, msg in extract_messages(doctree):
+             catalog.add(msg, node)
+ 
++        # Always extract image alt text (since version 4.0)
++        # URI extraction remains conditional on gettext_additional_targets
++        for node in doctree.traverse(nodes.image):
++            if node.get('alt'):
++                catalog.add(node['alt'], node)
++        
++        # Extract image URIs only if 'image' is in gettext_additional_targets
++        # (handled by extract_messages function)
++
+         if 'index' in self.env.config.gettext_additional_targets:
+             # Extract translatable messages from index entries.
+             for node, entries in traverse_translatable_index(doctree):

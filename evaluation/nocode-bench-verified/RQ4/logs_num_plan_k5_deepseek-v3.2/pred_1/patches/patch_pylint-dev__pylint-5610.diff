@@ -1,0 +1,91 @@
+diff --git a/pylint/extensions/__init__.py b/pylint/extensions/__init__.py
+new file mode 100644
+index 0000000..e83a0b0
+--- /dev/null
++++ b/pylint/extensions/__init__.py
+@@ -0,0 +1,3 @@
++"""Optional extensions for pylint."""
++from pylint.extensions.bad_builtin import BadBuiltinChecker
++from pylint.extensions.private_import import PrivateImportChecker
+diff --git a/pylint/extensions/import_checker_base.py b/pylint/extensions/import_checker_base.py
+new file mode 100644
+index 0000000..d8f7b56
+--- /dev/null
++++ b/pylint/extensions/import_checker_base.py
+@@ -0,0 +1,24 @@
++"""Base class for import-related checkers."""
++from typing import TYPE_CHECKING, List
++
++import astroid
++from pylint.checkers import BaseChecker
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++
++class ImportCheckerBase(BaseChecker):
++    """Base class for checkers that validate imports."""
++
++    def __init__(self, linter: "PyLinter") -> None:
++        super().__init__(linter)
++        self._import_stack: List[str] = []
++
++    def visit_import(self, node: astroid.Import) -> None:
++        """Called for `import` statements."""
++        pass
++
++    def visit_importfrom(self, node: astroid.ImportFrom) -> None:
++        """Called for `from ... import` statements."""
++        pass
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..a9cf385
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,46 @@
++"""Checker for private imports (names starting with underscore)."""
++from typing import TYPE_CHECKING
++
++import astroid
++from pylint import interfaces
++from pylint.checkers.utils import only_required_for_messages
++from pylint.extensions.import_checker_base import ImportCheckerBase
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++
++class PrivateImportChecker(ImportCheckerBase):
++    """Check for imports of private names (starting with underscore) from external modules."""
++
++    name = "private-import"
++    msgs = {
++        "C2501": (
++            "Import of private name %r from external package %r",
++            "import-private-name",
++            "Used when a private name (starting with underscore) is imported from an external package.",
++        )
++    }
++
++    @only_required_for_messages("import-private-name")
++    def visit_importfrom(self, node: astroid.ImportFrom) -> None:
++        """Check for private imports in 'from ... import ...'."""
++        if node.level is None or node.level == 0:
++            # It's an absolute import, so we can check the module.
++            module_name = node.modname
++        else:
++            # It's a relative import, so we skip because it's likely within the same package.
++            return
++
++        # Check if the module is external (i.e., not part of the standard library?).
++        # For simplicity, we assume all imports are external. In a more advanced version,
++        # we could skip standard library modules.
++        for name, _ in node.names:
++            if name.startswith("_"):
++                # Check if it's a private import.
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=(name, module_name),
++                    confidence=interfaces.HIGH,
++                )

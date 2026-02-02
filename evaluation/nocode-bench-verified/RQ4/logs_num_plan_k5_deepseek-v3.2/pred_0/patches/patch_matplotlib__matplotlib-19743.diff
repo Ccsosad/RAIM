@@ -1,0 +1,14 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..97d18ea 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -191,6 +191,9 @@ def make_layoutgrids(fig, layoutgrids, rect=(0, 0, 1, 1)):
+         if gs is not None:
+             layoutgrids = make_layoutgrids_gs(layoutgrids, gs)
+ 
++    # create layoutgrids for legends with outside loc
++    layoutgrids = _make_layoutgrids_for_legends(layoutgrids, fig)
++
+     return layoutgrids
+ 
+ 

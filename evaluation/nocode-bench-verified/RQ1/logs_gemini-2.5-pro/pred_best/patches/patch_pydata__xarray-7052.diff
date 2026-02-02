@@ -1,0 +1,55 @@
+diff --git a/xarray/plot/dataset_plot.py b/xarray/plot/dataset_plot.py
+index fee9e84..16d46e1 100644
+--- a/xarray/plot/dataset_plot.py
++++ b/xarray/plot/dataset_plot.py
+@@ -500,11 +500,34 @@ def _temp_dataarray(ds: T_Dataset, y: Hashable, locals_: Mapping) -> DataArray:
+ 
+ 
+ @_attach_to_plot_class
+-def scatter(ds: T_Dataset, x: Hashable, y: Hashable, *args, **kwargs):
++def scatter(ds: T_Dataset, *args, x: Hashable = None, y: Hashable = None, **kwargs):
+     """Scatter plot Dataset data variables against each other."""
++    if args:
++        import warnings
++
++        warnings.warn(
++            "Using positional arguments for plot methods is deprecated, use keyword arguments instead. "
++            "Example: `ds.plot.scatter(x='A', y='B')`",
++            FutureWarning,
++            stacklevel=2,
++        )
++        if x is not None or y is not None:
++            raise TypeError(
++                "Dataset.plot.scatter got multiple values for arguments 'x' and 'y'"
++            )
++        if len(args) == 2:
++            x, y = args
++        else:
++            raise ValueError(f"Expected 2 positional arguments, got {len(args)}")
++
++    if x is None or y is None:
++        raise TypeError(
++            "Dataset.plot.scatter missing 1 or 2 required keyword-only arguments: 'x' and 'y'"
++        )
++
+     plotmethod = "scatter"
+     kwargs.update(x=x)
+-    locals_ = _normalize_args(plotmethod, args, kwargs)
++    locals_ = _normalize_args(plotmethod, (), kwargs)
+     da = _temp_dataarray(ds, y, locals_)
+ 
+-    return getattr(da.plot, plotmethod)(*locals_.pop("args", ()), **locals_)
++    return getattr(da.plot, plotmethod)(*locals_.pop("args", ()), **locals_)
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..5466d33 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -468,7 +468,7 @@ class FacetGrid:
+                 self._mappables.append(mappable)
+ 
+         # Add titles and some touch ups:
+-        self._finalize_grid()
++        self._finalize_grid(x, y)
+         self._set_lims()
+ 
+         add_colorbar, add_legend = _determine_guide(

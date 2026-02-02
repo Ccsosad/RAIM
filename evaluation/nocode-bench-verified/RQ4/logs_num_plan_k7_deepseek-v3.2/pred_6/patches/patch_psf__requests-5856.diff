@@ -1,0 +1,69 @@
+diff --git a/requests/exceptions.py b/requests/exceptions.py
+index dd3ff05..7152d31 100644
+--- a/requests/exceptions.py
++++ b/requests/exceptions.py
+@@ -29,6 +29,19 @@ class InvalidJSONError(RequestException):
+     """A JSON error occurred."""
+ 
+ 
++class JSONDecodeError(InvalidJSONError):
++    """Failed to decode JSON text."""
++    def __init__(self, *args, **kwargs):
++        """
++        Initialize JSONDecodeError with the original exception.
++        
++        :param args: arguments for the exception
++        :param kwargs: keyword arguments for the exception
++        """
++        self.original_exception = kwargs.pop('original_exception', None)
++        super(JSONDecodeError, self).__init__(*args, **kwargs)
++
++
+ class HTTPError(RequestException):
+     """An HTTP error occurred."""
+ 
+diff --git a/requests/models.py b/requests/models.py
+index 612041a..2a6be45 100644
+--- a/requests/models.py
++++ b/requests/models.py
+@@ -882,12 +882,8 @@ class Response(object):
+         r"""Returns the json-encoded content of a response, if any.
+ 
+         :param \*\*kwargs: Optional arguments that ``json.loads`` takes.
+-        :raises simplejson.JSONDecodeError: If the response body does not
+-            contain valid json and simplejson is installed.
+-        :raises json.JSONDecodeError: If the response body does not contain
+-            valid json and simplejson is not installed on Python 3.
+-        :raises ValueError: If the response body does not contain valid
+-            json and simplejson is not installed on Python 2.        
++        :raises requests.exceptions.JSONDecodeError: If the response body does not
++            contain valid json.
+         """
+ 
+         if not self.encoding and self.content and len(self.content) > 3:
+@@ -907,7 +903,18 @@ class Response(object):
+                     # and the server didn't bother to tell us what codec *was*
+                     # used.
+                     pass
+-        return complexjson.loads(self.text, **kwargs)
++        try:
++            return complexjson.loads(self.text, **kwargs)
++        except (ValueError, complexjson.JSONDecodeError) as e:
++            # Catch JSON-related exceptions and re-raise as requests.exceptions.JSONDecodeError
++            # JSONDecodeError is from the standard library json module (Python 3) or simplejson
++            # ValueError is from the standard library json module (Python 2)
++            from .exceptions import JSONDecodeError as RequestsJSONDecodeError
++            raise RequestsJSONDecodeError(
++                "Failed to decode JSON text: {}".format(e),
++                response=self,
++                original_exception=e
++            )
+ 
+     @property
+     def links(self):
+@@ -963,4 +970,4 @@ class Response(object):
+ 
+         release_conn = getattr(self.raw, 'release_conn', None)
+         if release_conn is not None:
+-            release_conn()
++            release_conn()

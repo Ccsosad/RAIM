@@ -1,0 +1,362 @@
+diff --git a/xarray/__init__.py b/xarray/__init__.py
+index b35ae4c..860ff76 100644
+--- a/xarray/__init__.py
++++ b/xarray/__init__.py
+@@ -17,7 +17,7 @@ from .conventions import SerializationWarning, decode_cf
+ from .core.alignment import align, broadcast
+ from .core.combine import auto_combine, combine_by_coords, combine_nested
+ from .core.common import ALL_DIMS, full_like, ones_like, zeros_like
+-from .core.computation import apply_ufunc, dot, where
++from .core.computation import apply_ufunc, dot, where, polyval
+ from .core.concat import concat
+ from .core.dataarray import DataArray
+ from .core.dataset import Dataset
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..87f5edd 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3202,6 +3202,56 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().integrate(dim, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        rcond: float = None,
++        **kwargs,
++    ) -> "DataArray":
++        """
++        Least squares polynomial fit.
++
++        Parameters
++        ----------
++        dim : str
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        full : bool, optional
++            Whether to return additional information.
++        rcond : float, optional
++            Cut-off ratio for small singular values.
++        **kwargs : dict
++            Additional keyword arguments passed to numpy.linalg.lstsq.
++
++        Returns
++        -------
++        coefficients : DataArray
++            Polynomial coefficients, highest power first.
++            The coefficients are stored in a new dimension 'polyfit_coefficients'.
++        [residuals, rank, singular_values] : only if `full` is True
++
++        See Also
++        --------
++        xarray.polyval
++        numpy.polyfit
++
++        Examples
++        --------
++        >>> x = xr.DataArray(np.arange(10), dims=['x'], name='x')
++        >>> a = xr.DataArray(3 + 4 * x, dims=['x'], coords={'x': x})
++        >>> out = a.polyfit(dim='x', deg=1, full=True)
++        >>> out
++        <xarray.DataArray (polyfit_coefficients: 2)>
++        array([4., 3.])
++        Coordinates:
++          * polyfit_coefficients  (polyfit_coefficients) int64 1 0
++        """
++        from .poly_utils import polyfit
++        return polyfit(self, dim, deg, dim=dim, full=full, rcond=rcond, **kwargs)
++
+     def unify_chunks(self) -> "DataArray":
+         """ Unify chunk size along all chunked dimensions of this DataArray.
+ 
+@@ -3449,4 +3499,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 16f0e97..6ab2221 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5483,6 +5483,60 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             result = result._integrate_one(c, datetime_unit=datetime_unit)
+         return result
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        full: bool = False,
++        rcond: float = None,
++        **kwargs,
++    ) -> "Dataset":
++        """
++        Least squares polynomial fit for each variable in the dataset.
++
++        Parameters
++        ----------
++        dim : str
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        full : bool, optional
++            Whether to return additional information.
++        rcond : float, optional
++            Cut-off ratio for small singular values.
++        **kwargs : dict
++            Additional keyword arguments passed to numpy.linalg.lstsq.
++
++        Returns
++        -------
++        coefficients : Dataset
++            Polynomial coefficients, highest power first.
++            The coefficients are stored in a new dimension 'polyfit_coefficients'.
++        [residuals, rank, singular_values] : only if `full` is True
++
++        See Also
++        --------
++        xarray.polyval
++        numpy.polyfit
++
++        Examples
++        --------
++        >>> ds = xr.Dataset({
++        ...     'a': ('x', [1, 2, 3, 4]),
++        ...     'b': ('x', [5, 6, 7, 8])
++        ... }, coords={'x': [0, 1, 2, 3]})
++        >>> ds.polyfit('x', 1)
++        <xarray.Dataset>
++        Dimensions:               (polyfit_coefficients: 2)
++        Coordinates:
++          * polyfit_coefficients  (polyfit_coefficients) int64 1 0
++        Data variables:
++            a                    (polyfit_coefficients) float64 1.0 1.0
++            b                    (polyfit_coefficients) float64 1.0 5.0
++        """
++        from .poly_utils import polyfit
++        return polyfit(self, dim, deg, dim=dim, full=full, rcond=rcond, **kwargs)
++
+     def _integrate_one(self, coord, datetime_unit=None):
+         from .variable import Variable
+ 
+@@ -5915,4 +5969,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self._replace_vars_and_dims(variables)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/computation.py b/xarray/core/computation.py
+new file mode 100644
+index 0000000..c31022c
+--- /dev/null
++++ b/xarray/core/computation.py
+@@ -0,0 +1,6 @@
++__all__ = [
++    "apply_ufunc",
++    "dot",
++    "where",
++    "polyval",
++]
+diff --git a/xarray/core/poly_utils.py b/xarray/core/poly_utils.py
+new file mode 100644
+index 0000000..10c216f
+--- /dev/null
++++ b/xarray/core/poly_utils.py
+@@ -0,0 +1,193 @@
++"""
++Polynomial fitting utilities for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from . import duck_array_ops
++from .common import _contains_datetime_like_objects
++from .variable import Variable, IndexVariable
++
++def _least_squares(lhs, rhs, rcond=None):
++    """
++    Return the coefficients of a polynomial of degree `deg` that fits the data.
++
++    This is a helper function for polyfit, using numpy.linalg.lstsq.
++
++    Parameters
++    ----------
++    lhs : array_like
++        Vandermonde matrix of shape (M, deg + 1).
++    rhs : array_like
++        y-coordinates of the sample points, shape (M,) or (M, K).
++    rcond : float, optional
++        Cut-off ratio for small singular values.
++
++    Returns
++    -------
++    coefficients : ndarray
++        Polynomial coefficients, highest power first.
++    residuals : ndarray
++        Sum of squared residuals.
++    rank : int
++        Effective rank of the matrix.
++    s : ndarray
++        Singular values of the matrix.
++    """
++    # Use numpy's lstsq function
++    return np.linalg.lstsq(lhs, rhs, rcond=rcond)
++
++def _polyfit_1d(x, y, deg, rcond=None, full=False):
++    """
++    Polynomial fitting for 1D data.
++
++    Parameters
++    ----------
++    x : array_like
++        x-coordinates of the sample points.
++    y : array_like
++        y-coordinates of the sample points.
++    deg : int
++        Degree of the fitting polynomial.
++    rcond : float, optional
++        Cut-off ratio for small singular values.
++    full : bool, optional
++        Whether to return additional information.
++
++    Returns
++    -------
++    coefficients : ndarray
++        Polynomial coefficients, highest power first.
++    residuals : ndarray
++        Sum of squared residuals (if full=True).
++    rank : int
++        Effective rank of the matrix (if full=True).
++    s : ndarray
++        Singular values of the matrix (if full=True).
++    """
++    # Check inputs
++    x = np.asarray(x)
++    y = np.asarray(y)
++
++    # Vandermonde matrix
++    lhs = np.vander(x, deg + 1)
++    if full:
++        coefficients, residuals, rank, s = _least_squares(lhs, y, rcond)
++        return coefficients, residuals, rank, s
++    else:
++        coefficients, residuals, rank, s = _least_squares(lhs, y, rcond)
++        return coefficients
++
++def polyfit(data, coord, deg, dim=None, full=False, rcond=None, **kwargs):
++    """
++    Least squares polynomial fit for xarray objects.
++
++    Parameters
++    ----------
++    data : DataArray or Dataset
++        The data to fit.
++    coord : str or DataArray
++        The coordinate to use for the polynomial fit.
++    deg : int
++        Degree of the fitting polynomial.
++    dim : str, optional
++        Dimension along which to fit. If None, uses the dimension of `coord`.
++    full : bool, optional
++        Whether to return additional information.
++    rcond : float, optional
++        Cut-off ratio for small singular values.
++    **kwargs : dict
++        Additional keyword arguments passed to numpy.linalg.lstsq.
++
++    Returns
++    -------
++    coefficients : DataArray or Dataset
++        Polynomial coefficients, highest power first.
++    [residuals, rank, singular_values] : only if `full` is True
++    """
++    from .dataarray import DataArray
++    from .dataset import Dataset
++
++    if dim is None:
++        if isinstance(coord, str):
++            dim = coord
++        else:
++            dim = coord.dims[0]
++
++    # Get the coordinate values
++    if isinstance(coord, str):
++        coord_values = data[coord].values
++    else:
++        coord_values = coord.values
++
++    # Check for datetime-like coordinates
++    if _contains_datetime_like_objects(data[dim]):
++        # Convert to numeric (days since epoch) for fitting
++        coord_values = pd.to_datetime(coord_values).to_julian_date()
++        coord_values = coord_values - coord_values.min()
++
++    # Prepare the Vandermonde matrix
++    lhs = np.vander(coord_values, deg + 1)
++
++    if isinstance(data, DataArray):
++        # Fit for a single DataArray
++        rhs = data.values
++        # Move the fitting dimension to the last axis
++        axis = data.get_axis_num(dim)
++        rhs = np.moveaxis(rhs, axis, -1)
++        original_shape = rhs.shape[:-1]
++        rhs_2d = rhs.reshape(-1, rhs.shape[-1])
++        coefficients = []
++        residuals_list = []
++        rank_list = []
++        s_list = []
++        for i in range(rhs_2d.shape[0]):
++            if full:
++                coeff, resid, rank, s = _least_squares(lhs, rhs_2d[i], rcond)
++                coefficients.append(coeff)
++                residuals_list.append(resid)
++                rank_list.append(rank)
++                s_list.append(s)
++            else:
++                coeff, resid, rank, s = _least_squares(lhs, rhs_2d[i], rcond)
++                coefficients.append(coeff)
++        coefficients = np.array(coefficients)
++        coefficients = coefficients.reshape(original_shape + (deg + 1,))
++        # Create a new dimension for the polynomial coefficients
++        coeff_dim = 'polyfit_coefficients'
++        new_dims = list(data.dims)
++        new_dims.remove(dim)
++        new_dims.append(coeff_dim)
++        coefficients = DataArray(coefficients, dims=new_dims)
++        coefficients.coords[coeff_dim] = np.arange(deg + 1)
++        if full:
++            residuals = np.array(residuals_list).reshape(original_shape)
++            rank = np.array(rank_list).reshape(original_shape)
++            s = np.array(s_list).reshape(original_shape + (deg + 1,))
++            return coefficients, residuals, rank, s
++        else:
++            return coefficients
++    elif isinstance(data, Dataset):
++        # Fit for each data variable in the Dataset
++        coefficients_dict = {}
++        residuals_dict = {}
++        rank_dict = {}
++        s_dict = {}
++        for name, var in data.data_vars.items():
++            if dim in var.dims:
++                result = polyfit(var, coord, deg, dim=dim, full=full, rcond=rcond, **kwargs)
++                if full:
++                    coefficients_dict[name], residuals_dict[name], rank_dict[name], s_dict[name] = result
++                else:
++                    coefficients_dict[name] = result
++            else:
++                coefficients_dict[name] = var
++        if full:
++            coeff_ds = Dataset(coefficients_dict)
++            resid_ds = Dataset(residuals_dict)
++            rank_ds = Dataset(rank_dict)
++            s_ds = Dataset(s_dict)
++            return coeff_ds, resid_ds, rank_ds, s_ds
++        else:
++            return Dataset(coefficients_dict)
++    else:
++        raise TypeError("data must be a DataArray or Dataset")

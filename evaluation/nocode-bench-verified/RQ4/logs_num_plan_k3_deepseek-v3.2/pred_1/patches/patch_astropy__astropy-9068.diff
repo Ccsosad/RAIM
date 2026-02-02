@@ -1,0 +1,68 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..7f1e452 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3019,7 +3019,62 @@ class Table:
+             else:
+                 result = self.as_array() == other
+ 
+-        return result
++        # For structured arrays, numpy returns a 1D array. However, we want to ensure
++        # that we return a 1D array where each element is True only if all fields in the row are True.
++        if result.dtype.names is not None:
++            # result is a structured array of booleans
++            return result.all(axis=1)
++        else:
++            # result is already a 1D array
++            return result
++
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A Table of booleans with the same shape as this table.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table with different column names.
++        """
++        from .table import Table
++
++        if isinstance(other, Table):
++            # Check column names
++            if self.colnames != other.colnames:
++                raise ValueError('cannot compare tables with different column names')
++            # Create an empty table with the same structure
++            out = Table()
++            for name in self.colnames:
++                out[name] = self[name] == other[name]
++            return out
++        elif np.isscalar(other):
++            # Compare each column to the scalar
++            out = Table()
++            for name in self.colnames:
++                out[name] = self[name] == other
++            return out
++        else:
++            # Assume it's an array-like that can be broadcast column-wise
++            # We require the length to match the number of columns.
++            other = np.asarray(other)
++            if other.shape == (len(self.colnames),):
++                out = Table()
++                for name, val in zip(self.colnames, other):
++                    out[name] = self[name] == val
++                return out
++            else:
++                raise ValueError('Cannot compare table to array with shape {}'.format(other.shape))
+ 
+     def __ne__(self, other):
+         return ~self.__eq__(other)

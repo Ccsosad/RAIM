@@ -1,0 +1,23 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..171d125 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -416,6 +416,10 @@ class Documenter:
+         if result:
+             args, retann = result
+ 
++        # If the config value autodoc_typehints is set to 'none', hide the return annotation
++        if self.env.config.autodoc_typehints == 'none':
++            retann = None
++
+         if args is not None:
+             return args + (retann and (' -> %s' % retann) or '')
+         else:
+@@ -1614,6 +1618,7 @@ def setup(app):
+     app.add_config_value('autodoc_mock_imports', [], True)
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
++    app.add_config_value('autodoc_typehints', 'signature', True)
+     app.add_event('autodoc-process-docstring')
+     app.add_event('autodoc-process-signature')
+     app.add_event('autodoc-skip-member')

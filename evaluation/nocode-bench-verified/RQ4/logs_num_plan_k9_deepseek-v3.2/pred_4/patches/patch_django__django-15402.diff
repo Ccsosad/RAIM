@@ -1,0 +1,91 @@
+diff --git a/django/urls/resolvers.py b/django/urls/resolvers.py
+index eb43231..a001dea 100644
+--- a/django/urls/resolvers.py
++++ b/django/urls/resolvers.py
+@@ -41,6 +41,8 @@ class ResolverMatch:
+         namespaces=None,
+         route=None,
+         tried=None,
++        captured_kwargs=None,
++        extra_kwargs=None,
+     ):
+         self.func = func
+         self.args = args
+@@ -48,6 +50,15 @@ class ResolverMatch:
+         self.url_name = url_name
+         self.route = route
+         self.tried = tried
++        # If not provided, split kwargs into captured and extra.
++        if captured_kwargs is None or extra_kwargs is None:
++            # This is for backward compatibility when called from old code.
++            # We cannot split, so we set captured_kwargs to kwargs and extra_kwargs to empty.
++            self.captured_kwargs = kwargs.copy()
++            self.extra_kwargs = {}
++        else:
++            self.captured_kwargs = captured_kwargs
++            self.extra_kwargs = extra_kwargs
+ 
+         # If a URLRegexResolver doesn't have a namespace or app_name, it passes
+         # in an empty value.
+@@ -416,11 +427,20 @@ class URLPattern:
+     def resolve(self, path):
+         match = self.pattern.match(path)
+         if match:
+-            new_path, args, kwargs = match
+-            # Pass any extra_kwargs as **kwargs.
+-            kwargs.update(self.default_args)
++            new_path, args, captured_kwargs = match
++            # The captured_kwargs are the ones from the URL.
++            # The extra_kwargs are the default_args.
++            extra_kwargs = self.default_args.copy()
++            # Combine them for the total kwargs.
++            kwargs = {**captured_kwargs, **extra_kwargs}
+             return ResolverMatch(
+-                self.callback, args, kwargs, self.pattern.name, route=str(self.pattern)
++                self.callback,
++                args,
++                kwargs,
++                self.pattern.name,
++                route=str(self.pattern),
++                captured_kwargs=captured_kwargs,
++                extra_kwargs=extra_kwargs,
+             )
+ 
+     @cached_property
+@@ -654,14 +674,16 @@ class URLResolver:
+                 else:
+                     if sub_match:
+                         # Merge captured arguments in match with submatch
+-                        sub_match_dict = {**kwargs, **self.default_kwargs}
+-                        # Update the sub_match_dict with the kwargs from the sub_match.
+-                        sub_match_dict.update(sub_match.kwargs)
++                        # captured_kwargs are from the URL match.
++                        # extra_kwargs are from default_kwargs and sub_match.extra_kwargs.
++                        captured_kwargs = {**kwargs, **sub_match.captured_kwargs}
++                        extra_kwargs = {**self.default_kwargs, **sub_match.extra_kwargs}
++                        combined_kwargs = {**captured_kwargs, **extra_kwargs}
+                         # If there are *any* named groups, ignore all non-named groups.
+                         # Otherwise, pass all non-named arguments as positional
+                         # arguments.
+                         sub_match_args = sub_match.args
+-                        if not sub_match_dict:
++                        if not combined_kwargs:
+                             sub_match_args = args + sub_match.args
+                         current_route = (
+                             ""
+@@ -672,12 +694,14 @@ class URLResolver:
+                         return ResolverMatch(
+                             sub_match.func,
+                             sub_match_args,
+-                            sub_match_dict,
++                            combined_kwargs,
+                             sub_match.url_name,
+                             [self.app_name] + sub_match.app_names,
+                             [self.namespace] + sub_match.namespaces,
+                             self._join_route(current_route, sub_match.route),
+                             tried,
++                            captured_kwargs=captured_kwargs,
++                            extra_kwargs=extra_kwargs,
+                         )
+                     tried.append([pattern])
+             raise Resolver404({"tried": tried, "path": new_path})

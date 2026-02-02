@@ -1,0 +1,53 @@
+diff --git a/xarray/core/coordinates.py b/xarray/core/coordinates.py
+index 94f4425..39ed4ab 100644
+--- a/xarray/core/coordinates.py
++++ b/xarray/core/coordinates.py
+@@ -34,6 +34,27 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+     _data: DataWithCoords
+     __slots__ = ("_data",)
+ 
++    @classmethod
++    def from_pandas_multiindex(cls, midx: pd.MultiIndex, dim: Hashable) -> "Coordinates":
++        """Create Coordinates from a pandas MultiIndex.
++
++        Parameters
++        ----------
++        midx : pandas.MultiIndex
++            MultiIndex to convert to coordinates
++        dim : hashable
++            Name of the dimension to use for the coordinates
++
++        Returns
++        -------
++        Coordinates
++            New Coordinates object containing the MultiIndex coordinates
++        """
++        from xarray.core.dataset import Dataset
++        index = PandasMultiIndex(midx, dim)
++        variables = index.create_variables({dim: midx})
++        return Dataset._construct_direct(variables=variables, coord_names=set(variables), indexes={dim: index}).coords
++
+     def __getitem__(self, key: Hashable) -> T_DataArray:
+         raise NotImplementedError()
+ 
+@@ -86,7 +107,19 @@ class Coordinates(Mapping[Hashable, "T_DataArray"]):
+         return formatting.coords_repr(self)
+ 
+     def to_dataset(self) -> Dataset:
+-        raise NotImplementedError()
++        """Convert Coordinates to a Dataset.
++
++        Returns
++        -------
++        Dataset
++            New Dataset containing the coordinates
++        """
++        from xarray.core.dataset import Dataset
++        return Dataset._construct_direct(
++            variables=self.variables,
++            coord_names=self._names,
++            indexes=self.xindexes,
++        )
+ 
+     def to_index(self, ordered_dims: Sequence[Hashable] | None = None) -> pd.Index:
+         """Convert all index coordinates into a :py:class:`pandas.Index`.

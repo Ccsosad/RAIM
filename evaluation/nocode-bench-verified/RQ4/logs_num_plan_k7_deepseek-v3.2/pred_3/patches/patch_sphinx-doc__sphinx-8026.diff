@@ -1,0 +1,94 @@
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+index 796b7ad..616e873 100644
+--- a/sphinx/builders/__init__.py
++++ b/sphinx/builders/__init__.py
+@@ -603,6 +603,15 @@ class Builder:
+         """
+         pass
+ 
++    def get_docpath(self, docname: str) -> str:
++        """Return the directory path for the given docname, with a trailing slash if non-empty."""
++        import posixpath
++        dirname = posixpath.dirname(docname)
++        if dirname:
++            return dirname + '/'
++        else:
++            return ''
++
+     def get_builder_config(self, option: str, default: str) -> Any:
+         """Return a builder specific option.
+ 
+@@ -617,4 +626,4 @@ class Builder:
+             return getattr(self.config, optname)
+         except AttributeError:
+             optname = '%s_%s' % (default, option)
+-            return getattr(self.config, optname)
++            return getattr(self.config, optname)
+diff --git a/sphinx/util/path_tokens.py b/sphinx/util/path_tokens.py
+new file mode 100644
+index 0000000..7298d9c
+--- /dev/null
++++ b/sphinx/util/path_tokens.py
+@@ -0,0 +1,62 @@
++"""
++    sphinx.util.path_tokens
++    ~~~~~~~~~~~~~~~~~~~~~~~
++
++    Token replacement for image paths.
++
++    :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
++    :license: BSD, see LICENSE for details.
++"""
++
++import posixpath
++from typing import Dict, Callable
++
++class PatternParser:
++    """Parse and replace tokens in a pattern string."""
++    def __init__(self, tokens: Dict[str, Callable[[str], str]]):
++        self.tokens = tokens
++
++    def parse(self, pattern: str, docname: str) -> str:
++        """Parse the pattern and replace tokens with values from the docname."""
++        result = []
++        i = 0
++        while i < len(pattern):
++            if pattern[i] == '{' and i+1 < len(pattern) and pattern[i+1] == '{':
++                # Escaped {
++                result.append('{')
++                i += 2
++            elif pattern[i] == '}' and i+1 < len(pattern) and pattern[i+1] == '}':
++                # Escaped }
++                result.append('}')
++                i += 2
++            elif pattern[i] == '{':
++                # Start of a token
++                j = pattern.find('}', i)
++                if j == -1:
++                    # No closing brace, treat as literal
++                    result.append(pattern[i:])
++                    break
++                token = pattern[i+1:j]
++                if token in self.tokens:
++                    value = self.tokens[token](docname)
++                    result.append(value)
++                else:
++                    # Unknown token, leave as is
++                    result.append(pattern[i:j+1])
++                i = j + 1
++            else:
++                result.append(pattern[i])
++                i += 1
++        return ''.join(result)
++
++def get_image_pattern_parser() -> PatternParser:
++    """Return a PatternParser with default tokens for image paths."""
++    tokens = {
++        'root': lambda docname: '',
++        'path': lambda docname: posixpath.dirname(docname) + '/' if posixpath.dirname(docname) else '',
++        'docpath': lambda docname: posixpath.dirname(docname) + '/' if posixpath.dirname(docname) else '',
++        'basename': lambda docname: posixpath.basename(docname),
++        'ext': lambda docname: '',
++        'language': lambda docname: '',
++    }
++    return PatternParser(tokens)

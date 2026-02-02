@@ -1,0 +1,24 @@
+diff --git a/xarray/plot/plot.py b/xarray/plot/plot.py
+index b16caf5..f5284c9 100644
+--- a/xarray/plot/plot.py
++++ b/xarray/plot/plot.py
+@@ -530,6 +530,8 @@ def hist(
+     return primitive
+ 
+ 
++scatter = _plot1d(scatter)
++
+ # MUST run before any 2d plotting functions are defined since
+ # _plot2d decorator adds them as methods here.
+ class _PlotMethods:
+@@ -563,6 +565,10 @@ class _PlotMethods:
+     def step(self, *args, **kwargs):
+         return step(self._da, *args, **kwargs)
+ 
++    @functools.wraps(scatter)
++    def scatter(self, *args, **kwargs):
++        return scatter(self._da, *args, **kwargs)
++
+ 
+ def override_signature(f):
+     def wrapper(func):

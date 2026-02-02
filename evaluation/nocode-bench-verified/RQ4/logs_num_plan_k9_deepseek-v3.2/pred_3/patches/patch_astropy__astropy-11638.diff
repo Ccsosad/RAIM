@@ -1,0 +1,43 @@
+diff --git a/astropy/utils/iers/__init__.py b/astropy/utils/iers/__init__.py
+index c88b0b3..332ae55 100644
+--- a/astropy/utils/iers/__init__.py
++++ b/astropy/utils/iers/__init__.py
+@@ -1,2 +1,6 @@
+ 
+-from .iers import *
++
++from .iers import *
++from .conf import Conf
++
++conf = Conf()
+diff --git a/astropy/utils/iers/conf.py b/astropy/utils/iers/conf.py
+new file mode 100644
+index 0000000..f108dfa
+--- /dev/null
++++ b/astropy/utils/iers/conf.py
+@@ -0,0 +1,25 @@
++"""
++Configuration for the IERS system.
++"""
++
++from astropy.config import ConfigItem
++
++__all__ = ['Conf']
++
++class Conf:
++    """
++    Configuration for IERS data handling.
++    """
++    auto_download = ConfigItem(
++        True,
++        'Enable auto-downloading of the latest IERS data. If set to False then '
++        'the local IERS-B file will be used by default (even if the full IERS file '
++        'with predictions was already downloaded and cached). This parameter also '
++        'controls whether internet resources will be queried to update the leap '
++        'second table if the installed version is out of date.',
++        cfgtype='boolean')
++
++    auto_max_age = ConfigItem(
++        30.0,
++        'Maximum age of predictive data before auto-downloading (days).',
++        cfgtype='float')

@@ -1,0 +1,145 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..310a0d8 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -2290,6 +2290,140 @@ def _add_special_operator(sop_name, sop):
+     SPECIAL_OPERATORS[sop_name] = sop
+ 
+ 
++class _FixedInputsModel(Model):
++    """
++    A model that fixes one or more inputs of another model to constant values.
++    """
++    def __init__(self, model, fixed_inputs):
++        self._model = model
++        self._fixed_inputs = fixed_inputs
++        
++        # Convert input names to indices for internal use
++        fixed = {}
++        for key, val in fixed_inputs.items():
++            if isinstance(key, str):
++                try:
++                    idx = model.inputs.index(key)
++                except ValueError:
++                    raise ValueError(f"Input {key} not found in model inputs.")
++            else:
++                idx = key
++            if idx < 0 or idx >= model.n_inputs:
++                raise ValueError(f"Input index {idx} out of range.")
++            fixed[idx] = val
++            
++        self._fixed = fixed
++        
++        # Determine new inputs (excluding fixed ones)
++        new_inputs = [model.inputs[i] for i in range(model.n_inputs) if i not in fixed]
++        self._n_inputs = len(new_inputs)
++        self._inputs = tuple(new_inputs)
++        self._outputs = model.outputs
++        
++        # Adjust bounding box: remove dimensions for fixed inputs
++        if model.bounding_box is not None:
++            bbox = model.bounding_box
++            if len(bbox) != model.n_inputs:
++                raise ValueError("Bounding box does not match number of inputs.")
++            new_bbox = tuple(bbox[i] for i in range(model.n_inputs) if i not in fixed)
++            if new_bbox:
++                self._bounding_box = new_bbox
++            else:
++                self._bounding_box = None
++        else:
++            self._bounding_box = None
++            
++        super().__init__()
++        
++    @property
++    def n_inputs(self):
++        return self._n_inputs
++        
++    @property
++    def n_outputs(self):
++        return self._model.n_outputs
++        
++    @property
++    def inputs(self):
++        return self._inputs
++        
++    @property
++    def outputs(self):
++        return self._outputs
++        
++    @property
++    def bounding_box(self):
++        return self._bounding_box
++        
++    @bounding_box.setter
++    def bounding_box(self, value):
++        self._bounding_box = value
++        
++    def __call__(self, *args, **kwargs):
++        # Build the full argument list for the original model
++        full_args = [None] * self._model.n_inputs
++        
++        # Set fixed values
++        for idx, val in self._fixed.items():
++            full_args[idx] = val
++            
++        # Map remaining inputs to their positions
++        remaining_indices = [i for i in range(self._model.n_inputs) if i not in self._fixed]
++        
++        # Handle positional arguments
++        if len(args) > self.n_inputs:
++            raise TypeError(f"Too many positional arguments: expected {self.n_inputs}, got {len(args)}")
++            
++        for i, arg in enumerate(args):
++            full_args[remaining_indices[i]] = arg
++            
++        # Handle keyword arguments
++        for key, val in kwargs.items():
++            if key in self._model.inputs:
++                idx = self._model.inputs.index(key)
++                if idx in self._fixed:
++                    raise ValueError(f"Input {key} is fixed and cannot be set by keyword.")
++                if full_args[idx] is not None:
++                    raise ValueError(f"Input {key} already set by positional argument.")
++                full_args[idx] = val
++            else:
++                raise ValueError(f"Invalid input name: {key}")
++                
++        # Check all non-fixed inputs are provided
++        for i in remaining_indices:
++            if full_args[i] is None:
++                raise ValueError(f"Input {self._model.inputs[i]} was not provided.")
++                
++        return self._model(*full_args)
++
++
++def fix_inputs(model, fixed_inputs):
++    """
++    Create a new model by fixing one or more inputs of an existing model.
++    
++    Parameters
++    ----------
++    model : `Model`
++        The model to fix inputs of.
++    fixed_inputs : dict
++        A dictionary mapping input names or indices to constant values.
++        
++    Returns
++    -------
++    fixed_model : `_FixedInputsModel`
++        A new model with specified inputs fixed.
++        
++    Examples
++    --------
++    >>> from astropy.modeling.models import Gaussian2D
++    >>> g = Gaussian2D(1, 0, 0, 1, 1)
++    >>> fixed = fix_inputs(g, {'x_mean': 0})
++    >>> fixed.n_inputs
++    4  # Original had 5 inputs (x, y, amplitude, x_mean, y_mean), now one less
++    """
++    return _FixedInputsModel(model, fixed_inputs)
++
++
+ class CompoundModel(Model):
+     '''
+     Base class for compound models.

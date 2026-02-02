@@ -1,0 +1,95 @@
+diff --git a/_pytest/logging.py b/_pytest/logging.py
+new file mode 100644
+index 0000000..a51a1fa
+--- /dev/null
++++ b/_pytest/logging.py
+@@ -0,0 +1,89 @@
++"""pytest logging plugin implementation."""
++import logging
++import pytest
++
++
++def pytest_addoption(parser):
++    group = parser.getgroup("logging")
++    group.addoption(
++        "--no-print-logs",
++        dest="log_print",
++        action="store_false",
++        default=True,
++        help="disable printing captured logs on failed tests.",
++    )
++    group.addoption(
++        "--log-format",
++        action="store",
++        default="%(filename)s:%(lineno)d %(levelname)s %(message)s",
++        help="log format as used by the logging module.",
++    )
++    group.addoption(
++        "--log-date-format",
++        action="store",
++        default=None,
++        help="log date format as used by the logging module.",
++    )
++
++
++@pytest.hookimpl(tryfirst=True)
++def pytest_configure(config):
++    config._capturelog_handler = logging.StreamHandler()
++    fmt = logging.Formatter(config.getoption("log_format"),
++                             config.getoption("log_date_format"))
++    config._capturelog_handler.setFormatter(fmt)
++    logging.getLogger().addHandler(config._capturelog_handler)
++    logging.getLogger().setLevel(logging.NOTSET)
++
++
++@pytest.hookimpl(trylast=True)
++def pytest_unconfigure(config):
++    logging.getLogger().removeHandler(config._capturelog_handler)
++
++
++@pytest.fixture
++def caplog(request):
++    """Fixture to capture log messages."""
++    class CapLog:
++        def __init__(self):
++            self.records = []
++            self.record_tuples = []
++            self.text = ""
++
++        def set_level(self, level, logger=None):
++            if logger:
++                logging.getLogger(logger).setLevel(level)
++            else:
++                request.config._capturelog_handler.setLevel(level)
++
++        def at_level(self, level, logger=None):
++            caplog_self = self
++
++            class LevelCtx:
++                def __enter__(self_inner):
++                    caplog_self.set_level(level, logger)
++                def __exit__(self_inner, exc_type, exc_val, exc_tb):
++                    pass
++            return LevelCtx()
++
++        def clear(self):
++            self.records.clear()
++            self.record_tuples.clear()
++            self.text = ""
++
++    cap = CapLog()
++
++    class CaptureHandler(logging.Handler):
++        def emit(self, record):
++            cap.records.append(record)
++            cap.record_tuples.append((record.name, record.levelno, record.getMessage()))
++            cap.text += self.format(record) + "\n"
++
++    handler = CaptureHandler()
++    fmt = logging.Formatter(request.config.getoption("log_format"),
++                             request.config.getoption("log_date_format"))
++    handler.setFormatter(fmt)
++    logging.getLogger().addHandler(handler)
++
++    request.addfinalizer(lambda: logging.getLogger().removeHandler(handler))
++    return cap

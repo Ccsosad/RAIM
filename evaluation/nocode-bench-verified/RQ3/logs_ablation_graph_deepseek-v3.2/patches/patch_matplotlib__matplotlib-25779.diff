@@ -1,0 +1,159 @@
+diff --git a/galleries/examples/shapes_and_collections/ellipse_arrow.py b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+new file mode 100644
+index 0000000..4028252
+--- /dev/null
++++ b/galleries/examples/shapes_and_collections/ellipse_arrow.py
+@@ -0,0 +1,53 @@
++"""
++===========================================
++Adding arrows to an ellipse to show rotation
++===========================================
++
++This example demonstrates how to add arrows to an ellipse to indicate
++clockwise or counter-clockwise rotation. The arrows are placed exactly
++on the ellipse using the coordinates returned by `get_vertices()`.
++"""
++
++import matplotlib.pyplot as plt
++import matplotlib.patches as mpatches
++import numpy as np
++
++# Create figure and axis
++fig, ax = plt.subplots(figsize=(6, 6))
++ax.set_aspect('equal')
++ax.set_xlim(-3, 3)
++ax.set_ylim(-3, 3)
++ax.grid(True, linestyle='--', alpha=0.7)
++ax.set_title("Ellipse with rotation arrows", fontsize=14)
++
++# Create an ellipse
++ellipse = mpatches.Ellipse(xy=(0, 0), width=4, height=2, angle=30,
++                           edgecolor='blue', facecolor='lightblue', linewidth=2)
++ax.add_patch(ellipse)
++
++# Get vertices and co-vertices
++vertices = ellipse.get_vertices()
++co_vertices = ellipse.get_co_vertices()
++
++# Add arrows at vertices to show counter-clockwise rotation
++# Arrow from first vertex to first co-vertex
++ax.annotate('', xy=co_vertices[0], xytext=vertices[0],
++            arrowprops=dict(arrowstyle='->', color='red', lw=2))
++
++# Arrow from second co-vertex to second vertex
++ax.annotate('', xy=vertices[1], xytext=co_vertices[1],
++            arrowprops=dict(arrowstyle='->', color='green', lw=2))
++
++# Mark the points
++ax.plot(vertices[:, 0], vertices[:, 1], 'ro', label='Vertices')
++ax.plot(co_vertices[:, 0], co_vertices[:, 1], 'gs', label='Co-vertices')
++
++# Add legend
++ax.legend()
++
++# Add text indicating rotation direction
++ax.text(2, 2.5, "Red arrow: CCW rotation", color='red', fontsize=10)
++ax.text(2, 2.2, "Green arrow: CW rotation", color='green', fontsize=10)
++
++plt.tight_layout()
++plt.show()
+diff --git a/matplotlib/patches.py b/matplotlib/patches.py
+new file mode 100644
+index 0000000..60d9d60
+--- /dev/null
++++ b/matplotlib/patches.py
+@@ -0,0 +1,94 @@
++    def __init__(self, xy, width, height, angle=0.0, **kwargs):
++        """
++        Parameters
++        ----------
++        xy : (float, float)
++            The center of the ellipse.
++        width : float
++            The length of the horizontal axis.
++        height : float
++            The length of the vertical axis.
++        angle : float, default: 0
++            Rotation in degrees anti-clockwise.
++        **kwargs
++            `Patch` properties.
++        """
++        super().__init__(**kwargs)
++
++        self.center = xy
++        self.width = width
++        self.height = height
++        self.angle = angle
++        self._path = Path.unit_circle()
++
++    def get_vertices(self):
++        """
++        Return the coordinates of the vertices of the ellipse's major axis.
++
++        Returns
++        -------
++        vertices : (2, 2) array
++            The coordinates of the two vertices along the major axis.
++            The first row is the vertex in the positive direction along
++            the major axis, and the second row is the vertex in the
++            negative direction.
++        """
++        # Convert angle to radians
++        angle_rad = np.deg2rad(self.angle)
++        # Half-width and half-height
++        a = self.width / 2.
++        b = self.height / 2.
++        
++        # Major axis is along width if width >= height
++        if self.width >= self.height:
++            # Vertices are at (±a, 0) in the ellipse's coordinate system
++            vertices_local = np.array([[a, 0], [-a, 0]])
++        else:
++            # Vertices are at (0, ±b) in the ellipse's coordinate system
++            vertices_local = np.array([[0, b], [0, -b]])
++        
++        # Rotate and translate to get actual coordinates
++        rotation_matrix = np.array([
++            [np.cos(angle_rad), -np.sin(angle_rad)],
++            [np.sin(angle_rad), np.cos(angle_rad)]
++        ])
++        vertices_rotated = vertices_local @ rotation_matrix.T
++        vertices = vertices_rotated + self.center
++        
++        return vertices
++
++    def get_co_vertices(self):
++        """
++        Return the coordinates of the co-vertices of the ellipse's minor axis.
++
++        Returns
++        -------
++        co_vertices : (2, 2) array
++            The coordinates of the two co-vertices along the minor axis.
++            The first row is the co-vertex in the positive direction along
++            the minor axis, and the second row is the co-vertex in the
++            negative direction.
++        """
++        # Convert angle to radians
++        angle_rad = np.deg2rad(self.angle)
++        # Half-width and half-height
++        a = self.width / 2.
++        b = self.height / 2.
++        
++        # Co-vertices are on the minor axis
++        if self.width >= self.height:
++            # Co-vertices are at (0, ±b) in the ellipse's coordinate system
++            co_vertices_local = np.array([[0, b], [0, -b]])
++        else:
++            # Co-vertices are at (±a, 0) in the ellipse's coordinate system
++            co_vertices_local = np.array([[a, 0], [-a, 0]])
++        
++        # Rotate and translate to get actual coordinates
++        rotation_matrix = np.array([
++            [np.cos(angle_rad), -np.sin(angle_rad)],
++            [np.sin(angle_rad), np.cos(angle_rad)]
++        ])
++        co_vertices_rotated = co_vertices_local @ rotation_matrix.T
++        co_vertices = co_vertices_rotated + self.center
++        
++        return co_vertices

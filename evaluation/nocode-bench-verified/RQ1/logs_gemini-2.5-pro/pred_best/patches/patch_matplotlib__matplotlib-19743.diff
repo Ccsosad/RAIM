@@ -1,0 +1,96 @@
+diff --git a/lib/matplotlib/_constrained_layout.py b/lib/matplotlib/_constrained_layout.py
+index 8e41b90..f78d79a 100644
+--- a/lib/matplotlib/_constrained_layout.py
++++ b/lib/matplotlib/_constrained_layout.py
+@@ -120,6 +120,8 @@ def do_constrained_layout(fig, h_pad, w_pad,
+                             w_pad=w_pad, hspace=hspace, wspace=wspace)
+         make_margin_suptitles(layoutgrids, fig, renderer, h_pad=h_pad,
+                               w_pad=w_pad)
++        make_margin_legend(layoutgrids, fig, renderer, h_pad=h_pad,
++                           w_pad=w_pad)
+ 
+         # if a layout is such that a columns (or rows) margin has no
+         # constraints, we need to make all such instances in the grid
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index a9083df..c837a6f 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -487,7 +487,20 @@ class Legend(Artist):
+             loc = mpl.rcParams["legend.loc"]
+             if not self.isaxes and loc in [0, 'best']:
+                 loc = 'upper right'
+-        if isinstance(loc, str):
++        if isinstance(loc, str) and loc.startswith('outside'):
++            if self.isaxes:
++                raise ValueError(
++                    'The "outside" locations are only supported for '
++                    'figure legends.')
++            parts = loc.split()
++            if len(parts) != 3 or parts[0] != 'outside' or not (
++                    (parts[1] in ('upper', 'lower') and
++                     parts[2] in ('left', 'center', 'right')) or
++                    (parts[1] in ('left', 'right') and
++                     parts[2] in ('upper', 'center', 'lower'))):
++                raise ValueError(f'Invalid outside location "{loc}"')
++            # keep loc as string
++        elif isinstance(loc, str):
+             loc = _api.check_getitem(self.codes, loc=loc)
+         if not self.isaxes and loc == 0:
+             raise ValueError(
+@@ -653,6 +666,56 @@ class Legend(Artist):
+             x, y = self._get_anchored_bbox(self._loc, bbox,
+                                            self.get_bbox_to_anchor(),
+                                            renderer)
++        elif (isinstance(self._loc, str) and
++              self._loc.startswith('outside')):
++            # constrained_layout is supposed to make space for this legend.
++            # We just need to position it in the space created.
++            if (self.figure._layoutgrid is None or
++                    not self.figure.get_constrained_layout()):
++                _api.warn_external(f'Legend with loc={self._loc!r} requires '
++                                   'constrained_layout. The legend will be '
++                                   'ignored.')
++                # fall through to old behaviour of loc=(0, 0)
++                fx, fy = (0, 0)
++                bbox = self.get_bbox_to_anchor()
++                x, y = bbox.x0 + bbox.width * fx, bbox.y0 + bbox.height * fy
++            else:
++                # OK, CL is active, and we have a layout grid.
++                # The parent bbox is the area of the main gridspec.
++                parentbbox = self.figure._layoutgrid[
++                    self.figure].children[0].get_bbox()
++
++                pad = (self.borderaxespad *
++                       renderer.points_to_pixels(self._fontsize))
++
++                parts = self._loc.split()
++                edge = parts[1]
++                align = parts[2]
++
++                if edge in ('upper', 'lower'):
++                    if align == 'left':
++                        x = parentbbox.x0
++                    elif align == 'right':
++                        x = parentbbox.x1 - width
++                    else:  # center
++                        x = parentbbox.x0 + (parentbbox.width - width) / 2
++
++                    if edge == 'upper':
++                        y = parentbbox.y1 + pad
++                    else:  # lower
++                        y = parentbbox.y0 - height - pad
++                elif edge in ('left', 'right'):
++                    if align == 'upper':
++                        y = parentbbox.y1 - height
++                    elif align == 'lower':
++                        y = parentbbox.y0
++                    else:  # center
++                        y = parentbbox.y0 + (parentbbox.height - height) / 2
++
++                    if edge == 'right':
++                        x = parentbbox.x1 + pad
++                    else:  # left
++                        x = parentbbox.x0 - width - pad
+         else:  # Axes or figure coordinates.
+             fx, fy = self._loc
+             bbox = self.get_bbox_to_anchor()

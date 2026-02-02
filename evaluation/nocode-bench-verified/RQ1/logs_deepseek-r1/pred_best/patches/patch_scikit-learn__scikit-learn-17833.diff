@@ -1,0 +1,46 @@
+diff --git a/sklearn/preprocessing/_data.py b/sklearn/preprocessing/_data.py
+index b090a46..8b785b6 100644
+--- a/sklearn/preprocessing/_data.py
++++ b/sklearn/preprocessing/_data.py
+@@ -243,6 +243,10 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
+         Set to False to perform inplace row normalization and avoid a
+         copy (if the input is already a numpy array).
+ 
++    clip : bool, default=False
++        Set to True to clip transformed values of the test data to the
++        feature_range bounds.
++
+     Attributes
+     ----------
+     min_ : ndarray of shape (n_features,)
+@@ -311,9 +315,10 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
+     """
+ 
+     @_deprecate_positional_args
+-    def __init__(self, feature_range=(0, 1), *, copy=True):
++    def __init__(self, feature_range=(0, 1), *, copy=True, clip=False):
+         self.feature_range = feature_range
+         self.copy = copy
++        self.clip = clip
+ 
+     def _reset(self):
+         """Reset internal data-dependent state of the scaler, if necessary.
+@@ -418,7 +423,8 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
+         Returns
+         -------
+         Xt : ndarray of shape (n_samples, n_features)
+-            Transformed data.
++            Transformed data. If `clip` is set to True, the transformed values are
++            clipped to the bounds specified by `feature_range`.
+         """
+         check_is_fitted(self)
+ 
+@@ -427,6 +433,8 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
+ 
+         X *= self.scale_
+         X += self.min_
++        if self.clip:
++            np.clip(X, self.feature_range[0], self.feature_range[1], out=X)
+         return X
+ 
+     def inverse_transform(self, X):

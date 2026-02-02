@@ -1,0 +1,61 @@
+diff --git a/pylint/extensions/private_import.py b/pylint/extensions/private_import.py
+new file mode 100644
+index 0000000..225dd44
+--- /dev/null
++++ b/pylint/extensions/private_import.py
+@@ -0,0 +1,55 @@
++"""Checker for private imports."""
++from typing import TYPE_CHECKING, List
++
++if TYPE_CHECKING:
++    from pylint.lint import PyLinter
++
++import astroid
++from pylint import interfaces
++from pylint.checkers import BaseChecker
++
++
++class PrivateImportChecker(BaseChecker):
++    """Check for imports of private objects (prefixed with '_') from external modules."""
++
++    name = "private_import"
++    msgs = {
++        "W0002": (
++            "Import of private %s '%s' from external package",
++            "import-private-name",
++            "Used when a private object (prefixed with '_') is imported from an external package.",
++        )
++    }
++    options = ()
++
++    def visit_importfrom(self, node: astroid.ImportFrom) -> None:
++        """Check imports from external modules for private names."""
++        # If the module is None, it's a relative import.
++        if node.modname is None:
++            return
++        # Check each imported name.
++        for name, _ in node.names:
++            if name.startswith("_"):
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=("object", name),
++                    confidence=interfaces.HIGH,
++                )
++
++    def visit_import(self, node: astroid.Import) -> None:
++        """Check imports for private modules."""
++        for name, _ in node.names:
++            parts = name.split(".")
++            if parts[0].startswith("_"):
++                self.add_message(
++                    "import-private-name",
++                    node=node,
++                    args=("module", parts[0]),
++                    confidence=interfaces.HIGH,
++                )
++
++
++def register(linter: "PyLinter") -> None:
++    """Required method to auto-register this checker."""
++    linter.register_checker(PrivateImportChecker(linter))

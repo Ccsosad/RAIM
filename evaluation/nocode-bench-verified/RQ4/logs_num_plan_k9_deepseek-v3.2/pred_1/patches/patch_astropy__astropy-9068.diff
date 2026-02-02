@@ -1,0 +1,79 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..97ab62c 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -3024,6 +3024,74 @@ class Table:
+     def __ne__(self, other):
+         return ~self.__eq__(other)
+ 
++    def values_equal(self, other):
++        """
++        Compare table values element-wise to another table, array, or scalar.
++
++        Parameters
++        ----------
++        other : Table, array, or scalar
++            The object to compare with.
++
++        Returns
++        -------
++        result : Table
++            A table with the same column names and length as self, with boolean
++            values indicating element-wise equality.
++
++        Raises
++        ------
++        ValueError
++            If `other` is a Table with different column names.
++        """
++        from astropy.table import Table
++
++        if isinstance(other, Table):
++            # Check column names
++            if set(self.colnames) != set(other.colnames):
++                raise ValueError('cannot compare tables with different column names')
++            # Reorder columns of other to match self
++            other = other[self.colnames]
++            # Compare each column
++            data = {}
++            for name in self.colnames:
++                col_self = self[name]
++                col_other = other[name]
++                # Use element-wise equality, handling masks
++                if hasattr(col_self, 'mask') or hasattr(col_other, 'mask'):
++                    # Use np.ma.equal for masked arrays
++                    eq = np.ma.equal(col_self, col_other)
++                else:
++                    eq = col_self == col_other
++                data[name] = eq
++            return Table(data, names=self.colnames)
++        elif np.isscalar(other):
++            # Compare each column with the scalar
++            data = {}
++            for name in self.colnames:
++                col = self[name]
++                if hasattr(col, 'mask'):
++                    eq = np.ma.equal(col, other)
++                else:
++                    eq = col == other
++                data[name] = eq
++            return Table(data, names=self.colnames)
++        else:
++            # Assume other is an array-like that can be broadcast column-wise
++            # We require the length to match the number of columns
++            other = np.asarray(other)
++            if other.shape != (len(self.colnames),):
++                raise ValueError('For array comparison, length must match number of columns')
++            data = {}
++            for name, val in zip(self.colnames, other):
++                col = self[name]
++                if hasattr(col, 'mask'):
++                    eq = np.ma.equal(col, val)
++                else:
++                    eq = col == val
++                data[name] = eq
++            return Table(data, names=self.colnames)
++
+     @property
+     def groups(self):
+         if not hasattr(self, '_groups'):

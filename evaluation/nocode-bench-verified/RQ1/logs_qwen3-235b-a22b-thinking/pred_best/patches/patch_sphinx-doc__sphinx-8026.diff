@@ -1,0 +1,24 @@
+diff --git a/sphinx/environment/__init__.py b/sphinx/environment/__init__.py
+index 9ed8cac..50812bd 100644
+--- a/sphinx/environment/__init__.py
++++ b/sphinx/environment/__init__.py
+@@ -471,6 +471,13 @@ class BuildEnvironment:
+         """Returns the docname of the document currently being parsed."""
+         return self.temp_data['docname']
+ 
++    @property
++    def docpath(self) -> str:
++        """Returns the directory path component for the current document, with a trailing slash if non-empty."""
++        pathname = self.doc2path(self.docname, base=None)
++        dirname = path.dirname(pathname)
++        return f"{dirname}/" if dirname else ""
++
+     def new_serialno(self, category: str = '') -> int:
+         """Return a serial number, e.g. for index entry targets.
+ 
+@@ -656,4 +663,4 @@ class BuildEnvironment:
+                       RemovedInSphinx40Warning, stacklevel=2)
+         from sphinx.domains.index import IndexDomain
+         domain = cast(IndexDomain, self.get_domain('index'))
+-        domain.data['entries'] = entries
++        domain.data['entries'] = entries

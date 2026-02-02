@@ -1,0 +1,68 @@
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..176ef2f 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3692,7 +3692,8 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         ----------
+         *dims : Hashable, optional
+             By default, reverse the dimensions on each array. Otherwise,
+-            reorder the dimensions to this order.
++            reorder the dimensions to this order. An ellipsis (`...`) can be used
++            to represent all other dimensions.
+ 
+         Returns
+         -------
+@@ -3711,6 +3712,16 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         numpy.transpose
+         DataArray.transpose
+         """
++        # Expand ellipsis in dims
++        if ... in dims:
++            if dims.count(...) > 1:
++                raise ValueError("Only one ellipsis may be used.")
++            # Replace ... with the remaining dimensions in order
++            ellipsis_index = dims.index(...)
++            used_dims = [d for d in dims if d is not ...]
++            remaining_dims = [d for d in self.dims if d not in used_dims]
++            dims = dims[:ellipsis_index] + tuple(remaining_dims) + dims[ellipsis_index+1:]
++
+         if dims:
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+@@ -5449,4 +5460,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index 873be99..76e4eae 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -1209,7 +1209,8 @@ class Variable(
+         ----------
+         *dims : str, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. An ellipsis (`...`) can be used to
++            represent all other dimensions.
+ 
+         Returns
+         -------
+@@ -1226,6 +1227,16 @@ class Variable(
+         --------
+         numpy.transpose
+         """
++        # Expand ellipsis in dims
++        if ... in dims:
++            if dims.count(...) > 1:
++                raise ValueError("Only one ellipsis may be used.")
++            # Replace ... with the remaining dimensions in order
++            ellipsis_index = dims.index(...)
++            used_dims = [d for d in dims if d is not ...]
++            remaining_dims = [d for d in self.dims if d not in used_dims]
++            dims = dims[:ellipsis_index] + tuple(remaining_dims) + dims[ellipsis_index+1:]
++
+         if len(dims) == 0:
+             dims = self.dims[::-1]
+         axes = self.get_axis_num(dims)

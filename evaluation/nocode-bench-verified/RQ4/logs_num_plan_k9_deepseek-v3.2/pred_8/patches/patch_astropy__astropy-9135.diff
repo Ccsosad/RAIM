@@ -1,0 +1,63 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..9a1322b 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -1,3 +1,4 @@
++
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+ """
+@@ -2283,7 +2284,7 @@ BINARY_OPERATORS = {
+     '&': _join_operator
+ }
+ 
+-SPECIAL_OPERATORS = {}
++SPECIAL_OPERATORS = {'fix_inputs': None}
+ 
+ 
+ def _add_special_operator(sop_name, sop):
+@@ -2505,6 +2506,44 @@ class CompoundModel(Model):
+                 return self.right(leftval, **kw)
+         elif op in SPECIAL_OPERATORS:
+             return binary_operation(SPECIAL_OPERATORS[op], leftval, rightval)
++        elif op == 'fix_inputs':
++            # We need to insert the fixed values into the arguments
++            # The args are for the reduced set of inputs.
++            # We need to expand them to the full set by inserting the fixed values.
++            # First, convert the fixed inputs dictionary to a list in the correct order.
++            fixed = self._fixed_inputs
++            # We have the original model's input order.
++            # We need to build a list of values for all inputs.
++            full_args = []
++            arg_index = 0
++            for i in range(self.left.n_inputs):
++                if i in self._fixed_inputs_indices:
++                    # This input is fixed, so use the constant value.
++                    # But note: the fixed dictionary might use names or indices.
++                    # We have already converted to indices in __init__.
++                    # So we can use the index to get the value.
++                    # However, the fixed dictionary might have keys as strings.
++                    # So we need to map back.
++                    # We stored the fixed inputs in self._fixed_inputs as given.
++                    # So we need to find the key that corresponds to this index.
++                    key = None
++                    for k in fixed:
++                        if isinstance(k, int) and k == i:
++                            key = k
++                            break
++                        elif isinstance(k, str) and self.left.inputs[i] == k:
++                            key = k
++                            break
++                    if key is None:
++                        # This should not happen.
++                        raise RuntimeError("Internal error in fix_inputs.")
++                    full_args.append(fixed[key])
++                else:
++                    # This input is from the passed arguments.
++                    full_args.append(args[arg_index])
++                    arg_index += 1
++            # Now call the left model with the full arguments.
++            return self.left(*full_args, **kw)
+         else:
+             raise ModelDefinitionError('Unrecognized operator {op}')
+ 

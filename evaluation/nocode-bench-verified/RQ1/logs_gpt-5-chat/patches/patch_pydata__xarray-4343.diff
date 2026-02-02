@@ -1,0 +1,71 @@
+diff --git a/xarray/coding/cftime_offsets.py b/xarray/coding/cftime_offsets.py
+index 6b399c1..ab1e98b 100644
+--- a/xarray/coding/cftime_offsets.py
++++ b/xarray/coding/cftime_offsets.py
+@@ -961,10 +961,16 @@ def cftime_range(
+             "must be specified at a time."
+         )
+ 
++    from .cftime_parsing_utils import parse_iso8601_like
++
+     if start is not None:
++        if isinstance(start, str):
++            start = parse_iso8601_like(start, calendar)
+         start = to_cftime_datetime(start, calendar)
+         start = _maybe_normalize_date(start, normalize)
+     if end is not None:
++        if isinstance(end, str):
++            end = parse_iso8601_like(end, calendar)
+         end = to_cftime_datetime(end, calendar)
+         end = _maybe_normalize_date(end, normalize)
+ 
+@@ -992,4 +998,4 @@ def cftime_range(
+     if not right_closed and len(dates) and end is not None and dates[-1] == end:
+         dates = dates[:-1]
+ 
+-    return CFTimeIndex(dates, name=name)
++    return CFTimeIndex(dates, name=name)
+diff --git a/xarray/coding/cftime_parsing_utils.py b/xarray/coding/cftime_parsing_utils.py
+new file mode 100644
+index 0000000..97e60f8
+--- /dev/null
++++ b/xarray/coding/cftime_parsing_utils.py
+@@ -0,0 +1,38 @@
++import re
++import cftime
++
++def parse_iso8601_like(date_str, calendar="standard"):
++    """
++    Parse a date string in either basic ISO 8601, extended ISO 8601,
++    or default cftime datetime string format (YYYY-MM-DD hh:mm:ss)
++    into a cftime datetime object according to the given calendar.
++    """
++    iso_basic = re.compile(r"^\d{4}(\d{2}(\d{2}(\d{2}(\d{2}(\d{2})?)?)?)?)?$")
++    iso_extended = re.compile(
++        r"^\d{4}(-\d{2}(-\d{2}(T\d{2}(:\d{2}(:\d{2})?)?)?)?)?$"
++    )
++    cftime_default = re.compile(
++        r"^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$"
++    )
++    if not (iso_basic.match(date_str) or iso_extended.match(date_str) or cftime_default.match(date_str)):
++        return date_str  # Not matching known patterns, let existing logic handle or raise
++
++    try:
++        parts = re.split(r"[T:\-\s]", date_str)
++        parts = [p for p in parts if p]  # remove empty strings
++        parts_int = list(map(int, parts))
++    except Exception:
++        return date_str
++
++    while len(parts_int) < 6:
++        parts_int.append(0)
++
++    try:
++        dt_class = cftime.DatetimeGregorian  # default
++        for name, cls in cftime.__dict__.items():
++            if name.lower() == f"datetime{calendar}".lower():
++                dt_class = cls
++                break
++        return dt_class(*parts_int)
++    except Exception:
++        return date_str

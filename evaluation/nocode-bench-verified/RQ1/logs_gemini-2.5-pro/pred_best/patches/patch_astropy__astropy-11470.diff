@@ -1,0 +1,66 @@
+diff --git a/astropy/coordinates/representation.py b/astropy/coordinates/representation.py
+index 9a27812..edbe40a 100644
+--- a/astropy/coordinates/representation.py
++++ b/astropy/coordinates/representation.py
+@@ -1040,6 +1040,9 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+     def _scale_operation(self, op, *args):
+         """Scale all non-angular components, leaving angular ones unchanged.
+ 
++        If the representation has differentials, the scaling is done by
++        transforming to cartesian, scaling, and transforming back.
++
+         Parameters
+         ----------
+         op : `~operator` callable
+@@ -1048,8 +1051,29 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             Any arguments required for the operator (typically, what is to
+             be multiplied with, divided by).
+         """
++        if self.differentials:
++            # For non-cartesian, transform, operate, transform back.
++            if not isinstance(self, (CartesianRepresentation, RadialRepresentation)):
++                d_classes = {key: CartesianDifferential for key in self.differentials}
++                cart = self.represent_as(CartesianRepresentation,
++                                         differential_class=d_classes)
+ 
+-        self._raise_if_has_differentials(op.__name__)
++                scaled_cart = cart._scale_operation(op, *args)
++                if scaled_cart is NotImplemented:
++                    return NotImplemented
++
++                back_d_classes = {key: d.__class__
++                                  for key, d in self.differentials.items()}
++
++                # UnitSphericalRepresentation is special, as it cannot be scaled.
++                if isinstance(self, UnitSphericalRepresentation):
++                    if op is not operator.neg:
++                        return scaled_cart.represent_as(SphericalRepresentation,
++                                                        back_d_classes)
++
++                return scaled_cart.represent_as(self.__class__, back_d_classes)
++
++            # For cartesian (and radial), fall through to normal scaling.
+ 
+         results = []
+         for component, cls in self.attr_classes.items():
+@@ -1059,11 +1083,19 @@ class BaseRepresentation(BaseRepresentationOrDifferential):
+             else:
+                 results.append(op(value, *args))
+ 
++        # For representations with differentials, we need to scale them too.
++        # This is only for Cartesian/Radial, since others are handled above.
++        new_diffs = {key: diff._scale_operation(op, *args)
++                     for key, diff in self.differentials.items()}
++
+         # try/except catches anything that cannot initialize the class, such
+         # as operations that returned NotImplemented or a representation
+         # instead of a quantity (as would happen for, e.g., rep * rep).
+         try:
+-            return self.__class__(*results)
++            if new_diffs:
++                return self.__class__(*results, differentials=new_diffs, copy=False)
++            else:
++                return self.__class__(*results, copy=False)
+         except Exception:
+             return NotImplemented
+ 

@@ -1,0 +1,27 @@
+diff --git a/sphinx/builders/latex/__init__.py b/sphinx/builders/latex/__init__.py
+index 1c44ce3..58331cf 100644
+--- a/sphinx/builders/latex/__init__.py
++++ b/sphinx/builders/latex/__init__.py
+@@ -168,6 +168,10 @@ class LaTeXBuilder(Builder):
+     def init_context(self) -> None:
+         self.context = DEFAULT_SETTINGS.copy()
+ 
++        # Add default for extrapackages if not present
++        if 'extrapackages' not in self.context:
++            self.context['extrapackages'] = ''
++
+         # Add special settings for latex_engine
+         self.context.update(ADDITIONAL_SETTINGS.get(self.config.latex_engine, {}))
+ 
+@@ -405,8 +409,10 @@ class LaTeXBuilder(Builder):
+ 
+ 
+ def validate_config_values(app: Sphinx, config: Config) -> None:
++    # Known keys in latex_elements, including the new 'extrapackages'
++    known_keys = set(DEFAULT_SETTINGS.keys()) | {'extrapackages'}
+     for key in list(config.latex_elements):
+-        if key not in DEFAULT_SETTINGS:
++        if key not in known_keys:
+             msg = __("Unknown configure key: latex_elements[%r]. ignored.")
+             logger.warning(msg % (key,))
+             config.latex_elements.pop(key)

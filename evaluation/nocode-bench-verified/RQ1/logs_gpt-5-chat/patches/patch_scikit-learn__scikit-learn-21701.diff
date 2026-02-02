@@ -1,0 +1,62 @@
+diff --git a/sklearn/random_projection.py b/sklearn/random_projection.py
+index d06dfcd..ff93d05 100644
+--- a/sklearn/random_projection.py
++++ b/sklearn/random_projection.py
+@@ -399,8 +399,29 @@ class BaseRandomProjection(
+             " not the proper shape."
+         )
+ 
++        # Compute pseudo-inverse if requested
++        if getattr(self, "compute_inverse_components", False):
++            self.inverse_components_ = np.linalg.pinv(
++                self.components_.toarray() if sp.issparse(self.components_) else self.components_
++            )
++
+         return self
+ 
++    def inverse_transform(self, X):
++        """Reconstruct the data from its random projection."""
++        check_is_fitted(self)
++        X = self._validate_data(
++            X, accept_sparse=["csr", "csc"], reset=False, dtype=[np.float64, np.float32]
++        )
++        if hasattr(self, "inverse_components_"):
++            inverse = self.inverse_components_
++        else:
++            inverse = np.linalg.pinv(
++                self.components_.toarray() if sp.issparse(self.components_) else self.components_
++            )
++        X_inv = safe_sparse_dot(X, inverse.T, dense_output=True)
++        return X_inv
++
+     def transform(self, X):
+         """Project the data by using matrix product with the random matrix.
+ 
+diff --git a/sklearn/random_projection_inverse_mixin.py b/sklearn/random_projection_inverse_mixin.py
+new file mode 100644
+index 0000000..9c68566
+--- /dev/null
++++ b/sklearn/random_projection_inverse_mixin.py
+@@ -0,0 +1,22 @@
++"""Mixin providing inverse transform capabilities for random projection transformers."""
++
++import numpy as np
++import scipy.sparse as sp
++from sklearn.utils.extmath import safe_sparse_dot
++from sklearn.utils.validation import check_is_fitted
++
++class RandomProjectionInverseMixin:
++    def _compute_inverse_components(self):
++        mat = self.components_
++        if sp.issparse(mat):
++            mat = mat.toarray()
++        return np.linalg.pinv(mat)
++
++    def inverse_transform(self, X):
++        """Inverse-transform the data using the pseudo-inverse of components."""
++        check_is_fitted(self)
++        if hasattr(self, "inverse_components_"):
++            inverse = self.inverse_components_
++        else:
++            inverse = self._compute_inverse_components()
++        return safe_sparse_dot(X, inverse.T, dense_output=True)

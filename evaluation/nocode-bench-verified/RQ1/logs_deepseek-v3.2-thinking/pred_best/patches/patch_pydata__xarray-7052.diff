@@ -1,0 +1,44 @@
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..8ef8b57 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -347,7 +347,7 @@ class FacetGrid:
+         return self
+ 
+     def map_plot1d(
+-        self, func: Callable, x: Hashable, y: Hashable, **kwargs: Any
++        self, *, func: Callable, x: Hashable, y: Hashable, **kwargs: Any
+     ) -> Self:
+         """
+         Apply a plotting function to a 1d facet's subset of the data.
+@@ -944,6 +944,7 @@ def _easy_facetgrid(
+     data: DataArray,
+     plotfunc: Callable,
+     kind: Literal["line", "dataarray", "dataset", "plot1d"],
++    *,
+     x: Hashable | None = None,
+     y: Hashable | None = None,
+     row: Hashable | None = None,
+@@ -990,15 +991,17 @@ def _easy_facetgrid(
+     )
+ 
+     if kind == "line":
+-        return g.map_dataarray_line(plotfunc, x, y, **kwargs)
++        return g.map_dataarray_line(func=plotfunc, x=x, y=y, **kwargs)
+ 
+     if kind == "dataarray":
+-        return g.map_dataarray(plotfunc, x, y, **kwargs)
++        return g.map_dataarray(func=plotfunc, x=x, y=y, **kwargs)
+ 
+     if kind == "plot1d":
+-        return g.map_plot1d(plotfunc, x, y, **kwargs)
++        return g.map_plot1d(func=plotfunc, x=x, y=y, **kwargs)
+ 
+     if kind == "dataset":
+-        return g.map_dataset(plotfunc, x, y, **kwargs)
++        return g.map_dataset(func=plotfunc, x=x, y=y, **kwargs)
+ 
+-    raise ValueError(f"kind must be one of `line`, `dataarray`, `dataset`, got {kind}")
++    raise ValueError(
++        f"kind must be one of `line`, `dataarray`, `dataset`, `plot1d`, got {kind}"
++    )

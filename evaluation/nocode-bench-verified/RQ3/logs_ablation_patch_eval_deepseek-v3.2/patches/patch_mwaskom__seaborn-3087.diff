@@ -1,0 +1,25 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index b0a0822..f4cf0b5 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -613,10 +613,20 @@ class Continuous(ContinuousBase):
+     def _get_formatter(self, locator, formatter, like, base, unit):
+ 
+         log_base, symlog_thresh = self._parse_for_log_params(self.trans)
++        # If base is None and there is no log transform, we want to allow
++        # the user to override with a log formatter by setting base=None.
+         if base is None:
+             if symlog_thresh:
+                 log_base = 10
+             base = log_base
++        # If base is still None, it means there is no log transform and
++        # the user passed base=None. We interpret that as base=10 for the log formatter.
++        if base is None:
++            base = 10
++        # If base is still None, it means there is no log transform and
++        # the user passed base=None. We interpret that as base=10 for the log formatter.
++        if base is None:
++            base = 10
+ 
+         if formatter is not None:
+             return formatter

@@ -1,0 +1,66 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 17fe6af..bcbe1fd 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1,3 +1,4 @@
++
+ import datetime
+ import functools
+ import warnings
+@@ -3788,6 +3789,56 @@ class DataArray(AbstractArray, DataWithCoords):
+             dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov
+         )
+ 
++    def curvefit(
++        self,
++        coords,
++        func,
++        reduce_dims=None,
++        param_names=None,
++        bounds=None,
++        **kwargs,
++    ):
++        """
++        Curve fitting using `scipy.optimize.curve_fit`.
++
++        Parameters
++        ----------
++        coords : str, list of str, or DataArray
++            Independent variable(s) for the curve fitting. If a string or list of strings,
++            they are used as coordinate names to extract the data. If a DataArray, its data
++            is used directly.
++        func : callable
++            The model function to fit. It must take the independent variable as the first
++            argument and the parameters to fit as separate remaining arguments.
++        reduce_dims : str or list of str, optional
++            Dimensions to reduce by fitting over. If None, fit over all dimensions.
++        param_names : list of str, optional
++            Names of the parameters. If not provided, they are inferred from the function
++            signature or generated as 'param0', 'param1', etc.
++        bounds : dict, optional
++            Bounds for the parameters. The keys should be parameter names and the values
++            should be tuples of (lower, upper).
++        **kwargs : dict
++            Additional keyword arguments passed to `scipy.optimize.curve_fit`.
++
++        Returns
++        -------
++        fit_results : Dataset
++            A dataset containing the fitted parameters and their covariance.
++
++        See Also
++        --------
++        scipy.optimize.curve_fit
++        """
++        return self._to_temp_dataset().curvefit(
++            coords=coords,
++            func=func,
++            reduce_dims=reduce_dims,
++            param_names=param_names,
++            bounds=bounds,
++            **kwargs,
++        )
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,

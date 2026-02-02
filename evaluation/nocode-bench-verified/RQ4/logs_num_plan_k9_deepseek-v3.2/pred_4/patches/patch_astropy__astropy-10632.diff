@@ -1,0 +1,35 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..a21bcf3 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -62,6 +62,9 @@ class Conf(_config.ConfigNamespace):
+     dataurl_mirror = _config.ConfigItem(
+         'http://www.astropy.org/astropy-data/',
+         'Mirror URL for astropy remote data site.')
++    allow_internet = _config.ConfigItem(
++        True,
++        'If False, prevent any attempt to download files from the internet.')
+     default_http_user_agent = _config.ConfigItem(
+         'astropy',
+         'Default User-Agent for HTTP request headers. This can be overwritten '
+@@ -999,7 +1002,7 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+         raise urllib.error.URLError(
+             f"URL {remote_url} was supposed to be downloaded but timeout was set to 0; "
+             f"if this is unexpected check the astropy config file for the option "
+-            f"remote_timeout")
++            f"remote_timeout or allow_internet")
+ 
+     if remote_url is None:
+         remote_url = source_url
+@@ -1166,7 +1169,10 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+     """
+     if timeout is None:
+         timeout = conf.remote_timeout
+-    if sources is None:
++    if not conf.allow_internet:
++        # If internet is not allowed, we should not try any sources.
++        sources = []
++    elif sources is None:
+         sources = [remote_url]
+     if http_headers is None:
+         http_headers = {'User-Agent': conf.default_http_user_agent,

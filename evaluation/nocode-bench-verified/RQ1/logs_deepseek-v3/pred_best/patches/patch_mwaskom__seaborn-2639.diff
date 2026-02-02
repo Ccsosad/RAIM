@@ -1,0 +1,44 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index e4033e0..ff1ff3b 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -993,6 +993,17 @@ class FacetGrid(Grid):
+ 
+     @property
+     def fig(self):
++        """The :class:`matplotlib.figure.Figure` with the plot."""
++        warnings.warn(
++            "The `fig` attribute is deprecated and will be removed in a future version. "
++            "Please use the `figure` attribute instead.",
++            FutureWarning,
++            stacklevel=2
++        )
++        return self._fig
++
++    @property
++    def figure(self):
+         """The :class:`matplotlib.figure.Figure` with the plot."""
+         return self._fig
+ 
+@@ -1233,7 +1244,9 @@ class PairGrid(Grid):
+                 axes[i, j].remove()
+                 axes[i, j] = None
+ 
+-        self.fig = fig
++        self._fig = fig
++        self.fig = fig  # deprecated
++        self.figure = fig
+         self.axes = axes
+         self.data = data
+ 
+@@ -1650,7 +1663,9 @@ class JointGrid(object):
+         ax_marg_x = f.add_subplot(gs[0, :-1], sharex=ax_joint)
+         ax_marg_y = f.add_subplot(gs[1:, -1], sharey=ax_joint)
+ 
+-        self.fig = f
++        self._fig = f
++        self.fig = f  # deprecated
++        self.figure = f
+         self.ax_joint = ax_joint
+         self.ax_marg_x = ax_marg_x
+         self.ax_marg_y = ax_marg_y

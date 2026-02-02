@@ -1,0 +1,42 @@
+diff --git a/django/db/models/expressions.py b/django/db/models/expressions.py
+index bf6e882..b944d2a 100644
+--- a/django/db/models/expressions.py
++++ b/django/db/models/expressions.py
+@@ -340,6 +340,37 @@ class BaseExpression(object):
+         return self
+ 
+ 
++class ExpressionWrapper(Expression):
++    """
++    An expression that wraps another expression, providing access to properties
++    such as output_field that may not be available on other expressions.
++    """
++    def __init__(self, expression, output_field):
++        super(ExpressionWrapper, self).__init__(output_field=output_field)
++        self.expression = expression
++
++    def __repr__(self):
++        return "<{}: {}>".format(self.__class__.__name__, self)
++
++    def __str__(self):
++        return str(self.expression)
++
++    def get_source_expressions(self):
++        return [self.expression]
++
++    def set_source_expressions(self, exprs):
++        self.expression = exprs[0]
++
++    def as_sql(self, compiler, connection):
++        return self.expression.as_sql(compiler, connection)
++
++    def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
++        c = self.copy()
++        c.is_summary = summarize
++        c.expression = c.expression.resolve_expression(query, allow_joins, reuse, summarize, for_save)
++        return c
++
++
+ class Expression(BaseExpression, Combinable):
+     """
+     An expression that can be combined with other expressions.

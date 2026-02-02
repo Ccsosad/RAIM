@@ -1,0 +1,31 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..8477132 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -91,7 +91,17 @@ def build_pattern(date_sep=r"\-", datetime_sep=r"T", time_sep=r"\:"):
+ 
+ _BASIC_PATTERN = build_pattern(date_sep="", time_sep="")
+ _EXTENDED_PATTERN = build_pattern()
++_CFTIME_DEFAULT_PATTERN = build_pattern(datetime_sep=r"\s")
+ _PATTERNS = [_BASIC_PATTERN, _EXTENDED_PATTERN]
++_PATTERNS_LIKE = [_BASIC_PATTERN, _EXTENDED_PATTERN, _CFTIME_DEFAULT_PATTERN]
++
++
++def parse_iso8601_like(datetime_string):
++    for pattern in _PATTERNS_LIKE:
++        match = re.match(pattern, datetime_string)
++        if match:
++            return match.groupdict()
++    raise ValueError("no ISO-8601 or cftime default format match for string: %s" % datetime_string)
+ 
+ 
+ def parse_iso8601(datetime_string):
+@@ -106,7 +116,7 @@ def _parse_iso8601_with_reso(date_type, timestr):
+     import cftime
+ 
+     default = date_type(1, 1, 1)
+-    result = parse_iso8601(timestr)
++    result = parse_iso8601_like(timestr)
+     replace = {}
+ 
+     for attr in ["year", "month", "day", "hour", "minute", "second"]:

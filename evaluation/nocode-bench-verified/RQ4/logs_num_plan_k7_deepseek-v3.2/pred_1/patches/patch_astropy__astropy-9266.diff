@@ -1,0 +1,70 @@
+diff --git a/astropy/visualization/wcsaxes/wcsapi.py b/astropy/visualization/wcsaxes/wcsapi.py
+index 18817a1..4906b05 100644
+--- a/astropy/visualization/wcsaxes/wcsapi.py
++++ b/astropy/visualization/wcsaxes/wcsapi.py
+@@ -33,10 +33,11 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+             raise ValueError("'slices' should have as many elements as WCS "
+                              "has pixel dimensions (should be {})"
+                              .format(wcs.pixel_n_dim))
+-    elif wcs.pixel_n_dim < 2:
+-        raise ValueError("WCS should have at least 2 pixel dimensions")
+-    elif slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
+-        raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    elif wcs.pixel_n_dim == 2:
++        if slices is not None and slices != ('x', 'y') and slices != ('y', 'x'):
++            raise ValueError("WCS only has 2 pixel dimensions and cannot be sliced")
++    elif wcs.pixel_n_dim < 1:
++        raise ValueError("WCS should have at least 1 pixel dimension")
+ 
+     is_fits_wcs = isinstance(wcs, WCS)
+ 
+@@ -143,21 +144,34 @@ def transform_coord_meta_from_wcs(wcs, frame_class, slices=None):
+ 
+     if frame_class is RectangularFrame:
+ 
+-        for i, spine_name in enumerate('bltr'):
+-            pos = np.nonzero(m[:, i % 2])[0]
+-            if len(pos) > 0:
+-                index = world_keep[pos[0]]
+-                coord_meta['default_axislabel_position'][index] = spine_name
+-                coord_meta['default_ticklabel_position'][index] = spine_name
+-                coord_meta['default_ticks_position'][index] = spine_name
+-                m[pos[0], :] = 0
+-
+-        # In the special and common case where the frame is rectangular and
+-        # we are dealing with 2-d WCS (after slicing), we show all ticks on
+-        # all axes for backward-compatibility.
+-        if len(world_keep) == 2:
+-            for index in world_keep:
+-                coord_meta['default_ticks_position'][index] = 'bltr'
++        if wcs.pixel_n_dim == 2:
++            for i, spine_name in enumerate('bltr'):
++                pos = np.nonzero(m[:, i % 2])[0]
++                if len(pos) > 0:
++                    index = world_keep[pos[0]]
++                    coord_meta['default_axislabel_position'][index] = spine_name
++                    coord_meta['default_ticklabel_position'][index] = spine_name
++                    coord_meta['default_ticks_position'][index] = spine_name
++                    m[pos[0], :] = 0
++
++            # In the special and common case where the frame is rectangular and
++            # we are dealing with 2-d WCS (after slicing), we show all ticks on
++            # all axes for backward-compatibility.
++            if len(world_keep) == 2:
++                for index in world_keep:
++                    coord_meta['default_ticks_position'][index] = 'bltr'
++        elif wcs.pixel_n_dim == 1:
++            # For 1D plots, we put the first coordinate on the bottom spine
++            # and the second on the top spine, etc.
++            # We have only one pixel axis, so we use the first column of m.
++            for i in range(m.shape[0]):
++                if m[i, 0]:
++                    index = world_keep[i]
++                    # Alternate between bottom and top for each coordinate
++                    spine_name = 'b' if i % 2 == 0 else 't'
++                    coord_meta['default_axislabel_position'][index] = spine_name
++                    coord_meta['default_ticklabel_position'][index] = spine_name
++                    coord_meta['default_ticks_position'][index] = spine_name
+ 
+     elif frame_class is EllipticalFrame:
+ 

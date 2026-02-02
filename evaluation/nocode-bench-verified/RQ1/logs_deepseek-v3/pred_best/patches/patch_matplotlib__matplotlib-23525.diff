@@ -1,0 +1,27 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 677b319..3f9d29e 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -2334,6 +2334,13 @@ class Axes(_AxesBase):
+         log = kwargs.pop('log', False)
+         label = kwargs.pop('label', '')
+         tick_labels = kwargs.pop('tick_label', None)
++        
++        # Handle case where label is a sequence (one label per bar)
++        if np.iterable(label) and not isinstance(label, str):
++            bar_labels = label
++            label = '_nolegend_'  # Prevent legend entry for container
++        else:
++            bar_labels = None
+ 
+         y = bottom  # Matches barh call signature.
+         if orientation == 'vertical':
+@@ -2427,7 +2434,7 @@ class Axes(_AxesBase):
+                 facecolor=c,
+                 edgecolor=e,
+                 linewidth=lw,
+-                label='_nolegend_',
++                label=bar_labels[i] if bar_labels is not None else '_nolegend_',
+                 hatch=htch,
+                 )
+             r._internal_update(kwargs)

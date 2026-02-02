@@ -1,0 +1,137 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index e6fae2b..f3897f1 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4656,6 +4656,60 @@ class DataArray(AbstractArray, DataWithCoords, DataArrayArithmetic):
+         indexes = {dim: ~self.get_index(dim).duplicated(keep=keep)}
+         return self.isel(indexes)
+ 
++    def convert_calendar(self, calendar, align_on=None, missing=None, use_cftime=None):
++        """Convert a DataArray with a non-standard calendar to a different calendar.
++
++        Parameters
++        ----------
++        calendar : str
++            The target calendar name.
++        align_on : {None, 'date', 'year', 'random'}, optional
++            How to align the dates when converting between calendars. See
++            :py:func:`xarray.coding.calendar_ops.convert_calendar` for details.
++        missing : {None, 'nan', 'raise', 'skip', 'fill'}, optional
++            How to handle dates that are missing in the target calendar. See
++            :py:func:`xarray.coding.calendar_ops.convert_calendar` for details.
++        use_cftime : bool, optional
++            Whether to use cftime objects in the output. If None (default), infer from
++            the input.
++
++        Returns
++        -------
++        DataArray
++            DataArray with converted calendar.
++
++        See Also
++        --------
++        Dataset.convert_calendar
++        """
++        from .coding.calendar_ops import convert_calendar
++
++        return convert_calendar(self, calendar, align_on, missing, use_cftime)
++
++    def interp_calendar(self, target, use_cftime=None):
++        """Interpolates a DataArray with a non-standard calendar onto another calendar.
++
++        Parameters
++        ----------
++        target : DataArray or Dataset
++            The target calendar dates to interpolate to.
++        use_cftime : bool, optional
++            Whether to use cftime objects in the output. If None (default), infer from
++            the input.
++
++        Returns
++        -------
++        DataArray
++            DataArray interpolated to the target calendar.
++
++        See Also
++        --------
++        Dataset.interp_calendar
++        """
++        from .coding.calendar_ops import interp_calendar
++
++        return interp_calendar(self, target, use_cftime)
++
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor)
++    str = utils.UncachedAccessor(StringAccessor)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 0054d15..8c3d3d1 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -7557,6 +7557,60 @@ class Dataset(DataWithCoords, DatasetArithmetic, Mapping):
+         # apply the selection
+         return self.isel(indexers, missing_dims=missing_dims)
+ 
++    def convert_calendar(self, calendar, align_on=None, missing=None, use_cftime=None):
++        """Convert a Dataset with a non-standard calendar to a different calendar.
++
++        Parameters
++        ----------
++        calendar : str
++            The target calendar name.
++        align_on : {None, 'date', 'year', 'random'}, optional
++            How to align the dates when converting between calendars. See
++            :py:func:`xarray.coding.calendar_ops.convert_calendar` for details.
++        missing : {None, 'nan', 'raise', 'skip', 'fill'}, optional
++            How to handle dates that are missing in the target calendar. See
++            :py:func:`xarray.coding.calendar_ops.convert_calendar` for details.
++        use_cftime : bool, optional
++            Whether to use cftime objects in the output. If None (default), infer from
++            the input.
++
++        Returns
++        -------
++        Dataset
++            Dataset with converted calendar.
++
++        See Also
++        --------
++        DataArray.convert_calendar
++        """
++        from .coding.calendar_ops import convert_calendar
++
++        return convert_calendar(self, calendar, align_on, missing, use_cftime)
++
++    def interp_calendar(self, target, use_cftime=None):
++        """Interpolates a Dataset with a non-standard calendar onto another calendar.
++
++        Parameters
++        ----------
++        target : DataArray or Dataset
++            The target calendar dates to interpolate to.
++        use_cftime : bool, optional
++            Whether to use cftime objects in the output. If None (default), infer from
++            the input.
++
++        Returns
++        -------
++        Dataset
++            Dataset interpolated to the target calendar.
++
++        See Also
++        --------
++        DataArray.interp_calendar
++        """
++        from .coding.calendar_ops import interp_calendar
++
++        return interp_calendar(self, target, use_cftime)
++
+     def curvefit(
+         self,
+         coords: Union[Union[str, "DataArray"], Iterable[Union[str, "DataArray"]]],
+@@ -7730,4 +7784,4 @@ class Dataset(DataWithCoords, DatasetArithmetic, Mapping):
+         )
+         result.attrs = self.attrs.copy()
+ 
+-        return result
++        return result

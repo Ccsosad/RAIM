@@ -1,0 +1,46 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..5cfff14 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -90,6 +90,10 @@ class Conf(_config.ConfigNamespace):
+         True,
+         'If True, temporary download files created when the cache is '
+         'inaccessible will be deleted at the end of the python session.')
++    allow_internet = _config.ConfigItem(
++        True,
++        'If True, allow downloading files from the internet. If False, '
++        'any attempt to download a file will raise an error.')
+ 
+ 
+ conf = Conf()
+@@ -995,11 +999,11 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+                                http_headers=None, ftp_tls=None):
+     from astropy.utils.console import ProgressBarOrSpinner
+ 
+-    if timeout == 0:
++    if not conf.allow_internet:
+         raise urllib.error.URLError(
+-            f"URL {remote_url} was supposed to be downloaded but timeout was set to 0; "
++            f"URL {remote_url} was supposed to be downloaded but allow_internet is False; "
+             f"if this is unexpected check the astropy config file for the option "
+-            f"remote_timeout")
++            f"allow_internet")
+ 
+     if remote_url is None:
+         remote_url = source_url
+@@ -1166,6 +1170,15 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+     """
+     if timeout is None:
+         timeout = conf.remote_timeout
++    if not conf.allow_internet and sources:
++        # If internet is not allowed, we should only use cached files
++        # Filter out any remote sources (URLs that are not file://)
++        filtered_sources = []
++        for src in sources:
++            parsed = urllib.parse.urlparse(src)
++            if parsed.scheme == 'file':
++                filtered_sources.append(src)
++        sources = filtered_sources
+     if sources is None:
+         sources = [remote_url]
+     if http_headers is None:

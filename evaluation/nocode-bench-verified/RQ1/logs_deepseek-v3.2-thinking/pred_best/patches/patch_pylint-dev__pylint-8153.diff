@@ -1,0 +1,70 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..efc39f0 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -67,6 +67,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -74,6 +75,15 @@ def expand_modules(
+     result: dict[str, ModuleDescriptionDict] = {}
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
++    
++    # Add source roots to the search path to help with implicit namespace packages
++    if source_roots:
++        augmented_sys_path = []
++        for root in source_roots:
++            root_path = os.path.abspath(root)
++            if root_path not in path:
++                augmented_sys_path.append(root_path)
++        path = augmented_sys_path + path
+ 
+     for something in files_or_modules:
+         basename = os.path.basename(something)
+@@ -82,10 +92,16 @@ def expand_modules(
+         ):
+             continue
+         module_path = get_python_path(something)
+-        additional_search_path = [".", module_path] + path
++        # Use source roots for package discovery with implicit namespace packages
++        discover_package_path = list(path)
++        if source_roots:
++            discover_package_path = path  # path already includes source roots at the beginning
++        
++        additional_search_path = [".", module_path] + discover_package_path
+         if os.path.exists(something):
+             # this is a file or a directory
+             try:
++                # Try with the augmented path that includes source roots
+                 modname = ".".join(
+                     modutils.modpath_from_file(something, path=additional_search_path)
+                 )
+@@ -160,4 +176,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 21f6e51..a67b50d 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -891,6 +891,7 @@ class PyLinter(
+             self.config.ignore,
+             self.config.ignore_patterns,
+             self._ignore_paths,
++            self.config.source_roots if hasattr(self.config, 'source_roots') else (),
+         )
+         for error in errors:
+             message = modname = error["mod"]
+@@ -1367,4 +1368,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)

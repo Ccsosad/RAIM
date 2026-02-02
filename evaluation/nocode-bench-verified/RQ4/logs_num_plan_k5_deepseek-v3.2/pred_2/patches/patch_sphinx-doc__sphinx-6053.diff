@@ -1,0 +1,13 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ae23792..5a30904 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1446,7 +1446,7 @@ def merge_autodoc_default_flags(app, config):
+ 
+     for option in config.autodoc_default_flags:
+         if isinstance(option, str):
+-            config.autodoc_default_options[option] = None
++            config.autodoc_default_options[option] = True
+         else:
+             logger.warning(
+                 __("Ignoring invalid option in autodoc_default_flags: %r"),

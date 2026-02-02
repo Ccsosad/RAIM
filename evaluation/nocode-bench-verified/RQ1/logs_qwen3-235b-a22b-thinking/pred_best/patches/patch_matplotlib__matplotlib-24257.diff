@@ -1,0 +1,42 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..aa123e4 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -148,14 +148,29 @@ def use(style):
+         elif style in library:
+             _apply_style(library[style])
+         else:
+-            try:
+-                rc = rc_params_from_file(style, use_default_template=False)
+-                _apply_style(rc)
+-            except IOError as err:
+-                raise IOError(
+-                    "{!r} not found in the style library and input is not a "
+-                    "valid URL or path; see `style.available` for list of "
+-                    "available styles".format(style)) from err
++            loaded = False
++            # Check if this might be a package resource (contains a dot)
++            if '.' in style:
++                try:
++                    package_name, resource_name = style.rsplit('.', 1)
++                    resource_path = f"{resource_name}.mplstyle"
++                    with importlib_resources.open_text(package_name, resource_path) as f:
++                        rc = rc_params_from_file(f, use_default_template=False)
++                        _apply_style(rc)
++                        loaded = True
++                except (FileNotFoundError, ModuleNotFoundError, ValueError):
++                    # Not a valid package resource, fall through to file loading
++                    pass
++            
++            if not loaded:
++                try:
++                    rc = rc_params_from_file(style, use_default_template=False)
++                    _apply_style(rc)
++                except IOError as err:
++                    raise IOError(
++                        "{!r} not found in the style library and input is not a "
++                        "valid URL or path; see `style.available` for list of "
++                        "available styles".format(style)) from err
+ 
+ 
+ @contextlib.contextmanager

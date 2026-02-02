@@ -1,0 +1,442 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index 469c69b..9385089 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -412,6 +412,10 @@ class DatetimeAccessor(Properties):
+         "date", "Date corresponding to datetimes", object
+     )
+ 
++    calendar = Properties._tslib_field_accessor(
++        "calendar", "Calendar type of the datetime", object
++    )
++
+     is_month_start = Properties._tslib_field_accessor(
+         "is_month_start",
+         "Indicates whether the date is the first day of the month.",
+diff --git a/xarray/__init__.py b/xarray/__init__.py
+new file mode 100644
+index 0000000..9dbcb9e
+--- /dev/null
++++ b/xarray/__init__.py
+@@ -0,0 +1,2 @@
++from .coding.times import cftime_range
++from .coding.calendar_ops import date_range, date_range_like
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..833f965
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1,245 @@
++"""Calendar conversion and interpolation utilities."""
++import numpy as np
++import pandas as pd
++from datetime import datetime
++from typing import Optional, Union, Literal
++
++from xarray.core.types import T_DataArray
++from xarray.core.dataarray import DataArray
++from xarray.core.dataset import Dataset
++from xarray.core.common import AbstractArray
++from xarray.coding.times import (
++    CFTimeCoder,
++    _should_cftime_be_used,
++    _decode_datetime_with_cftime,
++    _encode_datetime_with_cftime,
++)
++from xarray.core.variable import Variable
++import xarray as xr
++
++
++def _infer_freq(
++    source: Union[DataArray, pd.DatetimeIndex, "CFTimeIndex"],
++    align_on: Optional[str] = None,
++) -> str:
++    """Infer frequency from a datetime array.
++    
++    Parameters
++    ----------
++    source : DataArray, pd.DatetimeIndex, or CFTimeIndex
++        Source datetime array.
++    align_on : {"year", "month", "day", "hour", "minute", "second", None}, optional
++        Align dates on this component before inferring frequency.
++        
++    Returns
++    -------
++    str
++        Inferred frequency string.
++        
++    Raises
++    ------
++    ValueError
++        If frequency cannot be inferred.
++    """
++    if isinstance(source, DataArray):
++        source = source.values
++    
++    if not hasattr(source, 'size') or source.size < 2:
++        raise ValueError(
++            "'source' must be a 1D array of datetime objects for inferring its range."
++        )
++    
++    # For pandas DatetimeIndex
++    if hasattr(source, 'freq') and source.freq is not None:
++        return str(source.freq)
++    
++    # For CFTimeIndex or generic array
++    try:
++        # Try to infer using pandas
++        if hasattr(source, 'to_datetimeindex'):
++            # This is a CFTimeIndex
++            dt_index = source.to_datetimeindex()
++            if dt_index.freq is not None:
++                return str(dt_index.freq)
++        
++        # Fallback: infer from differences
++        diffs = np.diff(source)
++        if len(diffs) == 0:
++            raise ValueError("Cannot infer frequency from single value.")
++        
++        # Check if all differences are equal
++        if np.all(diffs == diffs[0]):
++            # Convert timedelta to frequency string
++            diff = diffs[0]
++            if hasattr(diff, 'days'):
++                # cftime or datetime.timedelta
++                if diff.days == 30 and diff.seconds == 0:
++                    return 'MS'  # Month start
++                elif diff.days == 1 and diff.seconds == 0:
++                    return 'D'
++                elif diff.days == 0 and diff.seconds == 3600:
++                    return 'H'
++                # Add more cases as needed
++            elif isinstance(diff, np.timedelta64):
++                # numpy timedelta64
++                if diff == np.timedelta64(1, 'D'):
++                    return 'D'
++                elif diff == np.timedelta64(1, 'h'):
++                    return 'H'
++                elif diff == np.timedelta64(1, 'M'):  # month
++                    return 'MS'
++    except Exception:
++        pass
++    
++    raise ValueError(
++        "`date_range_like` was unable to generate a range as the source frequency was not inferrable."
++    )
++
++
++def date_range(
++    start: Union[str, datetime],
++    end: Union[str, datetime],
++    freq: str,
++    calendar: str = "standard",
++    use_cftime: Optional[bool] = None,
++) -> Union[pd.DatetimeIndex, "CFTimeIndex"]:
++    """Generate a range of dates.
++    
++    Parameters
++    ----------
++    start : str or datetime-like
++        Start date.
++    end : str or datetime-like
++        End date.
++    freq : str
++        Frequency string.
++    calendar : str, default: "standard"
++        Calendar type.
++    use_cftime : bool, optional
++        Whether to use cftime backend. If None, determined automatically.
++        
++    Returns
++    -------
++    pd.DatetimeIndex or CFTimeIndex
++        Generated date range.
++    """
++    if use_cftime is None:
++        use_cftime = _should_cftime_be_used(start, end, calendar)
++    
++    if use_cftime:
++        from xarray.coding.times import cftime_range
++        return cftime_range(start=start, end=end, freq=freq, calendar=calendar)
++    else:
++        return pd.date_range(start=start, end=end, freq=freq)
++
++
++def date_range_like(
++    source: Union[DataArray, pd.DatetimeIndex, "CFTimeIndex"],
++    calendar: str = "standard",
++    use_cftime: Optional[bool] = None,
++    align_on: Optional[str] = None,
++) -> Union[pd.DatetimeIndex, "CFTimeIndex"]:
++    """Generate a date range with same length and frequency as source.
++    
++    Parameters
++    ----------
++    source : DataArray, pd.DatetimeIndex, or CFTimeIndex
++        Source datetime array to mimic.
++    calendar : str, default: "standard"
++        Target calendar.
++    use_cftime : bool, optional
++        Whether to use cftime backend.
++    align_on : {"year", "month", "day", "hour", "minute", "second", None}, optional
++        Align dates on this component.
++        
++    Returns
++    -------
++    pd.DatetimeIndex or CFTimeIndex
++        Generated date range.
++        
++    Raises
++    ------
++    ValueError
++        If frequency cannot be inferred.
++    """
++    if isinstance(source, DataArray):
++        source = source.values
++    
++    if source.size == 0:
++        raise ValueError("Source array is empty.")
++    
++    # Infer frequency
++    freq = _infer_freq(source, align_on)
++    
++    # Get start and end
++    start = source[0]
++    end = source[-1]
++    
++    return date_range(
++        start=start,
++        end=end,
++        freq=freq,
++        calendar=calendar,
++        use_cftime=use_cftime,
++    )
++
++
++def convert_calendar(
++    obj: Union[DataArray, Dataset],
++    target: str,
++    align_on: Optional[str] = None,
++    missing: Optional[Union[float, int]] = None,
++    use_cftime: Optional[bool] = None,
++) -> Union[DataArray, Dataset]:
++    """Convert datetime coordinates to a different calendar.
++    
++    Parameters
++    ----------
++    obj : DataArray or Dataset
++        Input data with datetime coordinates.
++    target : str
++        Target calendar.
++    align_on : {"year", "month", "day", "hour", "minute", "second", None}, optional
++        Align dates on this component.
++    missing : float or int, optional
++        Value to use for missing dates.
++    use_cftime : bool, optional
++        Whether to use cftime backend.
++        
++    Returns
++    -------
++    DataArray or Dataset
++        Data with converted calendar.
++    """
++    # Implementation would go here
++    # This is a placeholder for the actual implementation
++    raise NotImplementedError("convert_calendar not yet implemented")
++
++
++def interp_calendar(
++    source: Union[DataArray, Dataset],
++    target: Union[DataArray, Dataset, pd.DatetimeIndex, "CFTimeIndex"],
++    align_on: Optional[str] = None,
++    use_cftime: Optional[bool] = None,
++) -> Union[DataArray, Dataset]:
++    """Interpolate data from one calendar to another.
++    
++    Parameters
++    ----------
++    source : DataArray or Dataset
++        Source data.
++    target : DataArray, Dataset, pd.DatetimeIndex, or CFTimeIndex
++        Target datetime coordinates.
++    align_on : {"year", "month", "day", "hour", "minute", "second", None}, optional
++        Align dates on this component.
++    use_cftime : bool, optional
++        Whether to use cftime backend.
++        
++    Returns
++    -------
++    DataArray or Dataset
++        Interpolated data.
++    """
++    # Implementation would go here
++    # This is a placeholder for the actual implementation
++    raise NotImplementedError("interp_calendar not yet implemented")
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+new file mode 100644
+index 0000000..6f4d499
+--- /dev/null
++++ b/xarray/core/dataarray.py
+@@ -0,0 +1,78 @@
++    def get_index(self, key):
++        """Get an index for a dimension, with fall-back to a default RangeIndex.
++
++        Parameters
++        ----------
++        key : str
++            Dimension name.
++
++        Returns
++        -------
++        pandas.Index or xarray.CFTimeIndex
++            Index for the dimension.
++        """
++        return _get_index(self._coords, key)
++
++    def convert_calendar(
++        self,
++        target: str,
++        align_on: Optional[str] = None,
++        missing: Optional[Union[float, int]] = None,
++        use_cftime: Optional[bool] = None,
++    ) -> "DataArray":
++        """Convert datetime coordinates to a different calendar.
++        
++        Parameters
++        ----------
++        target : str
++            Target calendar.
++        align_on : {"year", "month", "day", "hour", "minute", "second", None}, optional
++            Align dates on this component.
++        missing : float or int, optional
++            Value to use for missing dates.
++        use_cftime : bool, optional
++            Whether to use cftime backend.
++            
++        Returns
++        -------
++        DataArray
++            Data with converted calendar.
++        """
++        from xarray.coding.calendar_ops import convert_calendar
++        return convert_calendar(
++            self,
++            target=target,
++            align_on=align_on,
++            missing=missing,
++            use_cftime=use_cftime,
++        )
++
++    def interp_calendar(
++        self,
++        target: Union["DataArray", Dataset, pd.DatetimeIndex, "CFTimeIndex"],
++        align_on: Optional[str] = None,
++        use_cftime: Optional[bool] = None,
++    ) -> "DataArray":
++        """Interpolate data from one calendar to another.
++        
++        Parameters
++        ----------
++        target : DataArray, Dataset, pd.DatetimeIndex, or CFTimeIndex
++            Target datetime coordinates.
++        align_on : {"year", "month", "day", "hour", "minute", "second", None}, optional
++            Align dates on this component.
++        use_cftime : bool, optional
++            Whether to use cftime backend.
++            
++        Returns
++        -------
++        DataArray
++            Interpolated data.
++        """
++        from xarray.coding.calendar_ops import interp_calendar
++        return interp_calendar(
++            self,
++            target=target,
++            align_on=align_on,
++            use_cftime=use_cftime,
++        )
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+new file mode 100644
+index 0000000..d95528e
+--- /dev/null
++++ b/xarray/core/dataset.py
+@@ -0,0 +1,78 @@
++    def get_index(self, key):
++        """Get an index for a dimension, with fall-back to a default RangeIndex.
++
++        Parameters
++        ----------
++        key : str
++            Dimension name.
++
++        Returns
++        -------
++        pandas.Index or xarray.CFTimeIndex
++            Index for the dimension.
++        """
++        return _get_index(self._indexes, key)
++
++    def convert_calendar(
++        self,
++        target: str,
++        align_on: Optional[str] = None,
++        missing: Optional[Union[float, int]] = None,
++        use_cftime: Optional[bool] = None,
++    ) -> "Dataset":
++        """Convert datetime coordinates to a different calendar.
++        
++        Parameters
++        ----------
++        target : str
++            Target calendar.
++        align_on : {"year", "month", "day", "hour", "minute", "second", None}, optional
++            Align dates on this component.
++        missing : float or int, optional
++            Value to use for missing dates.
++        use_cftime : bool, optional
++            Whether to use cftime backend.
++            
++        Returns
++        -------
++        Dataset
++            Data with converted calendar.
++        """
++        from xarray.coding.calendar_ops import convert_calendar
++        return convert_calendar(
++            self,
++            target=target,
++            align_on=align_on,
++            missing=missing,
++            use_cftime=use_cftime,
++        )
++
++    def interp_calendar(
++        self,
++        target: Union[DataArray, "Dataset", pd.DatetimeIndex, "CFTimeIndex"],
++        align_on: Optional[str] = None,
++        use_cftime: Optional[bool] = None,
++    ) -> "Dataset":
++        """Interpolate data from one calendar to another.
++        
++        Parameters
++        ----------
++        target : DataArray, Dataset, pd.DatetimeIndex, or CFTimeIndex
++            Target datetime coordinates.
++        align_on : {"year", "month", "day", "hour", "minute", "second", None}, optional
++            Align dates on this component.
++        use_cftime : bool, optional
++            Whether to use cftime backend.
++            
++        Returns
++        -------
++        Dataset
++            Interpolated data.
++        """
++        from xarray.coding.calendar_ops import interp_calendar
++        return interp_calendar(
++            self,
++            target=target,
++            align_on=align_on,
++            use_cftime=use_cftime,
++        )

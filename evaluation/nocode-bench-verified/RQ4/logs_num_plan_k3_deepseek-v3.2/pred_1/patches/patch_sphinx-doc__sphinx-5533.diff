@@ -1,0 +1,59 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 1ae55eb..43028ac 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1467,6 +1467,21 @@ def merge_autodoc_default_flags(app, config):
+             )
+ 
+ 
++from .options import AUTODOC_DEFAULT_OPTIONS
++
++#: The list of options that can be set in autodoc_default_options
++AUTODOC_DEFAULT_OPTIONS = (
++    'members',
++    'member-order',
++    'undoc-members',
++    'private-members',
++    'special-members',
++    'inherited-members',
++    'show-inheritance',
++    'ignore-module-all',
++    'exclude-members',
++)
++
+ def setup(app):
+     # type: (Sphinx) -> Dict[unicode, Any]
+     app.add_autodocumenter(ModuleDocumenter)
+diff --git a/sphinx/ext/autodoc/directive.py b/sphinx/ext/autodoc/directive.py
+index 02803ef..42c3c33 100644
+--- a/sphinx/ext/autodoc/directive.py
++++ b/sphinx/ext/autodoc/directive.py
+@@ -59,6 +59,10 @@ class DocumenterBridge:
+         logger.warning(msg, location=(self.env.docname, self.lineno))
+ 
+ 
++from sphinx.ext.autodoc.options import AUTODOC_DEFAULT_OPTIONS
++
++from sphinx.ext.autodoc import AUTODOC_DEFAULT_OPTIONS
++
+ def process_documenter_options(documenter, config, options):
+     # type: (Type[Documenter], Config, Dict) -> Options
+     """Recognize options of Documenter from user input."""
+diff --git a/sphinx/ext/autodoc/options.py b/sphinx/ext/autodoc/options.py
+new file mode 100644
+index 0000000..85e6d00
+--- /dev/null
++++ b/sphinx/ext/autodoc/options.py
+@@ -0,0 +1,12 @@
++#: The list of options that can be set in autodoc_default_options
++AUTODOC_DEFAULT_OPTIONS = (
++    'members',
++    'member-order',
++    'undoc-members',
++    'private-members',
++    'special-members',
++    'inherited-members',
++    'show-inheritance',
++    'ignore-module-all',
++    'exclude-members',
++)

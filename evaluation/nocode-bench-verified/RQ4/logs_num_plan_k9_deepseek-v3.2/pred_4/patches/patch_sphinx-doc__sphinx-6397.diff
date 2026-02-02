@@ -1,0 +1,58 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..a4cbbc6 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -392,6 +392,10 @@ class Documenter:
+ 
+         Let the user process it via the ``autodoc-process-signature`` event.
+         """
++        # Check the configuration for type hints
++        typehints = self.env.config.autodoc_typehints
++        show_annotation = (typehints != 'none')
++
+         if self.args is not None:
+             # signature given explicitly
+             args = "(%s)" % self.args
+@@ -399,7 +403,7 @@ class Documenter:
+             # try to introspect the signature
+             try:
+                 try:
+-                    args = self.format_args(**kwargs)
++                    args = self.format_args(show_annotation=show_annotation, **kwargs)
+                 except TypeError:
+                     # retry without arguments for old documenters
+                     args = self.format_args()
+@@ -408,7 +412,7 @@ class Documenter:
+                                (self.fullname, err), type='autodoc')
+                 args = None
+ 
+-        retann = self.retann
++        retann = self.retann if show_annotation else None
+ 
+         result = self.env.events.emit_firstresult('autodoc-process-signature',
+                                                   self.objtype, self.fullname,
+diff --git a/sphinx/util/inspect.py b/sphinx/util/inspect.py
+index 275b3fa..1861e53 100644
+--- a/sphinx/util/inspect.py
++++ b/sphinx/util/inspect.py
+@@ -468,12 +468,15 @@ class Signature:
+         if self.return_annotation is inspect.Parameter.empty:
+             return '(%s)' % ', '.join(args)
+         else:
+-            if 'return' in self.annotations:
+-                annotation = self.format_annotation(self.annotations['return'])
+-            else:
+-                annotation = self.format_annotation(self.return_annotation)
++            if show_annotation:
++                if 'return' in self.annotations:
++                    annotation = self.format_annotation(self.annotations['return'])
++                else:
++                    annotation = self.format_annotation(self.return_annotation)
+ 
+-            return '(%s) -> %s' % (', '.join(args), annotation)
++                return '(%s) -> %s' % (', '.join(args), annotation)
++            else:
++                return '(%s)' % ', '.join(args)
+ 
+     def format_annotation(self, annotation):
+         # type: (Any) -> str

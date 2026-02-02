@@ -1,0 +1,57 @@
+diff --git a/sklearn/datasets/_openml.py b/sklearn/datasets/_openml.py
+index 2578f63..3a1322a 100644
+--- a/sklearn/datasets/_openml.py
++++ b/sklearn/datasets/_openml.py
+@@ -725,6 +725,7 @@ def fetch_openml(
+     n_retries: int = 3,
+     delay: float = 1.0,
+     parser: Optional[str] = "warn",
++    read_csv_kwargs: Optional[Dict] = None,
+ ):
+     """Fetch dataset from openml by name or dataset id.
+ 
+@@ -964,6 +965,17 @@ def fetch_openml(
+             f" {parser!r} instead."
+         )
+ 
++    if read_csv_kwargs is not None:
++        if not isinstance(read_csv_kwargs, dict):
++            raise TypeError(
++                "read_csv_kwargs must be a dictionary. "
++                f"Got {type(read_csv_kwargs).__name__} instead."
++            )
++        if parser not in ("pandas", "auto", "warn"):
++            # Note: if parser is "auto", it might become "pandas" later.
++            # We'll check again after parser_ is determined.
++            pass
++
+     if parser == "warn":
+         # TODO(1.4): remove this warning
+         parser = "liac-arff"
+@@ -1033,6 +1045,12 @@ def fetch_openml(
+                 f"Sparse ARFF datasets cannot be loaded with parser={parser!r}. "
+                 "Use parser='liac-arff' or parser='auto' instead."
+             )
++    # Validate read_csv_kwargs with the actual parser to be used.
++    if read_csv_kwargs is not None and parser_ != "pandas":
++        raise ValueError(
++            "read_csv_kwargs is only supported with parser='pandas'. "
++            f"Got parser={parser_!r}."
++        )
+ 
+     # download data features, meta-info about column types
+     features_list = _get_data_features(data_id, data_home)
+@@ -1096,6 +1114,7 @@ def fetch_openml(
+         n_retries=n_retries,
+         delay=delay,
+         parser=parser_,
++        read_csv_kwargs=read_csv_kwargs,
+     )
+ 
+     if return_X_y:
+@@ -1111,4 +1130,4 @@ def fetch_openml(
+         url="https://www.openml.org/d/{}".format(data_id),
+     )
+ 
+-    return bunch
++    return bunch

@@ -1,0 +1,133 @@
+diff --git a/astropy/cosmology/io/__init__.py b/astropy/cosmology/io/__init__.py
+index de60710..9868107 100644
+--- a/astropy/cosmology/io/__init__.py
++++ b/astropy/cosmology/io/__init__.py
+@@ -1,3 +1,4 @@
++
+ # -*- coding: utf-8 -*-
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+@@ -6,4 +7,4 @@ Read/Write/Interchange methods for `astropy.cosmology`. **NOT public API**.
+ """
+ 
+ # Import to register with the I/O machinery
+-from . import ecsv, mapping, model, table  # noqa: F403
++from . import ecsv, mapping, model, row, table  # noqa: F403
+diff --git a/astropy/cosmology/io/row.py b/astropy/cosmology/io/row.py
+new file mode 100644
+index 0000000..85bcdc6
+--- /dev/null
++++ b/astropy/cosmology/io/row.py
+@@ -0,0 +1,112 @@
++# -*- coding: utf-8 -*-
++# Licensed under a 3-clause BSD style license - see LICENSE.rst
++
++"""
++Read/Write/Interchange methods for `astropy.cosmology` for Row objects.
++"""
++
++import copy
++
++import numpy as np
++
++from astropy.cosmology.connect import convert_registry
++from astropy.cosmology.core import Cosmology
++from astropy.table import QTable, Row
++
++from .mapping import from_mapping, to_mapping
++
++
++def from_row(row, *, move_to_meta=False, cosmology=None):
++    """Instantiate a `~astropy.cosmology.Cosmology` from a |Row|.
++
++    Parameters
++    ----------
++    row : `~astropy.table.Row`
++        The row to parse.
++    move_to_meta : bool (optional, keyword-only)
++        Whether to move keyword arguments that are not in the Cosmology class'
++        signature to the Cosmology's metadata. This will only be applied if the
++        Cosmology does NOT have a keyword-only argument (e.g. ``**kwargs``).
++        Arguments moved to the metadata will be merged with existing metadata,
++        preferring specified metadata in the case of a merge conflict
++        (e.g. for ``Cosmology(meta={'key':10}, key=42)``, the ``Cosmology.meta``
++        will be ``{'key': 10}``).
++
++    cosmology : str, `~astropy.cosmology.Cosmology` class, or None (optional, keyword-only)
++        The cosmology class (or string name thereof) to use when constructing
++        the cosmology instance. The class also provides default parameter values,
++        filling in any non-mandatory arguments missing in 'row'.
++
++    Returns
++    -------
++    `~astropy.cosmology.Cosmology` subclass instance
++
++    Examples
++    --------
++    >>> from astropy.cosmology import Planck18
++    >>> row = Planck18.to_format("astropy.row")
++    >>> cosmo = Cosmology.from_format(row, format="astropy.row")
++    >>> cosmo == Planck18
++    True
++    """
++    # ------------------
++    # parse row to cosmo
++
++    # special values
++    name = row['name'] if 'name' in row.columns else None  # get name from column
++    meta = copy.deepcopy(row.meta)
++
++    # turn row into mapping, filling cosmo if not in a column
++    mapping = dict(row)
++    mapping["name"] = name
++    mapping.setdefault("cosmology", meta.pop("cosmology", None))
++    mapping["meta"] = meta
++
++    # build cosmology from map
++    return from_mapping(mapping, move_to_meta=move_to_meta, cosmology=cosmology)
++
++
++def to_row(cosmology, *args, cosmology_in_meta=True):
++    """Serialize the cosmology into a `~astropy.table.Row`.
++
++    Parameters
++    ----------
++    cosmology : `~astropy.cosmology.Cosmology` subclass instance
++    *args
++        Not used. Needed for compatibility with
++        `~astropy.io.registry.UnifiedReadWriteMethod`
++    cosmology_in_meta : bool (optional, keyword-only)
++        Whether to put the cosmology class in the row's metadata. Otherwise,
++        it will be added as a column.
++
++    Returns
++    -------
++    `~astropy.table.Row`
++        The row representation of the cosmology.
++    """
++    # Get the table representation
++    from .table import to_table
++    tbl = to_table(cosmology, *args, cosmology_in_meta=cosmology_in_meta, cls=QTable)
++    # Return the first row
++    return tbl[0]
++
++
++def row_identify(origin, format, *args, **kwargs):
++    """Identify if object uses the Row format.
++
++    Returns
++    -------
++    bool
++    """
++    itis = False
++    if origin == "read":
++        itis = isinstance(args[1], Row) and (format in (None, "astropy.row"))
++    return itis
++
++
++# ===================================================================
++# Register
++
++convert_registry.register_reader("astropy.row", Cosmology, from_row)
++convert_registry.register_writer("astropy.row", Cosmology, to_row)
++convert_registry.register_identifier("astropy.row", Cosmology, row_identify)

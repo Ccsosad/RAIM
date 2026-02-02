@@ -1,0 +1,100 @@
+diff --git a/lib/matplotlib/__init__.py b/lib/matplotlib/__init__.py
+index f649360..e777338 100644
+--- a/lib/matplotlib/__init__.py
++++ b/lib/matplotlib/__init__.py
+@@ -213,13 +213,18 @@ def _check_versions():
+     # DLLs are loaded before importing kiwisolver
+     from . import ft2font
+ 
++    # Check importlib_resources only on Python < 3.10
++    extra_deps = []
++    if sys.version_info < (3, 10):
++        extra_deps = [("importlib_resources", "3.2.0")]
++    
+     for modname, minver in [
+             ("cycler", "0.10"),
+             ("dateutil", "2.7"),
+             ("kiwisolver", "1.0.1"),
+             ("numpy", "1.19"),
+             ("pyparsing", "2.3.1"),
+-    ]:
++    ] + extra_deps:
+         module = importlib.import_module(modname)
+         if parse_version(module.__version__) < parse_version(minver):
+             raise ImportError(f"Matplotlib requires {modname}>={minver}; "
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..52fd57a 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -77,6 +77,49 @@ def _remove_blacklisted_style_params(d, warn=True):
+     return o
+ 
+ 
++def _load_package_style(style_name):
++    """
++    Load style from a package resource without importing the package.
++    
++    Parameters
++    ----------
++    style_name : str
++        Package-style name in format "package.name[.subpackage].style_name"
++    
++    Returns
++    -------
++    dict
++        RC parameters from the style file
++    """
++    # Split on dots to separate package path from style name
++    parts = style_name.split('.')
++    
++    # The last part is the style name, the rest is the package path
++    style_file = parts[-1] + '.mplstyle'
++    package_path = '.'.join(parts[:-1])
++    
++    if not package_path:
++        raise ValueError(f"Invalid package style specification: {style_name}")
++    
++    # Use importlib.resources for Python >= 3.9, fallback to importlib_resources
++    try:
++        if sys.version_info >= (3, 9):
++            from importlib.resources import files, as_file
++        else:
++            from importlib_resources import files, as_file
++    except ImportError:
++        raise ImportError(
++            "Package style loading requires importlib-resources>=3.2.0 on Python<3.10")
++    
++    try:
++        # Get the resource without importing the package
++        resource = files(package_path) / style_file
++        with as_file(resource) as style_path:
++            return rc_params_from_file(style_path, use_default_template=False)
++    except (OSError, ImportError) as e:
++        raise OSError(f"Could not load style {style_file} from package {package_path}") from e
++
++
+ def _apply_style(d, warn=True):
+     mpl.rcParams.update(_remove_blacklisted_style_params(d, warn=warn))
+ 
+@@ -147,6 +190,21 @@ def use(style):
+                 _apply_style(rcParamsDefault, warn=False)
+         elif style in library:
+             _apply_style(library[style])
++        elif '.' in style:  # Check if this might be a package resource
++            try:
++                # Try to load as package resource
++                rc = _load_package_style(style)
++                _apply_style(rc)
++            except (ImportError, OSError):
++                # Fall back to file loading if package resource fails
++                try:
++                    rc = rc_params_from_file(style, use_default_template=False)
++                    _apply_style(rc)
++                except IOError as err:
++                    raise IOError(
++                        "{!r} not found in the style library, package resources, "
++                        "and input is not a valid URL or path; see `style.available` "
++                        "for list of available styles".format(style)) from err
+         else:
+             try:
+                 rc = rc_params_from_file(style, use_default_template=False)

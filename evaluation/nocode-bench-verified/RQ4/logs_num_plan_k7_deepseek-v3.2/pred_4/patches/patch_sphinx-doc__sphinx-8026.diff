@@ -1,0 +1,37 @@
+diff --git a/sphinx/environment/__init__.py b/sphinx/environment/__init__.py
+index 9ed8cac..3ad8ee5 100644
+--- a/sphinx/environment/__init__.py
++++ b/sphinx/environment/__init__.py
+@@ -471,6 +471,11 @@ class BuildEnvironment:
+         """Returns the docname of the document currently being parsed."""
+         return self.temp_data['docname']
+ 
++    @property
++    def docpath(self) -> str:
++        """Return the directory path for the current document, with a trailing slash if non-empty."""
++        return self.get_docpath(self.docname)
++
+     def new_serialno(self, category: str = '') -> int:
+         """Return a serial number, e.g. for index entry targets.
+ 
+@@ -505,6 +510,14 @@ class BuildEnvironment:
+         """
+         self.reread_always.add(self.docname)
+ 
++    def get_docpath(self, docname: str) -> str:
++        """Return the directory path for the given docname, with a trailing slash if non-empty."""
++        dirname = path.dirname(self.doc2path(docname, base=None))
++        if dirname:
++            return dirname + '/'
++        else:
++            return ''
++
+     def get_domain(self, domainname: str) -> Domain:
+         """Return the domain instance with the specified name.
+ 
+@@ -656,4 +669,4 @@ class BuildEnvironment:
+                       RemovedInSphinx40Warning, stacklevel=2)
+         from sphinx.domains.index import IndexDomain
+         domain = cast(IndexDomain, self.get_domain('index'))
+-        domain.data['entries'] = entries
++        domain.data['entries'] = entries

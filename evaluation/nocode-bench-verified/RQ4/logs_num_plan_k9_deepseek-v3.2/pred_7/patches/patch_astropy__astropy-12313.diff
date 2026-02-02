@@ -1,0 +1,147 @@
+diff --git a/astropy/cosmology/io/__init__.py b/astropy/cosmology/io/__init__.py
+index de60710..9868107 100644
+--- a/astropy/cosmology/io/__init__.py
++++ b/astropy/cosmology/io/__init__.py
+@@ -1,3 +1,4 @@
++
+ # -*- coding: utf-8 -*-
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+@@ -6,4 +7,4 @@ Read/Write/Interchange methods for `astropy.cosmology`. **NOT public API**.
+ """
+ 
+ # Import to register with the I/O machinery
+-from . import ecsv, mapping, model, table  # noqa: F403
++from . import ecsv, mapping, model, row, table  # noqa: F403
+diff --git a/astropy/cosmology/io/row.py b/astropy/cosmology/io/row.py
+new file mode 100644
+index 0000000..f692d7d
+--- /dev/null
++++ b/astropy/cosmology/io/row.py
+@@ -0,0 +1,126 @@
++# -*- coding: utf-8 -*-
++# Licensed under a 3-clause BSD style license - see LICENSE.rst
++
++"""
++Read/Write support for converting a Cosmology to/from an Astropy Table Row.
++"""
++
++import warnings
++
++from astropy.cosmology.core import Cosmology
++from astropy.table import Row, Table
++
++from .table import from_table, to_table
++
++__all__ = []  # Nothing is publicly scoped
++
++
++def read_row_row(filename, **kwargs):
++    """Read a Row from a table file and return a Cosmology.
++    
++    Parameters
++    ----------
++    filename : str or path-like
++        File to read.
++    **kwargs
++        Passed to ``Table.read``.
++    
++    Returns
++    -------
++    Cosmology
++    """
++    # Read the table
++    table = Table.read(filename, **kwargs)
++    if len(table) != 1:
++        raise ValueError("Table must have exactly one row to convert to a Cosmology.")
++    row = table[0]
++    return from_row(row, move_to_meta=False)
++
++
++def write_row_row(cosmology, filename, **kwargs):
++    """Write a Cosmology to a Row in a table file.
++    
++    Parameters
++    ----------
++    cosmology : Cosmology
++        The cosmology to write.
++    filename : str or path-like
++        File to write to.
++    **kwargs
++        Passed to ``Table.write``.
++    """
++    # Convert to row then to table
++    row = to_row(cosmology)
++    table = Table(row)
++    table.write(filename, **kwargs)
++
++
++def from_row(row, move_to_meta=True, cosmology=None):
++    """Convert a Row to a Cosmology.
++    
++    Parameters
++    ----------
++    row : Row
++        The row to convert.
++    move_to_meta : bool, optional
++        Whether to move keyword arguments that are not in the Cosmology
++        constructor to the metadata.
++    cosmology : str, class, or None, optional
++        The cosmology class to use. If None, uses the class in the row's
++        metadata.
++    
++    Returns
++    -------
++    Cosmology
++    """
++    # Convert row to table (single row) and use table reader
++    table = Table(row)
++    return from_table(table, index=0, move_to_meta=move_to_meta, cosmology=cosmology)
++
++
++def to_row(cosmology, *args, **kwargs):
++    """Convert a Cosmology to a Row.
++    
++    Parameters
++    ----------
++    cosmology : Cosmology
++        The cosmology to convert.
++    *args, **kwargs
++        Passed to ``to_table``.
++    
++    Returns
++    -------
++    Row
++    """
++    # Convert to table (single row) and extract row
++    table = to_table(cosmology, *args, **kwargs)
++    if len(table) != 1:
++        # This should never happen for a single cosmology
++        raise ValueError("Table should have exactly one row.")
++    return table[0]
++
++
++# Register with I/O
++def row_identify(origin, format, *args, **kwargs):
++    """Identify if object uses the Row format."""
++    if origin == "read":
++        # For reading, check if the second argument is a Row and format matches
++        return isinstance(args[1], Row) and (format in (None, "astropy.row"))
++    elif origin == "write":
++        # For writing, check if format is specified
++        return format == "astropy.row"
++    return False
++
++
++# Register with the I/O registry
++def register_row():
++    """Register Row I/O functions with the Cosmology I/O registry."""
++    from astropy.io.registry import register_reader, register_writer, register_identifier
++
++    register_reader("astropy.row", Cosmology, from_row)
++    register_writer("astropy.row", Cosmology, to_row)
++    register_identifier("astropy.row", Cosmology, row_identify)
++
++
++# Register on import
++register_row()

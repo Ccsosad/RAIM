@@ -1,0 +1,239 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..c8ae3ed 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -2503,6 +2503,43 @@ class CompoundModel(Model):
+                 return self.right(*leftval, **kw)
+             else:
+                 return self.right(leftval, **kw)
++        elif op == 'fix_inputs':
++            # Build the full input list for the original model
++            fixed = self._fixed_inputs
++            original_inputs = self.left.inputs
++            # args are the inputs to the fixed model, in the order of self.inputs
++            # We need to create a list for the original model
++            full_args = []
++            arg_iter = iter(args)
++            for inp in original_inputs:
++                if inp in fixed:
++                    full_args.append(fixed[inp])
++                else:
++                    full_args.append(next(arg_iter))
++            # Now evaluate the original model
++            return self.left(*full_args, **kw)
++        elif op == 'fix_inputs':
++            # For the fix_inputs operator, we need to combine the fixed inputs with the provided ones.
++            # The leftval is the result of the left model with all inputs? Actually, we have reduced inputs.
++            # We need to reconstruct the full input array.
++            # The fixed inputs are stored in self._fixed_inputs.
++            # We need to insert the fixed values into the input array.
++            fixed = self._fixed_inputs
++            # The inputs to the fixed model are in the order of self.inputs.
++            # We need to map them to the original model's inputs.
++            original_inputs = self.left.inputs
++            # We are given args as a tuple of inputs in the order of self.inputs.
++            # We need to create a full input list for the original model.
++            full_args = []
++            for inp in original_inputs:
++                if inp in fixed:
++                    full_args.append(fixed[inp])
++                else:
++                    # Take the next input from args
++                    full_args.append(args[0])
++                    args = args[1:]
++            # Now evaluate the original model with the full arguments
++            return self.left(*full_args, **kw)
+         elif op in SPECIAL_OPERATORS:
+             return binary_operation(SPECIAL_OPERATORS[op], leftval, rightval)
+         else:
+@@ -4020,4 +4057,189 @@ def hide_inverse(model):
+     the model or restore the inverse later.
+     """
+     del model.inverse
+-    return model
++    return model
++
++
++def _fix_inputs_operator(left, right, fixed):
++    # This function is called by the compound model to evaluate the fixed inputs.
++    # 'left' is the original model, 'right' is a dummy, and 'fixed' is a dictionary
++    # of fixed inputs.
++    pass
++
++
++def fix_inputs(model, fixed):
++    """
++    Fix one or more inputs of a model to constant values.
++
++    Parameters
++    ----------
++    model : `~astropy.modeling.Model`
++        The model for which to fix inputs.
++    fixed : dict
++        A dictionary mapping input names or indices to constant values.
++
++    Returns
++    -------
++    fixed_model : `~astropy.modeling.CompoundModel`
++        A new compound model with the specified inputs fixed.
++
++    Examples
++    --------
++    >>> from astropy.modeling.models import Polynomial2D
++    >>> poly = Polynomial2D(degree=2)
++    >>> poly_fixed = fix_inputs(poly, {'x': 0})
++    >>> poly_fixed.n_inputs
++    1
++    >>> poly_fixed.n_outputs
++    1
++    """
++    from .core import CompoundModel
++
++    # Convert fixed indices to names if necessary
++    fixed_dict = {}
++    for key, value in fixed.items():
++        if isinstance(key, int):
++            fixed_dict[model.inputs[key]] = value
++        else:
++            fixed_dict[key] = value
++
++    # Create a new compound model with the 'fix_inputs' operator
++    # We need to pass the fixed dictionary as an attribute.
++    # We'll create a dummy model for the right.
++    class DummyModel(Model):
++        n_inputs = 0
++        n_outputs = 0
++        def __init__(self):
++            super().__init__()
++
++    dummy = DummyModel()
++
++    # Create the compound model
++    fixed_model = CompoundModel('fix_inputs', model, dummy)
++
++    # Set the fixed dictionary as an attribute
++    fixed_model._fixed_inputs = fixed_dict
++
++    # Adjust the inputs and outputs
++    fixed_model.n_inputs = model.n_inputs - len(fixed_dict)
++    fixed_model.n_outputs = model.n_outputs
++
++    # Adjust the input names
++    new_inputs = [inp for inp in model.inputs if inp not in fixed_dict]
++    fixed_model.inputs = tuple(new_inputs)
++    fixed_model.outputs = model.outputs
++
++    # Adjust the bounding box if present
++    if model.bounding_box is not None:
++        # Remove the fixed dimensions from the bounding box
++        bbox = model.bounding_box
++        if model.n_inputs == 1:
++            # 1D bounding box is a tuple
++            if model.inputs[0] in fixed_dict:
++                # The only input is fixed, so no bounding box
++                bbox = None
++            else:
++                bbox = bbox
++        else:
++            # Multi-dimensional bounding box is a tuple of tuples
++            new_bbox = []
++            for i, inp in enumerate(model.inputs):
++                if inp not in fixed_dict:
++                    # Keep this dimension
++                    new_bbox.append(bbox[i])
++            if len(new_bbox) == 1:
++                bbox = new_bbox[0]
++            else:
++                bbox = tuple(new_bbox)
++        fixed_model.bounding_box = bbox
++
++    return fixed_model
++
++
++def fix_inputs(model, fixed):
++    """
++    Fix one or more inputs of a model to constant values.
++
++    Parameters
++    ----------
++    model : `~astropy.modeling.Model`
++        The model for which to fix inputs.
++    fixed : dict
++        A dictionary mapping input names or indices to constant values.
++
++    Returns
++    -------
++    fixed_model : `~astropy.modeling.CompoundModel`
++        A new compound model with the specified inputs fixed.
++
++    Examples
++    --------
++    >>> from astropy.modeling.models import Polynomial2D
++    >>> poly = Polynomial2D(degree=2)
++    >>> poly_fixed = fix_inputs(poly, {'x': 0})
++    >>> poly_fixed.n_inputs
++    1
++    >>> poly_fixed.n_outputs
++    1
++    """
++    from .core import CompoundModel
++
++    # Convert fixed indices to names if necessary
++    fixed_dict = {}
++    for key, value in fixed.items():
++        if isinstance(key, int):
++            fixed_dict[model.inputs[key]] = value
++        else:
++            fixed_dict[key] = value
++
++    # Create a new compound model with the 'fix_inputs' operator
++    # We need to pass the fixed dictionary as an attribute.
++    # We'll create a dummy model for the right.
++    class DummyModel(Model):
++        n_inputs = 0
++        n_outputs = 0
++        def __init__(self):
++            super().__init__()
++
++    dummy = DummyModel()
++
++    # Create the compound model
++    fixed_model = CompoundModel('fix_inputs', model, dummy)
++
++    # Set the fixed dictionary as an attribute
++    fixed_model._fixed_inputs = fixed_dict
++
++    # Adjust the inputs and outputs
++    fixed_model.n_inputs = model.n_inputs - len(fixed_dict)
++    fixed_model.n_outputs = model.n_outputs
++
++    # Adjust the input names
++    new_inputs = [inp for inp in model.inputs if inp not in fixed_dict]
++    fixed_model.inputs = tuple(new_inputs)
++    fixed_model.outputs = model.outputs
++
++    # Adjust the bounding box if present
++    if model.bounding_box is not None:
++        # Remove the fixed dimensions from the bounding box
++        bbox = model.bounding_box
++        if model.n_inputs == 1:
++            # 1D bounding box is a tuple
++            if model.inputs[0] in fixed_dict:
++                # The only input is fixed, so no bounding box
++                bbox = None
++            else:
++                bbox = bbox
++        else:
++            # Multi-dimensional bounding box is a tuple of tuples
++            new_bbox = []
++            for i, inp in enumerate(model.inputs):
++                if inp not in fixed_dict:
++                    # Keep this dimension
++                    new_bbox.append(bbox[i])
++            if len(new_bbox) == 1:
++                bbox = new_bbox[0]
++            else:
++                bbox = tuple(new_bbox)
++        fixed_model.bounding_box = bbox
++
++    return fixed_model

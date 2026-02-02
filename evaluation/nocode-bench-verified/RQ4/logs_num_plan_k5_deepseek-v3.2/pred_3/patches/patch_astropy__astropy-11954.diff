@@ -1,0 +1,48 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..aaec0fb 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,10 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -381,6 +381,30 @@ def join(left, right, keys=None, join_type='inner',
+     if not isinstance(right, Table):
+         right = Table(right)
+ 
++    # Handle keys_left and keys_right
++    if keys_left is not None or keys_right is not None:
++        if keys_left is None or keys_right is None:
++            raise ValueError('keys_left and keys_right must both be provided')
++        # Convert to lists
++        if isinstance(keys_left, str):
++            keys_left = [keys_left]
++        if isinstance(keys_right, str):
++            keys_right = [keys_right]
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same length')
++        # Make light copies
++        left = left.copy(copy_data=False)
++        right = right.copy(copy_data=False)
++        # Create temporary columns in right for keys_right with the names from keys_left
++        for kl, kr in zip(keys_left, keys_right):
++            right[kl] = right[kr]
++        keys = keys_left
++    elif keys is None:
++        # Use common columns as before
++        keys = tuple(name for name in left.colnames if name in right.colnames)
++        if len(keys) == 0:
++            raise TableMergeError('No keys in common between left and right tables')
++
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,

@@ -1,0 +1,276 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 2dcd0f6..29cca9c 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4189,7 +4189,7 @@ class DataArray(
+     def _copy_attrs_from(self, other: DataArray | Dataset | Variable) -> None:
+         self.attrs = other.attrs
+ 
+-    plot = utils.UncachedAccessor(_PlotMethods)
++    plot = utils.UncachedAccessor("xarray.plot.dataarray_plot.DataArrayPlotAccessor")
+ 
+     def _title_for_slice(self, truncate: int = 50) -> str:
+         """
+@@ -6452,4 +6452,4 @@ class DataArray(
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor["DataArray"])
++    str = utils.UncachedAccessor(StringAccessor["DataArray"])
+diff --git a/xarray/plot/__init__.py b/xarray/plot/__init__.py
+index c73ecc2..ea8b9bd 100644
+--- a/xarray/plot/__init__.py
++++ b/xarray/plot/__init__.py
+@@ -1,6 +1,17 @@
++
+ from .dataset_plot import scatter
+ from .facetgrid import FacetGrid
+-from .plot import contour, contourf, hist, imshow, line, pcolormesh, plot, step, surface
++from .dataarray_plot import (
++    contour,
++    contourf,
++    hist,
++    imshow,
++    line,
++    pcolormesh,
++    plot,
++    step,
++    surface,
++)
+ 
+ __all__ = [
+     "plot",
+diff --git a/xarray/plot/dataarray_plot.py b/xarray/plot/dataarray_plot.py
+new file mode 100644
+index 0000000..f90ce76
+--- /dev/null
++++ b/xarray/plot/dataarray_plot.py
+@@ -0,0 +1,171 @@
++"""
++Plotting methods for DataArray.
++"""
++from __future__ import annotations
++
++import functools
++from collections.abc import Hashable
++from typing import TYPE_CHECKING, Any, Callable, Literal
++
++import numpy as np
++
++from ..core.dataarray import DataArray
++from .plot import _PlotMethods
++from .utils import _get_units_from_attrs, format_item
++
++if TYPE_CHECKING:
++    from matplotlib.axes import Axes
++    from matplotlib.collections import PathCollection
++
++
++class DataArrayPlotAccessor:
++    """
++    Plotting accessor for DataArray.
++    """
++
++    def __init__(self, da: DataArray) -> None:
++        self._da = da
++
++    def __call__(self, **kwargs: Any) -> Any:
++        """
++        Default plot for DataArray.
++        """
++        from .plot import plot
++
++        return plot(self._da, **kwargs)
++
++    def line(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> list[Any]:
++        """
++        Line plot for DataArray.
++        """
++        from .plot import line
++
++        return line(self._da, *args, **kwargs)
++
++    def step(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> list[Any]:
++        """
++        Step plot for DataArray.
++        """
++        from .plot import step
++
++        return step(self._da, *args, **kwargs)
++
++    def scatter(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> PathCollection:
++        """
++        Scatter plot for DataArray.
++        """
++        from .plot import scatter
++
++        return scatter(self._da, *args, **kwargs)
++
++    def hist(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """
++        Histogram plot for DataArray.
++        """
++        from .plot import hist
++
++        return hist(self._da, *args, **kwargs)
++
++    def imshow(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """
++        Imshow plot for DataArray.
++        """
++        from .plot import imshow
++
++        return imshow(self._da, *args, **kwargs)
++
++    def pcolormesh(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """
++        Pcolormesh plot for DataArray.
++        """
++        from .plot import pcolormesh
++
++        return pcolormesh(self._da, *args, **kwargs)
++
++    def contour(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """
++        Contour plot for DataArray.
++        """
++        from .plot import contour
++
++        return contour(self._da, *args, **kwargs)
++
++    def contourf(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """
++        Filled contour plot for DataArray.
++        """
++        from .plot import contourf
++
++        return contourf(self._da, *args, **kwargs)
++
++    def surface(
++        self,
++        *args: Any,
++        **kwargs: Any,
++    ) -> Any:
++        """
++        Surface plot for DataArray.
++        """
++        from .plot import surface
++
++        return surface(self._da, *args, **kwargs)
++
++    def _title_for_slice(self, truncate: int = 50) -> str:
++        """
++        If the dataarray has 1 dimensional coordinates or comes from a slice
++        we can show that info in the title.
++
++        Parameters
++        ----------
++        truncate : int, default: 50
++            maximum number of characters for title
++
++        Returns
++        -------
++        title : string
++            Can be used for plot titles.
++        """
++        one_dims = []
++        for dim, coord in self._da.coords.items():
++            if coord.size == 1:
++                one_dims.append(
++                    f"{dim} = {format_item(coord.values)}{_get_units_from_attrs(coord)}"
++                )
++
++        title = ", ".join(one_dims)
++        if len(title) > truncate:
++            title = title[: (truncate - 3)] + "..."
++
++        return title
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+new file mode 100644
+index 0000000..5c4a35e
+--- /dev/null
++++ b/xarray/plot/facetgrid.py
+@@ -0,0 +1,51 @@
++    def map_dataarray_line(
++        self,
++        func: Callable[..., Any],
++        *args: Any,
++        **kwargs: Any,
++    ) -> None:
++        """
++        Apply a plotting function to each DataArray subset and plot lines.
++
++        Parameters
++        ----------
++        func : callable
++            A plotting function that takes a DataArray and returns a list of
++            artists.
++        *args : tuple
++            Additional arguments to pass to `func`.
++        **kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Notes
++        -----
++        This method is similar to `map_dataarray` but is specifically designed
++        for line plots.
++        """
++        self._map_dataarray(func, *args, **kwargs)
++
++    def map_plot1d(
++        self,
++        func: Callable[..., Any],
++        *args: Any,
++        **kwargs: Any,
++    ) -> None:
++        """
++        Apply a 1D plotting function to each DataArray subset.
++
++        Parameters
++        ----------
++        func : callable
++            A 1D plotting function that takes a DataArray and returns a list of
++            artists.
++        *args : tuple
++            Additional arguments to pass to `func`.
++        **kwargs : dict
++            Additional keyword arguments to pass to `func`.
++
++        Notes
++        -----
++        This method is similar to `map_dataarray` but is specifically designed
++        for 1D plots (e.g., line, step, scatter).
++        """
++        self._map_dataarray(func, *args, **kwargs)

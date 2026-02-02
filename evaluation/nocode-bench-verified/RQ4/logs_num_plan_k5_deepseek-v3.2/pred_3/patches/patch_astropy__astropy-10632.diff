@@ -1,0 +1,36 @@
+diff --git a/astropy/utils/data.py b/astropy/utils/data.py
+index a1effdb..1f8f9ea 100644
+--- a/astropy/utils/data.py
++++ b/astropy/utils/data.py
+@@ -90,6 +90,11 @@ class Conf(_config.ConfigNamespace):
+         True,
+         'If True, temporary download files created when the cache is '
+         'inaccessible will be deleted at the end of the python session.')
++    allow_internet = _config.ConfigItem(
++        True,
++        'If False, prevent any attempt to download any file from the Internet. '
++        'This overrides remote_timeout (i.e., even if remote_timeout>0, no '
++        'download will occur).')
+ 
+ 
+ conf = Conf()
+@@ -999,7 +1004,7 @@ def _download_file_from_source(source_url, show_progress=True, timeout=None,
+         raise urllib.error.URLError(
+             f"URL {remote_url} was supposed to be downloaded but timeout was set to 0; "
+             f"if this is unexpected check the astropy config file for the option "
+-            f"remote_timeout")
++            f"remote_timeout or allow_internet")
+ 
+     if remote_url is None:
+         remote_url = source_url
+@@ -1197,6 +1202,10 @@ def download_file(remote_url, cache=False, show_progress=True, timeout=None,
+                 if os.path.exists(filename):
+                     return os.path.abspath(filename)
+ 
++    # If internet is not allowed, we cannot use any remote sources.
++    if not conf.allow_internet:
++        sources = []
++
+     errors = {}
+     for source_url in sources:
+         try:

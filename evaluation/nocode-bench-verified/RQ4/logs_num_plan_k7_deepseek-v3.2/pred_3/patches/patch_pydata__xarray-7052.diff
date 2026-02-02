@@ -1,0 +1,22 @@
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..6bec057 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -265,6 +265,7 @@ class FacetGrid:
+         self.col_labels = [None] * ncol
+         self._x_var = None
+         self._y_var = None
++        self._hue_var = None
+         self._cmap_extend = None
+         self._mappables = []
+         self._finalized = False
+@@ -476,8 +477,7 @@ class FacetGrid:
+             sizeplt_norm,
+             kwargs.get("add_colorbar", None),
+             kwargs.get("add_legend", None),
+-            # kwargs.get("add_guide", None),
+-            # kwargs.get("hue_style", None),
++            plotfunc_name=func.__name__,
+         )
+ 
+         if add_legend:

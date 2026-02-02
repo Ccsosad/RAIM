@@ -1,0 +1,15 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..63915fa 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -617,8 +617,8 @@ class Legend(Artist):
+         self._init_legend_box(handles, labels, markerfirst)
+ 
+         tmp = self._loc_used_default
+-        self._set_loc(loc)
+-        self._loc_used_default = tmp  # ignore changes done by _set_loc
++        self.set_loc(loc)
++        self._loc_used_default = tmp  # ignore changes done by set_loc
+ 
+         # figure out title font properties:
+         if title_fontsize is not None and title_fontproperties is not None:

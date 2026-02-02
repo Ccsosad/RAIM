@@ -1,0 +1,62 @@
+diff --git a/sklearn/preprocessing/_data.py b/sklearn/preprocessing/_data.py
+index b090a46..e3f3c2f 100644
+--- a/sklearn/preprocessing/_data.py
++++ b/sklearn/preprocessing/_data.py
+@@ -243,6 +243,10 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
+         Set to False to perform inplace row normalization and avoid a
+         copy (if the input is already a numpy array).
+ 
++    clip : bool, default=False
++        Set to True to clip transformed values of held-out data to
++        provided `feature_range`.
++
+     Attributes
+     ----------
+     min_ : ndarray of shape (n_features,)
+@@ -311,9 +315,10 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
+     """
+ 
+     @_deprecate_positional_args
+-    def __init__(self, feature_range=(0, 1), *, copy=True):
++    def __init__(self, feature_range=(0, 1), *, copy=True, clip=False):
+         self.feature_range = feature_range
+         self.copy = copy
++        self.clip = clip
+ 
+     def _reset(self):
+         """Reset internal data-dependent state of the scaler, if necessary.
+@@ -427,6 +432,9 @@ class MinMaxScaler(TransformerMixin, BaseEstimator):
+ 
+         X *= self.scale_
+         X += self.min_
++        if self.clip:
++            from ._clipping import clip
++            X = clip(X, self.feature_range)
+         return X
+ 
+     def inverse_transform(self, X):
+diff --git a/sklearn/preprocessing/_clipping.py b/sklearn/preprocessing/_clipping.py
+new file mode 100644
+index 0000000..ea08d5a
+--- /dev/null
++++ b/sklearn/preprocessing/_clipping.py
+@@ -0,0 +1,19 @@
++import numpy as np
++
++
++def clip(X, feature_range):
++    """Clip an array to a given range.
++
++    Parameters
++    ----------
++    X : ndarray
++        The data to clip.
++    feature_range : tuple (min, max)
++        The desired range of the data.
++
++    Returns
++    -------
++    X_clipped : ndarray
++        The clipped array.
++    """
++    return np.clip(X, feature_range[0], feature_range[1])

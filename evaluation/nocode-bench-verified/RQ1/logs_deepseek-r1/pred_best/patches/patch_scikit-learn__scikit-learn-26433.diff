@@ -1,0 +1,16 @@
+diff --git a/sklearn/datasets/_arff_parser.py b/sklearn/datasets/_arff_parser.py
+index 1439b17..e8cf850 100644
+--- a/sklearn/datasets/_arff_parser.py
++++ b/sklearn/datasets/_arff_parser.py
+@@ -529,9 +529,9 @@ def load_arff_from_gzip_file(
+             openml_columns_info,
+             feature_names_to_select,
+             target_names_to_select,
+-            read_csv_kwargs,
++            read_csv_kwargs=read_csv_kwargs,
+         )
+     else:
+         raise ValueError(
+             f"Unknown parser: '{parser}'. Should be 'liac-arff' or 'pandas'."
+-        )
++        )

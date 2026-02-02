@@ -1,0 +1,91 @@
+diff --git a/sklearn/datasets/_openml.py b/sklearn/datasets/_openml.py
+index 2578f63..440bec4 100644
+--- a/sklearn/datasets/_openml.py
++++ b/sklearn/datasets/_openml.py
+@@ -428,6 +428,7 @@ def _load_arff_response(
+     md5_checksum: str,
+     n_retries: int = 3,
+     delay: float = 1.0,
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Load the ARFF data associated with the OpenML URL.
+ 
+@@ -514,6 +515,9 @@ def _load_arff_response(
+         target_names_to_select=target_names_to_select,
+         shape=shape,
+     )
++    if parser == "pandas" and read_csv_kwargs is not None:
++        arff_params["read_csv_kwargs"] = read_csv_kwargs
++        
+     try:
+         X, y, frame, categories = _open_url_and_load_gzip_file(
+             url, data_home, n_retries, delay, arff_params
+@@ -530,7 +534,11 @@ def _load_arff_response(
+         # A parsing error could come from providing the wrong quotechar
+         # to pandas. By default, we use a double quote. Thus, we retry
+         # with a single quote before to raise the error.
+-        arff_params["read_csv_kwargs"] = {"quotechar": "'"}
++        retry_read_csv_kwargs = {}
++        if read_csv_kwargs is not None:
++            retry_read_csv_kwargs.update(read_csv_kwargs)
++        retry_read_csv_kwargs["quotechar"] = "'"
++        arff_params["read_csv_kwargs"] = retry_read_csv_kwargs
+         X, y, frame, categories = _open_url_and_load_gzip_file(
+             url, data_home, n_retries, delay, arff_params
+         )
+@@ -552,6 +560,7 @@ def _download_data_to_bunch(
+     n_retries: int = 3,
+     delay: float = 1.0,
+     parser: str,
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Download ARFF data, load it to a specific container and create to Bunch.
+ 
+@@ -657,6 +666,7 @@ def _download_data_to_bunch(
+         md5_checksum=md5_checksum,
+         n_retries=n_retries,
+         delay=delay,
++        read_csv_kwargs=read_csv_kwargs,
+     )
+ 
+     return Bunch(
+@@ -725,6 +735,7 @@ def fetch_openml(
+     n_retries: int = 3,
+     delay: float = 1.0,
+     parser: Optional[str] = "warn",
++    read_csv_kwargs: Optional[dict] = None,
+ ):
+     """Fetch dataset from openml by name or dataset id.
+ 
+@@ -829,6 +840,11 @@ def fetch_openml(
+            warning. Therefore, an `ImportError` will be raised from 1.4 if
+            the dataset is dense and pandas is not installed.
+ 
++    read_csv_kwargs : dict, default=None
++        Keyword arguments to pass to `pandas.read_csv` when using the
++        pandas parser. This allows to overwrite the default parameters
++        used to read the ARFF file. Only applicable when `parser="pandas"`.
++
+     Returns
+     -------
+     data : :class:`~sklearn.utils.Bunch`
+@@ -964,6 +980,11 @@ def fetch_openml(
+             f" {parser!r} instead."
+         )
+ 
++    if read_csv_kwargs is not None and not isinstance(read_csv_kwargs, dict):
++        raise ValueError(
++            f"`read_csv_kwargs` must be a dictionary or None. Got {read_csv_kwargs!r} instead."
++        )
++
+     if parser == "warn":
+         # TODO(1.4): remove this warning
+         parser = "liac-arff"
+@@ -1096,6 +1117,7 @@ def fetch_openml(
+         n_retries=n_retries,
+         delay=delay,
+         parser=parser_,
++        read_csv_kwargs=read_csv_kwargs,
+     )
+ 
+     if return_X_y:

@@ -1,0 +1,142 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 17fe6af..97582f0 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3788,6 +3788,56 @@ class DataArray(AbstractArray, DataWithCoords):
+             dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov
+         )
+ 
++    def curvefit(
++        self,
++        coords,
++        func,
++        reduce_dims=None,
++        param_names=None,
++        bounds=None,
++        **kwargs,
++    ):
++        """
++        Fit a function to the data using scipy.optimize.curve_fit.
++
++        Parameters
++        ----------
++        coords : DataArray or list of DataArray
++            The coordinates to use as independent variables.
++        func : callable
++            The model function to fit. It must take the independent variables as
++            its first argument and the parameters to fit as separate arguments.
++        reduce_dims : str or list of str, optional
++            Dimensions to reduce by fitting. If None, fit over all dimensions.
++        param_names : list of str, optional
++            Names of the parameters. If not given, use 'p0', 'p1', etc.
++        bounds : dict, optional
++            Bounds for the parameters. The keys should be parameter names and the
++            values should be tuples of (lower, upper).
++        **kwargs : dict
++            Additional keyword arguments passed to scipy.optimize.curve_fit.
++
++        Returns
++        -------
++        result : Dataset
++            A dataset with the fitted parameters and the covariance matrix.
++
++        See Also
++        --------
++        scipy.optimize.curve_fit
++        """
++        from .curve_fitting import curvefit
++
++        return curvefit(
++            self,
++            coords,
++            func,
++            reduce_dims=reduce_dims,
++            param_names=param_names,
++            bounds=bounds,
++            **kwargs,
++        )
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,
+@@ -4424,4 +4474,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 0127e99..9887100 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6526,6 +6526,64 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+ 
+         return Dataset(data_vars=variables, attrs=self.attrs.copy())
+ 
++    def curvefit(
++        self,
++        coords,
++        func,
++        reduce_dims=None,
++        param_names=None,
++        bounds=None,
++        **kwargs,
++    ):
++        """
++        Fit a function to each variable in the dataset using scipy.optimize.curve_fit.
++
++        Parameters
++        ----------
++        coords : DataArray or list of DataArray
++            The coordinates to use as independent variables.
++        func : callable
++            The model function to fit. It must take the independent variables as
++            its first argument and the parameters to fit as separate arguments.
++        reduce_dims : str or list of str, optional
++            Dimensions to reduce by fitting. If None, fit over all dimensions.
++        param_names : list of str, optional
++            Names of the parameters. If not given, use 'p0', 'p1', etc.
++        bounds : dict, optional
++            Bounds for the parameters. The keys should be parameter names and the
++            values should be tuples of (lower, upper).
++        **kwargs : dict
++            Additional keyword arguments passed to scipy.optimize.curve_fit.
++
++        Returns
++        -------
++        result : Dataset
++            A dataset with the fitted parameters and the covariance matrix for each variable.
++
++        See Also
++        --------
++        scipy.optimize.curve_fit
++        """
++        from .curve_fitting import curvefit
++
++        results = {}
++        for name, var in self.data_vars.items():
++            results[name] = curvefit(
++                var,
++                coords,
++                func,
++                reduce_dims=reduce_dims,
++                param_names=param_names,
++                bounds=bounds,
++                **kwargs,
++            )
++
++        # Combine the results
++        # Each result is a Dataset with 'params' and 'covariance'
++        # We'll create a new dataset with variables for each parameter and covariance per variable
++        combined = xr.merge(results, compat="no_conflicts")
++        return combined
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,
+@@ -7075,4 +7133,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self.isel(indexers, missing_dims=missing_dims)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

@@ -1,0 +1,156 @@
+diff --git a/astropy/modeling/core.py b/astropy/modeling/core.py
+index bb1fcca..5f3cf6b 100644
+--- a/astropy/modeling/core.py
++++ b/astropy/modeling/core.py
+@@ -3366,6 +3366,151 @@ def binary_operation(binoperator, left, right):
+         return tuple([binoperator(item[0], item[1])
+                       for item in zip(left, right)])
+     else:
++
++
++class FixedInputModel(Model):
++    """
++    A model that fixes one or more inputs of an original model to constant values.
++
++    Parameters
++    ----------
++    model : `~astropy.modeling.Model`
++        The original model.
++    fixed_inputs : dict
++        A dictionary mapping input names or indices to fixed values.
++    """
++    def __init__(self, model, fixed_inputs, name=None, meta=None):
++        # Determine the new inputs and outputs
++        self._original_model = model
++        self._fixed_inputs = self._validate_fixed_inputs(fixed_inputs, model)
++
++        # Create the new input and output names
++        new_inputs = []
++        for i, inp in enumerate(model.inputs):
++            if i not in self._fixed_inputs:
++                new_inputs.append(inp)
++        self._inputs = tuple(new_inputs)
++        self._outputs = model.outputs
++
++        # Initialize the base class
++        super().__init__(name=name, meta=meta)
++
++        # Copy the parameters from the original model
++        self._param_names = model.param_names
++        for param_name in self._param_names:
++            param = getattr(model, param_name)
++            new_param = param.copy()
++            new_param.model = self
++            setattr(self, param_name, new_param)
++
++        # Copy other attributes
++        self._n_models = model._n_models
++        self._model_set_axis = model._model_set_axis
++        self._constraints = model._constraints
++
++        # Adjust the bounding box
++        self._adjust_bounding_box()
++
++    def _validate_fixed_inputs(self, fixed_inputs, model):
++        """
++        Validate the fixed_inputs dictionary and convert to a mapping from index to value.
++        """
++        validated = {}
++        for key, value in fixed_inputs.items():
++            if isinstance(key, int):
++                if key < 0 or key >= model.n_inputs:
++                    raise ValueError(f"Input index {key} is out of range for model with {model.n_inputs} inputs.")
++                validated[key] = value
++            elif isinstance(key, str):
++                try:
++                    idx = model.inputs.index(key)
++                except ValueError:
++                    raise ValueError(f"Input name {key} is not in the model's inputs: {model.inputs}")
++                validated[idx] = value
++            else:
++                raise TypeError("Keys in fixed_inputs must be integers or strings.")
++        return validated
++
++    def _adjust_bounding_box(self):
++        """
++        Adjust the bounding box by removing the fixed dimensions.
++        """
++        try:
++            bbox = self._original_model.bounding_box
++        except NotImplementedError:
++            bbox = None
++
++        if bbox is not None:
++            # Convert to list for mutability
++            bbox = list(bbox)
++            # Remove the dimensions that are fixed
++            for idx in sorted(self._fixed_inputs.keys(), reverse=True):
++                del bbox[idx]
++            if len(bbox) == 0:
++                self._bounding_box = None
++            elif len(bbox) == 1:
++                self._bounding_box = bbox[0]
++            else:
++                self._bounding_box = tuple(bbox)
++        else:
++            self._bounding_box = None
++
++    def evaluate(self, *args):
++        """
++        Evaluate the model with the fixed inputs inserted.
++        """
++        # Build the full argument list
++        full_args = []
++        arg_iter = iter(args)
++        for i in range(self._original_model.n_inputs):
++            if i in self._fixed_inputs:
++                full_args.append(self._fixed_inputs[i])
++            else:
++                full_args.append(next(arg_iter))
++        # Call the original model
++        return self._original_model.evaluate(*full_args)
++
++    @property
++    def inputs(self):
++        return self._inputs
++
++    @property
++    def outputs(self):
++        return self._outputs
++
++    @property
++    def n_inputs(self):
++        return len(self._inputs)
++
++    @property
++    def n_outputs(self):
++        return len(self._outputs)
++
++
++def fix_inputs(model, fixed_inputs):
++    """
++    Fix one or more inputs of a model to constant values.
++
++    Parameters
++    ----------
++    model : `~astropy.modeling.Model`
++        The model to fix inputs of.
++    fixed_inputs : dict
++        A dictionary mapping input names or indices to constant values.
++
++    Returns
++    -------
++    fixed_model : `~astropy.modeling.Model`
++        A new model with the specified inputs fixed.
++
++    Examples
++    --------
++    >>> from astropy.modeling.models import Polynomial2D
++    >>> poly = Polynomial2D(degree=2)
++    >>> poly_fixed = fix_inputs(poly, {'x': 0})
++    >>> poly_fixed(1)  # evaluates poly at x=0, y=1
++    """
++    return FixedInputModel(model, fixed_inputs)
+         return binoperator(left, right)
+ 
+ 

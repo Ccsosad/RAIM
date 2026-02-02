@@ -1,0 +1,392 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..648ecb7 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3202,6 +3202,51 @@ class DataArray(AbstractArray, DataWithCoords):
+         ds = self._to_temp_dataset().integrate(dim, datetime_unit)
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        skipna: bool = True,
++        rcond: float = None,
++        full: bool = False,
++        **kwargs,
++    ) -> "DataArray":
++        """Least squares polynomial fit.
++
++        Parameters
++        ----------
++        dim : str
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        skipna : bool, optional
++            If True, skip missing values (marked as NaN). Default is True.
++        rcond : float, optional
++            Cut-off ratio for small singular values.
++        full : bool, optional
++            If True, return additional information (residuals, rank, singular values).
++        **kwargs : dict
++            Additional keyword arguments passed to apply_ufunc.
++
++        Returns
++        -------
++        coefficients : DataArray
++            Polynomial coefficients, with a new dimension 'degree' of size deg+1.
++            The coefficients are ordered from highest degree to lowest.
++        [if full=True] residuals : DataArray
++            Sum of squared residuals.
++        rank : DataArray
++            Effective rank of the matrix.
++        singular_values : DataArray
++            Singular values of the matrix.
++
++        See Also
++        --------
++        numpy.polyfit
++        """
++        from .polyfit import polyfit as _polyfit
++        return _polyfit(self, dim, deg, skipna=skipna, rcond=rcond, full=full, **kwargs)
++
+     def unify_chunks(self) -> "DataArray":
+         """ Unify chunk size along all chunked dimensions of this DataArray.
+ 
+@@ -3449,4 +3494,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 16f0e97..c1256ca 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5530,6 +5530,54 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+             variables, coord_names=coord_names, indexes=indexes
+         )
+ 
++    def polyfit(
++        self,
++        dim: Hashable,
++        deg: int,
++        skipna: bool = True,
++        rcond: float = None,
++        full: bool = False,
++        **kwargs,
++    ) -> "Dataset":
++        """Least squares polynomial fit for each variable in the dataset.
++
++        Parameters
++        ----------
++        dim : str
++            Dimension along which to fit the polynomial.
++        deg : int
++            Degree of the fitting polynomial.
++        skipna : bool, optional
++            If True, skip missing values (marked as NaN). Default is True.
++        rcond : float, optional
++            Cut-off ratio for small singular values.
++        full : bool, optional
++            If True, return additional information (residuals, rank, singular values).
++        **kwargs : dict
++            Additional keyword arguments passed to apply_ufunc.
++
++        Returns
++        -------
++        coefficients : Dataset
++            Polynomial coefficients, with a new dimension 'degree' of size deg+1.
++            The coefficients are ordered from highest degree to lowest.
++        [if full=True] residuals : Dataset
++            Sum of squared residuals.
++        rank : Dataset
++            Effective rank of the matrix.
++        singular_values : Dataset
++            Singular values of the matrix.
++
++        See Also
++        --------
++        numpy.polyfit
++        """
++        from .polyfit import polyfit as _polyfit
++        result = self.map(
++            lambda da: _polyfit(da, dim, deg, skipna=skipna, rcond=rcond, full=full, **kwargs)
++        )
++        return result
++
+     @property
+     def real(self):
+         return self._unary_op(lambda x: x.real, keep_attrs=True)(self)
+@@ -5915,4 +5963,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self._replace_vars_and_dims(variables)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/polyfit.py b/xarray/core/polyfit.py
+new file mode 100644
+index 0000000..fc80cce
+--- /dev/null
++++ b/xarray/core/polyfit.py
+@@ -0,0 +1,259 @@
++"""
++Polynomial fitting for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from . import duck_array_ops
++from .common import _contains_datetime_like_objects
++from .computation import apply_ufunc
++from .dataset import Dataset
++from .dataarray import DataArray
++from .variable import Variable, IndexVariable
++
++def _least_squares(lhs, rhs, rcond=None):
++    """Return the coefficients of a polynomial of degree `deg` that fits the data.
++
++    This is a helper function for polyfit, using numpy.linalg.lstsq.
++
++    Parameters
++    ----------
++    lhs : array_like
++        Vandermonde matrix of shape (M, deg + 1).
++    rhs : array_like
++        y-coordinates of the sample points, shape (M,) or (M, K).
++    rcond : float, optional
++        Cut-off ratio for small singular values.
++
++    Returns
++    -------
++    coefficients : ndarray
++        Polynomial coefficients, highest power first.
++    residuals : ndarray
++        Sum of squared residuals.
++    rank : int
++        Effective rank of the matrix.
++    singular_values : ndarray
++        Singular values of the matrix.
++    """
++    # Use numpy.linalg.lstsq
++    coeffs, residuals, rank, s = np.linalg.lstsq(lhs, rhs, rcond=rcond)
++    return coeffs, residuals, rank, s
++
++def _polyfit(x, y, deg, rcond=None, full=False):
++    """Least squares polynomial fit.
++
++    This is a helper function that mimics numpy.polyfit.
++
++    Parameters
++    ----------
++    x : array_like
++        x-coordinates of the sample points.
++    y : array_like
++        y-coordinates of the sample points.
++    deg : int
++        Degree of the fitting polynomial.
++    rcond : float, optional
++        Cut-off ratio for small singular values.
++    full : bool, optional
++        If True, return additional information.
++
++    Returns
++    -------
++    coefficients : ndarray
++        Polynomial coefficients, highest power first.
++    residuals : ndarray, optional
++        Sum of squared residuals (if full=True).
++    rank : int, optional
++        Effective rank of the matrix (if full=True).
++    singular_values : ndarray, optional
++        Singular values of the matrix (if full=True).
++    """
++    # Check inputs
++    x = np.asarray(x)
++    y = np.asarray(y)
++
++    # Check that x and y have the same length.
++    if len(x) != len(y):
++        raise ValueError("x and y must have the same length.")
++
++    # Check that deg is a non-negative integer.
++    if deg < 0:
++        raise ValueError("deg must be a non-negative integer.")
++
++    # Construct the Vandermonde matrix.
++    lhs = np.vander(x, deg + 1)
++    rhs = y
++
++    # Solve the least squares problem.
++    coeffs, residuals, rank, s = _least_squares(lhs, rhs, rcond)
++
++    if full:
++        return coeffs, residuals, rank, s
++    else:
++        return coeffs
++
++def polyfit(data_array, dim, deg, skipna=True, rcond=None, full=False, **kwargs):
++    """Least squares polynomial fit for DataArray.
++
++    Parameters
++    ----------
++    data_array : DataArray
++        Input data array.
++    dim : str
++        Dimension along which to fit the polynomial.
++    deg : int
++        Degree of the fitting polynomial.
++    skipna : bool, optional
++        If True, skip missing values (marked as NaN). Default is True.
++    rcond : float, optional
++        Cut-off ratio for small singular values.
++    full : bool, optional
++        If True, return additional information (residuals, rank, singular values).
++    **kwargs : dict
++        Additional keyword arguments passed to apply_ufunc.
++
++    Returns
++    -------
++    coefficients : DataArray
++        Polynomial coefficients, with a new dimension 'degree' of size deg+1.
++        The coefficients are ordered from highest degree to lowest.
++    [if full=True] residuals : DataArray
++        Sum of squared residuals.
++    rank : DataArray
++        Effective rank of the matrix.
++    singular_values : DataArray
++        Singular values of the matrix.
++    """
++    from .missing import get_clean_interp_index
++
++    # Get the coordinate along the dimension
++    if dim not in data_array.dims:
++        raise ValueError(f"Dimension {dim} not found in data array.")
++
++    # Get the coordinate values
++    x = get_clean_interp_index(data_array, dim, kind='linear')
++
++    # If there are datetime-like coordinates, convert to numeric.
++    if _contains_datetime_like_objects(x):
++        x = x._to_numeric()
++
++    # Convert to numpy array
++    x = x.values
++
++    # The data to fit
++    y = data_array
++
++    # Define the function to apply along the dimension
++    def _polyfit_1d(y, x, deg, rcond, full):
++        # Skip missing values if skipna is True
++        if skipna:
++            mask = np.isnan(y)
++            if np.any(mask):
++                x = x[~mask]
++                y = y[~mask]
++        # If all values are missing, return NaN coefficients
++        if len(y) == 0:
++            if full:
++                return (np.full(deg + 1, np.nan), np.nan, np.nan, np.full(deg + 1, np.nan))
++            else:
++                return np.full(deg + 1, np.nan)
++        # Perform the fit
++        result = _polyfit(x, y, deg, rcond=rcond, full=full)
++        return result
++
++    # Apply along the dimension
++    if full:
++        # We need to return four outputs
++        coeffs, residuals, rank, s = apply_ufunc(
++            _polyfit_1d,
++            y,
++            input_core_dims=[[dim]],
++            output_core_dims=[['degree'], [], [], ['degree']],
++            exclude_dims={dim},
++            vectorize=True,
++            kwargs={'x': x, 'deg': deg, 'rcond': rcond, 'full': full},
++            **kwargs
++        )
++        # Create a dataset for the full output
++        ds = Dataset({
++            'polyfit_coefficients': coeffs,
++            'residuals': residuals,
++            'rank': rank,
++            'singular_values': s,
++        })
++        return ds
++    else:
++        coeffs = apply_ufunc(
++            _polyfit_1d,
++            y,
++            input_core_dims=[[dim]],
++            output_core_dims=[['degree']],
++            exclude_dims={dim},
++            vectorize=True,
++            kwargs={'x': x, 'deg': deg, 'rcond': rcond, 'full': full},
++            **kwargs
++        )
++        return coeffs
++
++def polyval(coord, coeffs):
++    """Evaluate a polynomial at specific values.
++
++    Parameters
++    ----------
++    coord : DataArray or Variable
++        The coordinate values at which to evaluate the polynomial.
++    coeffs : DataArray or Variable
++        Polynomial coefficients, with a dimension 'degree' (highest degree first).
++
++    Returns
++    -------
++    values : DataArray or Variable
++        The evaluated polynomial.
++    """
++    # Convert to numpy arrays if necessary
++    if isinstance(coord, (DataArray, Variable)):
++        x = coord.values
++    else:
++        x = np.asarray(coord)
++
++    if isinstance(coeffs, (DataArray, Variable)):
++        c = coeffs.values
++    else:
++        c = np.asarray(coeffs)
++
++    # Check that coeffs has a dimension 'degree'
++    if hasattr(coeffs, 'dims') and 'degree' not in coeffs.dims:
++        raise ValueError("Coefficients must have a dimension named 'degree'.")
++
++    # Move the degree dimension to the last axis for numpy.polyval
++    if c.ndim > 1:
++        # Find the axis of the degree dimension
++        if hasattr(coeffs, 'dims'):
++            degree_axis = coeffs.get_axis_num('degree')
++        else:
++            # Assume the last dimension is degree
++            degree_axis = -1
++        # Roll the degree axis to the end
++        c = np.moveaxis(c, degree_axis, -1)
++        # Evaluate the polynomial
++        # numpy.polyval expects the last dimension of coeffs to be the degree
++        # and the second last dimension to be the same as x? Actually, numpy.polyval
++        # only works for 1D x. We'll use a custom implementation.
++        # We'll use a loop over the other dimensions.
++        shape = c.shape[:-1]
++        result = np.zeros(shape, dtype=c.dtype)
++        for idx in np.ndindex(shape):
++            result[idx] = np.polyval(c[idx], x)
++    else:
++        result = np.polyval(c, x)
++
++    # Return the same type as coeffs if possible
++    if isinstance(coeffs, DataArray):
++        # Remove the degree dimension from the result
++        dims = [d for d in coeffs.dims if d != 'degree']
++        return DataArray(result, dims=dims, coords=coeffs.coords, attrs=coeffs.attrs)
++    elif isinstance(coeffs, Variable):
++        dims = [d for d in coeffs.dims if d != 'degree']
++        return Variable(dims, result, attrs=coeffs.attrs)
++    else:
++        return result

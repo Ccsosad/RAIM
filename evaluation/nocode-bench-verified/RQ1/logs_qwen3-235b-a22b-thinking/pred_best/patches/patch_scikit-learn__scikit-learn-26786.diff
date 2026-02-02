@@ -1,0 +1,26 @@
+diff --git a/sklearn/base.py b/sklearn/base.py
+index 487600c..52e77d6 100644
+--- a/sklearn/base.py
++++ b/sklearn/base.py
+@@ -83,6 +83,8 @@ def _clone_parametrized(estimator, *, safe=True):
+     # XXX: not handling dictionaries
+     if estimator_type in (list, tuple, set, frozenset):
+         return estimator_type([clone(e, safe=safe) for e in estimator])
++    elif isinstance(estimator, dict):
++        return {key: clone(value, safe=safe) for key, value in estimator.items()}
+     elif not hasattr(estimator, "get_params") or isinstance(estimator, type):
+         if not safe:
+             return copy.deepcopy(estimator)
+diff --git a/sklearn/model_selection/_search.py b/sklearn/model_selection/_search.py
+index 6afb5f6..356a30b 100644
+--- a/sklearn/model_selection/_search.py
++++ b/sklearn/model_selection/_search.py
+@@ -849,7 +849,7 @@ class BaseSearchCV(MetaEstimatorMixin, BaseEstimator, metaclass=ABCMeta):
+                         y,
+                         train=train,
+                         test=test,
+-                        parameters=parameters,
++                        parameters=clone(parameters, safe=False),
+                         split_progress=(split_idx, n_splits),
+                         candidate_progress=(cand_idx, n_candidates),
+                         **fit_and_score_kwargs,

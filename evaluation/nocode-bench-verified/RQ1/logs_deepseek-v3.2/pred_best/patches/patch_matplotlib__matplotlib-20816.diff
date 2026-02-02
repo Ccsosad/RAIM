@@ -1,0 +1,69 @@
+diff --git a/lib/matplotlib/cbook/__init__.py b/lib/matplotlib/cbook/__init__.py
+index 5c3e852..fc4ef46 100644
+--- a/lib/matplotlib/cbook/__init__.py
++++ b/lib/matplotlib/cbook/__init__.py
+@@ -175,6 +175,9 @@ class CallbackRegistry:
+         self._func_cid_map = {}
+         # A hidden variable that marks cids that need to be pickled.
+         self._pickled_cids = set()
++        # Blocking state: a set of blocked signals, and a flag for blocking all.
++        self._blocked = set()
++        self._block_all = False
+ 
+     def __getstate__(self):
+         return {
+@@ -267,6 +270,9 @@ class CallbackRegistry:
+         All of the functions registered to receive callbacks on *s* will be
+         called with ``*args`` and ``**kwargs``.
+         """
++        # Skip processing if we are blocking all signals or this specific signal.
++        if self._block_all or s in self._blocked:
++            return
+         for cid, ref in list(self.callbacks.get(s, {}).items()):
+             func = ref()
+             if func is not None:
+@@ -281,6 +287,44 @@ class CallbackRegistry:
+                         raise
+ 
+ 
++    @contextlib.contextmanager
++    def blocked(self, *, signal=None):
++        """
++        Context manager to temporarily block callbacks.
++
++        Parameters
++        ----------
++        signal : str, optional
++            If provided, only block this specific signal. Otherwise, block all
++            signals.
++
++        Examples
++        --------
++        >>> with callbacks.blocked():
++        ...     # All signals are blocked
++        ...     pass
++        >>> with callbacks.blocked(signal="key_press_event"):
++        ...     # Only key_press_event is blocked
++        ...     pass
++        """
++        if signal is None:
++            # Block all signals
++            old_block_all = self._block_all
++            self._block_all = True
++            try:
++                yield
++            finally:
++                self._block_all = old_block_all
++        else:
++            # Block a specific signal
++            old_blocked = signal in self._blocked
++            self._blocked.add(signal)
++            try:
++                yield
++            finally:
++                if not old_blocked:
++                    self._blocked.remove(signal)
++
+ class silent_list(list):
+     """
+     A list with a short ``repr()``.

@@ -1,0 +1,66 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..6e9d536 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -67,6 +67,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -82,7 +83,8 @@ def expand_modules(
+         ):
+             continue
+         module_path = get_python_path(something)
+-        additional_search_path = [".", module_path] + path
++        source_roots_abs = [os.path.abspath(s) for s in source_roots]
++        additional_search_path = [".", module_path] + source_roots_abs + path
+         if os.path.exists(something):
+             # this is a file or a directory
+             try:
+@@ -160,4 +162,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 21f6e51..f3c7ddb 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -303,7 +303,18 @@ class PyLinter(
+         self.stats = LinterStats()
+ 
+         # Attributes related to (command-line) options and their parsing
+-        self.options: Options = options + _make_linter_options(self)
++        self.options: Options = options + _make_linter_options(self) + (
++            (
++                "source-roots",
++                {
++                    "type": "csv",
++                    "metavar": "<path>",
++                    "dest": "source_roots",
++                    "default": (),
++                    "help": "Add paths to the list of the source roots. The source root is an absolute path or a path relative to the current working directory used to determine a package namespace for modules located under the source root.",
++                },
++            ),
++        )
+         for opt_group in option_groups:
+             self.option_groups_descs[opt_group[0]] = opt_group[1]
+         self._option_groups: tuple[tuple[str, str], ...] = option_groups + (
+@@ -891,6 +902,7 @@ class PyLinter(
+             self.config.ignore,
+             self.config.ignore_patterns,
+             self._ignore_paths,
++            self.config.source_roots,
+         )
+         for error in errors:
+             message = modname = error["mod"]
+@@ -1367,4 +1379,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)

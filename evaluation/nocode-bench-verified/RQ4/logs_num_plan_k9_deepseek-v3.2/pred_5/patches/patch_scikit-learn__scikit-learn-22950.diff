@@ -1,0 +1,18 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..60a14ab 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -552,10 +552,10 @@ def _ridge_regression(
+             "Please use another solver."
+         )
+ 
+-    if return_intercept and solver != "sag":
++    if return_intercept and solver not in ["sag", "lsqr"]:
+         raise ValueError(
+-            "In Ridge, only 'sag' solver can directly fit the "
+-            "intercept. Please change solver to 'sag' or set "
++            "In Ridge, only 'sag' and 'lsqr' solvers can directly fit the "
++            "intercept. Please change solver to 'sag' or 'lsqr' or set "
+             "return_intercept=False."
+         )
+ 

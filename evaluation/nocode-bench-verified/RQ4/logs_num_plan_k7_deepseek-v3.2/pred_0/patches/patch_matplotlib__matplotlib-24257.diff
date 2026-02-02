@@ -1,0 +1,53 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..b91668a 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -212,6 +212,48 @@ def read_style_directory(style_dir):
+     return styles
+ 
+ 
++def rc_params_from_package(package_style_name):
++    """
++    Return rc parameters from a style defined in a package.
++
++    Parameters
++    ----------
++    package_style_name : str
++        The style name in the form "package.subpackage.style".
++
++    Returns
++    -------
++    dict
++        The rc parameters.
++
++    Raises
++    ------
++    OSError
++        If the style file cannot be found.
++    """
++    import importlib.resources as resources
++    # Split the package style name into package and style
++    parts = package_style_name.split('.')
++    if len(parts) < 2:
++        raise ValueError(
++            f"Invalid package style name: {package_style_name}. "
++            "Expected format: 'package.style' or 'package.subpackage.style'")
++    style_name = parts[-1]
++    package_name = '.'.join(parts[:-1])
++    try:
++        package = resources.files(package_name)
++    except (ModuleNotFoundError, AttributeError) as e:
++        raise OSError(f"Cannot find package {package_name}") from e
++    resource = package / f"{style_name}.{STYLE_EXTENSION}"
++    if not resource.is_file():
++        raise OSError(f"Cannot find style file {resource} in package {package_name}")
++    with warnings.catch_warnings(record=True) as warns:
++        params = rc_params_from_file(resource, use_default_template=False)
++    for w in warns:
++        _log.warning('In %s: %s', resource, w.message)
++    return params
++
++
+ def update_nested_dict(main_dict, new_dict):
+     """
+     Update nested dict (only level of nesting) with new values.

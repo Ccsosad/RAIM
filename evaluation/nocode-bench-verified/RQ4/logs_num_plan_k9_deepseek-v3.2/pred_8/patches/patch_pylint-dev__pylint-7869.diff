@@ -1,0 +1,27 @@
+diff --git a/pylint/lint/base_options.py b/pylint/lint/base_options.py
+index 055eb4f..e6e9e6f 100644
+--- a/pylint/lint/base_options.py
++++ b/pylint/lint/base_options.py
+@@ -427,6 +427,16 @@ def _make_run_options(self: Run) -> Options:
+                 "hide_from_config_file": True,
+             },
+         ),
++        (
++            "output-format",
++            {
++                "action": _DoNothingAction,
++                "kwargs": {},
++                "group": "Commands",
++                "help": "Specify the output format. Available formats: text, json, ... , no-header.",
++                "hide_from_config_file": True,
++            },
++        ),
+         (
+             "init-hook",
+             {
+@@ -580,4 +590,4 @@ def _make_run_options(self: Run) -> Options:
+                 "hide_from_config_file": True,
+             },
+         ),
+-    )
++    )

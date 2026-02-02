@@ -1,0 +1,10 @@
+diff --git a/astropy/cosmology/parameters.py b/astropy/cosmology/parameters.py
+index 233dc71..b47047f 100644
+--- a/astropy/cosmology/parameters.py
++++ b/astropy/cosmology/parameters.py
+@@ -235,4 +235,4 @@ WMAP1 = MappingProxyType(dict(
+ 
+ # If new parameters are added, this list must be updated
+ available = ('Planck18', 'Planck15', 'Planck13',
+-             'WMAP9', 'WMAP7', 'WMAP5', 'WMAP3', 'WMAP1')
++             'WMAP9', 'WMAP7', 'WMAP5', 'WMAP3', 'WMAP1')

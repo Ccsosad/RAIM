@@ -1,0 +1,81 @@
+diff --git a/sklearn/preprocessing/_encoders.py b/sklearn/preprocessing/_encoders.py
+index 221a7b7..f635342 100644
+--- a/sklearn/preprocessing/_encoders.py
++++ b/sklearn/preprocessing/_encoders.py
+@@ -93,7 +93,15 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+                                          "supported for numerical categories")
+                 if handle_unknown == 'error':
+                     diff = _check_unknown(Xi, cats)
+-                    if diff:
++                    if diff is not None and len(diff) > 0:
++                        # Remove missing values that are in cats from the diff
++                        new_diff = []
++                        for d in diff:
++                            if self._is_missing(np.array([d]))[0] and self._is_in(d, cats):
++                                continue
++                            new_diff.append(d)
++                        diff = np.array(new_diff, dtype=object) if new_diff else np.array([], dtype=object)
++                    if len(diff) > 0:
+                         msg = ("Found unknown categories {0} in column {1}"
+                                " during fit".format(diff, i))
+                         raise ValueError(msg)
+@@ -118,11 +126,30 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+             diff, valid_mask = _check_unknown(Xi, self.categories_[i],
+                                               return_mask=True)
+ 
++            # Handle missing values: if a missing value is in the categories, it should be valid
++            missing_mask = self._is_missing(Xi)
++            if missing_mask.any():
++                # For each missing value, check if it is in the categories
++                for idx in np.where(missing_mask)[0]:
++                    val = Xi[idx]
++                    if self._is_in(val, self.categories_[i]):
++                        valid_mask[idx] = True
++                    # Otherwise, leave it as invalid (so it will be handled as unknown)
++
+             if not np.all(valid_mask):
+                 if handle_unknown == 'error':
+-                    msg = ("Found unknown categories {0} in column {1}"
+-                           " during transform".format(diff, i))
+-                    raise ValueError(msg)
++                    # Update diff to remove the missing values that are in the categories
++                    if diff is not None and len(diff) > 0:
++                        new_diff = []
++                        for d in diff:
++                            if self._is_missing(np.array([d]))[0] and self._is_in(d, self.categories_[i]):
++                                continue
++                            new_diff.append(d)
++                        diff = np.array(new_diff, dtype=object) if new_diff else np.array([], dtype=object)
++                    if len(diff) > 0:
++                        msg = ("Found unknown categories {0} in column {1}"
++                               " during transform".format(diff, i))
++                        raise ValueError(msg)
+                 else:
+                     # Set the problematic rows to an acceptable value and
+                     # continue `The rows are marked `X_mask` and will be
+@@ -144,6 +171,25 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
+ 
+         return X_int, X_mask
+ 
++    def _is_missing(self, array):
++        """Return a boolean mask of the missing values in the array."""
++        if array.dtype.kind == 'O':
++            # For object dtype, check for None and np.nan
++            with np.errstate(invalid='ignore'):
++                return np.array([x is None or (isinstance(x, float) and np.isnan(x)) for x in array], dtype=bool)
++        else:
++            # For numeric and string dtypes, only check for np.nan
++            return np.isnan(array)
++
++    def _is_in(self, val, array):
++        """Check if val is in array, considering missing values."""
++        if val is None:
++            return any(x is None for x in array)
++        elif isinstance(val, float) and np.isnan(val):
++            return any(isinstance(x, float) and np.isnan(x) for x in array)
++        else:
++            return val in array
++
+     def _more_tags(self):
+         return {'X_types': ['categorical']}
+ 

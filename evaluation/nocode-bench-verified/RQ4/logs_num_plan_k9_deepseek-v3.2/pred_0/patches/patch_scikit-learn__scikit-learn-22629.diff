@@ -1,0 +1,50 @@
+diff --git a/sklearn/preprocessing/_label.py b/sklearn/preprocessing/_label.py
+index 14c1f4c..cd32a9e 100644
+--- a/sklearn/preprocessing/_label.py
++++ b/sklearn/preprocessing/_label.py
+@@ -136,7 +136,44 @@ class LabelEncoder(TransformerMixin, BaseEstimator):
+         if _num_samples(y) == 0:
+             return np.array([])
+ 
+-        return _encode(y, uniques=self.classes_)
++        # Use searchsorted for encoding, which handles NaN properly
++        # when classes_ contains NaN
++        if len(self.classes_) == 0:
++            return np.array([], dtype=np.int64)
++        
++        # Convert y to array for indexing
++        y_array = np.asarray(y)
++        
++        # Initialize result array
++        result = np.empty(len(y_array), dtype=np.int64)
++        
++        # For each class, find matches
++        for i, cls in enumerate(self.classes_):
++            if isinstance(cls, float) and np.isnan(cls):
++                # Special handling for NaN class
++                mask = np.isnan(y_array)
++            else:
++                mask = y_array == cls
++            result[mask] = i
++        
++        # Check for any unseen labels
++        # Create a mask of all matched positions
++        matched = np.zeros(len(y_array), dtype=bool)
++        for i, cls in enumerate(self.classes_):
++            if isinstance(cls, float) and np.isnan(cls):
++                matched = matched | np.isnan(y_array)
++            else:
++                matched = matched | (y_array == cls)
++        
++        if not np.all(matched):
++            # Find the unseen labels
++            unseen_mask = ~matched
++            unseen_labels = np.unique(y_array[unseen_mask])
++            raise ValueError(
++                "y contains previously unseen labels: %s" % str(unseen_labels)
++            )
++        
++        return result
+ 
+     def inverse_transform(self, y):
+         """Transform labels back to original encoding.

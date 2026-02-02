@@ -1,0 +1,66 @@
+diff --git a/django/db/models/deletion.py b/django/db/models/deletion.py
+index 96922fd..d44028e 100644
+--- a/django/db/models/deletion.py
++++ b/django/db/models/deletion.py
+@@ -76,8 +76,9 @@ def get_candidate_relations_to_delete(opts):
+ 
+ 
+ class Collector:
+-    def __init__(self, using):
++    def __init__(self, using, origin=None):
+         self.using = using
++        self.origin = origin
+         # Initially, {model: {instances}}, later values become lists.
+         self.data = defaultdict(set)
+         # {model: {(field, value): {instances}}}
+@@ -378,7 +379,10 @@ class Collector:
+                 return
+         self.data = {model: self.data[model] for model in sorted_models}
+ 
+-    def delete(self):
++    def delete(self, origin=None):
++        # If an origin is provided, update the collector's origin.
++        if origin is not None:
++            self.origin = origin
+         # sort instance collections
+         for model, instances in self.data.items():
+             self.data[model] = sorted(instances, key=attrgetter("pk"))
+@@ -404,7 +408,8 @@ class Collector:
+             for model, obj in self.instances_with_model():
+                 if not model._meta.auto_created:
+                     signals.pre_delete.send(
+-                        sender=model, instance=obj, using=self.using
++                        sender=model, instance=obj, using=self.using,
++                        origin=self.origin,
+                     )
+ 
+             # fast deletes
+@@ -435,7 +440,8 @@ class Collector:
+                 if not model._meta.auto_created:
+                     for obj in instances:
+                         signals.post_delete.send(
+-                            sender=model, instance=obj, using=self.using
++                            sender=model, instance=obj, using=self.using,
++                            origin=self.origin,
+                         )
+ 
+         # update collected instances
+@@ -446,4 +452,4 @@ class Collector:
+         for model, instances in self.data.items():
+             for instance in instances:
+                 setattr(instance, model._meta.pk.attname, None)
+-        return sum(deleted_counter.values()), dict(deleted_counter)
++        return sum(deleted_counter.values()), dict(deleted_counter)
+diff --git a/django/db/models/query.py b/django/db/models/query.py
+index 1013471..e367887 100644
+--- a/django/db/models/query.py
++++ b/django/db/models/query.py
+@@ -755,7 +755,7 @@ class QuerySet:
+ 
+         collector = Collector(using=del_query.db)
+         collector.collect(del_query)
+-        deleted, _rows_count = collector.delete()
++        deleted, _rows_count = collector.delete(origin=self)
+ 
+         # Clear the result cache, in case this QuerySet gets reused.
+         self._result_cache = None

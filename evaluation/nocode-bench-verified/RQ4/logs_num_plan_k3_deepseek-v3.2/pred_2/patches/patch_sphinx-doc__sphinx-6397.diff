@@ -1,0 +1,38 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..b52dd0f 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -392,6 +392,10 @@ class Documenter:
+ 
+         Let the user process it via the ``autodoc-process-signature`` event.
+         """
++        # If autodoc_typehints is set to 'none', return an empty string.
++        if self.env.config.autodoc_typehints == 'none':
++            return ''
++
+         if self.args is not None:
+             # signature given explicitly
+             args = "(%s)" % self.args
+@@ -1614,6 +1618,7 @@ def setup(app):
+     app.add_config_value('autodoc_mock_imports', [], True)
+     app.add_config_value('autodoc_warningiserror', True, True)
+     app.add_config_value('autodoc_inherit_docstrings', True, True)
++    app.add_config_value('autodoc_typehints', 'signature', True)
+     app.add_event('autodoc-process-docstring')
+     app.add_event('autodoc-process-signature')
+     app.add_event('autodoc-skip-member')
+diff --git a/sphinx/ext/autodoc/events.py b/sphinx/ext/autodoc/events.py
+new file mode 100644
+index 0000000..c2c4d12
+--- /dev/null
++++ b/sphinx/ext/autodoc/events.py
+@@ -0,0 +1,9 @@
++"""
++autodoc events
++~~~~~~~~~~~~~~
++
++This module defines events for autodoc.
++
++These events can be used to customize the behavior of autodoc.
++"""
++=======

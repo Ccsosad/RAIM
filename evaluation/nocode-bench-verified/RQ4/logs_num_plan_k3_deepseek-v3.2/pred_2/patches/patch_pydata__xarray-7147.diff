@@ -1,0 +1,12 @@
+diff --git a/xarray/coding/times.py b/xarray/coding/times.py
+index 3885b1c..491f8a7 100644
+--- a/xarray/coding/times.py
++++ b/xarray/coding/times.py
+@@ -691,6 +691,7 @@ class CFDatetimeCoder(VariableCoder):
+                 units=units,
+                 calendar=calendar,
+                 use_cftime=self.use_cftime,
++                name=name,
+             )
+             data = lazy_elemwise_func(data, transform, dtype)
+ 

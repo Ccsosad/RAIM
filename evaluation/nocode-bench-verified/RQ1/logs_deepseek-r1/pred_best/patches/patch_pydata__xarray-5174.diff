@@ -1,0 +1,47 @@
+diff --git a/xarray/core/indexing.py b/xarray/core/indexing.py
+index daf5951..931ac4d 100644
+--- a/xarray/core/indexing.py
++++ b/xarray/core/indexing.py
+@@ -1380,13 +1380,35 @@ class DaskIndexingAdapter(ExplicitlyIndexedNDArrayMixin):
+                 return value
+ 
+     def __setitem__(self, key, value):
+-        raise TypeError(
+-            "this variable's data is stored in a dask array, "
+-            "which does not support item assignment. To "
+-            "assign to this variable, you must first load it "
+-            "into memory explicitly using the .load() "
+-            "method or accessing its .values attribute."
+-        )
++        # Check if the underlying dask array supports item assignment
++        if hasattr(self.array, '__setitem__'):
++            # Convert indexing key to appropriate format for dask
++            if isinstance(key, BasicIndexer):
++                self.array[key.tuple] = value
++            elif isinstance(key, VectorizedIndexer):
++                self.array.vindex[key.tuple] = value
++            elif isinstance(key, OuterIndexer):
++                # For outer indexing, we need to handle it specially
++                key_tuple = key.tuple
++                try:
++                    self.array[key_tuple] = value
++                except NotImplementedError:
++                    # Manual orthogonal indexing for assignment
++                    # This might not be fully supported by dask
++                    raise TypeError(
++                        "Orthogonal indexing assignment is not supported "
++                        "for dask arrays in this version."
++                    )
++            else:
++                self.array[key] = value
++        else:
++            raise TypeError(
++                "this variable's data is stored in a dask array, "
++                "which does not support item assignment. To "
++                "assign to this variable, you must first load it "
++                "into memory explicitly using the .load() "
++                "method or accessing its .values attribute."
++            )
+ 
+     def transpose(self, order):
+         return self.array.transpose(order)

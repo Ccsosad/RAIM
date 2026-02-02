@@ -1,0 +1,62 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..dad6276 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -1047,7 +1047,7 @@ def _join(left, right, keys=None, join_type='inner',
+           uniq_col_name='{col_name}_{table_name}',
+           table_names=['1', '2'],
+           col_name_map=None, metadata_conflicts='warn',
+-          join_funcs=None):
++          join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left and right Tables on specified keys.
+ 
+@@ -1060,6 +1060,10 @@ def _join(left, right, keys=None, join_type='inner',
+     keys : str or list of str
+         Name(s) of column(s) used to match rows of left and right tables.
+         Default is to use all columns which are common to both tables.
++    keys_left : str or list of str or column-like
++        Name(s) of column(s) in left table used for matching, or column-like objects
++    keys_right : str or list of str or column-like
++        Name(s) of column(s) in right table used for matching, or column-like objects
+     join_type : str
+         Join type ('inner' | 'outer' | 'left' | 'right' | 'cartesian'), default is 'inner'
+     uniq_col_name : str or None
+@@ -1112,8 +1116,21 @@ def _join(left, right, keys=None, join_type='inner',
+         right[cartesian_index_name] = np.uint8(0)
+         keys = (cartesian_index_name, )
+ 
+-    # If we have a single key, put it in a tuple
+-    if keys is None:
++    # Handle keys, keys_left and keys_right
++    if keys is not None and (keys_left is not None or keys_right is not None):
++        raise ValueError('Cannot specify both keys and keys_left/keys_right')
++        
++    if keys_left is not None or keys_right is not None:
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both keys_left and keys_right')
++        if isinstance(keys_left, str):
++            keys_left = (keys_left,)
++        if isinstance(keys_right, str):
++            keys_right = (keys_right,)
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have same length')
++        keys = keys_left  # Use keys_left for the main keys parameter
++    elif keys is None:
+         keys = tuple(name for name in left.colnames if name in right.colnames)
+         if len(keys) == 0:
+             raise TableMergeError('No keys in common between left and right tables')
+@@ -1121,9 +1138,10 @@ def _join(left, right, keys=None, join_type='inner',
+         keys = (keys,)
+ 
+     # Check the key columns
+-    for arr, arr_label in ((left, 'Left'), (right, 'Right')):
+-        for name in keys:
+-            if name not in arr.colnames:
++    for arr, arr_label, key_names in ((left, 'Left', keys_left or keys),
++                                     (right, 'Right', keys_right or keys)):
++        for name in key_names:
++            if (isinstance(name, str) and name not in arr.colnames):
+                 raise TableMergeError('{} table does not have key column {!r}'
+                                       .format(arr_label, name))
+             if hasattr(arr[name], 'mask') and np.any(arr[name].mask):

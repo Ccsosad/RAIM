@@ -1,0 +1,17 @@
+diff --git a/seaborn/regression.py b/seaborn/regression.py
+index 4430a99..3f33a6b 100644
+--- a/seaborn/regression.py
++++ b/seaborn/regression.py
+@@ -844,11 +844,11 @@ def regplot(
+ 
+     scatter_kws = {} if scatter_kws is None else copy.copy(scatter_kws)
+     scatter_kws["marker"] = marker
++    plotter.scatter_kws = scatter_kws  # Pass scatter_kws to plotter for error bars alpha inheritance
+     line_kws = {} if line_kws is None else copy.copy(line_kws)
+     plotter.plot(ax, scatter_kws, line_kws)
+     return ax
+ 
+-
+ regplot.__doc__ = dedent("""\
+     Plot data and a linear regression model fit.
+ 

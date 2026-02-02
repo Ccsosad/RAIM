@@ -1,0 +1,23 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..b961d48 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -304,11 +304,18 @@ class PhysicalType:
+     PhysicalType('length')
+     """
+ 
++# Mapping from attribute names (underscored) to physical type strings.
++_attrname_physical_mapping = {}
++
+     def __init__(self, unit, physical_types):
+         self._unit = _replace_temperatures_with_kelvin(unit)
+         self._physical_type_id = self._unit._get_physical_type_id()
+         self._physical_type = _standardize_physical_type_names(physical_types)
+         self._physical_type_list = sorted(self._physical_type)
++        # Update the module-level mapping for attribute access.
++        for pt in self._physical_type_list:
++            attr_name = pt.replace(' ', '_').replace('-', '_').lower()
++            _attrname_physical_mapping[attr_name] = pt
+ 
+     def __iter__(self):
+         yield from self._physical_type_list

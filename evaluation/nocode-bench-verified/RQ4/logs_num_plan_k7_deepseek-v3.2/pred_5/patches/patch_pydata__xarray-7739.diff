@@ -1,0 +1,151 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 1dd2ee6..f635959 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4174,7 +4174,7 @@ class DataArray(
+             zarr_version=zarr_version,
+         )
+ 
+-    def to_dict(self, data: bool = True, encoding: bool = False) -> dict[str, Any]:
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
+         """
+         Convert this xarray.DataArray into a dictionary following xarray
+         naming conventions.
+@@ -4185,9 +4185,10 @@ class DataArray(
+ 
+         Parameters
+         ----------
+-        data : bool, default: True
++        data : bool or str, default: True
+             Whether to include the actual data in the dictionary. When set to
+-            False, returns just the schema.
++            False, returns just the schema. If 'array', returns data as the
++            underlying array type. If 'list' or True, returns data as Python lists.
+         encoding : bool, default: False
+             Whether to include the Dataset's encoding in the dictionary.
+ 
+@@ -6883,4 +6884,4 @@ class DataArray(
+ 
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+-    str = utils.UncachedAccessor(StringAccessor["DataArray"])
++    str = utils.UncachedAccessor(StringAccessor["DataArray"])
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c4bcfde..5813274 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6184,36 +6184,89 @@ class Dataset(
+         index = self.coords.to_index([*ordered_dims])
+         return pd.DataFrame(dict(zip(columns, data)), index=index)
+ 
+-    def to_dataframe(self, dim_order: Sequence[Hashable] | None = None) -> pd.DataFrame:
+-        """Convert this dataset into a pandas.DataFrame.
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
++        """
++        Convert this xarray.Dataset into a dictionary following xarray
++        naming conventions.
+ 
+-        Non-index variables in this dataset form the columns of the
+-        DataFrame. The DataFrame is indexed by the Cartesian product of
+-        this dataset's indices.
++        Converts all variables and attributes to native Python objects.
++        Useful for converting to json. To avoid datetime incompatibility
++        use decode_times=False kwarg in xarray.open_dataset.
+ 
+         Parameters
+         ----------
+-        dim_order: Sequence of Hashable or None, optional
+-            Hierarchical dimension order for the resulting dataframe. All
+-            arrays are transposed to this order and then written out as flat
+-            vectors in contiguous order, so the last dimension in this list
+-            will be contiguous in the resulting DataFrame. This has a major
+-            influence on which operations are efficient on the resulting
+-            dataframe.
+-
+-            If provided, must include all dimensions of this dataset. By
+-            default, dimensions are sorted alphabetically.
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary. When set to
++            False, returns just the schema. If 'array', returns data as the
++            underlying array type. If 'list' or True, returns data as Python lists.
++        encoding : bool, default: False
++            Whether to include the Dataset's encoding in the dictionary.
+ 
+         Returns
+         -------
+-        result : DataFrame
+-            Dataset as a pandas DataFrame.
++        dict: dict
+ 
++        See Also
++        --------
++        Dataset.from_dict
++        DataArray.to_dict
+         """
++        d: dict[str, Any] = {
++            "coords": {},
++            "attrs": dict(self.attrs),
++            "dims": dict(self.dims),
++            "data_vars": {},
++        }
++        for k, v in self.variables.items():
++            if k in self._coord_names:
++                d["coords"][k] = v.to_dict(data=data)
++            else:
++                d["data_vars"][k] = v.to_dict(data=data)
++        if encoding:
++            d["encoding"] = dict(self.encoding)
++        return d
+ 
+-        ordered_dims = self._normalize_dim_order(dim_order=dim_order)
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
++        """
++        Convert this xarray.Dataset into a dictionary following xarray
++        naming conventions.
++
++        Converts all variables and attributes to native Python objects.
++        Useful for converting to json. To avoid datetime incompatibility
++        use decode_times=False kwarg in xarray.open_dataset.
++
++        Parameters
++        ----------
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary. When set to
++            False, returns just the schema. If 'array', returns data as the
++            underlying array type. If 'list' or True, returns data as Python lists.
++        encoding : bool, default: False
++            Whether to include the Dataset's encoding in the dictionary.
+ 
+-        return self._to_dataframe(ordered_dims=ordered_dims)
++        Returns
++        -------
++        dict: dict
++
++        See Also
++        --------
++        Dataset.from_dict
++        DataArray.to_dict
++        """
++        d: dict[str, Any] = {
++            "coords": {},
++            "attrs": dict(self.attrs),
++            "dims": dict(self.dims),
++            "data_vars": {},
++        }
++        for k, v in self.variables.items():
++            if k in self._coord_names:
++                d["coords"][k] = v.to_dict(data=data)
++            else:
++                d["data_vars"][k] = v.to_dict(data=data)
++        if encoding:
++            d["encoding"] = dict(self.encoding)
++        return d
+ 
+     def _set_sparse_data_from_dataframe(
+         self, idx: pd.Index, arrays: list[tuple[Hashable, np.ndarray]], dims: tuple
+@@ -9252,4 +9305,4 @@ class Dataset(
+             loffset=loffset,
+             restore_coord_dims=restore_coord_dims,
+             **indexer_kwargs,
+-        )
++        )

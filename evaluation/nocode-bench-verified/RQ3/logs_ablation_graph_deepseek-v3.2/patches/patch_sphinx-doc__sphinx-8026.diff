@@ -1,0 +1,57 @@
+diff --git a/sphinx/transforms/post_transforms/images.py b/sphinx/transforms/post_transforms/images.py
+index 27577c0..53e9842 100644
+--- a/sphinx/transforms/post_transforms/images.py
++++ b/sphinx/transforms/post_transforms/images.py
+@@ -146,12 +146,51 @@ class DataURIExtractor(BaseImageConverter):
+         self.app.env.images.add_file(self.env.docname, path)
+ 
+ 
+-def get_filename_for(filename: str, mimetype: str) -> str:
++def get_filename_for(filename: str, mimetype: str, docpath: str = None) -> str:
+     basename = os.path.basename(filename)
+     basename = re.sub(CRITICAL_PATH_CHAR_RE, "_", basename)
++    # For backward compatibility, we ignore the docpath for now.
++    # The pattern expansion should be done by the caller using expand_image_filename.
+     return os.path.splitext(basename)[0] + get_image_extension(mimetype)
+ 
+ 
++def expand_image_filename(pattern: str, filename: str, mimetype: str, docpath: str = None) -> str:
++    """Expand the image filename pattern with the given tokens.
++
++    The pattern may contain the following tokens:
++    - {name}: the original filename (without extension)
++    - {path}: the directory path of the filename (with trailing slash if non-empty)
++    - {docpath}: the directory path of the current document (with trailing slash if non-empty)
++    - {basename}: the basename without extension
++    - {ext}: the file extension
++
++    If docpath is not provided, {docpath} will be replaced with an empty string.
++    """
++    # Extract the directory and basename from the filename
++    dirname = os.path.dirname(filename)
++    if dirname:
++        path = dirname + '/'
++    else:
++        path = ''
++    basename = os.path.basename(filename)
++    name, ext = os.path.splitext(basename)
++
++    # Prepare the docpath
++    if docpath is None:
++        docpath = ''
++    elif docpath and not docpath.endswith('/'):
++        docpath = docpath + '/'
++
++    # Replace the tokens
++    result = pattern
++    result = result.replace('{name}', name)
++    result = result.replace('{path}', path)
++    result = result.replace('{docpath}', docpath)
++    result = result.replace('{basename}', basename)
++    result = result.replace('{ext}', ext)
++    return result
++
++
+ class ImageConverter(BaseImageConverter):
+     """A base class for image converters.
+ 

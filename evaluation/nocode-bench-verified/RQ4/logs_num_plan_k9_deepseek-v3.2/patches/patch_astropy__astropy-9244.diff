@@ -1,0 +1,46 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..54a931d 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -106,9 +106,41 @@ class Conf(_config.ConfigNamespace):
+         'Remote timeout downloading IERS file data (seconds).')
+ 
+ 
++from astropy.utils.state import ScienceState
++
++from astropy.utils.state import ScienceState
++
+ conf = Conf()
+ 
+ 
++class earth_orientation_table(ScienceState):
++    """
++    Global setting for the Earth orientation table (IERS) used in time and coordinate transformations.
++
++    This should be an instance of an IERS table (e.g., ``IERS_A``, ``IERS_B``, or ``IERS_Auto``).
++    Setting it to `None` will reset to the default (``IERS_Auto.open()``).
++    """
++    _value = None
++
++    @classmethod
++    def validate(cls, value):
++        from . import IERS, IERS_Auto
++        if value is None:
++            return IERS_Auto.open()
++        elif isinstance(value, IERS):
++            return value
++        else:
++            raise ValueError("earth_orientation_table must be an IERS table instance or None")
++
++    @classmethod
++    def get(cls):
++        # If not set, initialize to default
++        if cls._value is None:
++            from . import IERS_Auto
++            cls._value = IERS_Auto.open()
++        return cls._value
++
++
+ class IERSRangeError(IndexError):
+     """
+     Any error for when dates are outside of the valid range for IERS

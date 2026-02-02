@@ -1,0 +1,364 @@
+diff --git a/xarray/core/accessor_dt.py b/xarray/core/accessor_dt.py
+index 469c69b..9385089 100644
+--- a/xarray/core/accessor_dt.py
++++ b/xarray/core/accessor_dt.py
+@@ -412,6 +412,10 @@ class DatetimeAccessor(Properties):
+         "date", "Date corresponding to datetimes", object
+     )
+ 
++    calendar = Properties._tslib_field_accessor(
++        "calendar", "Calendar type of the datetime", object
++    )
++
+     is_month_start = Properties._tslib_field_accessor(
+         "is_month_start",
+         "Indicates whether the date is the first day of the month.",
+diff --git a/xarray/__init__.py b/xarray/__init__.py
+new file mode 100644
+index 0000000..fc99ea8
+--- /dev/null
++++ b/xarray/__init__.py
+@@ -0,0 +1,11 @@
++from .core.datatree import DataTree
++from .core.duck_array_ops import isnull, notnull
++from .core.extensions import register_dataarray_accessor, register_dataset_accessor
++from .core.pycompat import (
++    _array_equiv,
++    _dask_array_type,
++    _is_dask_collection,
++    _pd_NamedAgg,
++)
++from .core.variable import Variable
++from .coding.calendar_ops import date_range, date_range_like
+diff --git a/xarray/coding/calendar_ops.py b/xarray/coding/calendar_ops.py
+new file mode 100644
+index 0000000..55a010c
+--- /dev/null
++++ b/xarray/coding/calendar_ops.py
+@@ -0,0 +1,118 @@
++"""Calendar conversion operations for xarray."""
++
++import numpy as np
++import pandas as pd
++from datetime import datetime
++
++from xarray.core.common import _contains_datetime_like_objects
++from xarray.core.pycompat import is_duck_dask_array
++
++
++def _should_cftime_be_used(source, target, use_cftime):
++    """Determine whether to use cftime or pandas datetime objects."""
++    if use_cftime is not None:
++        return use_cftime
++    
++    # Default behavior: use pandas when possible
++    if hasattr(source, 'calendar'):
++        # Source has calendar attribute (cftime objects)
++        calendar = getattr(source, 'calendar', None)
++        if calendar not in ['standard', 'gregorian', 'proleptic_gregorian']:
++            return True
++        # Check if dates are within pandas range
++        if hasattr(source, 'year'):
++            years = np.array([getattr(dt, 'year', 0) for dt in source])
++            if np.any((years < 1678) | (years > 2262)):
++                return True
++    return False
++
++
++def convert_calendar(source, target_calendar, use_cftime=None, align_on='date', missing=None):
++    """Convert datetime array from one calendar to another."""
++    if not _contains_datetime_like_objects(source):
++        raise ValueError("'source' must be a 1D array of datetime objects")
++    
++    use_cftime = _should_cftime_be_used(source, target_calendar, use_cftime)
++    
++    if use_cftime:
++        import cftime
++        # Convert using cftime
++        if hasattr(source, 'calendar'):
++            # Source is cftime objects
++            converted = []
++            for dt in source:
++                try:
++                    new_dt = cftime.datetime(dt.year, dt.month, dt.day, dt.hour, 
++                                           dt.minute, dt.second, dt.microsecond,
++                                           calendar=target_calendar)
++                    converted.append(new_dt)
++                except ValueError:
++                    if missing == 'nan':
++                        converted.append(np.nan)
++                    else:
++                        raise
++            return np.array(converted)
++        else:
++            # Source is pandas datetime, convert to cftime
++            converted = []
++            for dt in source:
++                try:
++                    new_dt = cftime.datetime(dt.year, dt.month, dt.day, dt.hour,
++                                           dt.minute, dt.second, dt.microsecond,
++                                           calendar=target_calendar)
++                    converted.append(new_dt)
++                except ValueError:
++                    if missing == 'nan':
++                        converted.append(np.nan)
++                    else:
++                        raise
++            return np.array(converted)
++    else:
++        # Use pandas - only valid for standard calendars
++        if target_calendar not in ['standard', 'gregorian', 'proleptic_gregorian']:
++            raise ValueError(f"Cannot convert to {target_calendar} calendar using pandas")
++        return source
++
++
++def interp_calendar(source, target, use_cftime=None):
++    """Interpolate data from source calendar to target calendar dates."""
++    # Implementation would involve more complex interpolation logic
++    # This is a placeholder for the actual implementation
++    raise NotImplementedError("interp_calendar is not yet implemented")
++
++
++def date_range(start, end, freq, calendar='standard', use_cftime=None):
++    """Generate date range with specified calendar."""
++    use_cftime = _should_cftime_be_used([start], calendar, use_cftime)
++    
++    if use_cftime:
++        import cftime
++        return cftime_range(start, end, freq, calendar)
++    else:
++        return pd.date_range(start, end, freq=freq)
++
++
++def date_range_like(source, use_cftime=None):
++    """Generate date range similar to source array."""
++    if not _contains_datetime_like_objects(source):
++        raise ValueError("'source' must be a 1D array of datetime objects for inferring its range.")
++    
++    if len(source) < 2:
++        raise ValueError("Need at least 2 dates to infer frequency")
++    
++    # Try to infer frequency
++    try:
++        freq = pd.infer_freq(source)
++        if freq is None:
++            raise ValueError("`date_range_like` was unable to generate a range as the source frequency was not inferrable.")
++    except (TypeError, ValueError):
++        raise ValueError("`date_range_like` was unable to generate a range as the source frequency was not inferrable.")
++    
++    use_cftime = _should_cftime_be_used(source, None, use_cftime)
++    
++    if use_cftime:
++        import cftime
++        calendar = getattr(source[0], 'calendar', 'standard')
++        return cftime_range(source[0], source[-1], freq, calendar)
++    else:
++        return pd.date_range(source[0], source[-1], freq=freq)
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+new file mode 100644
+index 0000000..5ccde70
+--- /dev/null
++++ b/xarray/core/dataarray.py
+@@ -0,0 +1,65 @@
++    def get_index(self, coord_name):
++        """Get the index for a coordinate.
++
++        Parameters
++        ----------
++        coord_name : str
++            Name of the coordinate.
++
++        Returns
++        -------
++        index : pandas.Index
++            Index of the coordinate.
++        """
++        return self._coords[coord_name].to_index()
++
++    def convert_calendar(self, target_calendar, use_cftime=None, align_on='date', missing=None):
++        """Convert datetime coordinates to a different calendar.
++        
++        Parameters
++        ----------
++        target_calendar : str
++            Target calendar name
++        use_cftime : bool, optional
++            Whether to use cftime objects
++        align_on : str, optional
++            How to align dates
++        missing : str, optional
++            How to handle missing dates
++            
++        Returns
++        -------
++        DataArray with converted calendar
++        """
++        from .coding.calendar_ops import convert_calendar
++        
++        # Convert the time coordinate
++        time_coord = self.coords['time']
++        new_time = convert_calendar(time_coord.values, target_calendar, use_cftime, align_on, missing)
++        
++        # Create new DataArray with converted time
++        new_coords = dict(self.coords)
++        new_coords['time'] = new_time
++        
++        return DataArray(self.data, coords=new_coords, dims=self.dims, attrs=self.attrs)
++
++    def interp_calendar(self, target, use_cftime=None):
++        """Interpolate data to target calendar.
++        
++        Parameters
++        ----------
++        target : DataArray or array-like
++            Target datetime coordinates
++        use_cftime : bool, optional
++            Whether to use cftime objects
++            
++        Returns
++        -------
++        DataArray interpolated to target calendar
++        """
++        from .coding.calendar_ops import interp_calendar
++        result_data = interp_calendar(self, target, use_cftime)
++        return DataArray(result_data, coords=target.coords, dims=target.dims)
++
++    def astype(self, dtype, order="K", casting="unsafe", subok=True, copy=True):
++        """Return a new DataArray whose data is cast to the given dtype.
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+new file mode 100644
+index 0000000..3d555a6
+--- /dev/null
++++ b/xarray/core/dataset.py
+@@ -0,0 +1,131 @@
++    def reset_coords(self, names=None, drop=False):
++        """Reset one or more coordinates to data variables.
++
++        Parameters
++        ----------
++        names : str or sequence of str, optional
++            Name(s) of non-index coordinates in this dataset to reset. By default,
++            all non-index coordinates are reset.
++        drop : bool, optional
++            If True, remove coordinates instead of converting them to data
++            variables.
++
++        Returns
++        -------
++        Dataset with given coordinates as data variables.
++
++        See Also
++        --------
++        set_coords
++
++        Examples
++        --------
++        >>> ds = xr.Dataset(
++        ...     {"foo": (("x", "y"), np.random.randn(2, 3))},
++        ...     coords={"x": [10, 20], "y": [1, 2, 3], "z": 4},
++        ... )
++        >>> ds.reset_coords()
++        <xarray.Dataset>
++        Dimensions:  (x: 2, y: 3)
++        Coordinates:
++          * x        (x) int64 10 20
++          * y        (y) int64 1 2 3
++        Data variables:
++            foo      (x, y) float64 -0.375 -0.600 -0.208 0.928 0.176 -1.14
++            z        () int64 4
++        >>> ds.reset_coords("z")
++        <xarray.Dataset>
++        Dimensions:  (x: 2, y: 3)
++        Coordinates:
++          * x        (x) int64 10 20
++          * y        (y) int64 1 2 3
++        Data variables:
++            foo      (x, y) float64 -0.375 -0.600 -0.208 0.928 0.176 -1.14
++            z        () int64 4
++        """
++        return self._reset_coords(names, drop)
++
++    def convert_calendar(self, target_calendar, use_cftime=None, align_on='date', missing=None):
++        """Convert datetime coordinates to a different calendar.
++        
++        Parameters
++        ----------
++        target_calendar : str
++            Target calendar name
++        use_cftime : bool, optional
++            Whether to use cftime objects
++        align_on : str, optional
++            How to align dates
++        missing : str, optional
++            How to handle missing dates
++            
++        Returns
++        -------
++        Dataset with converted calendar
++        """
++        from .coding.calendar_ops import convert_calendar
++        
++        # Convert time coordinate in all data arrays and coordinates
++        new_vars = {}
++        new_coords = {}
++        
++        for name, var in self.data_vars.items():
++            if 'time' in var.dims:
++                time_coord = var.coords['time']
++                new_time = convert_calendar(time_coord.values, target_calendar, use_cftime, align_on, missing)
++                new_coords['time'] = new_time
++                new_vars[name] = var.copy(data=var.data)
++            else:
++                new_vars[name] = var
++        
++        for name, coord in self.coords.items():
++            if name != 'time' and 'time' in coord.dims:
++                time_coord = coord.coords['time']
++                new_time = convert_calendar(time_coord.values, target_calendar, use_cftime, align_on, missing)
++                new_coords['time'] = new_time
++                new_coords[name] = coord.copy(data=coord.data)
++            elif name != 'time':
++                new_coords[name] = coord
++        
++        return Dataset(new_vars, coords=new_coords, attrs=self.attrs)
++
++    def interp_calendar(self, target, use_cftime=None):
++        """Interpolate data to target calendar.
++        
++        Parameters
++        ----------
++        target : Dataset or DataArray
++            Target datetime coordinates
++        use_cftime : bool, optional
++            Whether to use cftime objects
++            
++        Returns
++        -------
++        Dataset interpolated to target calendar
++        """
++        from .coding.calendar_ops import interp_calendar
++        
++        new_vars = {}
++        for name, var in self.data_vars.items():
++            if 'time' in var.dims:
++                result_data = interp_calendar(var, target, use_cftime)
++                new_vars[name] = DataArray(result_data, coords=target.coords, dims=target.dims)
++            else:
++                new_vars[name] = var
++        
++        return Dataset(new_vars, coords=target.coords, attrs=self.attrs)
++
++    def get_index(self, coord_name):
++        """Get the index for a coordinate.
++
++        Parameters
++        ----------
++        coord_name : str
++            Name of the coordinate.
++
++        Returns
++        -------
++        index : pandas.Index
++            Index of the coordinate.
++        """
++        return self._indexes[coord_name].to_pandas_index()

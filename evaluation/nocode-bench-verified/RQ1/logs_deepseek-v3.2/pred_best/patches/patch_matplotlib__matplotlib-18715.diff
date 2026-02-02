@@ -1,0 +1,74 @@
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 38580cf..7ad90f4 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -790,6 +790,22 @@ def validate_hist_bins(s):
+ class _ignorecase(list):
+     """A marker class indicating that a list-of-str is case-insensitive."""
+ 
++def validate_auto_minor_ndivs(s):
++    """
++    Validate rcParams `xtick.minor.ndivs` and `ytick.minor.ndivs`.
++    Accepts 'auto' or a positive integer.
++    """
++    if s == 'auto':
++        return 'auto'
++    try:
++        ival = int(s)
++        if ival <= 0:
++            raise ValueError
++        return ival
++    except (ValueError, TypeError):
++        raise ValueError("'xtick.minor.ndivs' and 'ytick.minor.ndivs' must be "
++                         "'auto' or a positive integer")
++
+ 
+ def _convert_validator_spec(key, conv):
+     if isinstance(conv, list):
+@@ -802,6 +818,11 @@ def _convert_validator_spec(key, conv):
+ # Mapping of rcParams to validators.
+ # Converters given as lists or _ignorecase are converted to ValidateInStrings
+ # immediately below.
++
++_validators.update({
++    'xtick.minor.ndivs': validate_auto_minor_ndivs,
++    'ytick.minor.ndivs': validate_auto_minor_ndivs,
++})
+ # The rcParams defaults are defined in lib/matplotlib/mpl-data/matplotlibrc, which
+ # gets copied to matplotlib/mpl-data/matplotlibrc by the setup script.
+ _validators = {
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..0cf64ad 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2891,13 +2891,18 @@ class AutoMinorLocator(Locator):
+             return []
+ 
+         if self.ndivs is None:
+-
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
++            # Determine which axis we are on
++            axis_name = self.axis.axis_name  # 'x' or 'y'
++            rc_param = f'{axis_name}tick.minor.ndivs'
++            ndivs = mpl.rcParams[rc_param]
++            if ndivs == 'auto':
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
++                if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+             else:
+-                ndivs = 4
++                ndivs = int(ndivs)
+         else:
+             ndivs = self.ndivs
+ 
+@@ -2916,4 +2921,4 @@ class AutoMinorLocator(Locator):
+ 
+     def tick_values(self, vmin, vmax):
+         raise NotImplementedError('Cannot get tick locations for a '
+-                                  '%s type.' % type(self))
++                                  '%s type.' % type(self))

@@ -1,0 +1,86 @@
+diff --git a/sklearn/cluster/_kmeans.py b/sklearn/cluster/_kmeans.py
+index 89ad263..c1e033a 100644
+--- a/sklearn/cluster/_kmeans.py
++++ b/sklearn/cluster/_kmeans.py
+@@ -1150,11 +1150,15 @@ class KMeans(_BaseKMeans):
+         If a callable is passed, it should take arguments X, n_clusters and a
+         random state and return an initialization.
+ 
+-    n_init : int, default=10
++    n_init : int or 'auto', default=10
+         Number of time the k-means algorithm will be run with different
+         centroid seeds. The final results will be the best output of
+         n_init consecutive runs in terms of inertia.
+ 
++        When `n_init='auto'`, the number of runs will be 1 if
++        `init='k-means++'` is used, and 10 otherwise. This is more efficient
++        when using `init='k-means++'` which already provides good initialization.
++
+     max_iter : int, default=300
+         Maximum number of iterations of the k-means algorithm for a
+         single run.
+@@ -1275,6 +1279,7 @@ class KMeans(_BaseKMeans):
+ 
+     _parameter_constraints = {
+         **_BaseKMeans._parameter_constraints,
++        "n_init": [Integral, StrOptions({"auto"})],
+         "copy_x": [bool],
+         "algorithm": [
+             StrOptions({"lloyd", "elkan", "auto", "full"}, deprecated={"auto", "full"})
+@@ -1325,6 +1330,15 @@ class KMeans(_BaseKMeans):
+                 RuntimeWarning,
+             )
+             self._algorithm = "lloyd"
++        
++        # Handle 'auto' for n_init
++        if self.n_init == 'auto':
++            if self.init == 'k-means++':
++                self._n_init = 1
++            else:
++                self._n_init = 10
++        else:
++            self._n_init = self.n_init
+ 
+     def _warn_mkl_vcomp(self, n_active_threads):
+         """Warn when vcomp and mkl are both present"""
+@@ -1667,11 +1681,15 @@ class MiniBatchKMeans(_BaseKMeans):
+         If `None`, the heuristic is `init_size = 3 * batch_size` if
+         `3 * batch_size < n_clusters`, else `init_size = 3 * n_clusters`.
+ 
+-    n_init : int, default=3
++    n_init : int or 'auto', default=3
+         Number of random initializations that are tried.
+         In contrast to KMeans, the algorithm is only run once, using the
+         best of the ``n_init`` initializations as measured by inertia.
+ 
++        When `n_init='auto'`, the number of runs will be 1 if
++        `init='k-means++'` is used, and 3 otherwise. This is more efficient
++        when using `init='k-means++'` which already provides good initialization.
++
+     reassignment_ratio : float, default=0.01
+         Control the fraction of the maximum number of counts for a center to
+         be reassigned. A higher value means that low count centers are more
+@@ -1759,6 +1777,7 @@ class MiniBatchKMeans(_BaseKMeans):
+ 
+     _parameter_constraints = {
+         **_BaseKMeans._parameter_constraints,
++        "n_init": [Integral, StrOptions({"auto"})],
+         "batch_size": [Interval(Integral, 1, None, closed="left")],
+         "compute_labels": [bool],
+         "max_no_improvement": [Interval(Integral, 0, None, closed="left"), None],
+@@ -1827,6 +1846,15 @@ class MiniBatchKMeans(_BaseKMeans):
+                 "reassignment_ratio should be >= 0, got "
+                 f"{self.reassignment_ratio} instead."
+             )
++        
++        # Handle 'auto' for n_init
++        if self.n_init == 'auto':
++            if self.init == 'k-means++':
++                self._n_init = 1
++            else:
++                self._n_init = 3
++        else:
++            self._n_init = self.n_init
+ 
+     def _warn_mkl_vcomp(self, n_active_threads):
+         """Warn when vcomp and mkl are both present"""

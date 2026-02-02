@@ -1,0 +1,28 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index 677b319..aa56145 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -2335,6 +2335,17 @@ class Axes(_AxesBase):
+         label = kwargs.pop('label', '')
+         tick_labels = kwargs.pop('tick_label', None)
+ 
++        # If label is a list, assign each label to the corresponding patch.
++        if np.iterable(label) and not isinstance(label, str):
++            labels = list(label)
++            if len(labels) == len(patches):
++                for patch, lbl in zip(patches, labels):
++                    patch.set_label(lbl)
++                # Set the container label to '_nolegend_' to avoid duplicate legend entries.
++                label = '_nolegend_'
++            else:
++                raise ValueError("The number of labels must match the number of bars")
++
+         y = bottom  # Matches barh call signature.
+         if orientation == 'vertical':
+             if y is None:
+@@ -8162,4 +8173,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

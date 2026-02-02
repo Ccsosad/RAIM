@@ -1,0 +1,62 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index d713a3b..13f879e 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -2998,28 +2998,40 @@ class Table:
+         return super().__ge__(other)
+ 
+     def __eq__(self, other):
+-
+         if isinstance(other, Table):
+             other = other.as_array()
++        return self.as_array() == other
+ 
+-        if self.has_masked_columns:
+-            if isinstance(other, np.ma.MaskedArray):
+-                result = self.as_array() == other
+-            else:
+-                # If mask is True, then by definition the row doesn't match
+-                # because the other array is not masked.
+-                false_mask = np.zeros(1, dtype=[(n, bool) for n in self.dtype.names])
+-                result = (self.as_array().data == other) & (self.mask == false_mask)
++    def values_equal(self, other):
++        """Compare table values element-wise returning a boolean Table."""
++        from astropy.table import Table
++        import numpy as np
++
++        # Compare to another Table
++        if isinstance(other, Table):
++            if self.colnames != other.colnames:
++                raise ValueError("cannot compare tables with different column names")
++            arr_other = other.as_array()
++            arr_self = self.as_array()
++            data = [arr_self[name] == arr_other[name] for name in self.colnames]
++            return Table(data, names=self.colnames)
++
++        # Compare to a numpy array or list/tuple
++        if np.isscalar(other):
++            # Compare to scalar (column-wise)
++            data = [col == other for col in self.itercols()]
++            return Table(data, names=self.colnames)
+         else:
+-            if isinstance(other, np.ma.MaskedArray):
+-                # If mask is True, then by definition the row doesn't match
+-                # because the other array is not masked.
+-                false_mask = np.zeros(1, dtype=[(n, bool) for n in other.dtype.names])
+-                result = (self.as_array() == other.data) & (other.mask == false_mask)
++            arr_other = np.array(other)
++            if arr_other.ndim == 1 and len(arr_other) == len(self):
++                # Compare column-wise against a 1D array same length as table
++                data = [self[name] == arr_other for name in self.colnames]
++            elif arr_other.ndim == 1 and len(arr_other) == len(self.colnames):
++                # Compare row-wise against a list of column values
++                data = [self[name] == arr_other[i] for i, name in enumerate(self.colnames)]
+             else:
+-                result = self.as_array() == other
+-
+-        return result
++                raise ValueError("Array shape not compatible for comparison")
++            return Table(data, names=self.colnames)
+ 
+     def __ne__(self, other):
+         return ~self.__eq__(other)

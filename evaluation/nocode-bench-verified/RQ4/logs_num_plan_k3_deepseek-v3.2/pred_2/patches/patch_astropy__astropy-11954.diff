@@ -1,0 +1,207 @@
+diff --git a/astropy/table/operations.py b/astropy/table/operations.py
+index c6c6808..a2f62c6 100644
+--- a/astropy/table/operations.py
++++ b/astropy/table/operations.py
+@@ -336,10 +336,10 @@ def join_distance(distance, kdtree_args=None, query_args=None):
+     return join_func
+ 
+ 
+-def join(left, right, keys=None, join_type='inner',
++def join(left, right, keys=None, join_type='inner', *,
+          uniq_col_name='{col_name}_{table_name}',
+          table_names=['1', '2'], metadata_conflicts='warn',
+-         join_funcs=None):
++         join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left table with the right table on specified keys.
+ 
+@@ -384,7 +384,7 @@ def join(left, right, keys=None, join_type='inner',
+     col_name_map = OrderedDict()
+     out = _join(left, right, keys, join_type,
+                 uniq_col_name, table_names, col_name_map, metadata_conflicts,
+-                join_funcs)
++                join_funcs, keys_left, keys_right)
+ 
+     # Merge the column and table meta data. Table subclasses might override
+     # these methods for custom merge behavior.
+@@ -1047,7 +1047,7 @@ def _join(left, right, keys=None, join_type='inner',
+           uniq_col_name='{col_name}_{table_name}',
+           table_names=['1', '2'],
+           col_name_map=None, metadata_conflicts='warn',
+-          join_funcs=None):
++          join_funcs=None, keys_left=None, keys_right=None):
+     """
+     Perform a join of the left and right Tables on specified keys.
+ 
+@@ -1085,6 +1085,20 @@ def _join(left, right, keys=None, join_type='inner',
+     joined_table : `~astropy.table.Table` object
+         New table containing the result of the join operation.
+     """
++    # Helper function to create a structured key from a table and key column names
++    def _make_structured_key(table, key_names):
++        # Get the columns
++        cols = [table[name] for name in key_names]
++        # Create a structured array dtype
++        dtype = []
++        for i, col in enumerate(cols):
++            dtype.append(('f{}'.format(i), col.dtype))
++        # Create the structured array
++        struct = np.empty(len(table), dtype=dtype)
++        for i, col in enumerate(cols):
++            struct['f{}'.format(i)] = col
++        return struct
++
+     # Store user-provided col_name_map until the end
+     _col_name_map = col_name_map
+ 
+@@ -1112,31 +1126,114 @@ def _join(left, right, keys=None, join_type='inner',
+         right[cartesian_index_name] = np.uint8(0)
+         keys = (cartesian_index_name, )
+ 
+-    # If we have a single key, put it in a tuple
+-    if keys is None:
+-        keys = tuple(name for name in left.colnames if name in right.colnames)
+-        if len(keys) == 0:
+-            raise TableMergeError('No keys in common between left and right tables')
+-    elif isinstance(keys, str):
+-        keys = (keys,)
+-
+-    # Check the key columns
+-    for arr, arr_label in ((left, 'Left'), (right, 'Right')):
+-        for name in keys:
+-            if name not in arr.colnames:
+-                raise TableMergeError('{} table does not have key column {!r}'
+-                                      .format(arr_label, name))
++    # Determine the keys for left and right
++    if keys_left is not None or keys_right is not None:
++        if keys is not None:
++            raise ValueError('Cannot specify both "keys" and "keys_left"/"keys_right"')
++        if keys_left is None or keys_right is None:
++            raise ValueError('Must specify both "keys_left" and "keys_right"')
++        # Convert to tuple if string
++        if isinstance(keys_left, str):
++            keys_left = (keys_left,)
++        if isinstance(keys_right, str):
++            keys_right = (keys_right,)
++        # Check that the lengths match
++        if len(keys_left) != len(keys_right):
++            raise ValueError('keys_left and keys_right must have the same length')
++        # Use the provided keys
++        left_keys = keys_left
++        right_keys = keys_right
++    else:
++        # Use the common keys
++        if keys is None:
++            keys = tuple(name for name in left.colnames if name in right.colnames)
++            if len(keys) == 0:
++                raise TableMergeError('No keys in common between left and right tables')
++        elif isinstance(keys, str):
++            keys = (keys,)
++        left_keys = keys
++        right_keys = keys
++
++    # Check the key columns for left table
++    for name in left_keys:
++        if name not in left.colnames:
++            # Check if it is a column-like object
++            if not hasattr(name, '__len__') or not hasattr(name, '__getitem__'):
++                raise TableMergeError('Left table does not have key column {!r}'
++                                      .format(name))
++            # If it is column-like, we need to add it to the table temporarily
++            # But we don't have the column object here. Actually, keys_left can be column objects.
++            # We'll handle that later.
++    for name in right_keys:
++        if name not in right.colnames:
++            if not hasattr(name, '__len__') or not hasattr(name, '__getitem__'):
++                raise TableMergeError('Right table does not have key column {!r}'
++                                      .format(name))
++    # Now, we need to handle the case where keys_left or keys_right are column-like objects.
++    # We'll create new tables with temporary columns.
++    # But to avoid modifying the original tables, we'll make shallow copies.
++    left_temp = left
++    right_temp = right
++    # If any key is not a string (i.e., a column-like object), we need to add it.
++    # We'll create a unique temporary column name.
++    import uuid
++    temp_key_left = []
++    for i, key in enumerate(left_keys):
++        if not isinstance(key, str):
++            temp_name = '__temp_left_key_{}__'.format(uuid.uuid4().hex)
++            left_temp[temp_name] = key
++            temp_key_left.append(temp_name)
++        else:
++            temp_key_left.append(key)
++    temp_key_right = []
++    for i, key in enumerate(right_keys):
++        if not isinstance(key, str):
++            temp_name = '__temp_right_key_{}__'.format(uuid.uuid4().hex)
++            right_temp[temp_name] = key
++            temp_key_right.append(temp_name)
++        else:
++            temp_key_right.append(key)
++    # Now we have two lists of column names in the temporary tables.
++    # We'll use these for the join.
++    left_keys = tuple(temp_key_left)
++    right_keys = tuple(temp_key_right)
++    # Now check for missing values in the key columns
++    for arr, arr_label, keys_arr in [(left_temp, 'Left', left_keys), (right_temp, 'Right', right_keys)]:
++        for name in keys_arr:
+             if hasattr(arr[name], 'mask') and np.any(arr[name].mask):
+                 raise TableMergeError('{} key column {!r} has missing values'
+                                       .format(arr_label, name))
+ 
+     if join_funcs is not None:
++        if keys_left is not None or keys_right is not None:
++            raise ValueError('join_funcs cannot be used with keys_left and keys_right')
+         if not all(key in keys for key in join_funcs):
+             raise ValueError(f'join_funcs keys {join_funcs.keys()} must be a '
+                              f'subset of join keys {keys}')
+         left, right, keys = _apply_join_funcs(left, right, keys, join_funcs)
+ 
+-    len_left, len_right = len(left), len(right)
++    # If we have separate keys, create a structured key column
++    if left_keys != right_keys:
++        # Create a structured array for the left keys
++        left_struct = _make_structured_key(left_temp, left_keys)
++        right_struct = _make_structured_key(right_temp, right_keys)
++        # Add them as temporary columns
++        temp_left_key_name = '__left_structured_key__'
++        temp_right_key_name = '__right_structured_key__'
++        left_temp[temp_left_key_name] = left_struct
++        right_temp[temp_right_key_name] = right_struct
++        # Now set the keys to these temporary columns
++        keys = (temp_left_key_name,)
++        # But note: we need to have the same column name in both tables for the existing logic.
++        # So we need to rename the right column to the same name.
++        # Actually, we can use two different column names and then use a single key? The existing logic requires the same column name.
++        # So we'll rename the right column to the same as the left.
++        right_temp.rename_column(temp_right_key_name, temp_left_key_name)
++        keys = (temp_left_key_name,)
++    else:
++        keys = left_keys
++
++    len_left, len_right = len(left_temp), len(right_temp)
+ 
+     if len_left == 0 or len_right == 0:
+         raise ValueError('input tables for join must both have at least one row')
+@@ -1146,7 +1243,7 @@ def _join(left, right, keys=None, join_type='inner',
+     out_descrs = get_descrs([left, right], col_name_map)
+ 
+     try:
+-        idxs, idx_sort = _get_join_sort_idxs(keys, left, right)
++        idxs, idx_sort = _get_join_sort_idxs(keys, left_temp, right_temp)
+     except NotImplementedError:
+         raise TypeError('one or more key columns are not sortable')
+ 
+@@ -1221,6 +1318,11 @@ def _join(left, right, keys=None, join_type='inner',
+     if isinstance(_col_name_map, Mapping):
+         _col_name_map.update(col_name_map)
+ 
++    # Remove temporary structured key columns if they exist
++    temp_key_names = [name for name in out.colnames if name.startswith('__left_structured_key__') or name.startswith('__right_structured_key__')]
++    for name in temp_key_names:
++        out.remove_column(name)
++
+     return out
+ 
+ 

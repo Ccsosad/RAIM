@@ -1,0 +1,38 @@
+diff --git a/seaborn/_core/moves.py b/seaborn/_core/moves.py
+index 0a4056b..e05afd4 100644
+--- a/seaborn/_core/moves.py
++++ b/seaborn/_core/moves.py
+@@ -25,16 +25,29 @@ class Move:
+ class Jitter(Move):
+     """
+     Random displacement of marks along either or both axes to reduce overplotting.
++
++    Parameters
++    ----------
++    width : float
++        Amount of jitter relative to the mark width along the orientation axis.
++        The default is 0.2, which applies a small amount of jitter.
++    x : float
++        Amount of jitter in data units along the x axis.
++    y : float
++        Amount of jitter in data units along the y axis.
++    seed : int, optional
++        Random seed for reproducible jitter.
++
++    Examples
++    --------
++    .. include:: ../doc/_docstrings/objects.Jitter.ipynb
+     """
+-    width: float = 0
++    width: float = 0.2
+     x: float = 0
+     y: float = 0
+ 
+     seed: Optional[int] = None
+ 
+-    # TODO what is the best way to have a reasonable default?
+-    # The problem is that "reasonable" seems dependent on the mark
+-
+     def __call__(
+         self, data: DataFrame, groupby: GroupBy, orient: str, scales: dict[str, Scale],
+     ) -> DataFrame:

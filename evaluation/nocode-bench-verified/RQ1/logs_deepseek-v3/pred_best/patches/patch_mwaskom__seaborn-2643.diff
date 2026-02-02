@@ -1,0 +1,57 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index c1f490d..f830d57 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -19,10 +19,51 @@ from ._docstrings import (
+ )
+ 
+ 
+-__all__ = ["FacetGrid", "PairGrid", "JointGrid", "pairplot", "jointplot"]
++__all__ = ["FacetGrid", "PairGrid", "JointGrid", "pairplot", "jointplot", "move_legend"]
+ 
+ 
+ _param_docs = DocstringComponents.from_nested_components(
++
++
++def move_legend(obj, loc, **kwargs):
++    """Move or resize a legend on a plot.
++    
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn Grid instance
++        The object with the legend to modify.
++    loc : str
++        Location for the legend, as in matplotlib.legend().
++    **kwargs
++        Additional keyword arguments passed to matplotlib.legend().
++        
++    Returns
++    -------
++    None
++    """
++    # Handle figure-level plots
++    if hasattr(obj, '_legend'):
++        legend = obj._legend
++        handles = legend.legendHandles
++        labels = [t.get_text() for t in legend.texts]
++        kwargs.setdefault('frameon', legend.get_frame().get_visible())
++        legend.remove()
++        obj._legend = obj._figure.legend(handles, labels, loc=loc, **kwargs)
++    
++    # Handle axes-level plots
++    elif hasattr(obj, 'legend_') and obj.legend_ is not None:
++        legend = obj.legend_
++        handles = legend.legendHandles
++        labels = [t.get_text() for t in legend.texts]
++        kwargs.setdefault('frameon', legend.get_frame().get_visible())
++        legend.remove()
++        obj.legend(handles, labels, loc=loc, **kwargs)
++    
++    # Handle case where legend needs to be created from scratch
++    elif hasattr(obj, 'get_legend_handles_labels'):
++        handles, labels = obj.get_legend_handles_labels()
++        if handles:
++            obj.legend(handles, labels, loc=loc, **kwargs)
+     core=_core_docs["params"],
+ )
+ 

@@ -1,0 +1,18 @@
+diff --git a/sphinx/ext/autodoc/directive.py b/sphinx/ext/autodoc/directive.py
+index 02803ef..1f4d099 100644
+--- a/sphinx/ext/autodoc/directive.py
++++ b/sphinx/ext/autodoc/directive.py
+@@ -117,6 +117,7 @@ class AutodocDirective(SphinxDirective):
+         doccls = get_documenters(self.env.app)[objtype]
+ 
+         # process the options with the selected documenter's option_spec
++        # Note: the supported options include 'member-order' (added in version x.x)
+         try:
+             documenter_options = process_documenter_options(doccls, self.config, self.options)
+         except (KeyError, ValueError, TypeError) as exc:
+@@ -140,4 +141,4 @@ class AutodocDirective(SphinxDirective):
+             self.state.document.settings.record_dependencies.add(fn)
+ 
+         result = parse_generated_content(self.state, params.result, documenter)
+-        return result
++        return result

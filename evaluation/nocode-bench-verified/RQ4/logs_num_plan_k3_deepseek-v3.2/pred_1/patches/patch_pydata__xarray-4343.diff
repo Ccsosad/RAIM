@@ -1,0 +1,43 @@
+diff --git a/xarray/coding/cftimeindex.py b/xarray/coding/cftimeindex.py
+index a4efa02..473e570 100644
+--- a/xarray/coding/cftimeindex.py
++++ b/xarray/coding/cftimeindex.py
+@@ -94,12 +94,36 @@ _EXTENDED_PATTERN = build_pattern()
+ _PATTERNS = [_BASIC_PATTERN, _EXTENDED_PATTERN]
+ 
+ 
+-def parse_iso8601(datetime_string):
++def parse_iso8601_like(datetime_string):
++    """Parse a datetime string that may be in ISO 8601 format or the default
++    cftime format (YYYY-MM-DD hh:mm:ss).
++    """
++    # First, try the existing ISO 8601 patterns
+     for pattern in _PATTERNS:
+         match = re.match(pattern, datetime_string)
+         if match:
+             return match.groupdict()
+-    raise ValueError("no ISO-8601 match for string: %s" % datetime_string)
++    # Then, try the default cftime format patterns
++    # Pattern for YYYY-MM-DD
++    cftime_date_pattern = r'^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})$'
++    # Pattern for YYYY-MM-DD hh:mm:ss
++    cftime_datetime_pattern = r'^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2}) (?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})$'
++    # Pattern for YYYY-MM-DD hh:mm:ss.uuuuuu
++    cftime_datetime_us_pattern = r'^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2}) (?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})\.(?P<microsecond>\d+)$'
++    
++    for pattern in [cftime_date_pattern, cftime_datetime_pattern, cftime_datetime_us_pattern]:
++        match = re.match(pattern, datetime_string)
++        if match:
++            result = match.groupdict()
++            # The existing code doesn't use microsecond, so remove it
++            if 'microsecond' in result:
++                del result['microsecond']
++            return result
++    raise ValueError("no ISO-8601 or cftime format match for string: %s" % datetime_string)
++
++
++def parse_iso8601(datetime_string):
++    return parse_iso8601_like(datetime_string)
+ 
+ 
+ def _parse_iso8601_with_reso(date_type, timestr):

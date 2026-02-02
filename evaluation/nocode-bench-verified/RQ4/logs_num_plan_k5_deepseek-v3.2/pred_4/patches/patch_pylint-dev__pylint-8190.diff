@@ -1,0 +1,80 @@
+diff --git a/pylint/pyreverse/inspector.py b/pylint/pyreverse/inspector.py
+index 9996e5d..3e8e06f 100644
+--- a/pylint/pyreverse/inspector.py
++++ b/pylint/pyreverse/inspector.py
+@@ -82,6 +82,43 @@ class Project:
+         return f"<Project {self.name!r} at {id(self)} ({len(self.modules)} modules)>"
+ 
+ 
++import sys
++import os
++from distutils.sysconfig import get_python_lib
++
++def is_stdlib_module(module_name, module_path):
++    """Return True if the module is in the standard library."""
++    if not module_path:
++        return False
++    stdlib_path = get_python_lib(standard_lib=True)
++    module_path = os.path.abspath(module_path)
++    stdlib_path = os.path.abspath(stdlib_path)
++    try:
++        common = os.path.commonpath([module_path, stdlib_path])
++    except ValueError:
++        return False
++    return common == stdlib_path
++
++
++import sys
++import os
++from distutils.sysconfig import get_python_lib
++
++def is_stdlib_module(module_name, module_path):
++    """Return True if the module is in the standard library."""
++    if not module_path:
++        return False
++    stdlib_path = get_python_lib(standard_lib=True)
++    # Make sure both paths are absolute
++    module_path = os.path.abspath(module_path)
++    stdlib_path = os.path.abspath(stdlib_path)
++    try:
++        common = os.path.commonpath([module_path, stdlib_path])
++    except ValueError:
++        return False
++    return common == stdlib_path
++
++
+ class Linker(IdGeneratorMixIn, utils.LocalsVisitor):
+     """Walk on the project tree and resolve relationships.
+ 
+@@ -90,6 +127,10 @@ class Linker(IdGeneratorMixIn, utils.LocalsVisitor):
+ 
+     * uid,
+       a unique identifier for the node (on astroid.Project, astroid.Module,
++    """
++    show_stdlib = False
++    """
++    show_stdlib = False
+       astroid.Class and astroid.locals_type). Only if the linker
+       has been instantiated with tag=True parameter (False by default).
+ 
+diff --git a/pylint/pyreverse/main.py b/pylint/pyreverse/main.py
+new file mode 100644
+index 0000000..a59c89f
+--- /dev/null
++++ b/pylint/pyreverse/main.py
+@@ -0,0 +1,15 @@
++    parser.add_option(
++        "--show-builtin",
++        dest="show_builtin",
++        action="store_true",
++        default=False,
++        help="include builtin objects in the generated diagrams.",
++    )
++    parser.add_option(
++        "--show-stdlib",
++        "-L",
++        dest="show_stdlib",
++        action="store_true",
++        default=False,
++        help="include standard library modules in the generated diagrams.",
++    )

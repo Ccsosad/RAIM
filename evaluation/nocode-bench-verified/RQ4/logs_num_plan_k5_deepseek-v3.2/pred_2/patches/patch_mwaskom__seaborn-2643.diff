@@ -1,0 +1,114 @@
+diff --git a/seaborn/legend_decorators.py b/seaborn/legend_decorators.py
+new file mode 100644
+index 0000000..d332db6
+--- /dev/null
++++ b/seaborn/legend_decorators.py
+@@ -0,0 +1 @@
++"""Decorators for legend-related functions."""
+diff --git a/seaborn/legend_utils.py b/seaborn/legend_utils.py
+new file mode 100644
+index 0000000..303b4c6
+--- /dev/null
++++ b/seaborn/legend_utils.py
+@@ -0,0 +1,47 @@
++"""Utilities for working with legends."""
++import matplotlib as mpl
++
++def get_legend_handles(ax):
++    """Get handles and labels from the legend of an axes."""
++    legend = ax.get_legend()
++    if legend is not None:
++        return legend.get_handles(), legend.get_labels()
++    else:
++        return [], []
++
++def get_legend_data(obj):
++    """Extract legend handles and labels from an axes or figure-level object."""
++    if hasattr(obj, 'ax') and hasattr(obj, 'legend'):
++        # This is a FacetGrid or similar
++        if hasattr(obj, '_legend'):
++            legend = obj._legend
++        else:
++            legend = obj.legend
++        if legend is not None:
++            handles = legend.get_handles()
++            labels = legend.get_labels()
++            return handles, labels
++        else:
++            return [], []
++    else:
++        # Assume it's an axes
++        return get_legend_handles(obj)
++
++def move_legend(obj, loc, **kwargs):
++    """Move the legend to a new location and update its properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.FacetGrid
++        The object with the legend.
++    loc : str or int
++        The new location for the legend.
++    **kwargs : dict
++        Additional keyword arguments passed to `ax.legend` or `g.legend`.
++
++    Returns
++    -------
++    None
++    """
++    # This function is implemented in miscplot.py, but we keep the helper here.
++    pass
+diff --git a/seaborn/miscplot.py b/seaborn/miscplot.py
+new file mode 100644
+index 0000000..c567477
+--- /dev/null
++++ b/seaborn/miscplot.py
+@@ -0,0 +1,48 @@
++def move_legend(obj, loc, **kwargs):
++    """Move a legend to a new location, or update legend properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.FacetGrid
++        The object with the legend.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid location values.
++    **kwargs : dict
++        Additional keyword arguments are passed to the underlying
++        :meth:`matplotlib.axes.Axes.legend` call.
++
++    Returns
++    -------
++    None
++
++    Examples
++    --------
++    .. include:: ../doc/docstrings/move_legend.ipynb
++    """
++    from .legend_utils import get_legend_handles_labels
++    handles, labels = get_legend_handles_labels(obj)
++    if not handles:
++        # No legend to move
++        return
++
++    # Remove the existing legend
++    if hasattr(obj, 'ax') and hasattr(obj, 'legend'):
++        # This is a FacetGrid or similar
++        if hasattr(obj, '_legend'):
++            obj._legend.remove()
++            obj._legend = None
++        else:
++            obj.legend.remove()
++            obj.legend = None
++        # Create a new legend on the first axes
++        ax = obj.ax if hasattr(obj, 'ax') else obj.axes.flat[0]
++        new_legend = ax.legend(handles, labels, loc=loc, **kwargs)
++        # Attach the new legend to the figure-level object
++        obj._legend = new_legend
++    else:
++        # For an axes, we can simply call legend again
++        obj.legend(handles, labels, loc=loc, **kwargs)
++
++def despine(fig=None, ax=None, top=True, right=True,
++            left=False, bottom=False, offset=None, trim=False):

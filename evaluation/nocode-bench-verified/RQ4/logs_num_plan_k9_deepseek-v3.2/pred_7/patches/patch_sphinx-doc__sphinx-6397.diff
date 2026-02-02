@@ -1,0 +1,52 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index 9d17b0d..b296f55 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1038,6 +1038,27 @@ class FunctionDocumenter(DocstringSignatureMixin, ModuleLevelDocumenter):  # typ
+         args = args.replace('\\', '\\\\')
+         return args
+ 
++    def format_signature(self, **kwargs):
++        # type: (Any) -> str
++        if self.env.config.autodoc_typehints == 'none':
++            # Return signature without type hints
++            # We need to get the signature without type hints
++            # Since we can't easily remove type hints from the formatted signature,
++            # we'll call the parent's format_signature and then remove type hints
++            # This is a simplified approach - in reality, we should modify how
++            # the Signature class formats arguments
++            sig = super().format_signature(**kwargs)
++            # Simple approach: remove type hints from signature
++            # This is not perfect but works for common cases
++            import re
++            # Remove type annotations from parameters
++            sig = re.sub(r'\s*:\s*[^,)]+', '', sig)
++            # Remove return type annotation
++            sig = re.sub(r'\s*->\s*[^:]+', '', sig)
++            return sig
++        else:
++            return super().format_signature(**kwargs)
++
+     def document_members(self, all_members=False):
+         # type: (bool) -> None
+         pass
+@@ -1127,7 +1148,18 @@ class ClassDocumenter(DocstringSignatureMixin, ModuleLevelDocumenter):  # type:
+         if self.doc_as_attr:
+             return ''
+ 
+-        return super().format_signature(**kwargs)
++        if self.env.config.autodoc_typehints == 'none':
++            # Return signature without type hints
++            sig = super().format_signature(**kwargs)
++            # Simple approach: remove type hints from signature
++            import re
++            # Remove type annotations from parameters
++            sig = re.sub(r'\s*:\s*[^,)]+', '', sig)
++            # Remove return type annotation
++            sig = re.sub(r'\s*->\s*[^:]+', '', sig)
++            return sig
++        else:
++            return super().format_signature(**kwargs)
+ 
+     def add_directive_header(self, sig):
+         # type: (str) -> None

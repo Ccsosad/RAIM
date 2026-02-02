@@ -1,0 +1,16 @@
+diff --git a/sklearn/pipeline.py b/sklearn/pipeline.py
+index 37667a3..48e5233 100644
+--- a/sklearn/pipeline.py
++++ b/sklearn/pipeline.py
+@@ -1054,6 +1054,11 @@ class FeatureUnion(TransformerMixin, _BaseComposition):
+                 continue
+             if trans == "passthrough":
+                 trans = FunctionTransformer()
++                # Attach get_feature_names_out for passthrough
++                def get_feature_names_out(input_features=None):
++                    from sklearn.utils.validation import _check_feature_names_in
++                    return _check_feature_names_in(trans, input_features)
++                trans.get_feature_names_out = get_feature_names_out
+             yield (name, trans, get_weight(name))
+ 
+     @deprecated(

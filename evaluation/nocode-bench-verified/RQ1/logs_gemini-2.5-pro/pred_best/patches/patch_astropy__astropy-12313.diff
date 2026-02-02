@@ -1,0 +1,93 @@
+diff --git a/astropy/cosmology/io/__init__.py b/astropy/cosmology/io/__init__.py
+index de60710..9868107 100644
+--- a/astropy/cosmology/io/__init__.py
++++ b/astropy/cosmology/io/__init__.py
+@@ -1,3 +1,4 @@
++
+ # -*- coding: utf-8 -*-
+ # Licensed under a 3-clause BSD style license - see LICENSE.rst
+ 
+@@ -6,4 +7,4 @@ Read/Write/Interchange methods for `astropy.cosmology`. **NOT public API**.
+ """
+ 
+ # Import to register with the I/O machinery
+-from . import ecsv, mapping, model, table  # noqa: F403
++from . import ecsv, mapping, model, row, table  # noqa: F403
+diff --git a/astropy/cosmology/io/row.py b/astropy/cosmology/io/row.py
+new file mode 100644
+index 0000000..c5d2808
+--- /dev/null
++++ b/astropy/cosmology/io/row.py
+@@ -0,0 +1,72 @@
++# -*- coding: utf-8 -*-
++# Licensed under a 3-clause BSD style license - see LICENSE.rst
++
++from astropy.cosmology.connect import convert_registry
++from astropy.cosmology.core import Cosmology
++from astropy.table import Row
++
++__all__ = ["from_row", "to_row"]
++
++
++def from_row(row, *, move_to_meta=False):
++    """Read a `~astropy.cosmology.Cosmology` from a `~astropy.table.Row`.
++
++    Parameters
++    ----------
++    row : `~astropy.table.Row`
++        The row to parse.
++    move_to_meta : bool
++        Whether to move keyword arguments that are not in the Cosmology's
++        signature to the metadata. This will only be applied if the
++        Cosmology is constructed from a mapping.
++
++    Returns
++    -------
++    `~astropy.cosmology.Cosmology`
++        The parsed cosmology.
++    """
++    # get metadata. `row.meta` is the table's metadata.
++    # We are defensive against a Row without a table.
++    meta = (row.table.meta if row.table is not None else {}).copy()
++    name = meta.pop("name", None)
++
++    # turn row into mapping (dict of the arguments)
++    mapping = dict(row)
++    mapping["name"] = name
++    mapping.setdefault("cosmology", meta.pop("cosmology", None))
++    mapping["meta"] = meta
++
++    # build cosmology from map
++    return Cosmology.from_format(mapping, format="mapping", move_to_meta=move_to_meta)
++
++
++def to_row(cosmo, *args, **kwargs):
++    """Convert a `~astropy.cosmology.Cosmology` to a `~astropy.table.Row`.
++
++    Parameters
++    ----------
++    cosmo : `~astropy.cosmology.Cosmology`
++        The cosmology to convert.
++
++    Returns
++    -------
++    `~astropy.table.Row`
++        The cosmology as a `~astropy.table.Row`.
++    """
++    # convert to a table and return the first (and only) row.
++    return cosmo.to_format("astropy.table")[0]
++
++
++def row_identify(origin, *args, **kwargs):
++    """Identify if object is a `~astropy.table.Row`."""
++    if origin == "read":
++        # from_format(cls, obj, *args, **kwargs)
++        # -> identify('read', cls, obj, *args, **kwargs)
++        return isinstance(args[1], Row)
++    return False
++
++
++# Register
++convert_registry.register_reader("astropy.row", Cosmology, from_row)
++convert_registry.register_writer("astropy.row", Cosmology, to_row)
++convert_registry.register_identifier("astropy.row", Cosmology, row_identify)

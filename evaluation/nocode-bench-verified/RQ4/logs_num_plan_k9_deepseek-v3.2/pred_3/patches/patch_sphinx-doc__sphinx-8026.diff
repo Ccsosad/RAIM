@@ -1,0 +1,83 @@
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+index 796b7ad..95d32be 100644
+--- a/sphinx/builders/__init__.py
++++ b/sphinx/builders/__init__.py
+@@ -603,6 +603,44 @@ class Builder:
+         """
+         pass
+ 
++    def replace_image_path_tokens(self, path: str, docname: str) -> str:
++        """Replace tokens in the image path with document-specific values.
++
++        This method replaces {docpath} with the directory path of the given document.
++        Other tokens are replaced by the derived builder.
++        """
++        from sphinx.util.uri_resolver import replace_uri_tokens
++        return replace_uri_tokens(path, docname)
++
++    def replace_image_path_tokens(self, path: str, docname: str) -> str:
++        """Replace tokens in the image path with document-specific values.
++
++        This method replaces {docpath} with the directory path of the given document.
++        Other tokens are replaced by the derived builder.
++        """
++        if '{docpath}' in path:
++            docdir = path.dirname(docname)
++            if docdir:
++                docdir += '/'
++            path = path.replace('{docpath}', docdir)
++        return path
++
++    def get_image_path_for_doc(self, docname: str) -> str:
++        """Return the image path for the given document.
++
++        This method replaces the {docpath} token in the image path with the
++        directory path of the given document.
++        """
++        if not hasattr(self, '_imgpath_pattern'):
++            # This should be set by the derived builder in prepare_writing.
++            return self.imgpath
++
++        # Replace {docpath} with the directory of the document.
++        docdir = path.dirname(docname)
++        if docdir:
++            docdir += '/'
++        return self._imgpath_pattern.replace('{docpath}', docdir)
++
+     def get_builder_config(self, option: str, default: str) -> Any:
+         """Return a builder specific option.
+ 
+@@ -617,4 +655,4 @@ class Builder:
+             return getattr(self.config, optname)
+         except AttributeError:
+             optname = '%s_%s' % (default, option)
+-            return getattr(self.config, optname)
++            return getattr(self.config, optname)
+diff --git a/sphinx/util/uri_resolver.py b/sphinx/util/uri_resolver.py
+new file mode 100644
+index 0000000..561ce90
+--- /dev/null
++++ b/sphinx/util/uri_resolver.py
+@@ -0,0 +1,22 @@
++"""
++URI resolver for Sphinx.
++"""
++
++import os
++from os import path
++
++def replace_uri_tokens(uri: str, docname: str = None, **kwargs: str) -> str:
++    """Replace tokens in a URI with given values.
++
++    Supported tokens:
++        {docpath} - the directory path component for the current document,
++                    with a trailing slash if non-empty.
++    """
++    if docname and '{docpath}' in uri:
++        docdir = path.dirname(docname)
++        if docdir:
++            docdir += '/'
++        uri = uri.replace('{docpath}', docdir)
++
++    # Other tokens can be added here.
++    return uri

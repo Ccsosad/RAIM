@@ -1,0 +1,49 @@
+diff --git a/sklearn/decomposition/_kernel_pca.py b/sklearn/decomposition/_kernel_pca.py
+index 6f0266a..e41aef3 100644
+--- a/sklearn/decomposition/_kernel_pca.py
++++ b/sklearn/decomposition/_kernel_pca.py
+@@ -59,10 +59,12 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+         Learn the inverse transform for non-precomputed kernels.
+         (i.e. learn to find the pre-image of a point)
+ 
+-    eigen_solver : {'auto', 'dense', 'arpack'}, default='auto'
++    eigen_solver : {'auto', 'dense', 'arpack', 'randomized'}, default='auto'
+         Select eigensolver to use. If n_components is much less than
+         the number of training samples, arpack may be more efficient
+-        than the dense eigensolver.
++        than the dense eigensolver. The randomized solver can be more
++        efficient when the number of samples is large and the number of
++        components is small.
+ 
+     tol : float, default=0
+         Convergence tolerance for arpack.
+@@ -215,6 +217,23 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+                                                 tol=self.tol,
+                                                 maxiter=self.max_iter,
+                                                 v0=v0)
++        elif eigen_solver == 'randomized':
++            if n_components == K.shape[0]:
++                # fall back to dense
++                self.lambdas_, self.alphas_ = linalg.eigh(
++                    K, eigvals=(K.shape[0] - n_components, K.shape[0] - 1))
++            else:
++                from ..utils.extmath import randomized_svd
++                n_oversamples = 10
++                n_random = n_components + n_oversamples
++                if n_random > K.shape[0]:
++                    n_random = K.shape[0]
++                U, S, _ = randomized_svd(K, n_components=n_components,
++                                         n_oversamples=n_oversamples,
++                                         random_state=self.random_state,
++                                         n_iter='auto')
++                self.lambdas_ = S
++                self.alphas_ = U
+ 
+         # make sure that the eigenvalues are ok and fix numerical issues
+         self.lambdas_ = _check_psd_eigenvalues(self.lambdas_,
+@@ -388,4 +407,4 @@ class KernelPCA(TransformerMixin, BaseEstimator):
+ 
+     def _more_tags(self):
+         return {'preserves_dtype': [np.float64, np.float32],
+-                'pairwise': self.kernel == 'precomputed'}
++                'pairwise': self.kernel == 'precomputed'}

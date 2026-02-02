@@ -1,0 +1,13 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ead4f5d..59f7d16 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -514,7 +514,7 @@ class Documenter:
+                     logger.warning(__('missing attribute %s in object %s') %
+                                    (name, self.fullname), type='autodoc')
+             return False, sorted(selected)
+-        elif self.options.inherited_members:
++        elif self.options.inherited_members or self.options.imported_members:
+             return False, sorted((m.name, m.value) for m in members.values())
+         else:
+             return False, sorted((m.name, m.value) for m in members.values()

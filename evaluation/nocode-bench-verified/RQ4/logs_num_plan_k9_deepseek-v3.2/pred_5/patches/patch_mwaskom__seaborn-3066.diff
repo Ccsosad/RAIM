@@ -1,0 +1,25 @@
+diff --git a/seaborn/_core/moves.py b/seaborn/_core/moves.py
+index 0a4056b..2c9e788 100644
+--- a/seaborn/_core/moves.py
++++ b/seaborn/_core/moves.py
+@@ -25,16 +25,16 @@ class Move:
+ class Jitter(Move):
+     """
+     Random displacement of marks along either or both axes to reduce overplotting.
++
++    When called without arguments, a small amount of jitter (width=0.1) is applied
++    along the orientation axis.
+     """
+-    width: float = 0
++    width: float = 0.1
+     x: float = 0
+     y: float = 0
+ 
+     seed: Optional[int] = None
+ 
+-    # TODO what is the best way to have a reasonable default?
+-    # The problem is that "reasonable" seems dependent on the mark
+-
+     def __call__(
+         self, data: DataFrame, groupby: GroupBy, orient: str, scales: dict[str, Scale],
+     ) -> DataFrame:

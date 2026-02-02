@@ -1,0 +1,38 @@
+diff --git a/xarray/coding/times.py b/xarray/coding/times.py
+index 3885b1c..a14f309 100644
+--- a/xarray/coding/times.py
++++ b/xarray/coding/times.py
+@@ -692,7 +692,15 @@ class CFDatetimeCoder(VariableCoder):
+                 calendar=calendar,
+                 use_cftime=self.use_cftime,
+             )
+-            data = lazy_elemwise_func(data, transform, dtype)
++            try:
++                data = lazy_elemwise_func(data, transform, dtype)
++            except Exception as e:
++                if name is not None:
++                    # Prepend the variable name to the error message
++                    msg = f"Failed to decode variable {name!r} as datetime. {e}"
++                    raise type(e)(msg) from e
++                else:
++                    raise
+ 
+         return Variable(dims, data, attrs, encoding)
+ 
+@@ -715,6 +723,14 @@ class CFTimedeltaCoder(VariableCoder):
+             units = pop_to(attrs, encoding, "units")
+             transform = partial(decode_cf_timedelta, units=units)
+             dtype = np.dtype("timedelta64[ns]")
+-            data = lazy_elemwise_func(data, transform, dtype=dtype)
++            try:
++                data = lazy_elemwise_func(data, transform, dtype=dtype)
++            except Exception as e:
++                if name is not None:
++                    # Prepend the variable name to the error message
++                    msg = f"Failed to decode variable {name!r} as timedelta. {e}"
++                    raise type(e)(msg) from e
++                else:
++                    raise
+ 
+-        return Variable(dims, data, attrs, encoding)
++        return Variable(dims, data, attrs, encoding)

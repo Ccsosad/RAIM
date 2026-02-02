@@ -1,0 +1,34 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index 7d25be3..db5bbb7 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -282,6 +282,10 @@ borderaxespad : float, default: :rc:`legend.borderaxespad`
+ columnspacing : float, default: :rc:`legend.columnspacing`
+     The spacing between columns, in font-size units.
+ 
++reverse : bool, default: False
++    If ``True``, the legend entries are displayed in reverse order from the
++    order they are created.
++
+ handler_map : dict or None
+     The custom dictionary mapping instances or types to a legend
+     handler. This *handler_map* updates the default handler map
+@@ -312,6 +316,7 @@ class Legend(Artist):
+         numpoints=None,      # number of points in the legend line
+         markerscale=None,    # relative size of legend markers vs. original
+         markerfirst=True,    # left/right ordering of legend marker and label
++        reverse=False,       # whether to reverse the order of entries
+         scatterpoints=None,  # number of scatter points
+         scatteryoffsets=None,
+         prop=None,           # properties for the legend texts
+@@ -437,6 +442,10 @@ class Legend(Artist):
+                 _hand.append(handle)
+         labels, handles = _lab, _hand
+ 
++        if reverse:
++            handles = handles[::-1]
++            labels = labels[::-1]
++
+         handles = list(handles)
+         if len(handles) < 2:
+             ncols = 1

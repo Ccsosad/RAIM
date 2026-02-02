@@ -1,0 +1,37 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..6a86853 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -212,6 +212,32 @@ def read_style_directory(style_dir):
+     return styles
+ 
+ 
++def _read_style_from_package(style_name):
++    """
++    Read a style from a package.
++
++    Parameters
++    ----------
++    style_name : str
++        Dotted style name (e.g., "mypackage.presentation").
++
++    Returns
++    -------
++    dict or None
++        The rc parameters dictionary, or None if the resource does not exist.
++    """
++    try:
++        package_name, resource_name = style_name.rsplit('.', 1)
++    except ValueError:
++        return None
++    resource_name = f"{resource_name}.{STYLE_EXTENSION}"
++    try:
++        with resources.open_text(package_name, resource_name) as f:
++            return rc_params_from_file(f, use_default_template=False)
++    except (ModuleNotFoundError, FileNotFoundError):
++        return None
++
++
+ def update_nested_dict(main_dict, new_dict):
+     """
+     Update nested dict (only level of nesting) with new values.

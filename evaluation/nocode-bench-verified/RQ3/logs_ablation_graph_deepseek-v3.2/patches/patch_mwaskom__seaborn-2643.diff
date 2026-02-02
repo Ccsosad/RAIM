@@ -1,0 +1,68 @@
+diff --git a/seaborn/axisgrid.py b/seaborn/axisgrid.py
+index c1f490d..0812927 100644
+--- a/seaborn/axisgrid.py
++++ b/seaborn/axisgrid.py
+@@ -1977,6 +1977,63 @@ Examples
+ )
+ 
+ 
++def move_legend(obj, loc, **kwargs):
++    """
++    Recreate an existing legend at a new location and/or with new properties.
++
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.axisgrid.FacetGrid or seaborn.axisgrid.PairGrid
++        The object with the legend to move.
++    loc : str or int
++        The new location for the legend. See :meth:`matplotlib.axes.Axes.legend`
++        for valid location strings and integers.
++    **kwargs
++        Additional keyword arguments are passed to :meth:`matplotlib.axes.Axes.legend`.
++
++    Returns
++    -------
++    None
++
++    Examples
++    --------
++    >>> import seaborn as sns
++    >>> penguins = sns.load_dataset("penguins")
++    >>> ax = sns.histplot(penguins, x="bill_length_mm", hue="species")
++    >>> sns.move_legend(ax, "center right")
++
++    """
++    # Get the existing legend
++    if hasattr(obj, "_legend"):
++        # This is a FacetGrid or PairGrid
++        old_legend = obj._legend
++        if old_legend is None:
++            raise ValueError("No legend found in the provided object.")
++        # The legend is on the figure
++        target = obj._figure
++    else:
++        # Assume it's an Axes
++        ax = obj
++        old_legend = ax.get_legend()
++        if old_legend is None:
++            raise ValueError("No legend found in the provided axes.")
++        target = ax
++
++    # Get the handles and labels from the old legend
++    handles = old_legend.legendHandles
++    labels = [t.get_text() for t in old_legend.get_texts()]
++
++    # Remove the old legend
++    old_legend.remove()
++
++    # Create the new legend
++    new_legend = target.legend(handles, labels, loc=loc, **kwargs)
++
++    # If it's a grid object, update the internal reference
++    if hasattr(obj, "_legend"):
++        obj._legend = new_legend
++
++
+ @_deprecate_positional_args
+ def pairplot(
+     data, *,

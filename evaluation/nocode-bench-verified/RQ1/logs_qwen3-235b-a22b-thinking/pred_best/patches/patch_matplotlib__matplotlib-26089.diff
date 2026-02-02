@@ -1,0 +1,50 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..f2a40c4 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -1047,6 +1047,18 @@ class Legend(Artist):
+             self._legend_title_box._text.set_fontproperties(prop)
+ 
+         self.stale = True
++        
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++        
++        Parameters
++        ----------
++        loc : str or int
++            The location code. See the documentation for the `loc` parameter
++            in the Legend class for valid values.
++        """
++        self._set_loc(loc)
+ 
+     def get_title(self):
+         """Return the `.Text` instance for the legend title."""
+@@ -1232,6 +1244,26 @@ class Legend(Artist):
+             self._draggable = None
+         return self._draggable
+ 
++    def set(self, **kwargs):
++        """
++        Set properties of the legend.
++        
++        Parameters
++        ----------
++        **kwargs
++            Keyword arguments. Valid properties include:
++            
++            loc : str or int
++                The location code. See the documentation for the `loc` parameter
++                in the Legend class for valid values.
++        """
++        if 'loc' in kwargs:
++            self.set_loc(kwargs.pop('loc'))
++        
++        # Handle other properties in the future
++        if kwargs:
++            _api.warn_external(f"Unknown properties: {list(kwargs.keys())}")
++
+     def get_draggable(self):
+         """Return ``True`` if the legend is draggable, ``False`` otherwise."""
+         return self._draggable is not None

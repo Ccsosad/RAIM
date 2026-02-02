@@ -1,0 +1,19 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..0410d2b 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -225,6 +225,14 @@ class Nominal(Scale):
+         if prop.legend:
+             new._legend = units_seed, list(stringify(units_seed))
+ 
++        # Set up axis appearance for categorical axes
++        if axis is not None and hasattr(axis, 'axes'):
++            ax = axis.axes
++            ax.margins(x=0, y=0)
++            ax.grid(False)
++            if axis.axis_name == 'y':
++                ax.invert_yaxis()
++
+         return new
+ 
+     def tick(self, locator: Locator | None = None):

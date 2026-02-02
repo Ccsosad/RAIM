@@ -1,0 +1,82 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..f3063cb 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -67,6 +67,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -74,6 +75,14 @@ def expand_modules(
+     result: dict[str, ModuleDescriptionDict] = {}
+     errors: list[ErrorDescriptionDict] = []
+     path = sys.path.copy()
++    # Add source roots to the path to support implicit namespace packages
++    for root in source_roots:
++        if root not in path:
++            path.insert(0, root)
++    # Add source roots to the path to support implicit namespace packages
++    for root in source_roots:
++        if root not in path:
++            path.insert(0, root)
+ 
+     for something in files_or_modules:
+         basename = os.path.basename(something)
+@@ -160,4 +169,4 @@ def expand_modules(
+                     "basepath": filepath,
+                     "basename": modname,
+                 }
+-    return result, errors
++    return result, errors
+diff --git a/pylint/lint/pylinter.py b/pylint/lint/pylinter.py
+index 21f6e51..8f9ceca 100644
+--- a/pylint/lint/pylinter.py
++++ b/pylint/lint/pylinter.py
+@@ -304,6 +304,30 @@ class PyLinter(
+ 
+         # Attributes related to (command-line) options and their parsing
+         self.options: Options = options + _make_linter_options(self)
++        # Add the source-roots option
++        self.options = self.options + (
++            (
++                "source-roots",
++                {
++                    "type": "csv",
++                    "metavar": "<path>",
++                    "default": (),
++                    "help": "Add paths to the list of the source roots. The source root is an absolute path or a path relative to the current working directory used to determine a package namespace for modules located under the source root.",
++                },
++            ),
++        )
++        # Add the source-roots option
++        self.options = self.options + (
++            (
++                "source-roots",
++                {
++                    "type": "csv",
++                    "metavar": "<path>",
++                    "default": (),
++                    "help": "Add paths to the list of the source roots. The source root is an absolute path or a path relative to the current working directory used to determine a package namespace for modules located under the source root.",
++                },
++            ),
++        )
+         for opt_group in option_groups:
+             self.option_groups_descs[opt_group[0]] = opt_group[1]
+         self._option_groups: tuple[tuple[str, str], ...] = option_groups + (
+@@ -891,6 +915,7 @@ class PyLinter(
+             self.config.ignore,
+             self.config.ignore_patterns,
+             self._ignore_paths,
++            self.config.source_roots,
+         )
+         for error in errors:
+             message = modname = error["mod"]
+@@ -1367,4 +1392,4 @@ class PyLinter(
+                     line=0,
+                     confidence=HIGH,
+                 )
+-        self._stashed_messages = collections.defaultdict(list)
++        self._stashed_messages = collections.defaultdict(list)

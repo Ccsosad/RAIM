@@ -1,0 +1,34 @@
+diff --git a/lib/matplotlib/axes/_axes.py b/lib/matplotlib/axes/_axes.py
+index eed9d35..a030703 100644
+--- a/lib/matplotlib/axes/_axes.py
++++ b/lib/matplotlib/axes/_axes.py
+@@ -6486,7 +6486,11 @@ default: :rc:`scatter.edgecolors`
+         %(contour_doc)s
+         """
+         kwargs['filled'] = False
++        clip_path = kwargs.pop('clip_path', None)
+         contours = mcontour.QuadContourSet(self, *args, **kwargs)
++        if clip_path is not None:
++            for coll in contours.collections:
++                coll.set_clip_path(clip_path)
+         self._request_autoscale_view()
+         return contours
+ 
+@@ -6502,7 +6506,11 @@ default: :rc:`scatter.edgecolors`
+         %(contour_doc)s
+         """
+         kwargs['filled'] = True
++        clip_path = kwargs.pop('clip_path', None)
+         contours = mcontour.QuadContourSet(self, *args, **kwargs)
++        if clip_path is not None:
++            for coll in contours.collections:
++                coll.set_clip_path(clip_path)
+         self._request_autoscale_view()
+         return contours
+ 
+@@ -8423,4 +8431,4 @@ such objects
+         figure_size = self.get_figure().get_size_inches()
+         ll, ur = self.get_position() * figure_size
+         width, height = ur - ll
+-        return height / (width * self.get_data_ratio())
++        return height / (width * self.get_data_ratio())

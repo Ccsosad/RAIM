@@ -1,0 +1,163 @@
+diff --git a/xarray/plot/facetgrid.py b/xarray/plot/facetgrid.py
+index 24417f2..014d9ae 100644
+--- a/xarray/plot/facetgrid.py
++++ b/xarray/plot/facetgrid.py
+@@ -1001,4 +1001,4 @@ def _easy_facetgrid(
+     if kind == "dataset":
+         return g.map_dataset(plotfunc, x, y, **kwargs)
+ 
+-    raise ValueError(f"kind must be one of `line`, `dataarray`, `dataset`, got {kind}")
++    raise ValueError(f"kind must be one of `line`, `dataarray`, `dataset`, `plot1d`, got {kind}")
+diff --git a/xarray/plot/accessor.py b/xarray/plot/accessor.py
+new file mode 100644
+index 0000000..5840619
+--- /dev/null
++++ b/xarray/plot/accessor.py
+@@ -0,0 +1,147 @@
++from typing import TYPE_CHECKING, Callable, Hashable, Literal, overload
++
++if TYPE_CHECKING:
++    from ..core.dataarray import DataArray
++    from ..core.dataset import Dataset
++
++
++class DataArrayPlotAccessor:
++    """Type hints for DataArray.plot accessor."""
++
++    def __init__(self, dataarray: "DataArray") -> None:
++        ...
++
++    @overload
++    def __call__(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def line(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def scatter(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def step(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def pcolormesh(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def surface(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def imshow(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def contour(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def contourf(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def hist(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++
++class DatasetPlotAccessor:
++    """Type hints for Dataset.plot accessor."""
++
++    def __init__(self, dataset: "Dataset") -> None:
++        ...
++
++    @overload
++    def __call__(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def scatter(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def quiver(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...
++
++    def streamplot(
++        self,
++        *args,
++        x: Hashable | None = None,
++        y: Hashable | None = None,
++        **kwargs,
++    ) -> None:
++        ...

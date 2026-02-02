@@ -1,0 +1,231 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 17fe6af..2a7fc30 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3788,6 +3788,69 @@ class DataArray(AbstractArray, DataWithCoords):
+             dim, deg, skipna=skipna, rcond=rcond, w=w, full=full, cov=cov
+         )
+ 
++    def curvefit(
++        self,
++        coords,
++        func,
++        reduce_dims=None,
++        skipna=None,
++        p0=None,
++        bounds=(-np.inf, np.inf),
++        param_names=None,
++        **kwargs,
++    ):
++        """
++        Least squares curve fit.
++
++        This method replicates the behaviour of `scipy.optimize.curve_fit`.
++
++        Parameters
++        ----------
++        coords : str, DataArray, or list of str or DataArray
++            The coordinates to use as the independent variable(s) in the fit.
++            If a string, it is used as a coordinate name. If a list, each element
++            is a coordinate for a multidimensional fit.
++        func : callable
++            The model function, f(x, ...). It must take the independent variable
++            as the first argument and the parameters to fit as separate remaining
++            arguments.
++        reduce_dims : str or list of str, optional
++            Dimensions to reduce. If None, all dimensions are reduced.
++        skipna : bool, optional
++            If True, skip missing values (as marked by NaN). Default is True if
++            there are any missing values, False otherwise.
++        p0 : array-like, optional
++            Initial guess for the parameters.
++        bounds : 2-tuple or dict, optional
++            Lower and upper bounds on parameters. If a dict, maps parameter names
++            to bounds.
++        param_names : list of str, optional
++            Names for the parameters. If not given, names are generated.
++        **kwargs : dict
++            Additional keyword arguments passed to `scipy.optimize.curve_fit`.
++
++        Returns
++        -------
++        result : Dataset
++            A dataset containing the fitted parameters and possibly other outputs.
++
++        See Also
++        --------
++        scipy.optimize.curve_fit
++        """
++        from .fitting import _curvefit
++        return _curvefit(
++            self,
++            coords,
++            func,
++            reduce_dims=reduce_dims,
++            skipna=skipna,
++            p0=p0,
++            bounds=bounds,
++            param_names=param_names,
++            **kwargs,
++        )
++
+     def pad(
+         self,
+         pad_width: Mapping[Hashable, Union[int, Tuple[int, int]]] = None,
+@@ -4424,4 +4487,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/fitting.py b/xarray/core/fitting.py
+new file mode 100644
+index 0000000..b8cff23
+--- /dev/null
++++ b/xarray/core/fitting.py
+@@ -0,0 +1,145 @@
++"""
++Curve fitting for xarray objects.
++"""
++import numpy as np
++import pandas as pd
++from . import duck_array_ops
++from .common import _contains_datetime_like_objects
++from .utils import is_duck_dask_array
++from .variable import Variable, as_variable
++
++try:
++    from scipy.optimize import curve_fit
++    has_scipy = True
++except ImportError:
++    has_scipy = False
++
++
++def _curvefit(
++    obj,
++    coords,
++    func,
++    reduce_dims=None,
++    skipna=None,
++    p0=None,
++    bounds=(-np.inf, np.inf),
++    param_names=None,
++    **kwargs,
++):
++    """
++    Least squares curve fit.
++
++    This replicates the behaviour of `scipy.optimize.curve_fit` but works on
++    xarray objects and can skip missing values.
++
++    Parameters
++    ----------
++    obj : DataArray or Dataset
++        The object to fit.
++    coords : str, DataArray, or list of str or DataArray
++        The coordinates to use as the independent variable(s) in the fit.
++        If a string, it is used as a coordinate name. If a list, each element
++        is a coordinate for a multidimensional fit.
++    func : callable
++        The model function, f(x, ...). It must take the independent variable
++        as the first argument and the parameters to fit as separate remaining
++        arguments.
++    reduce_dims : str or list of str, optional
++        Dimensions to reduce. If None, all dimensions are reduced.
++    skipna : bool, optional
++        If True, skip missing values (as marked by NaN). Default is True if
++        there are any missing values, False otherwise.
++    p0 : array-like, optional
++        Initial guess for the parameters.
++    bounds : 2-tuple or dict, optional
++        Lower and upper bounds on parameters. If a dict, maps parameter names
++        to bounds.
++    param_names : list of str, optional
++        Names for the parameters. If not given, names are generated.
++    **kwargs : dict
++        Additional keyword arguments passed to `scipy.optimize.curve_fit`.
++
++    Returns
++    -------
++    result : Dataset
++        A dataset containing the fitted parameters and possibly other outputs.
++    """
++    if not has_scipy:
++        raise ImportError("curvefit requires scipy to be installed.")
++
++    # Handle coords
++    if isinstance(coords, str):
++        coords = [coords]
++    elif not isinstance(coords, list):
++        coords = list(coords)
++
++    # Get the independent variable(s) as numpy arrays
++    coord_arrays = []
++    for c in coords:
++        if isinstance(c, str):
++            coord_arrays.append(obj[c].values)
++        else:
++            coord_arrays.append(c.values)
++
++    # Determine dimensions to reduce
++    if reduce_dims is None:
++        reduce_dims = list(obj.dims)
++    elif isinstance(reduce_dims, str):
++        reduce_dims = [reduce_dims]
++
++    # Figure out which dimensions are left
++    other_dims = [d for d in obj.dims if d not in reduce_dims]
++
++    # Reshape the data to stack the reduce_dims
++    if other_dims:
++        # We need to loop over the other dimensions
++        raise NotImplementedError("Fitting with remaining dimensions is not yet implemented.")
++    else:
++        # We are reducing all dimensions
++        data = obj.values
++        # Flatten the coordinate arrays to 1D
++        coord_arrays = [c.ravel() for c in coord_arrays]
++
++    # Handle missing values
++    if skipna is None:
++        skipna = bool(np.any(np.isnan(data)))
++
++    if skipna:
++        mask = ~np.isnan(data)
++        data = data[mask]
++        coord_arrays = [c[mask] for c in coord_arrays]
++    else:
++        mask = None
++
++    # Prepare bounds
++    if isinstance(bounds, dict):
++        # Convert to array bounds
++        if param_names is None:
++            raise ValueError("param_names must be given if bounds is a dict.")
++        lower = []
++        upper = []
++        for name in param_names:
++            low, high = bounds.get(name, (-np.inf, np.inf))
++            lower.append(low)
++            upper.append(high)
++        bounds = (lower, upper)
++    else:
++        # bounds is already a 2-tuple
++        pass
++
++    # Perform the fit
++    popt, pcov = curve_fit(func, coord_arrays, data, p0=p0, bounds=bounds, **kwargs)
++
++    # Create result dataset
++    if param_names is None:
++        param_names = [f"param_{i}" for i in range(len(popt))]
++
++    # Build result dataset
++    from .dataset import Dataset
++    result_vars = {}
++    result_vars["curvefit_coefficients"] = (["parameter"], popt)
++    result_vars["curvefit_covariance"] = (["parameter", "parameter_cov"], pcov)
++    result_coords = {"parameter": param_names, "parameter_cov": param_names}
++    result = Dataset(result_vars, coords=result_coords)
++
++    return result

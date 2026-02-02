@@ -1,0 +1,153 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f8247e8..cc9d0e5 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1924,9 +1924,61 @@ class DataArray(AbstractArray, DataWithCoords):
+         -------
+         dropped : DataArray
+         """
++        warnings.warn(
++            "DataArray.drop is deprecated. Use DataArray.drop_vars or "
++            "DataArray.drop_sel instead.",
++            PendingDeprecationWarning,
++            stacklevel=2,
++        )
+         ds = self._to_temp_dataset().drop(labels, dim, errors=errors)
+         return self._from_temp_dataset(ds)
+ 
++    def drop_sel(self, labels=None, *, errors="raise", **labels_kwargs):
++        """Drop index labels along a dimension.
++
++        Parameters
++        ----------
++        labels : dict, optional
++            Dictionary from dimension names to labels to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the labels passed are not in the array.
++            If 'ignore', any given labels that are in the array are dropped
++            and no error is raised.
++        **labels_kwargs : {dim: label, ...}, optional
++            The keyword arguments form of ``labels``.
++            One of labels or labels_kwargs must be provided.
++
++        Returns
++        -------
++        dropped : DataArray
++        """
++        if labels is None and not labels_kwargs:
++            raise ValueError("must specify at least one label to drop")
++        labels = either_dict_or_kwargs(labels, labels_kwargs, "drop_sel")
++        ds = self._to_temp_dataset().drop_sel(labels, errors=errors)
++        return self._from_temp_dataset(ds)
++
++    def drop_vars(self, names, *, errors="raise"):
++        """Drop variables (including coordinates) from this DataArray.
++
++        Parameters
++        ----------
++        names : hashable or iterable of hashables
++            Name(s) of variables to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the variables passed are not in the array.
++            If 'ignore', any given variables that are in the array are dropped
++            and no error is raised.
++
++        Returns
++        -------
++        dropped : DataArray
++        """
++        ds = self._to_temp_dataset().drop_vars(names, errors=errors)
++        return self._from_temp_dataset(ds)
++
+     def dropna(
+         self, dim: Hashable, how: str = "any", thresh: int = None
+     ) -> "DataArray":
+@@ -3118,4 +3170,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c07f9e0..6d21fa1 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3579,6 +3579,12 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         Data variables:
+             A        (x, y) float64 -0.3944 -1.418 1.423 -1.041
+         """
++        warnings.warn(
++            "Dataset.drop is deprecated. Use Dataset.drop_vars or "
++            "Dataset.drop_sel instead.",
++            PendingDeprecationWarning,
++            stacklevel=2,
++        )
+         if errors not in ["raise", "ignore"]:
+             raise ValueError('errors must be either "raise" or "ignore"')
+ 
+@@ -3614,6 +3620,57 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         else:
+             return self._drop_labels(labels, dim, errors=errors)
+ 
++    def drop_sel(self, labels=None, *, errors="raise", **labels_kwargs):
++        """Drop index labels along a dimension.
++
++        Parameters
++        ----------
++        labels : dict, optional
++            Dictionary from dimension names to labels to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the labels passed are not in the dataset.
++            If 'ignore', any given labels that are in the dataset are dropped
++            and no error is raised.
++        **labels_kwargs : {dim: label, ...}, optional
++            The keyword arguments form of ``labels``.
++            One of labels or labels_kwargs must be provided.
++
++        Returns
++        -------
++        dropped : Dataset
++        """
++        if labels is None and not labels_kwargs:
++            raise ValueError("must specify at least one label to drop")
++        labels = either_dict_or_kwargs(labels, labels_kwargs, "drop_sel")
++        ds = self
++        for dim, labels in labels.items():
++            ds = ds._drop_labels(labels, dim, errors=errors)
++        return ds
++
++    def drop_vars(self, names, *, errors="raise"):
++        """Drop variables (including coordinates) from this dataset.
++
++        Parameters
++        ----------
++        names : hashable or iterable of hashables
++            Name(s) of variables to drop.
++        errors: {'raise', 'ignore'}, optional
++            If 'raise' (default), raises a ValueError error if
++            any of the variables passed are not in the dataset.
++            If 'ignore', any given variables that are in the dataset are dropped
++            and no error is raised.
++
++        Returns
++        -------
++        dropped : Dataset
++        """
++        if isinstance(names, str) or not isinstance(names, Iterable):
++            names = {names}
++        else:
++            names = set(names)
++        return self._drop_vars(names, errors=errors)
++
+     def _drop_labels(self, labels=None, dim=None, errors="raise"):
+         # Don't cast to set, as it would harm performance when labels
+         # is a large numpy array
+@@ -5478,4 +5535,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)

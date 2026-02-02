@@ -1,0 +1,73 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..d324343 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -137,22 +137,47 @@ def _solve_sparse_cg(
+     return coefs
+ 
+ 
+-def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3):
++def _solve_lsqr(X, y, alpha, max_iter=None, tol=1e-3, X_offset=None, X_scale=None, sample_weight_sqrt=None):
+     n_samples, n_features = X.shape
+-    coefs = np.empty((y.shape[1], n_features), dtype=X.dtype)
++    if X_offset is not None:
++        n_coef = n_features + 1
++    else:
++        n_coef = n_features
++    coefs = np.empty((y.shape[1], n_coef), dtype=X.dtype)
+     n_iter = np.empty(y.shape[1], dtype=np.int32)
+ 
+     # According to the lsqr documentation, alpha = damp^2.
+     sqrt_alpha = np.sqrt(alpha)
+ 
++    if X_offset is not None:
++        # Center the data and add an intercept column via a linear operator
++        if sample_weight_sqrt is not None:
++            sqrt_sw = sample_weight_sqrt
++        else:
++            sqrt_sw = np.ones(n_samples, dtype=X.dtype)
++        X_op = _X_CenterStackOp(X, X_offset, sqrt_sw)
++    else:
++        X_op = X
++
+     for i in range(y.shape[1]):
+         y_column = y[:, i]
+         info = sp_linalg.lsqr(
+-            X, y_column, damp=sqrt_alpha[i], atol=tol, btol=tol, iter_lim=max_iter
++            X_op, y_column, damp=sqrt_alpha[i], atol=tol, btol=tol, iter_lim=max_iter
+         )
+         coefs[i] = info[0]
+         n_iter[i] = info[2]
+ 
++    if X_offset is not None:
++        # Separate coefficients and intercept
++        intercept = coefs[:, -1]
++        coef = coefs[:, :-1]
++        # Rescale coefficients
++        if X_scale is not None:
++            coef /= X_scale
++        # The intercept from the centered problem is not needed because
++        # the Ridge class will compute the intercept from the coefficients.
++        coefs = coef
++
+     return coefs, n_iter
+ 
+ 
+@@ -629,7 +654,16 @@ def _ridge_regression(
+         )
+ 
+     elif solver == "lsqr":
+-        coef, n_iter = _solve_lsqr(X, y, alpha, max_iter, tol)
++        coef, n_iter = _solve_lsqr(
++            X,
++            y,
++            alpha,
++            max_iter,
++            tol,
++            X_offset=X_offset,
++            X_scale=X_scale,
++            sample_weight_sqrt=sample_weight_sqrt if has_sw else None,
++        )
+ 
+     elif solver == "cholesky":
+         if n_features > n_samples:

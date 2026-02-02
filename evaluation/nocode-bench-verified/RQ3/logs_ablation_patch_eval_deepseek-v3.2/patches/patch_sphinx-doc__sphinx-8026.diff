@@ -1,0 +1,68 @@
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+index 796b7ad..c95b14d 100644
+--- a/sphinx/builders/__init__.py
++++ b/sphinx/builders/__init__.py
+@@ -617,4 +617,23 @@ class Builder:
+             return getattr(self.config, optname)
+         except AttributeError:
+             optname = '%s_%s' % (default, option)
+-            return getattr(self.config, optname)
++            return getattr(self.config, optname)
++
++    def get_docpath(self, docname: str) -> str:
++        """Return the directory path component for the given document.
++
++        The path is returned with a trailing slash if non-empty.
++        """
++        dirname = os.path.dirname(docname)
++        if dirname:
++            return dirname.replace(os.sep, '/') + '/'
++        else:
++            return ''
++
++    def get_docpath(self, docname: str) -> str:
++        """Return the directory path component for the given document.
++
++        The path is returned with a trailing slash if non-empty.
++        """
++        from sphinx.util.uri_tokens import get_docpath_tokens
++        return get_docpath_tokens(docname)['docpath']
+diff --git a/sphinx/util/uri_tokens.py b/sphinx/util/uri_tokens.py
+new file mode 100644
+index 0000000..40f3237
+--- /dev/null
++++ b/sphinx/util/uri_tokens.py
+@@ -0,0 +1,33 @@
++"""
++Utility functions for replacing URI tokens.
++"""
++
++import os
++from typing import Dict, Optional
++
++
++def replace_uri_tokens(uri: str, tokens: Dict[str, str]) -> str:
++    """
++    Replace tokens in a URI with their values.
++
++    Tokens are expected to be in the format ``{token}``.
++    """
++    for token, value in tokens.items():
++        uri = uri.replace('{' + token + '}', value)
++    return uri
++
++
++def get_docpath_tokens(docname: str) -> Dict[str, str]:
++    """
++    Return a dictionary of tokens for a given document.
++
++    Currently includes:
++    - ``docpath``: the directory path component for the current document,
++      with a trailing slash if non-empty.
++    """
++    dirname = os.path.dirname(docname)
++    if dirname:
++        docpath = dirname.replace(os.sep, '/') + '/'
++    else:
++        docpath = ''
++    return {'docpath': docpath}

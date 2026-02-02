@@ -1,0 +1,116 @@
+diff --git a/lib/matplotlib/style/core.py b/lib/matplotlib/style/core.py
+index 7b59d49..24c78f1 100644
+--- a/lib/matplotlib/style/core.py
++++ b/lib/matplotlib/style/core.py
+@@ -102,8 +102,9 @@ def use(style):
+         A style specification. Valid options are:
+ 
+         +------+-------------------------------------------------------------+
+-        | str  | The name of a style or a path/URL to a style file. For a    |
+-        |      | list of available style names, see `.style.available`.      |
++        | str  | The name of a style, a dotted package style name, or a      |
++        |      | path/URL to a style file. For a list of available style     |
++        |      | names, see `.style.available`.                              |
+         +------+-------------------------------------------------------------+
+         | dict | Dictionary with valid key/value pairs for                   |
+         |      | `matplotlib.rcParams`.                                      |
+@@ -148,6 +149,16 @@ def use(style):
+         elif style in library:
+             _apply_style(library[style])
+         else:
++            # Try to load as a package style if it contains a dot.
++            if '.' in style:
++                try:
++                    from .package_loader import _load_style_from_package
++                    rc = _load_style_from_package(style)
++                    _apply_style(rc)
++                    continue
++                except IOError:
++                    # If it fails, we fall back to the file loading.
++                    pass
+             try:
+                 rc = rc_params_from_file(style, use_default_template=False)
+                 _apply_style(rc)
+diff --git a/lib/matplotlib/style/package_loader.py b/lib/matplotlib/style/package_loader.py
+new file mode 100644
+index 0000000..bd52121
+--- /dev/null
++++ b/lib/matplotlib/style/package_loader.py
+@@ -0,0 +1,77 @@
++"""
++Support for loading style files from third-party packages.
++"""
++
++import importlib.resources as importlib_resources
++import sys
++from pathlib import Path
++
++from matplotlib import _api
++
++
++def _load_style_from_package(name):
++    """
++    Load a style specification from a third-party package.
++
++    Parameters
++    ----------
++    name : str
++        A dotted style name like "mypackage.presentation". This is interpreted
++        as the module name "mypackage" and the resource name "presentation.mplstyle".
++
++    Returns
++    -------
++    dict
++        The style dictionary.
++
++    Raises
++    ------
++    IOError
++        If the resource cannot be found.
++    """
++    # Split the name into package and style
++    parts = name.split('.')
++    if len(parts) < 2:
++        raise ValueError(
++            f"Invalid package style name {name!r}. "
++            "Expected a dotted name like 'mypackage.presentation'."
++        )
++    package_name = '.'.join(parts[:-1])
++    style_name = parts[-1]
++    resource_name = f"{style_name}.mplstyle"
++
++    # Check if the package is importable without actually importing it.
++    # We use importlib.util.find_spec to avoid side effects.
++    if sys.version_info >= (3, 10):
++        from importlib.util import find_spec
++    else:
++        from importlib_resources import find_spec
++
++    if find_spec(package_name) is None:
++        raise IOError(f"Package {package_name!r} is not installed or not found.")
++
++    # Use importlib.resources to open the resource.
++    # We use the backport for Python < 3.10.
++    try:
++        if sys.version_info >= (3, 10):
++            # Use standard library importlib.resources
++            from importlib.resources import files, as_file
++        else:
++            # Use the backport
++            from importlib_resources import files, as_file
++
++        package = files(package_name)
++        resource = package / resource_name
++        if not resource.is_file():
++            raise IOError(
++                f"Style file {resource_name!r} not found in package {package_name!r}."
++            )
++        # Use as_file to get a path-like object
++        with as_file(resource) as path:
++            from matplotlib.style.core import rc_params_from_file
++            return rc_params_from_file(path, use_default_template=False)
++    except (ImportError, OSError) as e:
++        raise IOError(
++            f"Failed to load style {name!r} from package {package_name!r}. "
++            f"Error: {e}"
++        )

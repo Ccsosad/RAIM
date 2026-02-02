@@ -1,0 +1,50 @@
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 836039e..fbb7f98 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -545,6 +545,17 @@ class TimeBase(ShapedLikeNDArray):
+             raise ValueError("Scale {!r} is not in the allowed scales {}"
+                              .format(scale, sorted(self.SCALES)))
+ 
++        # Update leap seconds if the conversion involves UTC.
++        # This ensures that the leap second table is only updated when needed.
++        global _LEAP_SECONDS_CHECK
++        if _LEAP_SECONDS_CHECK != _LeapSecondsCheck.DONE and (
++                self.scale == 'utc' or scale == 'utc'):
++            with _LEAP_SECONDS_LOCK:
++                if _LEAP_SECONDS_CHECK == _LeapSecondsCheck.NOT_STARTED:
++                    _LEAP_SECONDS_CHECK = _LeapSecondsCheck.RUNNING
++                    update_leap_seconds()
++                    _LEAP_SECONDS_CHECK = _LeapSecondsCheck.DONE
++
+         # Determine the chain of scale transformations to get from the current
+         # scale to the new scale.  MULTI_HOPS contains a dict of all
+         # transformations (xforms) that require intermediate xforms.
+@@ -1484,27 +1495,6 @@ class Time(TimeBase):
+                 precision=None, in_subfmt=None, out_subfmt=None,
+                 location=None, copy=False):
+ 
+-        # Because of import problems, this can only be done on
+-        # first call of Time. The initialization is complicated because
+-        # update_leap_seconds uses Time.
+-        # In principle, this may cause wrong leap seconds in
+-        # update_leap_seconds itself, but since expiration is in
+-        # units of days, that is fine.
+-        global _LEAP_SECONDS_CHECK
+-        if _LEAP_SECONDS_CHECK != _LeapSecondsCheck.DONE:
+-            with _LEAP_SECONDS_LOCK:
+-                # There are three ways we can get here:
+-                # 1. First call (NOT_STARTED).
+-                # 2. Re-entrant call (RUNNING). We skip the initialisation
+-                #    and don't worry about leap second errors.
+-                # 3. Another thread which raced with the first call
+-                #    (RUNNING). The first thread has relinquished the
+-                #    lock to us, so initialization is complete.
+-                if _LEAP_SECONDS_CHECK == _LeapSecondsCheck.NOT_STARTED:
+-                    _LEAP_SECONDS_CHECK = _LeapSecondsCheck.RUNNING
+-                    update_leap_seconds()
+-                    _LEAP_SECONDS_CHECK = _LeapSecondsCheck.DONE
+-
+         if isinstance(val, Time):
+             self = val.replicate(format=format, copy=copy, cls=cls)
+         else:

@@ -1,0 +1,70 @@
+diff --git a/lib/matplotlib/rcsetup.py b/lib/matplotlib/rcsetup.py
+index 38580cf..6aa8ec0 100644
+--- a/lib/matplotlib/rcsetup.py
++++ b/lib/matplotlib/rcsetup.py
+@@ -276,6 +276,13 @@ def validate_color_or_auto(s):
+     return validate_color(s)
+ 
+ 
++def validate_int_or_auto(s):
++    """Return 'auto' or a valid integer."""
++    if cbook._str_equal(s, 'auto'):
++        return 'auto'
++    return validate_int(s)
++
++
+ def validate_color_for_prop_cycle(s):
+     # N-th color cycle syntax can't go into the color cycle.
+     if isinstance(s, str) and re.match("^C[0-9]$", s):
+@@ -1224,6 +1231,9 @@ _validators = {
+     "keymap.help":       validate_stringlist,
+     "keymap.copy":       validate_stringlist,
+ 
++    "xtick.minor.ndivs":   validate_int_or_auto,
++    "ytick.minor.ndivs":   validate_int_or_auto,
++
+     # Animation settings
+     "animation.html":         ["html5", "jshtml", "none"],
+     # Limit, in MB, of size of base64 encoded animation in HTML
+diff --git a/lib/matplotlib/ticker.py b/lib/matplotlib/ticker.py
+index 3e28678..13634b4 100644
+--- a/lib/matplotlib/ticker.py
++++ b/lib/matplotlib/ticker.py
+@@ -2869,7 +2869,8 @@ class AutoMinorLocator(Locator):
+         major ticks; e.g., n=2 will place a single minor tick midway
+         between major ticks.
+ 
+-        If *n* is omitted or None, it will be set to 5 or 4.
++        If *n* is ``None``, the number of subdivisions is determined by the
++        rcParam ``xtick.minor.ndivs`` or ``ytick.minor.ndivs``.
+         """
+         self.ndivs = n
+ 
+@@ -2891,13 +2892,15 @@ class AutoMinorLocator(Locator):
+             return []
+ 
+         if self.ndivs is None:
++            ndivs = mpl.rcParams[f'{self.axis.axis_name}tick.minor.ndivs']
++            if ndivs == 'auto':
++                majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+ 
+-            majorstep_no_exponent = 10 ** (np.log10(majorstep) % 1)
+-
+-            if np.isclose(majorstep_no_exponent, [1.0, 2.5, 5.0, 10.0]).any():
+-                ndivs = 5
+-            else:
+-                ndivs = 4
++                if np.isclose(majorstep_no_exponent,
++                              [1.0, 2.5, 5.0, 10.0]).any():
++                    ndivs = 5
++                else:
++                    ndivs = 4
+         else:
+             ndivs = self.ndivs
+ 
+@@ -2916,4 +2919,4 @@ class AutoMinorLocator(Locator):
+ 
+     def tick_values(self, vmin, vmax):
+         raise NotImplementedError('Cannot get tick locations for a '
+-                                  '%s type.' % type(self))
++                                  '%s type.' % type(self))

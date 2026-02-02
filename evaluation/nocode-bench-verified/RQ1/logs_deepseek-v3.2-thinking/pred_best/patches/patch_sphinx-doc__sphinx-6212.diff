@@ -1,0 +1,29 @@
+diff --git a/sphinx/ext/autosummary/__init__.py b/sphinx/ext/autosummary/__init__.py
+index a7f2a9d..38f188e 100644
+--- a/sphinx/ext/autosummary/__init__.py
++++ b/sphinx/ext/autosummary/__init__.py
+@@ -234,8 +234,11 @@ class Autosummary(SphinxDirective):
+ 
+     def run(self):
+         # type: () -> List[nodes.Node]
++        options = Options()
++        # Pass the autosummary_imported_members config to the bridge
++        options.imported_members = self.config.autosummary_imported_members
+         self.bridge = DocumenterBridge(self.env, self.state.document.reporter,
+-                                       Options(), self.lineno)
++                                       options, self.lineno)
+ 
+         names = [x.strip().split()[0] for x in self.content
+                  if x.strip() and re.search(r'^[~a-zA-Z_]', x.strip()[0])]
+@@ -303,6 +306,11 @@ class Autosummary(SphinxDirective):
+             #     handle module prefixes slightly differently
+             doccls = get_documenter(self.env.app, obj, parent)
+             documenter = doccls(self.bridge, full_name)
++            
++            # Set the imported_members option from autosummary configuration
++            documenter.options.imported_members = getattr(
++                self.config, 'autosummary_imported_members', False)
++                
+             if not documenter.parse_name():
+                 logger.warning(__('failed to parse name %s'), real_name)
+                 items.append((display_name, '', '', real_name))

@@ -1,0 +1,73 @@
+diff --git a/sphinx/builders/__init__.py b/sphinx/builders/__init__.py
+index 796b7ad..ea96202 100644
+--- a/sphinx/builders/__init__.py
++++ b/sphinx/builders/__init__.py
+@@ -603,6 +603,15 @@ class Builder:
+         """
+         pass
+ 
++    def expand_static_path_tokens(self, path_str: str, docname: str = None) -> str:
++        """Expand tokens in a static path string.
++
++        This method expands the {docpath} token in the given string.
++        Other tokens are expanded by the caller (e.g., for images).
++        """
++        from sphinx.builders.token_handlers import expand_static_path_tokens as expand_tokens
++        return expand_tokens(path_str, docname)
++
+     def get_builder_config(self, option: str, default: str) -> Any:
+         """Return a builder specific option.
+ 
+@@ -617,4 +626,4 @@ class Builder:
+             return getattr(self.config, optname)
+         except AttributeError:
+             optname = '%s_%s' % (default, option)
+-            return getattr(self.config, optname)
++            return getattr(self.config, optname)
+diff --git a/sphinx/builders/token_handlers.py b/sphinx/builders/token_handlers.py
+new file mode 100644
+index 0000000..9615b4d
+--- /dev/null
++++ b/sphinx/builders/token_handlers.py
+@@ -0,0 +1,41 @@
++"""
++Token handlers for builders.
++"""
++
++import os
++from typing import Optional
++
++
++def expand_static_path_tokens(path_str: str, docname: Optional[str] = None) -> str:
++    """Expand tokens in a static path string.
++
++    Supported tokens are:
++    - {path}: the directory path component of the filename
++    - {basename}: the filename without directory and extension
++    - {ext}: the file extension
++    - {docpath}: the directory path for the current document
++
++    If docname is provided, {docpath} is expanded to the directory path of the
++    document. Otherwise, it is expanded to an empty string.
++    """
++    # For {docpath}, we need to compute the directory path from docname.
++    if docname is not None:
++        # docname uses SEP as separator, convert to OS path
++        docpath = os.path.dirname(docname.replace(SEP, os.path.sep))
++        if docpath:
++            docpath = docpath + os.path.sep
++        # Convert back to SEP for consistency
++        docpath = docpath.replace(os.path.sep, SEP)
++    else:
++        docpath = ''
++
++    # For other tokens, we currently don't have the filename.
++    # So we cannot expand {path}, {basename}, {ext} here.
++    # This function should be called with the filename as well.
++    # But for backward compatibility, we only handle {docpath} for now.
++    # The other tokens are handled elsewhere.
++    return path_str.replace('{docpath}', docpath)
++
++
++# The separator used in docnames
++SEP = '/'

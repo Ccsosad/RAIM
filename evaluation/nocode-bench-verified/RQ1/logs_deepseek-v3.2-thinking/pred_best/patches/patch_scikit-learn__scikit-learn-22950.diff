@@ -1,0 +1,46 @@
+diff --git a/sklearn/linear_model/_ridge.py b/sklearn/linear_model/_ridge.py
+index 793a339..f778be5 100644
+--- a/sklearn/linear_model/_ridge.py
++++ b/sklearn/linear_model/_ridge.py
+@@ -553,6 +553,8 @@ def _ridge_regression(
+         )
+ 
+     if return_intercept and solver != "sag":
++        # Note: For sparse input with fit_intercept=True, we handle intercept
++        # differently via X_offset/X_scale, so return_intercept is False in that case
+         raise ValueError(
+             "In Ridge, only 'sag' solver can directly fit the "
+             "intercept. Please change solver to 'sag' or set "
+@@ -629,6 +631,18 @@ def _ridge_regression(
+         )
+ 
+     elif solver == "lsqr":
++        if X_offset is not None and X_scale is not None:
++            # For sparse X with fit_intercept=True, we need to center the data
++            # before solving with lsqr
++            X = X.copy()
++            if sparse.issparse(X):
++                # Handle sparse matrix centering
++                X_mean = X_offset / X_scale
++                # Subtract mean for centering
++                X = X - X_mean
++            else:
++                # For dense matrices (though lsqr with sparse input is our focus)
++                X = (X - X_offset) / X_scale
+         coef, n_iter = _solve_lsqr(X, y, alpha, max_iter, tol)
+ 
+     elif solver == "cholesky":
+@@ -764,11 +778,11 @@ class _BaseRidge(LinearModel, metaclass=ABCMeta):
+             else:
+                 solver = self.solver
+         elif sparse.issparse(X) and self.fit_intercept:
+-            if self.solver not in ["auto", "sparse_cg", "sag", "lbfgs"]:
++            if self.solver not in ["auto", "sparse_cg", "sag", "lsqr", "lbfgs"]:
+                 raise ValueError(
+                     "solver='{}' does not support fitting the intercept "
+                     "on sparse data. Please set the solver to 'auto' or "
+-                    "'sparse_cg', 'sag', 'lbfgs' "
++                    "'sparse_cg', 'sag', 'lsqr', 'lbfgs' "
+                     "or set `fit_intercept=False`".format(self.solver)
+                 )
+             if self.solver == "lbfgs":

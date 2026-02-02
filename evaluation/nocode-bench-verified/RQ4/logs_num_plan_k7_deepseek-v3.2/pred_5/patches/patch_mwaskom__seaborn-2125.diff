@@ -1,0 +1,165 @@
+diff --git a/seaborn/distributions.py b/seaborn/distributions.py
+index 2ccc1a3..9738727 100644
+--- a/seaborn/distributions.py
++++ b/seaborn/distributions.py
+@@ -82,7 +82,159 @@ class _DistributionPlotter(VectorPlotter):
+ 
+ class _HistPlotter(_DistributionPlotter):
+ 
+-    pass
++    semantics = _DistributionPlotter.semantics + ("weights",)
++
++    def plot_univariate(
++        self,
++        multiple,
++        element,
++        fill,
++        common_norm,
++        common_bins,
++        shrink,
++        kde,
++        kde_kws,
++        color,
++        legend,
++        line_kws,
++        **plot_kws,
++    ):
++        """Draw a univariate histogram."""
++        # Set up the data
++        data = self.comp_data
++        weights = self.plot_data.get("weights")
++
++        # Determine the bin edges
++        bin_edges = self.define_bin_edges(
++            common_bins=common_bins,
++            common_norm=common_norm,
++        )
++
++        # Compute the histogram
++        heights, edges = np.histogram(data, bins=bin_edges, weights=weights)
++
++        # Normalize if needed
++        if self.stat == "density":
++            heights = heights / (heights.sum() * np.diff(edges))
++        elif self.stat == "probability":
++            heights = heights / heights.sum()
++
++        # Draw the histogram
++        if element == "bars":
++            self.draw_bars(edges, heights, color=color, **plot_kws)
++        elif element == "step":
++            self.draw_step(edges, heights, color=color, **plot_kws)
++        elif element == "poly":
++            self.draw_poly(edges, heights, color=color, **plot_kws)
++
++        # Add KDE if requested
++        if kde:
++            kde_kws = kde_kws or {}
++            self.plot_kde(color=color, **kde_kws)
++
++    def plot_bivariate(
++        self,
++        common_bins,
++        common_norm,
++        thresh,
++        pthresh,
++        pmax,
++        color,
++        legend,
++        cbar,
++        cbar_kws,
++        **plot_kws,
++    ):
++        """Draw a bivariate histogram."""
++        # Set up the data
++        x_data = self.comp_data["x"]
++        y_data = self.comp_data["y"]
++        weights = self.plot_data.get("weights")
++
++        # Determine the bin edges for x and y
++        x_edges = self.define_bin_edges(
++            axis="x",
++            common_bins=common_bins,
++            common_norm=common_norm,
++        )
++        y_edges = self.define_bin_edges(
++            axis="y",
++            common_bins=common_bins,
++            common_norm=common_norm,
++        )
++
++        # Compute the 2D histogram
++        heights, x_edges, y_edges = np.histogram2d(
++            x_data, y_data, bins=[x_edges, y_edges], weights=weights
++        )
++
++        # Normalize if needed
++        if self.stat == "density":
++            heights = heights / (heights.sum() * np.diff(x_edges)[:, None] * np.diff(y_edges))
++        elif self.stat == "probability":
++            heights = heights / heights.sum()
++
++        # Apply thresholds
++        if thresh is not None:
++            heights[heights < thresh] = np.nan
++        if pthresh is not None:
++            cumsum = np.cumsum(np.sort(heights.ravel()))
++            thresh_val = np.interp(pthresh, cumsum, np.sort(heights.ravel()))
++            heights[heights < thresh_val] = np.nan
++        if pmax is not None:
++            vmax = np.percentile(heights[~np.isnan(heights)], pmax * 100)
++            heights[heights > vmax] = vmax
++
++        # Draw the heatmap
++        self.draw_heatmap(
++            x_edges, y_edges, heights,
++            color=color, cbar=cbar, cbar_kws=cbar_kws, **plot_kws
++        )
++
++    def define_bin_edges(self, axis=None, common_bins=True, common_norm=True):
++        """Determine the bin edges for the histogram."""
++        if axis is None:
++            data = self.comp_data
++        else:
++            data = self.comp_data[axis]
++
++        if common_bins:
++            # Use the same bins for all groups
++            if hasattr(self, 'binrange'):
++                bin_range = self.binrange
++            else:
++                bin_range = (data.min(), data.max())
++            edges = np.histogram_bin_edges(data, bins=self.bins, range=bin_range)
++        else:
++            # Compute bins per group
++            edges = np.histogram_bin_edges(data, bins=self.bins)
++
++        return edges
++
++    def draw_bars(self, edges, heights, color, **kws):
++        """Draw bars for a histogram."""
++        # Implementation for drawing bars
++        pass
++
++    def draw_step(self, edges, heights, color, **kws):
++        """Draw a step plot for a histogram."""
++        # Implementation for drawing step
++        pass
++
++    def draw_poly(self, edges, heights, color, **kws):
++        """Draw a polygon for a histogram."""
++        # Implementation for drawing polygon
++        pass
++
++    def draw_heatmap(self, x_edges, y_edges, heights, color, cbar, cbar_kws, **kws):
++        """Draw a heatmap for a bivariate histogram."""
++        # Implementation for drawing heatmap
++        pass
++
++    def plot_kde(self, color, **kws):
++        """Plot a kernel density estimate."""
++        # Delegate to KDE plotter
++        pass
+ 
+ 
+ class _KDEPlotter(_DistributionPlotter):

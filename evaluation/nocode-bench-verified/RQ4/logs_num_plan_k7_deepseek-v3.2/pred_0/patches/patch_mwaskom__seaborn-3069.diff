@@ -1,0 +1,23 @@
+diff --git a/seaborn/_core/scales.py b/seaborn/_core/scales.py
+index 1e10d58..33ac1fa 100644
+--- a/seaborn/_core/scales.py
++++ b/seaborn/_core/scales.py
+@@ -177,11 +177,13 @@ class Nominal(Scale):
+             name = None  # To work around mpl<3.4 compat issues
+ 
+             def set_default_locators_and_formatters(self, axis):
+-                ...
+-                # axis.set_major_locator(major_locator)
+-                # if minor_locator is not None:
+-                #     axis.set_minor_locator(minor_locator)
+-                # axis.set_major_formatter(major_formatter)
++                super().set_default_locators_and_formatters(axis)
++                # Set axis properties to match seaborn's categorical style
++                axis.set_margin(0)
++                axis.grid(False)
++                # Invert the y-axis for categorical plots
++                if hasattr(axis, 'axis_name') and axis.axis_name == 'y':
++                    axis.invert_yaxis()
+ 
+         mpl_scale = CatScale(data.name)
+         if axis is None:

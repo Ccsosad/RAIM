@@ -1,0 +1,36 @@
+diff --git a/lib/matplotlib/spines.py b/lib/matplotlib/spines.py
+index 915b34c..2aa23fa 100644
+--- a/lib/matplotlib/spines.py
++++ b/lib/matplotlib/spines.py
+@@ -1,3 +1,4 @@
++
+ from collections.abc import MutableMapping
+ import functools
+ 
+@@ -504,8 +505,25 @@ class SpinesProxy:
+         x.__doc__ = broadcast_targets[0].__doc__
+         return x
+ 
++    def set(self, **kwargs):
++        """
++        Set multiple properties on all spines.
++
++        This method sets the given properties on all spines in the proxy.
++        The properties are passed as keyword arguments, where each key
++        corresponds to a property name (e.g., 'visible', 'color', 'linewidth').
++        The method internally calls the appropriate `set_*` method for each
++        property.
++
++        Examples
++        --------
++        >>> spines[:].set(visible=False, color='red', linewidth=2)
++        """
++        for spine in self._spine_dict.values():
++            spine.set(**kwargs)
++
+     def __dir__(self):
+-        names = []
++        names = ['set']
+         for spine in self._spine_dict.values():
+             names.extend(name
+                          for name in dir(spine) if name.startswith('set_'))

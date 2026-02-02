@@ -1,0 +1,33 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..ab89f87 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -617,8 +617,8 @@ class Legend(Artist):
+         self._init_legend_box(handles, labels, markerfirst)
+ 
+         tmp = self._loc_used_default
+-        self._set_loc(loc)
+-        self._loc_used_default = tmp  # ignore changes done by _set_loc
++        self.set_loc(loc)
++        self._loc_used_default = tmp  # ignore changes done by set_loc
+ 
+         # figure out title font properties:
+         if title_fontsize is not None and title_fontproperties is not None:
+@@ -713,6 +713,17 @@ class Legend(Artist):
+         self.stale = True
+         self._legend_box.set_offset(self._findoffset)
+ 
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++
++        Parameters
++        ----------
++        loc : str or int or tuple of floats
++            The location of the legend. See `~matplotlib.legend.Legend` for details.
++        """
++        self._set_loc(loc)
++
+     def set_ncols(self, ncols):
+         """Set the number of columns."""
+         self._ncols = ncols

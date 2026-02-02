@@ -1,0 +1,25 @@
+diff --git a/sphinx/ext/autodoc/__init__.py b/sphinx/ext/autodoc/__init__.py
+index ae23792..b0f8849 100644
+--- a/sphinx/ext/autodoc/__init__.py
++++ b/sphinx/ext/autodoc/__init__.py
+@@ -1447,12 +1447,19 @@ def merge_autodoc_default_flags(app, config):
+     for option in config.autodoc_default_flags:
+         if isinstance(option, str):
+             config.autodoc_default_options[option] = None
+-        else:
++        else:  # pragma: no cover
+             logger.warning(
+                 __("Ignoring invalid option in autodoc_default_flags: %r"),
+                 option, type='autodoc'
+             )
+ 
++    # Normalize True to None for flag options in autodoc_default_options
++    flag_options = ['members', 'undoc-members', 'private-members', 'special-members',
++                    'inherited-members', 'show-inheritance', 'ignore-module-all']
++    for option in flag_options:
++        if option in config.autodoc_default_options:
++            if config.autodoc_default_options[option] is True:
++                config.autodoc_default_options[option] = None
+ 
+ def setup(app):
+     # type: (Sphinx) -> Dict[str, Any]

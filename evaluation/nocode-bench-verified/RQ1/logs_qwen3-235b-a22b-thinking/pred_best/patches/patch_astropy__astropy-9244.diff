@@ -1,0 +1,61 @@
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 175be72..97b0b6b 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -1690,7 +1690,8 @@ class Time(ShapedLikeNDArray):
+         """
+         if iers_table is None:
+             from astropy.utils.iers import IERS_Auto
+-            iers_table = IERS_Auto.open()
++            from astropy.utils.iers import earth_orientation_table
++            iers_table = earth_orientation_table.get()
+ 
+         return iers_table.ut1_utc(self.utc, return_status=return_status)
+ 
+@@ -1706,7 +1707,8 @@ class Time(ShapedLikeNDArray):
+         # seconds. It is obtained from tables published by the IERS.
+         if not hasattr(self, '_delta_ut1_utc'):
+             from astropy.utils.iers import IERS_Auto
+-            iers_table = IERS_Auto.open()
++            from astropy.utils.iers import earth_orientation_table
++            iers_table = earth_orientation_table.get()
+             # jd1, jd2 are normally set (see above), except if delta_ut1_utc
+             # is access directly; ensure we behave as expected for that case
+             if jd1 is None:
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..eb78811 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -108,6 +108,32 @@ class Conf(_config.ConfigNamespace):
+ 
+ conf = Conf()
+ 
++from astropy.utils.state import ScienceState
++
++
++class earth_orientation_table(ScienceState):
++    """
++    Science state class for the Earth orientation table used in time and
++    coordinate transformations.
++    """
++    _value = None
++
++    @classmethod
++    def get(cls):
++        """Get the current Earth orientation table."""
++        if cls._value is None:
++            from .iers_auto import IERS_Auto
++            cls._value = IERS_Auto.open()
++        return cls._value
++
++    @classmethod
++    def set(cls, value):
++        """Set the Earth orientation table."""
++        if value is None:
++            from .iers_auto import IERS_Auto
++            value = IERS_Auto.open()
++        return super().set(value)
++
+ 
+ class IERSRangeError(IndexError):
+     """

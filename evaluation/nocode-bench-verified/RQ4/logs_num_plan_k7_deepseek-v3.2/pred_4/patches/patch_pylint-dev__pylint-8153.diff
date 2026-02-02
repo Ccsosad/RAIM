@@ -1,0 +1,86 @@
+diff --git a/pylint/lint/expand_modules.py b/pylint/lint/expand_modules.py
+index 7c2d313..f300172 100644
+--- a/pylint/lint/expand_modules.py
++++ b/pylint/lint/expand_modules.py
+@@ -23,12 +23,19 @@ def _modpath_from_file(filename: str, is_namespace: bool, path: list[str]) -> li
+     )
+ 
+ 
+-def get_python_path(filepath: str) -> str:
+-    """TODO This get the python path with the (bad) assumption that there is always
+-    an __init__.py.
++def get_python_path(filepath: str, source_roots: Sequence[str] = ()) -> str:
++    """Get the python path for the given filepath.
+ 
+-    This is not true since python 3.3 and is causing problem.
++    If source_roots is provided, use them to determine the package root.
++    Otherwise, fall back to the old behavior (looking for __init__.py).
+     """
++    # First, try to find the source root that contains the file.
++    for root in source_roots:
++        root = os.path.abspath(root)
++        if os.path.commonpath([root, filepath]) == root:
++            # The file is under this source root.
++            return root
++    # If no source root found, use the old logic.
+     dirname = os.path.realpath(os.path.expanduser(filepath))
+     if not os.path.isdir(dirname):
+         dirname = os.path.dirname(dirname)
+@@ -67,6 +74,7 @@ def expand_modules(
+     ignore_list: list[str],
+     ignore_list_re: list[Pattern[str]],
+     ignore_list_paths_re: list[Pattern[str]],
++    source_roots: Sequence[str] = (),
+ ) -> tuple[dict[str, ModuleDescriptionDict], list[ErrorDescriptionDict]]:
+     """Take a list of files/modules/packages and return the list of tuple
+     (file, module name) which have to be actually checked.
+@@ -81,8 +89,12 @@ def expand_modules(
+             something, ignore_list, ignore_list_re, ignore_list_paths_re
+         ):
+             continue
+-        module_path = get_python_path(something)
++        module_path = get_python_path(something, source_roots)
+         additional_search_path = [".", module_path] + path
++        # Add source roots to the search path for module resolution.
++        for root in source_roots:
++            if root not in additional_search_path:
++                additional_search_path.insert(0, root)
+         if os.path.exists(something):
+             # this is a file or a directory
+             try:
+diff --git a/pylint/lint/utils.py b/pylint/lint/utils.py
+index 05793a0..46bbcef 100644
+--- a/pylint/lint/utils.py
++++ b/pylint/lint/utils.py
+@@ -72,12 +72,12 @@ def get_fatal_error_message(filepath: str, issue_template_path: Path) -> str:
+     )
+ 
+ 
+-def _patch_sys_path(args: Sequence[str]) -> list[str]:
++def _patch_sys_path(args: Sequence[str], source_roots: Sequence[str] = ()) -> list[str]:
+     original = list(sys.path)
+     changes = []
+     seen = set()
+     for arg in args:
+-        path = get_python_path(arg)
++        path = get_python_path(arg, source_roots)
+         if path not in seen:
+             changes.append(path)
+             seen.add(path)
+@@ -87,7 +87,7 @@ def _patch_sys_path(args: Sequence[str]) -> list[str]:
+ 
+ 
+ @contextlib.contextmanager
+-def fix_import_path(args: Sequence[str]) -> Iterator[None]:
++def fix_import_path(args: Sequence[str], source_roots: Sequence[str] = ()) -> Iterator[None]:
+     """Prepare 'sys.path' for running the linter checks.
+ 
+     Within this context, each of the given arguments is importable.
+@@ -95,6 +95,7 @@ def fix_import_path(args: Sequence[str]) -> Iterator[None]:
+     We avoid adding duplicate directories to sys.path.
+     `sys.path` is reset to its original value upon exiting this context.
+     """
++    original = _patch_sys_path(args, source_roots)
+     original = _patch_sys_path(args)
+     try:
+         yield

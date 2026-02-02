@@ -1,0 +1,28 @@
+diff --git a/pylint/reporters/text.py b/pylint/reporters/text.py
+index 4db1264..d28bf1c 100644
+--- a/pylint/reporters/text.py
++++ b/pylint/reporters/text.py
+@@ -238,6 +238,16 @@ class VSTextReporter(ParseableTextReporter):
+     line_format = "{path}({line}): [{msg_id}({symbol}){obj}] {msg}"
+ 
+ 
++class NoHeaderTextReporter(TextReporter):
++    """A reporter that does not include the module name in the output."""
++
++    name = "no-header"
++
++    def handle_message(self, msg: Message) -> None:
++        """Write the message without printing the module header."""
++        self.write_message(msg)
++
++
+ class ColorizedTextReporter(TextReporter):
+     """Simple TextReporter that colorizes text output."""
+ 
+@@ -315,4 +325,5 @@ def register(linter: PyLinter) -> None:
+     linter.register_reporter(TextReporter)
+     linter.register_reporter(ParseableTextReporter)
+     linter.register_reporter(VSTextReporter)
+-    linter.register_reporter(ColorizedTextReporter)
++    linter.register_reporter(ColorizedTextReporter)
++    linter.register_reporter(NoHeaderTextReporter)

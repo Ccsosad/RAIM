@@ -1,0 +1,18 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..11c41e0 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -545,6 +545,13 @@ def get_physical_type(obj):
+ for unit, physical_type in _units_and_physical_types:
+     def_physical_type(unit, physical_type)
+ 
++# Build mapping from attribute names (with underscores) to physical type names (with spaces)
++_attrname_physical_mapping = {name.replace(" ", "_"): name for name in _name_physical_mapping.keys()}
++
++def __getattr__(name):
++    if name in _attrname_physical_mapping:
++        return get_physical_type(_attrname_physical_mapping[name])
++    raise AttributeError(f"module 'astropy.units.physical' has no attribute '{name}'")
+ 
+ # This generates a docstring addition for this module that describes all of the
+ # standard physical types defined here.

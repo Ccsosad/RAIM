@@ -1,0 +1,98 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..4456272 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -599,6 +599,87 @@ class IERS_B(IERS):
+         return np.ones_like(i) * FROM_IERS_B
+ 
+ 
++from astropy.utils.state import ScienceState
++
++
++class earth_orientation_table(ScienceState):
++    """
++    Global state for the Earth orientation table (IERS data).
++
++    This state controls which IERS table is used for Earth orientation data
++    (UT1-UTC and polar motion) in time and coordinate transformations.
++
++    The default is to use `IERS_Auto.open()`, which automatically downloads
++    the latest IERS-A table with predictions.
++
++    Examples
++    --------
++    >>> from astropy.utils.iers import earth_orientation_table
++    >>> earth_orientation_table.get()  # doctest: +REMOTE_DATA
++    <IERS_Auto length=...>
++
++    >>> from astropy.utils.iers import IERS_B
++    >>> iers_b = IERS_B.open()
++    >>> with earth_orientation_table.set(iers_b):
++    ...     # do something with IERS_B as the current table
++    ...     pass
++
++    To reset to the default:
++    >>> earth_orientation_table.set(None)  # doctest: +REMOTE_DATA
++    <ScienceState earth_orientation_table: <IERS_Auto length=...>>
++    """
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError("earth_orientation_table must be an IERS instance or None")
++        return value
++
++    @classmethod
++    def default(cls):
++        return IERS_Auto.open()
++
++
++class earth_orientation_table(ScienceState):
++    """
++    Global state for the Earth orientation table (IERS data).
++
++    This state controls which IERS table is used for Earth orientation data
++    (UT1-UTC and polar motion) in time and coordinate transformations.
++
++    The default is to use `IERS_Auto.open()`, which automatically downloads
++    the latest IERS-A table with predictions.
++
++    Examples
++    --------
++    >>> from astropy.utils.iers import earth_orientation_table
++    >>> earth_orientation_table.get()  # doctest: +REMOTE_DATA
++    <IERS_Auto length=...>
++
++    >>> from astropy.utils.iers import IERS_B
++    >>> iers_b = IERS_B.open()
++    >>> with earth_orientation_table.set(iers_b):
++    ...     # do something with IERS_B as the current table
++    ...     pass
++
++    To reset to the default:
++    >>> earth_orientation_table.set(None)  # doctest: +REMOTE_DATA
++    <ScienceState earth_orientation_table: <IERS_Auto length=...>>
++    """
++    @classmethod
++    def validate(cls, value):
++        if value is None:
++            value = IERS_Auto.open()
++        elif not isinstance(value, IERS):
++            raise TypeError("earth_orientation_table must be an IERS instance or None")
++        return value
++
++    @classmethod
++    def default(cls):
++        return IERS_Auto.open()
++
++
+ class IERS_Auto(IERS_A):
+     """
+     Provide most-recent IERS data and automatically handle downloading
+@@ -801,4 +882,4 @@ class IERS_Auto(IERS_A):
+             table['dX_2000A_B'][:n_iers_b] = iers_b['dX_2000A']
+             table['dY_2000A_B'][:n_iers_b] = iers_b['dY_2000A']
+ 
+-        return table
++        return table

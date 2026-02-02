@@ -1,0 +1,10 @@
+diff --git a/lib/matplotlib/spines.py b/lib/matplotlib/spines.py
+index 915b34c..8560f7b 100644
+--- a/lib/matplotlib/spines.py
++++ b/lib/matplotlib/spines.py
+@@ -585,4 +585,4 @@ class Spines(MutableMapping):
+         return iter(self._dict)
+ 
+     def __len__(self):
+-        return len(self._dict)
++        return len(self._dict)

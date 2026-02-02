@@ -1,0 +1,24 @@
+diff --git a/astropy/units/physical.py b/astropy/units/physical.py
+index e50c440..d08467d 100644
+--- a/astropy/units/physical.py
++++ b/astropy/units/physical.py
+@@ -542,8 +542,19 @@ def get_physical_type(obj):
+         return PhysicalType(unit, "unknown")
+ 
+ 
++_attrname_physical_mapping = {}
++
+ for unit, physical_type in _units_and_physical_types:
+     def_physical_type(unit, physical_type)
++    # Map underscored attribute-accessible name to physical type
++    for name in physical_type:
++        _attrname_physical_mapping[name.replace(' ', '_').replace('(', '').replace(')', '')] = physical_type
++
++# Expose physical types as attributes on this module for attribute access
++import sys as _sys
++_this_module = _sys.modules[__name__]
++for _attr_name, _phys_type in _attrname_physical_mapping.items():
++    setattr(_this_module, _attr_name, _phys_type)
+ 
+ 
+ # This generates a docstring addition for this module that describes all of the

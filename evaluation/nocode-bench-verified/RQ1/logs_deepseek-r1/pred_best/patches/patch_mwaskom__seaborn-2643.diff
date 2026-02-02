@@ -1,0 +1,149 @@
+diff --git a/seaborn/__init__.py b/seaborn/__init__.py
+new file mode 100644
+index 0000000..9ca56f1
+--- /dev/null
++++ b/seaborn/__init__.py
+@@ -0,0 +1,8 @@
++    despine
++    move_legend
++    saturate
++    desaturate
++    set_hls_values
++    load_dataset
++    get_dataset_names
++    get_data_home
+diff --git a/seaborn/_legends.py b/seaborn/_legends.py
+new file mode 100644
+index 0000000..78aee9a
+--- /dev/null
++++ b/seaborn/_legends.py
+@@ -0,0 +1,113 @@
++"""
++Functions for working with plot legends.
++"""
++
++import matplotlib as mpl
++
++
++def move_legend(obj, loc, **kwargs):
++    """
++    Recreate a legend on an existing plot at a new location.
++    
++    Parameters
++    ----------
++    obj : matplotlib.axes.Axes or seaborn.Grid
++        The object with the legend to move.
++    loc : str or tuple
++        Location for the new legend. See matplotlib documentation for options.
++    **kwargs
++        Additional keyword arguments passed to matplotlib's legend method.
++        
++    Returns
++    -------
++    matplotlib.legend.Legend
++        The new legend object.
++    """
++    # Handle seaborn Grid objects (FacetGrid, PairGrid, etc.)
++    if hasattr(obj, '_legend') and obj._legend is not None:
++        return _move_grid_legend(obj, loc, **kwargs)
++    
++    # Handle matplotlib Axes objects
++    elif hasattr(obj, 'legend_') and obj.legend_ is not None:
++        return _move_axes_legend(obj, loc, **kwargs)
++    
++    else:
++        raise ValueError("No legend found on the provided object")
++
++
++def _move_grid_legend(grid, loc, **kwargs):
++    """Move legend for seaborn Grid objects."""
++    # Extract legend data from the grid
++    legend_data = grid._legend_data
++    if not legend_data:
++        raise ValueError("No legend data found on the grid")
++    
++    # Get current legend to extract information
++    old_legend = grid._legend
++    title = old_legend.get_title().get_text()
++    title_size = mpl.rcParams["legend.title_fontsize"]
++    
++    # Get handles and labels from legend data
++    handles = []
++    labels = []
++    for label, handle in legend_data.items():
++        labels.append(label)
++        handles.append(handle)
++    
++    # Remove the existing legend
++    if hasattr(grid, '_legend'):
++        grid._legend.remove()
++        grid._legend = None
++    
++    # Create new legend with updated position
++    if grid._legend_out:
++        kwargs.setdefault("frameon", False)
++        new_legend = grid._figure.legend(handles, labels, **kwargs)
++        new_legend.set_title(title, prop={"size": title_size})
++        grid._legend = new_legend
++        
++        # Update layout to accommodate new legend position
++        _update_grid_layout_for_legend(grid, loc, kwargs.get('bbox_to_anchor'))
++        
++    else:
++        ax = grid.axes.flat[0]
++        new_legend = ax.legend(handles, labels, **kwargs)
++        new_legend.set_title(title, prop={"size": title_size})
++        grid._legend = new_legend
++    
++    return new_legend
++
++
++def _move_axes_legend(ax, loc, **kwargs):
++    """Move legend for matplotlib Axes objects."""
++    # Get current legend information
++    old_legend = ax.legend_
++    handles = old_legend.legendHandles
++    labels = [t.get_text() for t in old_legend.texts]
++    title = old_legend.get_title().get_text()
++    title_size = mpl.rcParams["legend.title_fontsize"]
++    
++    # Remove old legend
++    old_legend.remove()
++    ax.legend_ = None
++    
++    # Create new legend with updated position
++    new_legend = ax.legend(handles, labels, loc=loc, **kwargs)
++    new_legend.set_title(title, prop={"size": title_size})
++    ax.legend_ = new_legend
++    
++    return new_legend
++
++
++def _update_grid_layout_for_legend(grid, loc, bbox_to_anchor):
++    """Update grid layout to accommodate external legend position."""
++    if bbox_to_anchor is not None:
++        # For custom bbox positioning, we need to adjust the layout
++        # This is a simplified approach - in practice would need more complex logic
++        grid._figure.tight_layout()
++    else:
++        # For standard positions, use the grid's existing legend layout logic
++        grid._space_needed = 0.15  # Default space for legend
++        right = 1 - grid._space_needed
++        grid._figure.subplots_adjust(right=right)
++        grid._tight_layout_rect[2] = right
+diff --git a/seaborn/utils.py b/seaborn/utils.py
+new file mode 100644
+index 0000000..92e6d89
+--- /dev/null
++++ b/seaborn/utils.py
+@@ -0,0 +1,10 @@
++__all__ = [
++    "despine",
++    "move_legend",
++    "saturate", 
++    "desaturate",
++    "set_hls_values",
++    "load_dataset",
++    "get_dataset_names",
++    "get_data_home",
++]

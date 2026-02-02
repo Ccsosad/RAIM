@@ -1,0 +1,59 @@
+diff --git a/seaborn/_core/jitter.py b/seaborn/_core/jitter.py
+new file mode 100644
+index 0000000..005fcf3
+--- /dev/null
++++ b/seaborn/_core/jitter.py
+@@ -0,0 +1,53 @@
++import numpy as np
++from .move import Move
++from typing import Optional
++
++class Jitter(Move):
++    """Reposition marks by applying random jitter."""
++    
++    def __init__(
++        self,
++        width: Optional[float] = None,
++        x: Optional[float] = None,
++        y: Optional[float] = None,
++    ):
++        """
++        Parameters
++        ----------
++        width : float, optional
++            Relative amount of jitter along orientation axis (0-1).
++        x : float, optional
++            Absolute amount of jitter in x direction (data units).
++        y : float, optional
++            Absolute amount of jitter in y direction (data units).
++        """
++        self.width = 0.1 if width is None else width  # Default width
++        self.x = x
++        self.y = y
++
++    def _compute_jitter(self, data, amount):
++        """Compute jitter values for given data and amount."""
++        if amount is None:
++            return np.zeros_like(data)
++        rng = np.random.default_rng()
++        return rng.uniform(-amount, amount, size=len(data))
++
++    def __call__(self, data, groupby, orient):
++        """Apply the jitter transformation to the data."""
++        new_data = data.copy()
++        
++        # Apply width-based jitter along orientation axis
++        if self.width is not None:
++            axis = orient.opposite
++            vals = new_data[axis]
++            if len(vals.unique()) > 1:
++                spacing = np.diff(np.sort(vals.unique())).mean()
++                jitter = self._compute_jitter(vals, self.width * spacing)
++                new_data[axis] = vals + jitter
++        
++        # Apply absolute x/y jitter
++        for var, amount in [("x", self.x), ("y", self.y)]:
++            if amount is not None:
++                new_data[var] = new_data[var] + self._compute_jitter(new_data[var], amount)
++        
++        return new_data

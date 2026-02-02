@@ -1,0 +1,43 @@
+diff --git a/django/db/models/expressions.py b/django/db/models/expressions.py
+index bf6e882..4903345 100644
+--- a/django/db/models/expressions.py
++++ b/django/db/models/expressions.py
+@@ -514,6 +514,38 @@ class Func(Expression):
+         return copy
+ 
+ 
++class ExpressionWrapper(Expression):
++    """
++    An ExpressionWrapper simply surrounds another expression and provides access to
++    properties, such as output_field, that may not be available on other
++    expressions.
++    """
++    def __init__(self, expression, output_field):
++        super(ExpressionWrapper, self).__init__(output_field=output_field)
++        if not hasattr(expression, 'resolve_expression'):
++            expression = Value(expression)
++        self.expression = expression
++
++    def resolve_expression(self, query=None, allow_joins=True, reuse=None, summarize=False, for_save=False):
++        c = self.copy()
++        c.expression = c.expression.resolve_expression(query, allow_joins, reuse, summarize, for_save)
++        return c
++
++    def get_source_expressions(self):
++        return [self.expression]
++
++    def set_source_expressions(self, exprs):
++        self.expression = exprs[0]
++
++    def as_sql(self, compiler, connection):
++        return compiler.compile(self.expression)
++
++    def copy(self):
++        copy = super(ExpressionWrapper, self).copy()
++        copy.expression = self.expression.copy()
++        return copy
++
++
+ class Value(Expression):
+     """
+     Represents a wrapped value as a node within an expression

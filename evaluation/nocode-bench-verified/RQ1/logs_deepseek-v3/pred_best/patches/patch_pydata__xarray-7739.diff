@@ -1,0 +1,89 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 1dd2ee6..811ffee 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -4174,7 +4174,7 @@ class DataArray(
+             zarr_version=zarr_version,
+         )
+ 
+-    def to_dict(self, data: bool = True, encoding: bool = False) -> dict[str, Any]:
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
+         """
+         Convert this xarray.DataArray into a dictionary following xarray
+         naming conventions.
+@@ -4185,9 +4185,11 @@ class DataArray(
+ 
+         Parameters
+         ----------
+-        data : bool, default: True
+-            Whether to include the actual data in the dictionary. When set to
+-            False, returns just the schema.
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary and in what format.
++            - True or 'list': returns data as Python lists
++            - 'array': returns data as the underlying array type
++            - False: returns just the schema without data
+         encoding : bool, default: False
+             Whether to include the Dataset's encoding in the dictionary.
+ 
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index c4bcfde..c2806a8 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -6441,7 +6441,7 @@ class Dataset(
+ 
+         return df
+ 
+-    def to_dict(self, data: bool = True, encoding: bool = False) -> dict[str, Any]:
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict[str, Any]:
+         """
+         Convert this dataset to a dictionary following xarray naming
+         conventions.
+@@ -6452,9 +6452,11 @@ class Dataset(
+ 
+         Parameters
+         ----------
+-        data : bool, default: True
+-            Whether to include the actual data in the dictionary. When set to
+-            False, returns just the schema.
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary and in what format.
++            - True or 'list': returns data as Python lists
++            - 'array': returns data as the underlying array type
++            - False: returns just the schema without data
+         encoding : bool, default: False
+             Whether to include the Dataset's encoding in the dictionary.
+ 
+diff --git a/xarray/core/variable.py b/xarray/core/variable.py
+index bb36ddd..4de859f 100644
+--- a/xarray/core/variable.py
++++ b/xarray/core/variable.py
+@@ -633,11 +633,25 @@ class Variable(AbstractArray, NdimSizeLenMixin, VariableArithmetic):
+         """Convert this variable to a pandas.Index"""
+         return self.to_index_variable().to_index()
+ 
+-    def to_dict(self, data: bool = True, encoding: bool = False) -> dict:
+-        """Dictionary representation of variable."""
++    def to_dict(self, data: bool | str = True, encoding: bool = False) -> dict:
++        """Dictionary representation of variable.
++        
++        Parameters
++        ----------
++        data : bool or str, default: True
++            Whether to include the actual data in the dictionary and in what format.
++            - True or 'list': returns data as Python lists
++            - 'array': returns data as the underlying array type
++            - False: returns just the schema without data
++        encoding : bool, default: False
++            Whether to include the variable's encoding in the dictionary.
++        """
+         item = {"dims": self.dims, "attrs": decode_numpy_dict_values(self.attrs)}
+         if data:
+-            item["data"] = ensure_us_time_resolution(self.values).tolist()
++            if data == 'array':
++                item["data"] = ensure_us_time_resolution(self.values)
++            else:  # True or 'list'
++                item["data"] = ensure_us_time_resolution(self.values).tolist()
+         else:
+             item.update({"dtype": str(self.dtype), "shape": self.shape})
+ 

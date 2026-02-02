@@ -1,0 +1,90 @@
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index 74257e4..a772a1f 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -1842,7 +1842,8 @@ class DataArray(AbstractArray, DataWithCoords):
+         ----------
+         *dims : hashable, optional
+             By default, reverse the dimensions. Otherwise, reorder the
+-            dimensions to this order.
++            dimensions to this order. Supports use of ellipsis (...) to
++            represent all other dimensions.
+         transpose_coords : boolean, optional
+             If True, also transpose the coordinates of this DataArray.
+ 
+@@ -1863,6 +1864,9 @@ class DataArray(AbstractArray, DataWithCoords):
+         Dataset.transpose
+         """
+         if dims:
++            from .infix_dims import infix_dims
++            # expand ellipsis if present
++            dims = infix_dims(dims, self.dims)
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+@@ -3122,4 +3126,4 @@ class DataArray(AbstractArray, DataWithCoords):
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 4ff7a14..9f036bf 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -3692,7 +3692,8 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         ----------
+         *dims : Hashable, optional
+             By default, reverse the dimensions on each array. Otherwise,
+-            reorder the dimensions to this order.
++            reorder the dimensions to this order. Supports use of ellipsis (...)
++            to represent all other dimensions.
+ 
+         Returns
+         -------
+@@ -3712,6 +3713,9 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         DataArray.transpose
+         """
+         if dims:
++            from .infix_dims import infix_dims
++            # expand ellipsis if present
++            dims = infix_dims(dims, tuple(self.dims))
+             if set(dims) ^ set(self.dims):
+                 raise ValueError(
+                     "arguments to transpose (%s) must be "
+@@ -5449,4 +5453,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return map_blocks(func, self, args, kwargs)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/infix_dims.py b/xarray/core/infix_dims.py
+new file mode 100644
+index 0000000..b94a5de
+--- /dev/null
++++ b/xarray/core/infix_dims.py
+@@ -0,0 +1,24 @@
++"""Utility functions to handle infix dimensions including ellipsis support for transpose."""
++
++from typing import Sequence, Tuple, Hashable
++
++def infix_dims(dims: Sequence[Hashable], all_dims: Sequence[Hashable]) -> Tuple[Hashable, ...]:
++    """
++    Expand ellipsis in `dims` to include all dimensions from `all_dims`.
++    For example:
++        infix_dims(('x', ...), ['x','y','z']) -> ('x','y','z')
++        infix_dims((..., 'x'), ['x','y','z']) -> ('y','z','x')
++    """
++    if Ellipsis not in dims:
++        return tuple(dims)
++    # Convert to list for manipulation
++    dims = list(dims)
++    # Remove ellipsis and compute prefix/suffix
++    ellipsis_index = dims.index(Ellipsis)
++    prefix = dims[:ellipsis_index]
++    suffix = dims[ellipsis_index + 1:]
++    # Determine remaining dims
++    remaining = [d for d in all_dims if d not in prefix and d not in suffix]
++    # Combine
++    expanded = tuple(prefix + remaining + suffix)
++    return expanded

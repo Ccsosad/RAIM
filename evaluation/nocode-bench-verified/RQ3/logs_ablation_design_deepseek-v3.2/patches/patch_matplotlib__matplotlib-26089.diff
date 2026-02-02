@@ -1,0 +1,160 @@
+diff --git a/lib/matplotlib/legend.py b/lib/matplotlib/legend.py
+index f094b07..209d686 100644
+--- a/lib/matplotlib/legend.py
++++ b/lib/matplotlib/legend.py
+@@ -713,10 +713,155 @@ class Legend(Artist):
+         self.stale = True
+         self._legend_box.set_offset(self._findoffset)
+ 
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++
++        Parameters
++        ----------
++        loc : str or int or tuple
++            The location of the legend. Valid values are:
++            - 'best' (0)
++            - 'upper right' (1)
++            - 'upper left' (2)
++            - 'lower left' (3)
++            - 'lower right' (4)
++            - 'right' (5)
++            - 'center left' (6)
++            - 'center right' (7)
++            - 'lower center' (8)
++            - 'upper center' (9)
++            - 'center' (10)
++            - a tuple (x, y) of axes coordinates.
++
++        Notes
++        -----
++        This method updates the legend location and redraws the legend.
++        """
++        # Validate the location argument similar to __init__
++        type_err_message = ("loc must be string, coordinate tuple, or"
++                            f" an integer 0-10, not {loc!r}")
++        if isinstance(loc, str):
++            # handle outside legends:
++            if loc.split()[0] == 'outside':
++                # strip outside:
++                loc = loc.split('outside ')[1]
++                # strip "center" at the beginning
++                outside_loc = loc.replace('center ', '')
++                # strip first
++                outside_loc = outside_loc.split()[0]
++                locs = loc.split()
++                if len(locs) > 1 and locs[0] in ('right', 'left'):
++                    # locs doesn't accept "left upper", etc, so swap
++                    if locs[0] != 'center':
++                        loc = locs[0] + ' ' + locs[1]
++            # check that loc is in acceptable strings
++            loc = _api.check_getitem(self.codes, loc=loc)
++        elif np.iterable(loc):
++            # coerce iterable into tuple
++            loc = tuple(loc)
++            # validate the tuple represents Real coordinates
++            if len(loc) != 2 or not all(isinstance(e, numbers.Real) for e in loc):
++                raise ValueError(type_err_message)
++        elif isinstance(loc, int):
++            # validate the integer represents a string numeric value
++            if loc < 0 or loc > 10:
++                raise ValueError(type_err_message)
++        else:
++            # all other cases are invalid values of loc
++            raise ValueError(type_err_message)
++
++        # Call the internal setter
++        self._set_loc(loc)
++
++    def set_loc(self, loc):
++        """
++        Set the location of the legend.
++
++        Parameters
++        ----------
++        loc : str or int or tuple
++            The location of the legend. Valid values are:
++            - 'best' (0)
++            - 'upper right' (1)
++            - 'upper left' (2)
++            - 'lower left' (3)
++            - 'lower right' (4)
++            - 'right' (5)
++            - 'center left' (6)
++            - 'center right' (7)
++            - 'lower center' (8)
++            - 'upper center' (9)
++            - 'center' (10)
++            - a tuple (x, y) of axes coordinates.
++
++        Notes
++        -----
++        This method updates the legend location and redraws the legend.
++        """
++        # Validate the location argument similar to __init__
++        type_err_message = ("loc must be string, coordinate tuple, or"
++                            f" an integer 0-10, not {loc!r}")
++        # handle outside legends:
++        self._outside_loc = None
++        if isinstance(loc, str):
++            if loc.split()[0] == 'outside':
++                # strip outside:
++                loc = loc.split('outside ')[1]
++                # strip "center" at the beginning
++                self._outside_loc = loc.replace('center ', '')
++                # strip first
++                self._outside_loc = self._outside_loc.split()[0]
++                locs = loc.split()
++                if len(locs) > 1 and locs[0] in ('right', 'left'):
++                    # locs doesn't accept "left upper", etc, so swap
++                    if locs[0] != 'center':
++                        loc = locs[0] + ' ' + locs[1]
++            # check that loc is in acceptable strings
++            loc = _api.check_getitem(self.codes, loc=loc)
++        elif np.iterable(loc):
++            # coerce iterable into tuple
++            loc = tuple(loc)
++            # validate the tuple represents Real coordinates
++            if len(loc) != 2 or not all(isinstance(e, numbers.Real) for e in loc):
++                raise ValueError(type_err_message)
++        elif isinstance(loc, int):
++            # validate the integer represents a string numeric value
++            if loc < 0 or loc > 10:
++                raise ValueError(type_err_message)
++        else:
++            # all other cases are invalid values of loc
++            raise ValueError(type_err_message)
++
++        if self.isaxes and self._outside_loc:
++            raise ValueError(
++                f"'outside' option for loc='{loc}' keyword argument only "
++                "works for figure legends")
++
++        if not self.isaxes and loc == 0:
++            raise ValueError(
++                "Automatic legend placement (loc='best') not implemented for "
++                "figure legend")
++
++        # Call the internal setter
++        self._set_loc(loc)
++
+     def set_ncols(self, ncols):
+         """Set the number of columns."""
+         self._ncols = ncols
+ 
++    def set(self, **kwargs):
++        """
++        Set properties of the legend.
++
++        This method supports setting the legend location with the keyword
++        argument `loc`. Other keyword arguments are passed to `Artist.set`.
++        """
++        loc = kwargs.pop('loc', None)
++        if loc is not None:
++            self.set_loc(loc)
++        super().set(**kwargs)
++
+     def _get_loc(self):
+         return self._loc_real
+ 

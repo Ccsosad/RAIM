@@ -1,0 +1,172 @@
+diff --git a/_pytest/logging.py b/_pytest/logging.py
+new file mode 100644
+index 0000000..1c8a271
+--- /dev/null
++++ b/_pytest/logging.py
+@@ -0,0 +1,166 @@
++import logging
++import io
++import contextlib
++from _pytest.config import hookimpl
++from _pytest.fixtures import fixture
++
++class LogCaptureHandler(logging.StreamHandler):
++    def __init__(self):
++        super().__init__(io.StringIO())
++        self.records = []
++
++    def emit(self, record):
++        self.records.append(record)
++        super().emit(record)
++
++    def get_records(self):
++        return self.records
++
++    def clear(self):
++        self.records.clear()
++        self.stream = io.StringIO()
++
++    def get_logs(self):
++        return self.stream.getvalue()
++
++class LogCaptureFixture:
++    def __init__(self, handler):
++        self.handler = handler
++        self._level = None
++        self._logger = None
++
++    def set_level(self, level, logger=None):
++        self._level = level
++        self._logger = logger
++        if logger is None:
++            self.handler.setLevel(level)
++        else:
++            logging.getLogger(logger).setLevel(level)
++
++    @contextlib.contextmanager
++    def at_level(self, level, logger=None):
++        old_level = self._level
++        old_logger = self._logger
++        self.set_level(level, logger)
++        try:
++            yield
++        finally:
++            self.set_level(old_level, old_logger)
++
++    @property
++    def records(self):
++        return self.handler.get_records()
++
++    @property
++    def text(self):
++        return self.handler.get_logs()
++
++    @property
++    def record_tuples(self):
++        return [(r.name, r.levelno, r.getMessage()) for r in self.records]
++
++    def clear(self):
++        self.handler.clear()
++
++def pytest_addoption(parser):
++    group = parser.getgroup("logging")
++    group.addoption(
++        "--log-format",
++        action="store",
++        default="%(levelname)s %(name)s %(message)s",
++        help="Log format for captured log messages"
++    )
++    group.addoption(
++        "--log-date-format",
++        action="store",
++        default="%Y-%m-%d %H:%M:%S",
++        help="Log date format for captured log messages"
++    )
++    group.addoption(
++        "--no-print-logs",
++        action="store_true",
++        default=False,
++        help="Do not print captured logs to the console"
++    )
++    group.addoption(
++        "--log-cli-level",
++        action="store",
++        default=None,
++        help="Log level for the console logging"
++    )
++    group.addoption(
++        "--log-cli-format",
++        action="store",
++        default=None,
++        help="Log format for the console logging"
++    )
++    group.addoption(
++        "--log-cli-date-format",
++        action="store",
++        default=None,
++        help="Log date format for the console logging"
++    )
++    group.addoption(
++        "--log-file",
++        action="store",
++        default=None,
++        help="Path to a file to record logs"
++    )
++    group.addoption(
++        "--log-file-level",
++        action="store",
++        default=None,
++        help="Log level for the file logging"
++    )
++    group.addoption(
++        "--log-file-format",
++        action="store",
++        default=None,
++        help="Log format for the file logging"
++    )
++    group.addoption(
++        "--log-file-date-format",
++        action="store",
++        default=None,
++        help="Log date format for the file logging"
++    )
++
++@fixture
++def caplog(request):
++    handler = request.node._logging_handler
++    if handler is None:
++        raise RuntimeError("Logging handler not found")
++    return LogCaptureFixture(handler)
++
++@hookimpl(hookwrapper=True)
++def pytest_runtest_setup(item):
++    handler = LogCaptureHandler()
++    formatter = logging.Formatter(
++        item.config.getoption("--log-format"),
++        item.config.getoption("--log-date-format")
++    )
++    handler.setFormatter(formatter)
++    handler.setLevel(logging.NOTSET)
++    logging.root.addHandler(handler)
++    item._logging_handler = handler
++    yield
++    logging.root.removeHandler(handler)
++    item._logging_handler = None
++
++@hookimpl(hookwrapper=True)
++def pytest_runtest_call(item):
++    yield
++    handler = item._logging_handler
++    if handler is not None:
++        logs = handler.get_logs()
++        if logs and not item.config.getoption("--no-print-logs"):
++            item.add_report_section("call", "stdlog", logs)
++
++@hookimpl(hookwrapper=True)
++def pytest_runtest_teardown(item):
++    yield
++    handler = item._logging_handler
++    if handler is not None:
++        logs = handler.get_logs()
++        if logs and not item.config.getoption("--no-print-logs"):
++            item.add_report_section("teardown", "stdlog", logs)

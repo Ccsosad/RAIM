@@ -1,0 +1,44 @@
+diff --git a/sphinx/builders/html/__init__.py b/sphinx/builders/html/__init__.py
+index c052c27..5700311 100644
+--- a/sphinx/builders/html/__init__.py
++++ b/sphinx/builders/html/__init__.py
+@@ -604,6 +604,7 @@ class StandaloneHTMLBuilder(Builder):
+ 
+     def write_doc_serialized(self, docname: str, doctree: nodes.document) -> None:
+         self.imgpath = relative_uri(self.get_target_uri(docname), self.imagedir)
++        self.current_docname = docname
+         self.post_process_images(doctree)
+         title_node = self.env.longtitles.get(docname)
+         title = self.render_partial(title_node)['title'] if title_node else ''
+diff --git a/sphinx/util/images.py b/sphinx/util/images.py
+new file mode 100644
+index 0000000..b710ae3
+--- /dev/null
++++ b/sphinx/util/images.py
+@@ -0,0 +1,26 @@
++def get_image_filename_for_target(builder, target):
++    """
++    Return the filename for an image target.
++    """
++    fmt = get_filename_format(builder)
++    if fmt is None:
++        return target
++
++    dirname, basename = path.split(target)
++    name, ext = path.splitext(basename)
++    path_part = dirname + '/' if dirname else ''
++    docpath = _get_docpath(builder)
++
++    return fmt.format(path=path_part, basename=name, ext=ext, docpath=docpath)
++
++
++def _get_docpath(builder):
++    """Return the directory path for the current document."""
++    if builder.current_docname:
++        docdir = path.dirname(builder.current_docname)
++        if docdir:
++            return docdir + '/'
++        else:
++            return ''
++    else:
++        return ''

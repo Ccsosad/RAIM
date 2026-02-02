@@ -1,0 +1,77 @@
+diff --git a/astropy/__init__.py b/astropy/__init__.py
+index 9e1bf3a..f0df064 100644
+--- a/astropy/__init__.py
++++ b/astropy/__init__.py
+@@ -318,9 +318,13 @@ def online_help(query):
+     webbrowser.open(url)
+ 
+ 
++# Import the science state classes for constants
++from .constants.config import physical_constants, astronomical_constants
++
+ __dir_inc__ = ['__version__', '__githash__', '__minimum_numpy_version__',
+                '__bibtex__', 'test', 'log', 'find_api_page', 'online_help',
+-               'online_docs_root', 'conf']
++               'online_docs_root', 'conf',
++               'physical_constants', 'astronomical_constants']
+ 
+ 
+ from types import ModuleType as __module_type__
+@@ -340,4 +344,4 @@ for varname in dir():
+         # the cleanup to keep any public submodules of the astropy package
+         del locals()[varname]
+ 
+-del varname, __module_type__
++del varname, __module_type__
+diff --git a/astropy/constants/config.py b/astropy/constants/config.py
+new file mode 100644
+index 0000000..06975cd
+--- /dev/null
++++ b/astropy/constants/config.py
+@@ -0,0 +1,46 @@
++"""
++Configuration for astropy.constants.
++"""
++
++import sys
++from astropy.config import ScienceState
++
++__all__ = ['physical_constants', 'astronomical_constants']
++
++
++class _ConstantsScienceState(ScienceState):
++    """
++    Base class for constants version science state.
++    """
++    _value = None
++    _module_names = ()  # modules that must not be imported when setting
++
++    @classmethod
++    def validate(cls, value):
++        # Check if any forbidden module is already imported
++        for mod_name in cls._module_names:
++            if mod_name in sys.modules:
++                raise RuntimeError(f"{mod_name} is already imported")
++        return value
++
++
++class physical_constants(_ConstantsScienceState):
++    """
++    Science state for physical constants version.
++
++    This should be set to a string representing the version, e.g., 'codata2010'
++    or 'astropyconst13', before importing `astropy.constants` or `astropy.units`.
++    """
++    _value = 'codata2018'  # default
++    _module_names = ('astropy.constants', 'astropy.units')
++
++
++class astronomical_constants(_ConstantsScienceState):
++    """
++    Science state for astronomical constants version.
++
++    This should be set to a string representing the version, e.g., 'iau2012'
++    or 'astropyconst13', before importing `astropy.constants` or `astropy.units`.
++    """
++    _value = 'iau2015'  # default
++    _module_names = ('astropy.constants', 'astropy.units')

@@ -1,0 +1,17 @@
+diff --git a/sphinx/ext/autosummary/generate.py b/sphinx/ext/autosummary/generate.py
+index d43c130..2bd2ff6 100644
+--- a/sphinx/ext/autosummary/generate.py
++++ b/sphinx/ext/autosummary/generate.py
+@@ -91,7 +91,11 @@ def _underline(title, line='='):
+ def generate_autosummary_docs(sources, output_dir=None, suffix='.rst',
+                               warn=_simple_warn, info=_simple_info,
+                               base_path=None, builder=None, template_dir=None,
+-                              imported_members=False, app=None):
++                              imported_members=None, app=None):
++    if imported_members is None and app is not None:
++        imported_members = app.config.autosummary_imported_members
++    elif imported_members is None:
++        imported_members = False
+     # type: (List[str], str, str, Callable, Callable, str, Builder, str, bool, Any) -> None
+ 
+     showed_sources = list(sorted(sources))

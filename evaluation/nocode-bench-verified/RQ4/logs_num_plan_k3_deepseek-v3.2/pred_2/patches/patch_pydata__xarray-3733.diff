@@ -1,0 +1,275 @@
+diff --git a/xarray/__init__.py b/xarray/__init__.py
+index b35ae4c..860ff76 100644
+--- a/xarray/__init__.py
++++ b/xarray/__init__.py
+@@ -17,7 +17,7 @@ from .conventions import SerializationWarning, decode_cf
+ from .core.alignment import align, broadcast
+ from .core.combine import auto_combine, combine_by_coords, combine_nested
+ from .core.common import ALL_DIMS, full_like, ones_like, zeros_like
+-from .core.computation import apply_ufunc, dot, where
++from .core.computation import apply_ufunc, dot, where, polyval
+ from .core.concat import concat
+ from .core.dataarray import DataArray
+ from .core.dataset import Dataset
+diff --git a/xarray/core/computation.py b/xarray/core/computation.py
+index 15b4590..6ad892d 100644
+--- a/xarray/core/computation.py
++++ b/xarray/core/computation.py
+@@ -756,6 +756,9 @@ def apply_array_ufunc(func, *args, dask="forbidden"):
+     return func(*args)
+ 
+ 
++from .least_squares import polyval
++
++
+ def apply_ufunc(
+     func: Callable,
+     *args: Any,
+@@ -1069,6 +1072,9 @@ def apply_ufunc(
+         return apply_array_ufunc(func, *args, dask=dask)
+ 
+ 
++from .least_squares import polyval
++
++
+ def dot(*arrays, dims=None, **kwargs):
+     """Generalized dot product for xarray objects. Like np.einsum, but
+     provides a simpler interface based on array dimensions.
+diff --git a/xarray/core/dataarray.py b/xarray/core/dataarray.py
+index f1d3d53..a7c8a5f 100644
+--- a/xarray/core/dataarray.py
++++ b/xarray/core/dataarray.py
+@@ -3443,10 +3443,37 @@ class DataArray(AbstractArray, DataWithCoords):
+         )
+         return self._from_temp_dataset(ds)
+ 
++    def polyfit(self, dim, deg, full=False, **kwargs):
++        """
++        Least squares polynomial fit along the given dimension.
++
++        Parameters
++        ----------
++        dim : str
++            Dimension along which to fit.
++        deg : int
++            Degree of the polynomial.
++        full : bool, optional
++            If True, return additional information.
++        **kwargs : dict
++            Additional keyword arguments passed to numpy.polyfit.
++
++        Returns
++        -------
++        Dataset
++            Dataset containing the coefficients and optionally other statistics.
++
++        See Also
++        --------
++        xarray.polyval
++        """
++        from .least_squares import polyfit
++        return polyfit(self, dim, deg, full=full, **kwargs)
++
+     # this needs to be at the end, or mypy will confuse with `str`
+     # https://mypy.readthedocs.io/en/latest/common_issues.html#dealing-with-conflicting-names
+     str = property(StringAccessor)
+ 
+ 
+ # priority most be higher than Variable to properly work with binary ufuncs
+-ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
++ops.inject_all_ops_and_reduce_methods(DataArray, priority=60)
+diff --git a/xarray/core/dataset.py b/xarray/core/dataset.py
+index 16f0e97..036e3d9 100644
+--- a/xarray/core/dataset.py
++++ b/xarray/core/dataset.py
+@@ -5538,6 +5538,41 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+     def imag(self):
+         return self._unary_op(lambda x: x.imag, keep_attrs=True)(self)
+ 
++    def polyfit(self, dim, deg, full=False, **kwargs):
++        """
++        Least squares polynomial fit along the given dimension for each data variable.
++
++        Parameters
++        ----------
++        dim : str
++            Dimension along which to fit.
++        deg : int
++            Degree of the polynomial.
++        full : bool, optional
++            If True, return additional information.
++        **kwargs : dict
++            Additional keyword arguments passed to numpy.polyfit.
++
++        Returns
++        -------
++        Dataset
++            Dataset containing the coefficients and optionally other statistics for each variable.
++
++        See Also
++        --------
++        xarray.polyval
++        """
++        from .least_squares import polyfit
++        datasets = []
++        for var in self.data_vars:
++            ds = polyfit(self[var], dim, deg, full=full, **kwargs)
++            # Rename variables to avoid conflicts.
++            ds = ds.rename({name: f"{var}_{name}" for name in ds.data_vars})
++            datasets.append(ds)
++        # Combine all datasets.
++        from .merge import merge
++        return merge(datasets)
++
+     @property
+     def plot(self):
+         """
+@@ -5915,4 +5950,4 @@ class Dataset(Mapping, ImplementsDatasetReduce, DataWithCoords):
+         return self._replace_vars_and_dims(variables)
+ 
+ 
+-ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
++ops.inject_all_ops_and_reduce_methods(Dataset, array_only=False)
+diff --git a/xarray/core/least_squares.py b/xarray/core/least_squares.py
+new file mode 100644
+index 0000000..6e2ea2e
+--- /dev/null
++++ b/xarray/core/least_squares.py
+@@ -0,0 +1,137 @@
++"""
++Least squares polynomial fit for xarray objects.
++"""
++import numpy as np
++import xarray as xr
++from .computation import apply_ufunc
++
++
++def _polyfit(x, y, deg, rcond=None, full=False, w=None, cov=False):
++    """
++    Wrapper around numpy.polyfit for use with apply_ufunc.
++    """
++    # numpy.polyfit expects 1D arrays.
++    # We are using apply_ufunc to vectorize over other dimensions.
++    result = np.polyfit(x, y, deg, rcond=rcond, full=full, w=w, cov=cov)
++    if full or cov:
++        # In these cases, numpy.polyfit returns a tuple.
++        # We need to convert to a tuple of arrays for apply_ufunc.
++        return result
++    else:
++        # Otherwise, it returns an array of coefficients.
++        return result
++
++
++def polyfit(data_array, dim, deg, full=False, **kwargs):
++    """
++    Least squares polynomial fit for DataArray.
++
++    Parameters
++    ----------
++    data_array : DataArray
++        Input data.
++    dim : str
++        Dimension along which to fit.
++    deg : int
++        Degree of the polynomial.
++    full : bool, optional
++        If True, return additional information.
++    **kwargs : dict
++        Additional keyword arguments passed to numpy.polyfit.
++
++    Returns
++    -------
++    Dataset
++        Dataset containing the coefficients and optionally other statistics.
++    """
++    # The coordinate along the fitting dimension.
++    coord = data_array[dim]
++    # We need to move the fitting dimension to the end for numpy.polyfit.
++    # Use apply_ufunc to vectorize over other dimensions.
++
++    # Define the signature for apply_ufunc.
++    input_core_dims = [[dim], [dim]]
++    output_core_dims = [["degree"]]
++    if full:
++        # When full=True, numpy.polyfit returns (coefficients, residuals, rank, singular_values, rcond)
++        output_core_dims = [["degree"], [], [], [], []]
++    if kwargs.get('cov', False):
++        # When cov=True, numpy.polyfit returns (coefficients, V)
++        output_core_dims = [["degree"], ["degree", "degree_v"]]
++
++    # Use apply_ufunc to apply _polyfit across all other dimensions.
++    result = apply_ufunc(
++        _polyfit,
++        coord,
++        data_array,
++        input_core_dims=input_core_dims,
++        output_core_dims=output_core_dims,
++        kwargs={'deg': deg, 'full': full, **kwargs},
++        dask='allowed',
++    )
++
++    if full:
++        coeffs, residuals, rank, singular_values, rcond = result
++        ds = xr.Dataset({
++            'polyfit_coefficients': coeffs,
++            'residuals': residuals,
++            'rank': rank,
++            'singular_values': singular_values,
++            'rcond': rcond,
++        })
++    elif kwargs.get('cov', False):
++        coeffs, V = result
++        ds = xr.Dataset({
++            'polyfit_coefficients': coeffs,
++            'covariance_matrix': V,
++        })
++    else:
++        ds = xr.Dataset({'polyfit_coefficients': result})
++
++    # Add degree coordinate.
++    ds.coords['degree'] = np.arange(deg, -1, -1)
++    return ds
++
++
++def polyval(coord, coeffs):
++    """
++    Evaluate a polynomial at specific coordinates.
++
++    Parameters
++    ----------
++    coord : DataArray or Variable
++        Coordinates at which to evaluate the polynomial.
++    coeffs : DataArray or Variable
++        Polynomial coefficients with dimension 'degree'.
++        The coefficients should be in descending order.
++
++    Returns
++    -------
++    DataArray
++        Evaluated polynomial.
++    """
++    # We want to compute sum(coeffs[i] * x**(deg-i)) over i.
++    # We can use xr.dot or implement with apply_ufunc.
++    # Since the degree dimension is small, we can do a loop.
++    # But for efficiency, we can use numpy.polyval via apply_ufunc.
++
++    # Ensure coeffs has dimension 'degree'
++    if 'degree' not in coeffs.dims:
++        raise ValueError("coefficients must have a dimension named 'degree'")
++
++    # We'll use apply_ufunc to vectorize over all other dimensions.
++    # The core dimensions are 'degree' for coeffs and no core dim for coord.
++    # The output has no core dimension.
++    def _polyval(x, c):
++        # x is scalar, c is 1D array.
++        return np.polyval(c, x)
++
++    result = apply_ufunc(
++        _polyval,
++        coord,
++        coeffs,
++        input_core_dims=[[], ["degree"]],
++        output_core_dims=[[]],
++        dask='allowed',
++    )
++    return result

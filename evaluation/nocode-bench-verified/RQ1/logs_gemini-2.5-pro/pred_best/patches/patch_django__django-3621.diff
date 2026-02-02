@@ -1,0 +1,54 @@
+diff --git a/django/template/defaulttags.py b/django/template/defaulttags.py
+index 8c6c1d4..cc60565 100644
+--- a/django/template/defaulttags.py
++++ b/django/template/defaulttags.py
+@@ -419,12 +419,17 @@ class LoadNode(Node):
+ 
+ 
+ class NowNode(Node):
+-    def __init__(self, format_string):
++    def __init__(self, format_string, var_name=None):
+         self.format_string = format_string
++        self.var_name = var_name
+ 
+     def render(self, context):
+         tzinfo = timezone.get_current_timezone() if settings.USE_TZ else None
+-        return date(datetime.now(tz=tzinfo), self.format_string)
++        output = date(datetime.now(tz=tzinfo), self.format_string)
++        if self.var_name:
++            context[self.var_name] = output
++            return ''
++        return output
+ 
+ 
+ class SpacelessNode(Node):
+@@ -1198,12 +1203,26 @@ def now(parser, token):
+     Sample usage::
+ 
+         It is {% now "jS F Y H:i" %}
++
++    You can also use the syntax ``{% now "Y" as current_year %}`` to store the
++    output inside a variable. This is useful if you want to use ``{% now %}``
++    inside a template tag like :ttag:`blocktrans` for example::
++
++        {% now "Y" as current_year %}
++        {% blocktrans %}Copyright {{ current_year }}{% endblocktrans %}
+     """
+     bits = token.split_contents()
+-    if len(bits) != 2:
+-        raise TemplateSyntaxError("'now' statement takes one argument")
++    if len(bits) == 2:
++        var_name = None
++    elif len(bits) == 4 and bits[2] == 'as':
++        var_name = bits[3]
++    else:
++        raise TemplateSyntaxError(
++            "'now' statement takes one argument or is of the form "
++            "{% now 'format' as var %}"
++        )
+     format_string = bits[1][1:-1]
+-    return NowNode(format_string)
++    return NowNode(format_string, var_name)
+ 
+ 
+ @register.tag

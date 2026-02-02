@@ -1,0 +1,40 @@
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index a7e7d80..7b32eff 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -608,6 +608,20 @@ class IERS_Auto(IERS_A):
+ 
+     @classmethod
+     def open(cls):
++        """Return the current Earth orientation table.
++
++        This returns the table set by `~astropy.utils.iers.earth_orientation_table`.
++        If no table has been set, it returns the default automatic table (which may
++        be downloaded from the IERS server if necessary).
++
++        Returns
++        -------
++        `~astropy.table.QTable` instance with IERS (Earth rotation) data columns
++        """
++        return earth_orientation_table.get()
++
++    @classmethod
++    def _open_auto_download(cls):
+         """If the configuration setting ``astropy.utils.iers.conf.auto_download``
+         is set to True (default), then open a recent version of the IERS-A
+         table with predictions for UT1-UTC and polar motion out to
+@@ -620,7 +634,7 @@ class IERS_Auto(IERS_A):
+         is normally the IERS-B table that is supplied with astropy.
+ 
+         On the first call in a session, the table will be memoized (in the
+-        ``iers_table`` class attribute), and further calls to ``open`` will
++        ``iers_table`` class attribute), and further calls to ``_open_auto_download`` will
+         return this stored table.
+ 
+         Returns
+@@ -801,4 +815,4 @@ class IERS_Auto(IERS_A):
+             table['dX_2000A_B'][:n_iers_b] = iers_b['dX_2000A']
+             table['dY_2000A_B'][:n_iers_b] = iers_b['dY_2000A']
+ 
+-        return table
++        return table

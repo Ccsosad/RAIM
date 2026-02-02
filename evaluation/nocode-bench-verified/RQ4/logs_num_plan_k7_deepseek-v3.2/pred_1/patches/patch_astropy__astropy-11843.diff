@@ -1,0 +1,110 @@
+diff --git a/astropy/io/fits/connect.py b/astropy/io/fits/connect.py
+index 8c70ca8..9c9427f 100644
+--- a/astropy/io/fits/connect.py
++++ b/astropy/io/fits/connect.py
+@@ -112,7 +112,7 @@ def _decode_mixins(tbl):
+ 
+ 
+ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+-                    character_as_bytes=True):
++                    character_as_bytes=True, unit_parse_strict='warn'):
+     """
+     Read a Table object from an FITS file
+ 
+@@ -152,6 +152,12 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+         ``U``) internally, you should set this to `False`, but note that this
+         will use more memory. If set to `False`, string columns will not be
+         memory-mapped even if ``memmap`` is `True`.
++    unit_parse_strict : str, optional
++        How to handle invalid unit strings in the FITS header. Must be one of:
++        - "silent": silently ignore invalid units.
++        - "warn": warn and ignore invalid units.
++        - "raise": raise an exception.
++        Default is "warn".
+     """
+ 
+     if isinstance(input, HDUList):
+@@ -212,7 +218,8 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+ 
+         try:
+             return read_table_fits(hdulist, hdu=hdu,
+-                                   astropy_native=astropy_native)
++                                   astropy_native=astropy_native,
++                                   unit_parse_strict=unit_parse_strict)
+         finally:
+             hdulist.close()
+ 
+@@ -220,6 +227,12 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+     # col.array to make sure that the data is scaled correctly if needed.
+     data = table.data
+ 
++    # Import the helper function for unit conversion
++    from .unit_utils import fits_unit_to_unit
++
++    # Import the helper function for unit conversion
++    from .unit_utils import fits_unit_to_unit
++
+     columns = []
+     for col in data.columns:
+         # Check if column is masked. Here, we make a guess based on the
+@@ -249,7 +262,9 @@ def read_table_fits(input, hdu=None, astropy_native=False, memmap=False,
+ 
+         # Copy over units
+         if col.unit is not None:
+-            column.unit = u.Unit(col.unit, format='fits', parse_strict='silent')
++            unit = fits_unit_to_unit(col.unit, parse_strict=unit_parse_strict)
++            if unit is not None:
++                column.unit = unit
+ 
+         # Copy over display format
+         if col.disp is not None:
+diff --git a/astropy/io/fits/unit_utils.py b/astropy/io/fits/unit_utils.py
+new file mode 100644
+index 0000000..2a2013b
+--- /dev/null
++++ b/astropy/io/fits/unit_utils.py
+@@ -0,0 +1,44 @@
++"""
++Utilities for handling FITS units.
++"""
++
++from astropy import units as u
++
++
++def fits_unit_to_unit(fits_unit_str, parse_strict='warn'):
++    """
++    Convert a FITS unit string to an astropy unit.
++
++    Parameters
++    ----------
++    fits_unit_str : str
++        The unit string from a FITS header.
++    parse_strict : str, optional
++        How to handle invalid unit strings. Must be one of:
++        - "silent": silently ignore invalid units and return `None`.
++        - "warn": warn and return `None`.
++        - "raise": raise an exception.
++        Default is "warn".
++
++    Returns
++    -------
++    unit : `~astropy.units.Unit` or `None`
++        The astropy unit, or `None` if the unit string is invalid and
++        `parse_strict` is "silent" or "warn".
++    """
++    if fits_unit_str is None:
++        return None
++    try:
++        return u.Unit(fits_unit_str, format='fits', parse_strict=parse_strict)
++    except (ValueError, u.UnitsError) as e:
++        if parse_strict == 'raise':
++            raise
++        elif parse_strict == 'warn':
++            from astropy.utils.exceptions import AstropyWarning
++            import warnings
++            warnings.warn(
++                f"Invalid unit string {fits_unit_str!r} in FITS file: {e}",
++                AstropyWarning
++            )
++        # For 'silent', just return None
++        return None
