@@ -11,10 +11,10 @@ The directory structure of the uploaded data is organized as follows:
 ├── evaluation
 │   └── nocode-bench-verified
 │       ├── RQ1  <-- Evaluation results of RAIM using different LLMs
-│       ├── RQ2  <-- Scripts for Cross-File Modification Performance Analysis
+│       ├── RQ2  <-- Script for Cross-File Modification Performance Analysis
 │       ├── RQ3  <-- Results of the ablation study
 │       ├── RQ4  <-- Experimental results on Multi-Design and Selection Strategies
-│       └── RQ5  <-- Scripts for analyzing failure type distributions
+│       └── RQ5  <-- Script for analyzing failure type distributions
 └── prompt
     └── prompt.py  <-- Key prompts of the RAIM framework
 ```
