@@ -36,3 +36,6 @@ The file `./prompt/prompt.py` contains the critical prompt templates designed fo
 2.  **Architecture-Aware Iterative Function Localization**
 3.  **Multi-Design-Based Patch Generation**
 4.  **Impact-Aware Patch Selection**
+
+**3. Code Availability**
+The complete source code for the RAIM framework will be released and made publicly available upon the acceptance of the paper.
